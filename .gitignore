@@ -23,7 +23,6 @@
 *.dll
 *.so.*
 
-
 # Fortran module files
 *.mod
 *.smod
@@ -43,6 +42,9 @@
 build/
 Build/
 build-*/
+
+# PlatformIO
+.pio/
 
 # CMake generated files
 CMakeFiles/
