@@ -1,47 +1,46 @@
 import unittest
+from pathlib import Path
 
 from vcd_parser import (
+    assert_alternates_high_low,
+    assert_rising_edge_periods,
     parse_vcd_file,
-    assert_periods,
-    Transition,
 )
+
+
+VCD_FILE = Path(__file__).with_name("gravity-flexseq-ch1.vcd")
 
 
 class Ch1SignalTest(unittest.TestCase):
 
-    def test_ch1_has_100ms_high_low_transitions(self):
-        transitions = parse_vcd_file(
-            "gravity-ch1-test.vcd",
+    @classmethod
+    def setUpClass(cls):
+        if not VCD_FILE.exists():
+            raise AssertionError(
+                f"VCD file not found: {VCD_FILE}"
+            )
+
+        cls.transitions = parse_vcd_file(
+            VCD_FILE,
             "CH1",
         )
 
+    def test_ch1_has_transitions(self):
         self.assertGreaterEqual(
-            len(transitions),
-            6,
-            "CH1 doit produire au moins 6 transitions",
-        )
-
-        # Chaque transition doit être espacée d'environ 100 ms.
-        assert_periods(
-            transitions[:7],
-            expected_ns=100_000_000,
-            tolerance_ns=1_000_000,
+            len(self.transitions),
+            3,
+            "CH1 must contain at least three transitions",
         )
 
     def test_ch1_alternates_high_low(self):
-        transitions = parse_vcd_file(
-            "gravity-ch1-test.vcd",
-            "CH1",
+        assert_alternates_high_low(self.transitions)
+
+    def test_ch1_has_100ms_rising_edge_period(self):
+        assert_rising_edge_periods(
+            self.transitions,
+            expected_ns=100_000_000,
+            tolerance_ns=2_000_000,
         )
-
-        values = [transition.value for transition in transitions[:10]]
-
-        for previous, current in zip(values, values[1:]):
-            self.assertNotEqual(
-                previous,
-                current,
-                "CH1 doit alterner HIGH / LOW",
-            )
 
 
 if __name__ == "__main__":

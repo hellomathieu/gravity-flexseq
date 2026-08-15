@@ -2,7 +2,9 @@ import unittest
 
 from vcd_parser import (
     Transition,
+    assert_alternates_high_low,
     assert_periods,
+    assert_rising_edge_periods,
     parse_signal,
 )
 
@@ -104,6 +106,42 @@ class PeriodAssertionTest(unittest.TestCase):
                 expected_ns=100_000_000,
                 tolerance_ns=1_000_000,
             )
+
+class SignalAssertionTest(unittest.TestCase):
+
+    def test_accepts_alternating_signal(self):
+        transitions = [
+            Transition(0, 1),
+            Transition(100, 0),
+            Transition(200, 1),
+            Transition(300, 0),
+        ]
+
+        assert_alternates_high_low(transitions)
+
+    def test_rejects_non_alternating_signal(self):
+        transitions = [
+            Transition(0, 1),
+            Transition(100, 1),
+        ]
+
+        with self.assertRaises(AssertionError):
+            assert_alternates_high_low(transitions)
+
+    def test_accepts_rising_edge_period(self):
+        transitions = [
+            Transition(0, 1),
+            Transition(5, 0),
+            Transition(100, 1),
+            Transition(105, 0),
+            Transition(200, 1),
+        ]
+
+        assert_rising_edge_periods(
+            transitions,
+            expected_ns=100,
+            tolerance_ns=1,
+        )
 
 
 if __name__ == "__main__":

@@ -75,3 +75,57 @@ def assert_periods(
                 f"expected {expected_ns} ns ± {tolerance_ns} ns, "
                 f"got {duration} ns"
             )
+
+
+def assert_alternates_high_low(
+    transitions: list[Transition],
+) -> None:
+    if not transitions:
+        raise AssertionError(
+            "At least one transition is required"
+        )
+
+    for index, (previous, current) in enumerate(
+        zip(transitions, transitions[1:])
+    ):
+        if current.value == previous.value:
+            raise AssertionError(
+                f"Transition {index}: "
+                f"expected alternating values, "
+                f"got {previous.value} -> {current.value}"
+            )
+
+
+def assert_rising_edge_periods(
+    transitions: list[Transition],
+    expected_ns: int,
+    tolerance_ns: int,
+) -> None:
+    rising_edges = [
+        transition
+        for transition in transitions
+        if transition.value == 1
+    ]
+
+    if len(rising_edges) < 2:
+        raise AssertionError(
+            "At least two rising edges are required"
+        )
+
+    durations = []
+
+    for previous, current in zip(
+        rising_edges,
+        rising_edges[1:],
+    ):
+        duration = current.time_ns - previous.time_ns
+        durations.append(duration)
+
+    for index, duration in enumerate(durations):
+        if abs(duration - expected_ns) > tolerance_ns:
+            raise AssertionError(
+                f"Rising edge period {index}: "
+                f"expected {expected_ns} ns ± "
+                f"{tolerance_ns} ns, "
+                f"got {duration} ns"
+            )

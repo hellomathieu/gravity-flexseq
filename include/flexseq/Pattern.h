@@ -22,12 +22,21 @@ public:
 
     void clear();
 
+    bool addTriplet(uint8_t startIndex);
+    bool removeTriplet(uint8_t startIndex);
+
+    bool isTripletStart(uint8_t index) const;
+    bool isTripletStep(uint8_t index) const;
+
+    void clearTriplets();
+
 private:
     uint8_t packedSteps[3];
+    uint8_t tripletStarts[3];
     uint8_t baseLength;
 };
 
-static_assert(sizeof(Pattern) == 4, "Pattern must remain 4 bytes");
+static_assert(sizeof(Pattern) == 7, "Pattern must remain 7 bytes");
 
 } // namespace flexseq
 

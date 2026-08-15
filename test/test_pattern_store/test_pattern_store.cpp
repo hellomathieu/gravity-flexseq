@@ -7,7 +7,14 @@ using flexseq::PatternStore;
 
 void test_pattern_store_has_expected_memory_footprint() {
     TEST_ASSERT_EQUAL_UINT(
-        384,
+        672,
+        sizeof(PatternStore)
+    );
+}
+
+void test_pattern_store_memory_footprint_matches_pattern_size() {
+    TEST_ASSERT_EQUAL_UINT(
+        6 * 16 * sizeof(Pattern),
         sizeof(PatternStore)
     );
 }
@@ -86,6 +93,38 @@ void test_pattern_store_isolates_patterns_between_channels() {
     TEST_ASSERT_FALSE(active);
 }
 
+void test_pattern_store_isolates_triplet_metadata_within_same_channel() {
+    PatternStore store;
+
+    Pattern* a1 = store.getPattern(0, 0);
+    Pattern* a2 = store.getPattern(0, 1);
+
+    TEST_ASSERT_NOT_NULL(a1);
+    TEST_ASSERT_NOT_NULL(a2);
+
+    TEST_ASSERT_TRUE(a1->setBaseLength(24));
+    TEST_ASSERT_TRUE(a1->addTriplet(6));
+
+    TEST_ASSERT_TRUE(a1->isTripletStart(6));
+    TEST_ASSERT_FALSE(a2->isTripletStart(6));
+}
+
+void test_pattern_store_isolates_triplet_metadata_between_channels() {
+    PatternStore store;
+
+    Pattern* channel1 = store.getPattern(0, 0);
+    Pattern* channel2 = store.getPattern(1, 0);
+
+    TEST_ASSERT_NOT_NULL(channel1);
+    TEST_ASSERT_NOT_NULL(channel2);
+
+    TEST_ASSERT_TRUE(channel1->setBaseLength(24));
+    TEST_ASSERT_TRUE(channel1->addTriplet(6));
+
+    TEST_ASSERT_TRUE(channel1->isTripletStart(6));
+    TEST_ASSERT_FALSE(channel2->isTripletStart(6));
+}
+
 void test_pattern_store_maps_first_eight_patterns_to_bank_a() {
     PatternStore store;
 
@@ -121,12 +160,15 @@ int main() {
     UNITY_BEGIN();
 
     RUN_TEST(test_pattern_store_has_expected_memory_footprint);
+    RUN_TEST(test_pattern_store_memory_footprint_matches_pattern_size);
     RUN_TEST(test_pattern_store_returns_first_pattern);
     RUN_TEST(test_pattern_store_returns_last_pattern);
     RUN_TEST(test_pattern_store_rejects_invalid_channel);
     RUN_TEST(test_pattern_store_rejects_invalid_pattern_index);
     RUN_TEST(test_pattern_store_isolates_patterns_within_same_channel);
     RUN_TEST(test_pattern_store_isolates_patterns_between_channels);
+    RUN_TEST(test_pattern_store_isolates_triplet_metadata_within_same_channel);
+    RUN_TEST(test_pattern_store_isolates_triplet_metadata_between_channels);
     RUN_TEST(test_pattern_store_maps_first_eight_patterns_to_bank_a);
     RUN_TEST(test_pattern_store_maps_last_eight_patterns_to_bank_b);
     RUN_TEST(test_pattern_store_returns_const_pattern_from_const_store);
