@@ -42,6 +42,8 @@ npm run typecheck # tsc --noEmit
 - [x] Transport dans le simulateur — Play/Stop/Reset + playhead sur l'OLED (P3.1).
 - [x] Pattern actif **par channel** + bande multi-channels (6 playheads simultanés) (P3.1).
 - [x] `SequencerEngine.hasStepped` + `TriggerSequencer` (parité C++) ; **flash des triggers** par channel dans le sim.
+- [x] **SUBDIV → ticksPerStep** par channel (convention libGravity 96 PPQN) + sélecteur SUBDIV (parité C++).
+- [ ] METER / MEASURES.
 - [ ] Grille musicale METER/SUBDIV/MEASURES ; sorties trigger.
 - [ ] Couche Transport réelle (clock/MIDI) ; port C++ du moteur.
 - [ ] Backend avr8js (branché sur le même seam `SimBackend`).

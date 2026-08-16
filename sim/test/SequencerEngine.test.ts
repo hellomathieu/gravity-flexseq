@@ -239,3 +239,37 @@ describe("SequencerEngine — hasStepped (onset)", () => {
     expect(e.hasStepped(1)).toBe(true);
   });
 });
+
+describe("SequencerEngine — SUBDIV", () => {
+  it("defaults each channel to SUBDIV -4 (1/16 = 24 ticks)", () => {
+    const e = new SequencerEngine();
+    expect(e.getSubdiv(0)).toBe(-4);
+    expect(e.getTicksPerStep(0)).toBe(24);
+  });
+
+  it("setSubdiv updates the step rate", () => {
+    const e = new SequencerEngine();
+    e.start();
+    expect(e.setSubdiv(0, 1)).toBe(true); // quarter note = 96 ticks
+    expect(e.getTicksPerStep(0)).toBe(96);
+    e.advance(96);
+    expect(e.effectiveStep(0)).toBe(1);
+  });
+
+  it("supports a different SUBDIV per channel (different rates)", () => {
+    const e = new SequencerEngine();
+    e.start();
+    e.setSubdiv(0, -4); // 1/16 -> 24 ticks
+    e.setSubdiv(1, 1); //  1/4  -> 96 ticks
+    e.advance(96);
+    expect(e.effectiveStep(0)).toBe(4); // 96/24 = 4 steps
+    expect(e.effectiveStep(1)).toBe(1); // 96/96 = 1 step
+  });
+
+  it("rejects invalid subdiv and channel", () => {
+    const e = new SequencerEngine();
+    expect(e.setSubdiv(0, 0)).toBe(false);
+    expect(e.setSubdiv(6, 1)).toBe(false);
+    expect(e.getSubdiv(6)).toBe(0);
+  });
+});

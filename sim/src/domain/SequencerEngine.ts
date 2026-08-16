@@ -27,6 +27,8 @@
  * l'equivalent 1/16.
  */
 
+import { subdivToTicks, DEFAULT_SUBDIV } from "./subdiv.js";
+
 /** Ticks par noire de l'horloge interne libGravity (resolution de reference). */
 export const PPQN = 96;
 
@@ -49,6 +51,7 @@ export const PATTERN_COUNT = 16;
 interface ChannelState {
   selectedPattern: number; // index 0..15 dans la banque partagee
   effectiveLength: number;
+  subdiv: number; // valeur SUBDIV (libGravity) ; determine ticksPerStep
   ticksPerStep: number;
   localStep: number; // position locale, dans [0, effectiveLength)
   acc: number; // ticks accumules dans le step courant, dans [0, ticksPerStep)
@@ -64,6 +67,7 @@ export class SequencerEngine {
     this.channels = Array.from({ length: channelCount }, () => ({
       selectedPattern: 0,
       effectiveLength: DEFAULT_LENGTH,
+      subdiv: DEFAULT_SUBDIV,
       ticksPerStep: TICKS_PER_SIXTEENTH,
       localStep: 0,
       acc: 0,
@@ -176,6 +180,26 @@ export class SequencerEngine {
   }
 
   // --- Derivation --------------------------------------------------------
+
+  /** Valeur SUBDIV du channel (libGravity), ou 0 si invalide. */
+  getSubdiv(channel: number): number {
+    return this.channel(channel)?.subdiv ?? 0;
+  }
+
+  /**
+   * Definit la SUBDIV du channel : met a jour subdiv ET ticksPerStep via la
+   * table officielle. Rejette (sans mutation) une SUBDIV invalide.
+   */
+  setSubdiv(channel: number, subdiv: number): boolean {
+    const c = this.channel(channel);
+    if (!c) return false;
+    const ticks = subdivToTicks(subdiv);
+    if (ticks < 1) return false;
+    c.subdiv = subdiv;
+    c.ticksPerStep = ticks;
+    if (c.acc >= ticks) c.acc %= ticks;
+    return true;
+  }
 
   /** Position logique du channel (localStep), dans [0, effectiveLength). -1 si invalide. */
   effectiveStep(channel: number): number {

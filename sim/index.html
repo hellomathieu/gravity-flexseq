@@ -53,12 +53,17 @@
         background: #262b34; border: 1px solid var(--line);
         border-radius: 6px; padding: 5px 8px;
       }
+      select {
+        font: inherit; color: var(--fg);
+        background: #262b34; border: 1px solid var(--line);
+        border-radius: 6px; padding: 5px 8px;
+      }
       .toggle.on { background: var(--accent); border-color: var(--accent); color: #14161a; }
       .readout { color: var(--muted); font-size: 12px; margin-left: 8px; }
 
       .chstrip { display: flex; flex-direction: column; gap: 6px; }
       .chrow { display: flex; align-items: center; gap: 10px; }
-      .chlab { color: var(--muted); width: 58px; font-size: 11px; flex: none; }
+      .chlab { color: var(--muted); width: 96px; font-size: 11px; flex: none; }
       .chrow.sel .chlab { color: var(--fg); }
       .chstep { color: var(--muted); width: 44px; font-size: 11px; flex: none; }
       .minirow { display: flex; gap: 2px; flex-wrap: nowrap; }

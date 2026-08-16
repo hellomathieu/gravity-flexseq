@@ -16,6 +16,7 @@
 import { TsReferenceBackend, type SimBackend } from "../sim/backend.js";
 import { drawOled, type OledCtx } from "../sim/OledDisplay.js";
 import { PPQN } from "../domain/SequencerEngine.js";
+import { SUBDIVS, subdivLabel } from "../domain/subdiv.js";
 
 const backend: SimBackend = new TsReferenceBackend();
 
@@ -39,7 +40,12 @@ function render(): void {
   const { channel } = state;
   const pat = curPat();
   const length = backend.getLength(channel);
+  const sub = backend.getSubdiv(channel);
   const playing = backend.isPlaying();
+
+  const subdivOptions = SUBDIVS.map(
+    (v) => `<option value="${v}" ${v === sub ? "selected" : ""}>${subdivLabel(v)}</option>`,
+  ).join("");
 
   const channelButtons = Array.from({ length: backend.channelCount }, (_, c) =>
     `<button data-ch="${c}" class="${c === channel ? "sel" : ""}">CH${c + 1}</button>`,
@@ -56,6 +62,8 @@ function render(): void {
       <div class="row">
         <span class="label">LENGTH</span>
         <input id="len" type="number" min="1" max="24" value="${length}" />
+        <span class="label" style="width:auto;margin-left:8px">SUBDIV</span>
+        <select id="subdiv">${subdivOptions}</select>
         <button id="triplet" class="toggle ${state.tripletMode ? "on" : ""}">
           Mode triolet : ${state.tripletMode ? "ON" : "off"}
         </button>
@@ -162,7 +170,7 @@ function updateChannels(): void {
     const lit = performance.now() < (triggerFlashUntil[ch] ?? 0) ? " on" : "";
     html += `<div class="chrow${sel}">
       <span class="trigled${lit}" title="trigger"></span>
-      <span class="chlab">CH${ch + 1} ${patternLabel(pat)}</span>
+      <span class="chlab">CH${ch + 1} ${patternLabel(pat)} · ${subdivLabel(backend.getSubdiv(ch))}</span>
       <span class="minirow">${row}</span>
       <span class="chstep">${step + 1}/${len}</span>
     </div>`;
@@ -234,6 +242,12 @@ function wire(): void {
   const len = app.querySelector<HTMLInputElement>("#len");
   len?.addEventListener("change", () => {
     backend.setLength(state.channel, Number(len.value));
+    render();
+  });
+
+  const subdiv = app.querySelector<HTMLSelectElement>("#subdiv");
+  subdiv?.addEventListener("change", () => {
+    backend.setSubdiv(state.channel, Number(subdiv.value));
     render();
   });
 

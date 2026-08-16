@@ -24,6 +24,8 @@ export interface SimBackend {
   setSelectedPattern(channel: number, index: number): void;
   getLength(channel: number): number;
   setLength(channel: number, length: number): boolean;
+  getSubdiv(channel: number): number;
+  setSubdiv(channel: number, subdiv: number): boolean;
   view(channel: number): CellView[];
   toggleStep(channel: number, index: number): void;
   /** Ajoute le triolet s'il est absent (et valide), le retire s'il est present. */
@@ -70,6 +72,14 @@ export class TsReferenceBackend implements SimBackend {
 
   setLength(channel: number, length: number): boolean {
     return this.engine.setEffectiveLength(channel, length);
+  }
+
+  getSubdiv(channel: number): number {
+    return this.engine.getSubdiv(channel);
+  }
+
+  setSubdiv(channel: number, subdiv: number): boolean {
+    return this.engine.setSubdiv(channel, subdiv);
   }
 
   view(channel: number): CellView[] {
