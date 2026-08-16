@@ -48,6 +48,8 @@ export interface OledModel {
   title: string;
   cells: CellView[];
   cursor: number;
+  /** Step joue (effectiveStep) marque par un tiret sous la pastille. -1 pour masquer. */
+  playhead?: number;
 }
 
 /** Sous-ensemble de CanvasRenderingContext2D utilise (testable/mockable). */
@@ -103,9 +105,15 @@ export function drawOled(ctx: OledCtx, model: OledModel): void {
     }
   }
 
-  // Curseur : cadre carre autour du step courant.
+  // Curseur d'edition : cadre carre autour du step courant.
   const cur = centers[model.cursor];
   if (cur) {
     boxOutline(ctx, cur.x - (CURSOR_SIDE >> 1), cur.y - (CURSOR_SIDE >> 1), CURSOR_SIDE);
+  }
+
+  // Playhead (effectiveStep) : tiret sous la pastille jouee.
+  if (model.playhead !== undefined && model.playhead >= 0) {
+    const ph = centers[model.playhead];
+    if (ph) ctx.fillRect(ph.x - 3, ph.y + 5, 7, 1);
   }
 }

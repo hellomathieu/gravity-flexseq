@@ -4,25 +4,23 @@ import { viewPattern, toAscii, CELL_SYMBOL } from "../src/sim/PatternView.js";
 
 describe("PatternView — viewPattern", () => {
   it("always projects exactly 24 cells", () => {
-    expect(viewPattern(new Pattern())).toHaveLength(24);
+    expect(viewPattern(new Pattern(), 16)).toHaveLength(24);
   });
 
-  it("marks positions beyond LENGTH as 'beyond'", () => {
+  it("marks positions beyond the channel length as 'beyond'", () => {
     const p = new Pattern();
-    p.setBaseLength(14);
-    const cells = viewPattern(p);
+    const cells = viewPattern(p, 14);
 
     expect(cells[13]!.kind).toBe("inactive"); // dernier step actif, off
     expect(cells[14]!.kind).toBe("beyond");
     expect(cells[23]!.kind).toBe("beyond");
   });
 
-  it("distinguishes active vs inactive within LENGTH", () => {
+  it("distinguishes active vs inactive within length", () => {
     const p = new Pattern();
-    p.setBaseLength(16);
     p.writeStep(0, true);
     p.writeStep(5, true);
-    const cells = viewPattern(p);
+    const cells = viewPattern(p, 16);
 
     expect(cells[0]!.kind).toBe("active");
     expect(cells[1]!.kind).toBe("inactive");
@@ -31,18 +29,16 @@ describe("PatternView — viewPattern", () => {
 
   it("reports beyond-length even if the stored step is active (display rule)", () => {
     const p = new Pattern();
-    p.setBaseLength(8);
     p.writeStep(20, true); // conserve hors longueur, mais affiche '•'
-    const cells = viewPattern(p);
+    const cells = viewPattern(p, 8);
 
     expect(cells[20]!.kind).toBe("beyond");
   });
 
   it("flags triplet membership and start", () => {
     const p = new Pattern();
-    p.setBaseLength(24);
     p.addTriplet(3);
-    const cells = viewPattern(p);
+    const cells = viewPattern(p, 24);
 
     expect(cells[3]!.tripletStart).toBe(true);
     expect(cells[3]!.tripletStep).toBe(true);
@@ -54,8 +50,8 @@ describe("PatternView — viewPattern", () => {
 });
 
 describe("PatternView — toAscii", () => {
-  it("renders 2 rows of 12 with default (length 16, all off)", () => {
-    const ascii = toAscii(viewPattern(new Pattern()));
+  it("renders 2 rows of 12 with length 16, all off", () => {
+    const ascii = toAscii(viewPattern(new Pattern(), 16));
     const lines = ascii.split("\n");
 
     // marqueur1, cellules1, marqueur2, cellules2
@@ -69,7 +65,7 @@ describe("PatternView — toAscii", () => {
   it("draws the triplet marker above a group", () => {
     const p = new Pattern();
     p.addTriplet(0);
-    const lines = toAscii(viewPattern(p)).split("\n");
+    const lines = toAscii(viewPattern(p, 16)).split("\n");
 
     expect(lines[0]).toBe("‾‾‾" + " ".repeat(9));
     expect(lines[1]!.startsWith(CELL_SYMBOL.inactive)).toBe(true);
