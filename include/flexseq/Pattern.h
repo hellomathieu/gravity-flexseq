@@ -10,7 +10,7 @@ public:
     static constexpr uint8_t MIN_PATTERN_LENGTH = 1;
     static constexpr uint8_t MAX_PATTERN_LENGTH = 24;
     static constexpr uint8_t DEFAULT_PATTERN_LENGTH = 16;
-    static constexpr uint8_t STEP_COUNT = 24;
+    static constexpr uint8_t DEFAULT_TOTAL_STEPS = 24;
 
     Pattern();
 

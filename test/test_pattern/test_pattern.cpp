@@ -17,7 +17,7 @@ void test_pattern_defaults_to_length_16_and_all_steps_off() {
 
     TEST_ASSERT_EQUAL_UINT8(16, pattern.getBaseLength());
 
-    for (uint8_t i = 0; i < Pattern::STEP_COUNT; ++i) {
+    for (uint8_t i = 0; i < Pattern::DEFAULT_TOTAL_STEPS; ++i) {
         bool active = true;
         TEST_ASSERT_TRUE(pattern.readStep(i, active));
         TEST_ASSERT_FALSE(active);
@@ -53,11 +53,11 @@ void test_pattern_rejects_invalid_base_lengths_without_mutation() {
 void test_pattern_writes_and_reads_all_24_steps() {
     Pattern pattern;
 
-    for (uint8_t i = 0; i < Pattern::STEP_COUNT; ++i) {
+    for (uint8_t i = 0; i < Pattern::DEFAULT_TOTAL_STEPS; ++i) {
         TEST_ASSERT_TRUE(pattern.writeStep(i, (i % 2) == 0));
     }
 
-    for (uint8_t i = 0; i < Pattern::STEP_COUNT; ++i) {
+    for (uint8_t i = 0; i < Pattern::DEFAULT_TOTAL_STEPS; ++i) {
         bool active = false;
         TEST_ASSERT_TRUE(pattern.readStep(i, active));
         TEST_ASSERT_EQUAL((i % 2) == 0, active);
@@ -77,7 +77,7 @@ void test_pattern_covers_bit_boundaries_0_7_8_15_16_23() {
         TEST_ASSERT_TRUE(pattern.writeStep(boundarySteps[i], true));
     }
 
-    for (uint8_t i = 0; i < Pattern::STEP_COUNT; ++i) {
+    for (uint8_t i = 0; i < Pattern::DEFAULT_TOTAL_STEPS; ++i) {
         bool active = false;
         TEST_ASSERT_TRUE(pattern.readStep(i, active));
 
@@ -134,7 +134,7 @@ void test_pattern_clear_turns_all_24_steps_off_and_preserves_length() {
 
     TEST_ASSERT_TRUE(pattern.setBaseLength(12));
 
-    for (uint8_t i = 0; i < Pattern::STEP_COUNT; ++i) {
+    for (uint8_t i = 0; i < Pattern::DEFAULT_TOTAL_STEPS; ++i) {
         TEST_ASSERT_TRUE(pattern.writeStep(i, true));
     }
 
@@ -142,14 +142,14 @@ void test_pattern_clear_turns_all_24_steps_off_and_preserves_length() {
 
     TEST_ASSERT_EQUAL_UINT8(12, pattern.getBaseLength());
 
-    for (uint8_t i = 0; i < Pattern::STEP_COUNT; ++i) {
+    for (uint8_t i = 0; i < Pattern::DEFAULT_TOTAL_STEPS; ++i) {
         bool active = true;
 
         TEST_ASSERT_TRUE(pattern.readStep(i, active));
         TEST_ASSERT_FALSE(active);
     }
 
-    for (uint8_t i = 0; i < Pattern::STEP_COUNT; ++i) {
+    for (uint8_t i = 0; i < Pattern::DEFAULT_TOTAL_STEPS; ++i) {
         TEST_ASSERT_FALSE(pattern.isTripletStep(i));
     }
 }
@@ -161,7 +161,7 @@ void test_pattern_clear_turns_all_24_steps_off_and_preserves_length() {
 void test_pattern_has_no_triplets_by_default() {
     Pattern pattern;
 
-    for (uint8_t i = 0; i < Pattern::STEP_COUNT; ++i) {
+    for (uint8_t i = 0; i < Pattern::DEFAULT_TOTAL_STEPS; ++i) {
         TEST_ASSERT_FALSE(pattern.isTripletStart(i));
         TEST_ASSERT_FALSE(pattern.isTripletStep(i));
     }
@@ -357,7 +357,7 @@ void test_pattern_clear_removes_triplets() {
     TEST_ASSERT_FALSE(pattern.isTripletStart(0));
     TEST_ASSERT_FALSE(pattern.isTripletStart(6));
 
-    for (uint8_t i = 0; i < Pattern::STEP_COUNT; ++i) {
+    for (uint8_t i = 0; i < Pattern::DEFAULT_TOTAL_STEPS; ++i) {
         TEST_ASSERT_FALSE(pattern.isTripletStep(i));
     }
 }

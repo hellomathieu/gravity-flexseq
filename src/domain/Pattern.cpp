@@ -9,7 +9,7 @@ Pattern::Pattern()
 }
 
 bool Pattern::readStep(uint8_t index, bool& active) const {
-    if (index >= STEP_COUNT) {
+    if (index >= DEFAULT_TOTAL_STEPS) {
         return false;
     }
 
@@ -22,7 +22,7 @@ bool Pattern::readStep(uint8_t index, bool& active) const {
 }
 
 bool Pattern::writeStep(uint8_t index, bool active) {
-    if (index >= STEP_COUNT) {
+    if (index >= DEFAULT_TOTAL_STEPS) {
         return false;
     }
 
@@ -62,8 +62,8 @@ void Pattern::clear() {
 
 bool Pattern::addTriplet(uint8_t startIndex) {
     // A triplet occupies startIndex, startIndex + 1 and startIndex + 2.
-    // Therefore the latest possible start is STEP_COUNT - 3.
-    if (startIndex > STEP_COUNT - 3) {
+    // Therefore the latest possible start is DEFAULT_TOTAL_STEPS - 3.
+    if (startIndex > DEFAULT_TOTAL_STEPS - 3) {
         return false;
     }
 
@@ -92,7 +92,7 @@ bool Pattern::addTriplet(uint8_t startIndex) {
          existingStart <= lastCandidate;
          ++existingStart) {
 
-        if (existingStart >= STEP_COUNT - 2) {
+        if (existingStart >= DEFAULT_TOTAL_STEPS - 2) {
             break;
         }
 
@@ -111,7 +111,7 @@ bool Pattern::addTriplet(uint8_t startIndex) {
 }
 
 bool Pattern::removeTriplet(uint8_t startIndex) {
-    if (startIndex >= STEP_COUNT) {
+    if (startIndex >= DEFAULT_TOTAL_STEPS) {
         return false;
     }
 
@@ -129,7 +129,7 @@ bool Pattern::removeTriplet(uint8_t startIndex) {
 }
 
 bool Pattern::isTripletStart(uint8_t index) const {
-    if (index >= STEP_COUNT) {
+    if (index >= DEFAULT_TOTAL_STEPS) {
         return false;
     }
 
@@ -141,11 +141,11 @@ bool Pattern::isTripletStart(uint8_t index) const {
 }
 
 bool Pattern::isTripletStep(uint8_t index) const {
-    if (index >= STEP_COUNT) {
+    if (index >= DEFAULT_TOTAL_STEPS) {
         return false;
     }
 
-    for (uint8_t start = 0; start <= STEP_COUNT - 3; ++start) {
+    for (uint8_t start = 0; start <= DEFAULT_TOTAL_STEPS - 3; ++start) {
         if (!isTripletStart(start)) {
             continue;
         }
