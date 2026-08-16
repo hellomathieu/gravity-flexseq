@@ -52,6 +52,7 @@ interface ChannelState {
   ticksPerStep: number;
   localStep: number; // position locale, dans [0, effectiveLength)
   acc: number; // ticks accumules dans le step courant, dans [0, ticksPerStep)
+  stepped: boolean; // a franchi une frontiere de step lors du dernier advance()
 }
 
 export class SequencerEngine {
@@ -66,6 +67,7 @@ export class SequencerEngine {
       ticksPerStep: TICKS_PER_SIXTEENTH,
       localStep: 0,
       acc: 0,
+      stepped: false,
     }));
   }
 
@@ -103,6 +105,7 @@ export class SequencerEngine {
    * locale de chaque channel. No-op si le moteur est arrete.
    */
   advance(ticks = 1): void {
+    for (const c of this.channels) c.stepped = false; // report only THIS advance
     if (!this.running) return;
     if (!Number.isInteger(ticks) || ticks < 0) return;
 
@@ -113,6 +116,7 @@ export class SequencerEngine {
       while (c.acc >= c.ticksPerStep) {
         c.acc -= c.ticksPerStep;
         c.localStep = (c.localStep + 1) % c.effectiveLength;
+        c.stepped = true;
       }
     }
   }
@@ -176,5 +180,14 @@ export class SequencerEngine {
   /** Position logique du channel (localStep), dans [0, effectiveLength). -1 si invalide. */
   effectiveStep(channel: number): number {
     return this.channel(channel)?.localStep ?? -1;
+  }
+
+  /**
+   * Vrai si le channel a franchi au moins une frontiere de step lors du DERNIER
+   * advance() (onset). Sert a emettre les triggers. Remis a zero au debut de
+   * chaque advance().
+   */
+  hasStepped(channel: number): boolean {
+    return this.channel(channel)?.stepped ?? false;
   }
 }

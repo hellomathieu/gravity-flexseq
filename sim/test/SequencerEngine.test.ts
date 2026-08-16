@@ -208,3 +208,34 @@ describe("SequencerEngine — per-channel selected pattern", () => {
     expect(e.getSelectedPattern(6)).toBe(-1);
   });
 });
+
+describe("SequencerEngine — hasStepped (onset)", () => {
+  it("reports boundary crossings for the last advance()", () => {
+    const e = new SequencerEngine();
+    e.start();
+    e.advance(STEP - 1);
+    expect(e.hasStepped(0)).toBe(false);
+    e.advance(1); // crosses the first boundary
+    expect(e.hasStepped(0)).toBe(true);
+    e.advance(1); // within the step
+    expect(e.hasStepped(0)).toBe(false);
+  });
+
+  it("is false while stopped and for an invalid channel", () => {
+    const e = new SequencerEngine();
+    e.advance(STEP);
+    expect(e.hasStepped(0)).toBe(false);
+    expect(e.hasStepped(6)).toBe(false);
+  });
+
+  it("is per-channel with different ticksPerStep", () => {
+    const e = new SequencerEngine();
+    e.start();
+    e.setTicksPerStep(1, STEP * 2);
+    e.advance(STEP);
+    expect(e.hasStepped(0)).toBe(true);
+    expect(e.hasStepped(1)).toBe(false);
+    e.advance(STEP);
+    expect(e.hasStepped(1)).toBe(true);
+  });
+});

@@ -12,6 +12,7 @@
  */
 import { PatternBank, PATTERN_COUNT } from "../domain/PatternBank.js";
 import { SequencerEngine, CHANNEL_COUNT } from "../domain/SequencerEngine.js";
+import { TriggerSequencer } from "../domain/TriggerSequencer.js";
 import { viewPattern, type CellView } from "./PatternView.js";
 
 export interface SimBackend {
@@ -36,6 +37,8 @@ export interface SimBackend {
   advanceTicks(ticks: number): void;
   masterPhase(): number;
   effectiveStep(channel: number): number;
+  /** Vrai si le channel vient de declencher un trigger (onset sur step actif). Valide apres advanceTicks(). */
+  triggered(channel: number): boolean;
 }
 
 /** Backend de reference : banque partagee + moteur, en TypeScript. */
@@ -45,6 +48,7 @@ export class TsReferenceBackend implements SimBackend {
 
   private readonly bank = new PatternBank();
   private readonly engine = new SequencerEngine();
+  private readonly triggers = new TriggerSequencer(this.bank, this.engine);
 
   private patternOf(channel: number) {
     return this.bank.getPattern(this.engine.getSelectedPattern(channel));
@@ -117,5 +121,9 @@ export class TsReferenceBackend implements SimBackend {
 
   effectiveStep(channel: number): number {
     return this.engine.effectiveStep(channel);
+  }
+
+  triggered(channel: number): boolean {
+    return this.triggers.triggered(channel);
   }
 }

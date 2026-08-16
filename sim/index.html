@@ -69,6 +69,16 @@
       .minicell.on { background: var(--active); border-color: var(--active); }
       .minicell.play { box-shadow: 0 0 0 2px var(--accent); }
 
+      .trigled {
+        width: 10px; height: 10px; border-radius: 50%; flex: none;
+        border: 1px solid var(--line); background: var(--beyond);
+        transition: background 90ms ease-out, box-shadow 90ms ease-out;
+      }
+      .trigled.on {
+        background: var(--accent); border-color: var(--accent);
+        box-shadow: 0 0 6px var(--accent);
+      }
+
       .grid { display: inline-flex; flex-direction: column; gap: 8px; margin-top: 6px; }
       .gridrow { display: flex; gap: 6px; }
       .cellwrap { display: flex; flex-direction: column; align-items: center; gap: 3px; }
