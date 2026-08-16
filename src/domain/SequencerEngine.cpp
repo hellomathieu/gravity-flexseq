@@ -9,6 +9,7 @@ SequencerEngine::SequencerEngine()
     for (uint8_t ch = 0; ch < CHANNEL_COUNT; ++ch) {
         channels_[ch].selectedPattern = 0;
         channels_[ch].effectiveLength = DEFAULT_LENGTH;
+        channels_[ch].subdiv = DEFAULT_SUBDIV;
         channels_[ch].ticksPerStep = TICKS_PER_SIXTEENTH;
         channels_[ch].localStep = 0;
         channels_[ch].acc = 0;
@@ -106,6 +107,30 @@ bool SequencerEngine::setTicksPerStep(uint8_t channel, uint16_t ticks) {
         return false;
     }
     ChannelState& c = channels_[channel];
+    c.ticksPerStep = ticks;
+    if (c.acc >= ticks) {
+        c.acc = static_cast<uint16_t>(c.acc % ticks);
+    }
+    return true;
+}
+
+int16_t SequencerEngine::getSubdiv(uint8_t channel) const {
+    if (!validChannel(channel)) {
+        return 0;
+    }
+    return channels_[channel].subdiv;
+}
+
+bool SequencerEngine::setSubdiv(uint8_t channel, int16_t subdiv) {
+    if (!validChannel(channel)) {
+        return false;
+    }
+    const uint16_t ticks = subdivToTicks(subdiv);
+    if (ticks < 1) {
+        return false;
+    }
+    ChannelState& c = channels_[channel];
+    c.subdiv = subdiv;
     c.ticksPerStep = ticks;
     if (c.acc >= ticks) {
         c.acc = static_cast<uint16_t>(c.acc % ticks);

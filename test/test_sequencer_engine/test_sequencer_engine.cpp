@@ -239,6 +239,35 @@ void test_rejects_out_of_range_pattern_and_channel() {
     TEST_ASSERT_EQUAL_INT8(-1, e.getSelectedPattern(6));
 }
 
+void test_default_subdiv_and_setSubdiv_rate() {
+    SequencerEngine e;
+    TEST_ASSERT_EQUAL_INT16(-4, e.getSubdiv(0)); // 1/16
+    TEST_ASSERT_EQUAL_UINT16(24, e.getTicksPerStep(0));
+
+    e.start();
+    TEST_ASSERT_TRUE(e.setSubdiv(0, 1)); // quarter note = 96 ticks
+    TEST_ASSERT_EQUAL_UINT16(96, e.getTicksPerStep(0));
+    e.advance(96);
+    TEST_ASSERT_EQUAL_INT8(1, e.effectiveStep(0));
+}
+
+void test_subdiv_per_channel_gives_different_rates() {
+    SequencerEngine e;
+    e.start();
+    e.setSubdiv(0, -4); // 1/16 -> 24 ticks
+    e.setSubdiv(1, 1);  // 1/4  -> 96 ticks
+    e.advance(96);
+    TEST_ASSERT_EQUAL_INT8(4, e.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(1, e.effectiveStep(1));
+}
+
+void test_rejects_invalid_subdiv() {
+    SequencerEngine e;
+    TEST_ASSERT_FALSE(e.setSubdiv(0, 0));
+    TEST_ASSERT_FALSE(e.setSubdiv(6, 1));
+    TEST_ASSERT_EQUAL_INT16(0, e.getSubdiv(6));
+}
+
 int main() {
     UNITY_BEGIN();
 
@@ -267,6 +296,10 @@ int main() {
     RUN_TEST(test_defaults_every_channel_to_pattern_zero);
     RUN_TEST(test_sets_and_reads_selected_pattern_independently);
     RUN_TEST(test_rejects_out_of_range_pattern_and_channel);
+
+    RUN_TEST(test_default_subdiv_and_setSubdiv_rate);
+    RUN_TEST(test_subdiv_per_channel_gives_different_rates);
+    RUN_TEST(test_rejects_invalid_subdiv);
 
     return UNITY_END();
 }

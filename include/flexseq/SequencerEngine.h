@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#include <flexseq/Subdiv.h>
+
 namespace flexseq {
 
 // SequencerEngine — FlexSeq temporal core (mirror of the TS reference model).
@@ -51,6 +53,11 @@ public:
     uint16_t getTicksPerStep(uint8_t channel) const;
     bool setTicksPerStep(uint8_t channel, uint16_t ticks);
 
+    // Per-channel SUBDIV (libGravity). setSubdiv also updates ticksPerStep via
+    // the official mapping. Query returns 0 for an invalid channel.
+    int16_t getSubdiv(uint8_t channel) const;
+    bool setSubdiv(uint8_t channel, int16_t subdiv);
+
     // Logical position of the channel, in [0, effectiveLength). -1 if invalid.
     int8_t effectiveStep(uint8_t channel) const;
 
@@ -63,6 +70,7 @@ private:
     struct ChannelState {
         uint8_t selectedPattern;
         uint8_t effectiveLength;
+        int16_t subdiv;
         uint16_t ticksPerStep;
         uint8_t localStep; // in [0, effectiveLength)
         uint16_t acc;      // ticks into the current step, in [0, ticksPerStep)
