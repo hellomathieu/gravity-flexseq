@@ -1,0 +1,20 @@
+{
+  "name": "gravity-flexseq-sim",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "POC TypeScript — modele de reference, simulateur et tests miroir du domaine FlexSeq (isole du firmware AVR).",
+  "engines": {
+    "node": "26.5.0",
+    "npm": "11.17.0"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9"
+  }
+}
