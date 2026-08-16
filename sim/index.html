@@ -54,6 +54,20 @@
         border-radius: 6px; padding: 5px 8px;
       }
       .toggle.on { background: var(--accent); border-color: var(--accent); color: #14161a; }
+      .readout { color: var(--muted); font-size: 12px; margin-left: 8px; }
+
+      .chstrip { display: flex; flex-direction: column; gap: 6px; }
+      .chrow { display: flex; align-items: center; gap: 10px; }
+      .chlab { color: var(--muted); width: 58px; font-size: 11px; flex: none; }
+      .chrow.sel .chlab { color: var(--fg); }
+      .chstep { color: var(--muted); width: 44px; font-size: 11px; flex: none; }
+      .minirow { display: flex; gap: 2px; flex-wrap: nowrap; }
+      .minicell {
+        width: 11px; height: 11px; border-radius: 2px;
+        border: 1px solid var(--line); background: transparent;
+      }
+      .minicell.on { background: var(--active); border-color: var(--active); }
+      .minicell.play { box-shadow: 0 0 0 2px var(--accent); }
 
       .grid { display: inline-flex; flex-direction: column; gap: 8px; margin-top: 6px; }
       .gridrow { display: flex; gap: 6px; }

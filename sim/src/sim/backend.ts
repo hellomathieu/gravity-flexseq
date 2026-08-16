@@ -2,66 +2,120 @@
  * Seam backend du Gravity Simulator.
  *
  * L'UI ne parle qu'a cette interface : elle est ainsi decouplee de la source
- * des donnees. Aujourd'hui un seul backend (`TsReferenceBackend`, modele TS de
- * reference) ; demain un `Avr8jsBackend` lira l'etat du firmware C++ reel
- * execute par avr8js, en implementant la meme interface.
+ * des donnees. Aujourd'hui `TsReferenceBackend` (modele TS) ; demain un
+ * `Avr8jsBackend` lira l'etat du firmware C++ execute par avr8js.
  *
- * Les vues renvoyees sont des valeurs (CellView[]), pas des objets domaine :
- * un backend AVR n'expose pas de `Pattern` TypeScript.
+ * Modele : une BANQUE de 16 patterns partages + un SequencerEngine qui detient
+ * l'etat d'execution par channel (pattern selectionne, longueur, phase locale).
+ * Editer le pattern d'un channel modifie le pattern PARTAGE : les autres
+ * channels qui le referencent voient le meme contenu.
  */
-import { PatternStore } from "../domain/PatternStore.js";
+import { PatternBank, PATTERN_COUNT } from "../domain/PatternBank.js";
+import { SequencerEngine, CHANNEL_COUNT } from "../domain/SequencerEngine.js";
 import { viewPattern, type CellView } from "./PatternView.js";
 
 export interface SimBackend {
   readonly channelCount: number;
-  readonly patternsPerChannel: number;
+  readonly patternCount: number;
 
-  getLength(channel: number, patternIndex: number): number;
-  view(channel: number, patternIndex: number): CellView[];
-
-  toggleStep(channel: number, patternIndex: number, index: number): void;
-  setLength(channel: number, patternIndex: number, length: number): boolean;
+  // --- selection & edition (par channel, sur le pattern partage) ---
+  getSelectedPattern(channel: number): number;
+  setSelectedPattern(channel: number, index: number): void;
+  getLength(channel: number): number;
+  setLength(channel: number, length: number): boolean;
+  view(channel: number): CellView[];
+  toggleStep(channel: number, index: number): void;
   /** Ajoute le triolet s'il est absent (et valide), le retire s'il est present. */
-  toggleTriplet(channel: number, patternIndex: number, startIndex: number): boolean;
+  toggleTriplet(channel: number, startIndex: number): boolean;
+
+  // --- transport & modele temporel ---
+  play(): void;
+  pause(): void;
+  resetPhase(): void;
+  isPlaying(): boolean;
+  advanceTicks(ticks: number): void;
+  masterPhase(): number;
+  effectiveStep(channel: number): number;
 }
 
-/** Backend de reference : lit/ecrit directement le modele TypeScript. */
+/** Backend de reference : banque partagee + moteur, en TypeScript. */
 export class TsReferenceBackend implements SimBackend {
-  readonly channelCount = PatternStore.CHANNEL_COUNT;
-  readonly patternsPerChannel = PatternStore.PATTERN_PER_CHANNEL;
+  readonly channelCount = CHANNEL_COUNT;
+  readonly patternCount = PATTERN_COUNT;
 
-  private readonly store: PatternStore;
+  private readonly bank = new PatternBank();
+  private readonly engine = new SequencerEngine();
 
-  constructor(store: PatternStore = new PatternStore()) {
-    this.store = store;
+  private patternOf(channel: number) {
+    return this.bank.getPattern(this.engine.getSelectedPattern(channel));
   }
 
-  getLength(channel: number, patternIndex: number): number {
-    return this.store.getPattern(channel, patternIndex)?.getBaseLength() ?? 0;
+  // --- selection & edition ----------------------------------------------
+
+  getSelectedPattern(channel: number): number {
+    return this.engine.getSelectedPattern(channel);
   }
 
-  view(channel: number, patternIndex: number): CellView[] {
-    const pattern = this.store.getPattern(channel, patternIndex);
-    return pattern ? viewPattern(pattern) : [];
+  setSelectedPattern(channel: number, index: number): void {
+    this.engine.setSelectedPattern(channel, index);
   }
 
-  toggleStep(channel: number, patternIndex: number, index: number): void {
-    const pattern = this.store.getPattern(channel, patternIndex);
+  getLength(channel: number): number {
+    return this.engine.getEffectiveLength(channel);
+  }
+
+  setLength(channel: number, length: number): boolean {
+    return this.engine.setEffectiveLength(channel, length);
+  }
+
+  view(channel: number): CellView[] {
+    const pattern = this.patternOf(channel);
+    return pattern ? viewPattern(pattern, this.engine.getEffectiveLength(channel)) : [];
+  }
+
+  toggleStep(channel: number, index: number): void {
+    const pattern = this.patternOf(channel);
     if (!pattern) return;
     const current = pattern.readStep(index);
     if (current === null) return;
     pattern.writeStep(index, !current);
   }
 
-  setLength(channel: number, patternIndex: number, length: number): boolean {
-    return this.store.getPattern(channel, patternIndex)?.setBaseLength(length) ?? false;
-  }
-
-  toggleTriplet(channel: number, patternIndex: number, startIndex: number): boolean {
-    const pattern = this.store.getPattern(channel, patternIndex);
+  toggleTriplet(channel: number, startIndex: number): boolean {
+    const pattern = this.patternOf(channel);
     if (!pattern) return false;
     return pattern.isTripletStart(startIndex)
       ? pattern.removeTriplet(startIndex)
       : pattern.addTriplet(startIndex);
+  }
+
+  // --- transport & modele temporel --------------------------------------
+
+  play(): void {
+    this.engine.start();
+  }
+
+  pause(): void {
+    this.engine.stop();
+  }
+
+  resetPhase(): void {
+    this.engine.reset();
+  }
+
+  isPlaying(): boolean {
+    return this.engine.isRunning;
+  }
+
+  advanceTicks(ticks: number): void {
+    this.engine.advance(ticks);
+  }
+
+  masterPhase(): number {
+    return this.engine.masterPhase;
+  }
+
+  effectiveStep(channel: number): number {
+    return this.engine.effectiveStep(channel);
   }
 }

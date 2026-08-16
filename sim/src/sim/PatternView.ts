@@ -31,9 +31,12 @@ export const CELL_SYMBOL: Record<CellKind, string> = {
   beyond: "•",
 };
 
-/** Projette un Pattern en 24 cellules de vue (index 0..23). */
-export function viewPattern(pattern: Pattern): CellView[] {
-  const length = pattern.getBaseLength();
+/**
+ * Projette un Pattern en 24 cellules de vue (index 0..23).
+ * `length` est la longueur active du CHANNEL (etat par channel, plus dans le
+ * Pattern) : les positions >= length sont marquees "beyond".
+ */
+export function viewPattern(pattern: Pattern, length: number): CellView[] {
   const cells: CellView[] = [];
 
   for (let index = 0; index < Pattern.DEFAULT_TOTAL_STEPS; ++index) {

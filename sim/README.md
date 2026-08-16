@@ -34,11 +34,20 @@ npm run typecheck # tsc --noEmit
 
 ## État
 
-- [x] `Pattern` — modèle + tests miroir (P0).
-- [x] `PatternStore` — modèle + tests miroir (P1).
+- [x] `Pattern` — contenu partagé (24 steps + triolets, sans length) (P0, revu P4).
+- [x] `PatternBank` — **banque de 16 patterns partagés** (remplace l'ancien 6×16) (P4).
+- [x] `SequencerEngine.selectedPattern` + LENGTH **par channel** ; édition de pattern partagée (P4).
 - [x] Simulateur UI — squelette EDIT PATTERN, backend TS (P2).
-- [ ] Transport / masterPhase / sorties trigger.
+- [x] `SequencerEngine` — `masterPhase` (ticks 96 PPQN), effectiveStep par channel (P3.0).
+- [x] Transport dans le simulateur — Play/Stop/Reset + playhead sur l'OLED (P3.1).
+- [x] Pattern actif **par channel** + bande multi-channels (6 playheads simultanés) (P3.1).
+- [ ] Grille musicale METER/SUBDIV/MEASURES ; sorties trigger.
+- [ ] Couche Transport réelle (clock/MIDI) ; port C++ du moteur.
 - [ ] Backend avr8js (branché sur le même seam `SimBackend`).
+
+> Le playhead sur l'écran EDIT est une aide du simulateur ; le PRD ne l'exige
+> pas comme fonctionnalité firmware. L'horloge du simulateur convertit le temps
+> réel en ticks 96 PPQN selon le BPM (rôle tenu plus tard par la couche Transport).
 
 ### Lancer le simulateur
 
