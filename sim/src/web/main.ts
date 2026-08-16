@@ -21,6 +21,10 @@ const backend: SimBackend = new TsReferenceBackend();
 
 const state = { channel: 0, cursor: 0, tripletMode: false, bpm: 120 };
 
+// Trigger flash: timestamp (perf clock) until which each channel's LED stays lit.
+const FLASH_MS = 120;
+const triggerFlashUntil: number[] = new Array(6).fill(0);
+
 // horloge d'animation
 let rafId = 0;
 let lastTime = 0;
@@ -155,7 +159,9 @@ function updateChannels(): void {
       row += `<span class="minicell${on}${play}"></span>`;
     }
     const sel = ch === state.channel ? " sel" : "";
+    const lit = performance.now() < (triggerFlashUntil[ch] ?? 0) ? " on" : "";
     html += `<div class="chrow${sel}">
+      <span class="trigled${lit}" title="trigger"></span>
       <span class="chlab">CH${ch + 1} ${patternLabel(pat)}</span>
       <span class="minirow">${row}</span>
       <span class="chstep">${step + 1}/${len}</span>
@@ -174,6 +180,10 @@ function animate(now: number): void {
   if (whole > 0) {
     tickAcc -= whole;
     backend.advanceTicks(whole);
+    // Right after advancing: latch a flash for every channel that just triggered.
+    for (let ch = 0; ch < backend.channelCount; ++ch) {
+      if (backend.triggered(ch)) triggerFlashUntil[ch] = now + FLASH_MS;
+    }
   }
 
   drawOledScreen();
