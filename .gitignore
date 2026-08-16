@@ -70,6 +70,12 @@ vcpkg_installed/
 Testing/
 .cache/
 
+# Node / TypeScript sim workspace
+node_modules/
+sim/node_modules/
+sim/dist/
+sim/coverage/
+
 # Others
 .DS_Store
 
