@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gravity Simulator — POC</title>
+    <style>
+      :root {
+        --bg: #14161a;
+        --panel: #1d2027;
+        --line: #2c313b;
+        --fg: #e6e8ec;
+        --muted: #8b93a1;
+        --active: #43d17a;
+        --inactive: #4a5160;
+        --beyond: #2a2f39;
+        --accent: #f0a53a;
+        --sel: #3a7afe;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font: 14px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+        background: var(--bg);
+        color: var(--fg);
+        padding: 20px;
+      }
+      h1 { font-size: 15px; margin: 0 0 4px; }
+      .sub { color: var(--muted); margin: 0 0 18px; font-size: 12px; }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 14px;
+      }
+      .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+      .row + .row { margin-top: 12px; }
+      .label { color: var(--muted); width: 84px; font-size: 12px; }
+      button {
+        font: inherit;
+        color: var(--fg);
+        background: #262b34;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 5px 9px;
+        cursor: pointer;
+      }
+      button:hover { border-color: var(--muted); }
+      button.sel { background: var(--sel); border-color: var(--sel); color: #fff; }
+      input[type="number"] {
+        font: inherit; width: 64px; color: var(--fg);
+        background: #262b34; border: 1px solid var(--line);
+        border-radius: 6px; padding: 5px 8px;
+      }
+      .toggle.on { background: var(--accent); border-color: var(--accent); color: #14161a; }
+
+      .grid { display: inline-flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+      .gridrow { display: flex; gap: 6px; }
+      .cellwrap { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+      .tmark { height: 4px; width: 34px; border-radius: 2px; background: transparent; }
+      .cellwrap.trip .tmark { background: var(--accent); }
+      .cell {
+        width: 34px; height: 34px; border-radius: 6px;
+        border: 1px solid var(--line);
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer; user-select: none; font-size: 12px; color: var(--muted);
+      }
+      .cell.active { background: var(--active); border-color: var(--active); color: #0b1a10; }
+      .cell.inactive { background: var(--inactive); }
+      .cell.beyond { background: var(--beyond); color: #3f4653; cursor: default; }
+      .hint { color: var(--muted); font-size: 12px; margin-top: 12px; }
+      code { color: var(--accent); }
+      canvas.oled {
+        width: 512px; height: 256px;
+        image-rendering: pixelated;
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        background: #f4f4f2;
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Gravity Simulator — POC (backend TypeScript)</h1>
+    <p class="sub">Modèle de référence FlexSeq · EDIT PATTERN · 6 channels × 16 patterns × 24 steps</p>
+    <div id="app"></div>
+    <script type="module" src="/src/web/main.ts"></script>
+  </body>
+</html>

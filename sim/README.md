@@ -36,8 +36,20 @@ npm run typecheck # tsc --noEmit
 
 - [x] `Pattern` — modèle + tests miroir (P0).
 - [x] `PatternStore` — modèle + tests miroir (P1).
-- [ ] Simulateur UI (P1+).
-- [ ] Backend avr8js (P2).
+- [x] Simulateur UI — squelette EDIT PATTERN, backend TS (P2).
+- [ ] Transport / masterPhase / sorties trigger.
+- [ ] Backend avr8js (branché sur le même seam `SimBackend`).
+
+### Lancer le simulateur
+
+```bash
+cd sim
+npm run dev   # http://localhost:5173 (Vite, hot-reload)
+```
+
+Architecture : `src/web/main.ts` (UI) → `src/sim/backend.ts` (`SimBackend`,
+seam pour brancher avr8js plus tard) → `src/domain/*` → `src/sim/PatternView.ts`
+(rendu pur, testé).
 
 Côté C++, le loop de test sans hardware est `pio test -e native` (env ajouté
 en P1). Parité mesurée : TS 35/35 ; C++ natif 42/42 (`test_pattern` 25,
