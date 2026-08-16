@@ -54,6 +54,11 @@ public:
     // Logical position of the channel, in [0, effectiveLength). -1 if invalid.
     int8_t effectiveStep(uint8_t channel) const;
 
+    // True if the channel crossed at least one step boundary during the LAST
+    // advance() call (i.e. a new step onset). Used to emit triggers. Reset at
+    // the start of every advance().
+    bool hasStepped(uint8_t channel) const;
+
 private:
     struct ChannelState {
         uint8_t selectedPattern;
@@ -67,6 +72,7 @@ private:
 
     uint32_t phase_;
     bool running_;
+    uint8_t stepped_; // bitmask: channels that crossed a step in the last advance()
     ChannelState channels_[CHANNEL_COUNT];
 };
 

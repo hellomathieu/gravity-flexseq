@@ -35,11 +35,13 @@ class Ch1SignalTest(unittest.TestCase):
     def test_ch1_alternates_high_low(self):
         assert_alternates_high_low(self.transitions)
 
-    def test_ch1_has_100ms_rising_edge_period(self):
+    def test_ch1_has_40ms_rising_edge_period(self):
+        # Engine-driven: pattern 0 has active steps 0/4/8/12 played on CH1 at
+        # one 1/16 step per 10 ms, so CH1 pulses once every 4 steps = 40 ms.
         assert_rising_edge_periods(
             self.transitions,
-            expected_ns=100_000_000,
-            tolerance_ns=2_000_000,
+            expected_ns=40_000_000,
+            tolerance_ns=3_000_000,
         )
 
 

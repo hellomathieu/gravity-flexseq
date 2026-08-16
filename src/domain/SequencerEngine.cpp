@@ -4,7 +4,8 @@ namespace flexseq {
 
 SequencerEngine::SequencerEngine()
     : phase_(0),
-      running_(false) {
+      running_(false),
+      stepped_(0) {
     for (uint8_t ch = 0; ch < CHANNEL_COUNT; ++ch) {
         channels_[ch].selectedPattern = 0;
         channels_[ch].effectiveLength = DEFAULT_LENGTH;
@@ -39,6 +40,7 @@ void SequencerEngine::reset() {
 }
 
 void SequencerEngine::advance(uint16_t ticks) {
+    stepped_ = 0; // report only the crossings of THIS advance()
     if (!running_ || ticks == 0) {
         return;
     }
@@ -52,6 +54,7 @@ void SequencerEngine::advance(uint16_t ticks) {
         while (c.acc >= c.ticksPerStep) {
             c.acc = static_cast<uint16_t>(c.acc - c.ticksPerStep);
             c.localStep = static_cast<uint8_t>((c.localStep + 1) % c.effectiveLength);
+            stepped_ = static_cast<uint8_t>(stepped_ | (1u << ch));
         }
     }
 }
@@ -115,6 +118,13 @@ int8_t SequencerEngine::effectiveStep(uint8_t channel) const {
         return -1;
     }
     return static_cast<int8_t>(channels_[channel].localStep);
+}
+
+bool SequencerEngine::hasStepped(uint8_t channel) const {
+    if (!validChannel(channel)) {
+        return false;
+    }
+    return (stepped_ & (1u << channel)) != 0;
 }
 
 }  // namespace flexseq

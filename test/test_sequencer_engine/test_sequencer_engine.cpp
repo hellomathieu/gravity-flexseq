@@ -179,6 +179,39 @@ void test_rejects_invalid_channel_and_ticks_per_step() {
     TEST_ASSERT_FALSE(e.setTicksPerStep(0, 0));
 }
 
+void test_has_stepped_reports_boundary_crossings() {
+    SequencerEngine e;
+    e.start();
+
+    e.advance(STEP - 1); // no boundary yet
+    TEST_ASSERT_FALSE(e.hasStepped(0));
+
+    e.advance(1); // crosses the first boundary
+    TEST_ASSERT_TRUE(e.hasStepped(0));
+
+    e.advance(1); // within the step, no new boundary
+    TEST_ASSERT_FALSE(e.hasStepped(0));
+}
+
+void test_has_stepped_is_false_while_stopped_and_for_invalid_channel() {
+    SequencerEngine e;
+    e.advance(STEP); // stopped -> no crossing
+    TEST_ASSERT_FALSE(e.hasStepped(0));
+    TEST_ASSERT_FALSE(e.hasStepped(6));
+}
+
+void test_has_stepped_per_channel_with_different_rates() {
+    SequencerEngine e;
+    e.start();
+    e.setTicksPerStep(1, STEP * 2); // channel 1 half as fast
+    e.advance(STEP); // ch0 crosses, ch1 does not yet
+    TEST_ASSERT_TRUE(e.hasStepped(0));
+    TEST_ASSERT_FALSE(e.hasStepped(1));
+    e.advance(STEP); // now ch1 crosses too
+    TEST_ASSERT_TRUE(e.hasStepped(0));
+    TEST_ASSERT_TRUE(e.hasStepped(1));
+}
+
 /*
  * Per-channel selected pattern
  */
@@ -227,6 +260,9 @@ int main() {
     RUN_TEST(test_isolates_execution_state_between_channels);
     RUN_TEST(test_supports_different_ticks_per_step_per_channel);
     RUN_TEST(test_rejects_invalid_channel_and_ticks_per_step);
+    RUN_TEST(test_has_stepped_reports_boundary_crossings);
+    RUN_TEST(test_has_stepped_is_false_while_stopped_and_for_invalid_channel);
+    RUN_TEST(test_has_stepped_per_channel_with_different_rates);
 
     RUN_TEST(test_defaults_every_channel_to_pattern_zero);
     RUN_TEST(test_sets_and_reads_selected_pattern_independently);
