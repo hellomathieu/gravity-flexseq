@@ -1,9 +1,9 @@
 #include <Arduino.h>
 #include <libGravity.h>
 
-#include <flexseq/PatternStore.h>
+#include <flexseq/PatternBank.h>
 
-flexseq::PatternStore patternStore;
+flexseq::PatternBank patternBank;
 
 void setup() {
     gravity.Init();

@@ -5,20 +5,22 @@
 
 namespace flexseq {
 
+// Pattern holds only shared musical content: 24 binary steps + local triplet
+// groups. It carries NO length: LENGTH is a per-channel execution state (see
+// the sequencer), so a single Pattern can be referenced by several channels
+// (shared bank model, matching the original Sitka firmware seqA1..seqB8).
+//
+// Triplet validity is therefore independent of any length: a group is valid on
+// the 24-step grid (start <= 21, no overlap), per the PRD ("triplets are
+// independent of LENGTH").
 class Pattern {
 public:
-    static constexpr uint8_t MIN_PATTERN_LENGTH = 1;
-    static constexpr uint8_t MAX_PATTERN_LENGTH = 24;
-    static constexpr uint8_t DEFAULT_PATTERN_LENGTH = 16;
     static constexpr uint8_t DEFAULT_TOTAL_STEPS = 24;
 
     Pattern();
 
     bool readStep(uint8_t index, bool& active) const;
     bool writeStep(uint8_t index, bool active);
-
-    uint8_t getBaseLength() const;
-    bool setBaseLength(uint8_t length);
 
     void clear();
 
@@ -33,10 +35,9 @@ public:
 private:
     uint8_t packedSteps[3];
     uint8_t tripletStarts[3];
-    uint8_t baseLength;
 };
 
-static_assert(sizeof(Pattern) == 7, "Pattern must remain 7 bytes");
+static_assert(sizeof(Pattern) == 6, "Pattern must remain 6 bytes (content only)");
 
 } // namespace flexseq
 
