@@ -11,11 +11,12 @@ namespace flexseq {
 // negative = multiply (faster) => 96 / |v|. `processClockTick` fires a step
 // when `tick % mod_pulses == 0`, so mod_pulses == ticksPerStep.
 //
-// Note: the historical Sitka Trigger Sequencer step is 1/16, which here is
-// SUBDIV = -4 (96/4 = 24 ticks) — the per-channel default.
+// Default per-channel SUBDIV is /1 (the quarter note / noire, 96 ticks) — this
+// matches the original Sitka channel default (subDiv index 7 == unity). The
+// historical Trigger Sequencer STEP grid of 1/16 is SUBDIV = -4 (24 ticks).
 
 constexpr uint16_t QUARTER_TICKS = 96; // == SequencerEngine::PPQN
-constexpr int16_t DEFAULT_SUBDIV = -4; // 1/16 (24 ticks)
+constexpr int16_t DEFAULT_SUBDIV = 1;  // /1 = quarter note (noire), 96 ticks
 
 // Returns ticksPerStep for a SUBDIV value, or 0 if invalid (0, or a multiplier
 // that does not divide 96 evenly).

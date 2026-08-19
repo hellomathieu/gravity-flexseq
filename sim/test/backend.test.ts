@@ -26,12 +26,12 @@ describe("TsReferenceBackend — dimensions & edition", () => {
     expect(b.getLength(0)).toBe(8);
   });
 
-  it("adds then removes a triplet via toggle", () => {
+  it("sets and clears a ratchet on a step", () => {
     const b = new TsReferenceBackend();
-    expect(b.toggleTriplet(0, 6)).toBe(true);
-    expect(b.view(0)[6]!.tripletStart).toBe(true);
-    expect(b.toggleTriplet(0, 6)).toBe(true);
-    expect(b.view(0)[6]!.tripletStart).toBe(false);
+    expect(b.setRatchet(0, 6, 3)).toBe(true);
+    expect(b.view(0)[6]!.ratchet).toBe(3);
+    expect(b.setRatchet(0, 6, 0)).toBe(true);
+    expect(b.view(0)[6]!.ratchet).toBe(0);
   });
 });
 
@@ -105,5 +105,42 @@ describe("TsReferenceBackend — transport", () => {
     b.play();
     b.advanceTicks(24 * 5); // 5 steps at 1/16
     expect(b.effectiveStep(0)).toBe(5 % 4); // 1
+  });
+});
+
+describe("TsReferenceBackend — ratchets are wired to the engine", () => {
+  it("un ratchet emet plusieurs declenchements sur le meme step", () => {
+    const b = new TsReferenceBackend();
+    b.setSubdiv(0, 1); // /1 -> 96 ticks
+    b.toggleStep(0, 1); // step 1 actif
+    expect(b.setRatchet(0, 1, 3)).toBe(true);
+    b.play();
+
+    b.advanceTicks(96); // -> step 1
+    expect(b.effectiveStep(0)).toBe(1);
+    expect(b.triggerCount(0)).toBe(1);
+
+    b.advanceTicks(32);
+    expect(b.triggerCount(0)).toBe(1); // 2e des trois
+    expect(b.effectiveStep(0)).toBe(1); // toujours le meme step
+  });
+
+  it("le triolet etire le step et decale la suite", () => {
+    const b = new TsReferenceBackend();
+    b.setSubdiv(0, 1);
+    expect(b.setRatchet(0, 0, 7)).toBe(true);
+    b.play();
+    b.advanceTicks(96 * 3);
+    expect(b.effectiveStep(0)).toBe(2); // un step de retard
+  });
+
+  it("sans ratchet, le meme temps avance d'un seul step", () => {
+    const b = new TsReferenceBackend();
+    b.setSubdiv(0, 1);
+    b.play();
+    b.advanceTicks(96);
+    expect(b.effectiveStep(0)).toBe(1);
+    b.advanceTicks(96);
+    expect(b.effectiveStep(0)).toBe(2);
   });
 });

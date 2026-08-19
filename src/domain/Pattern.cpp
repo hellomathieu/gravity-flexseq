@@ -2,9 +2,29 @@
 
 namespace flexseq {
 
+bool isValidRatchet(uint8_t code) {
+    return code == RATCHET_NONE || code == RATCHET_2 || code == RATCHET_3 ||
+           code == RATCHET_4 || code == RATCHET_6 || code == RATCHET_TRIPLET;
+}
+
+uint8_t ratchetTriggers(uint8_t code) {
+    if (code == RATCHET_TRIPLET) {
+        return 3; // three triggers, spread over two step durations
+    }
+    if (code == RATCHET_2 || code == RATCHET_3 || code == RATCHET_4 ||
+        code == RATCHET_6) {
+        return code; // the code IS the trigger count
+    }
+    return 1;
+}
+
+uint8_t ratchetSpan(uint8_t code) {
+    return (code == RATCHET_TRIPLET) ? 2 : 1;
+}
+
 Pattern::Pattern()
     : packedSteps{0, 0, 0},
-      tripletStarts{0, 0, 0} {
+      packedRatchets{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0} {
 }
 
 bool Pattern::readStep(uint8_t index, bool& active) const {
@@ -43,100 +63,45 @@ void Pattern::clear() {
     packedSteps[1] = 0;
     packedSteps[2] = 0;
 
-    clearTriplets();
+    clearRatchets();
 }
 
-bool Pattern::addTriplet(uint8_t startIndex) {
-    // A triplet occupies startIndex, startIndex + 1 and startIndex + 2, so the
-    // latest possible start is DEFAULT_TOTAL_STEPS - 3. Validity is independent
-    // of any length (LENGTH is a per-channel state, not a Pattern property).
-    if (startIndex > DEFAULT_TOTAL_STEPS - 3) {
+bool Pattern::setRatchet(uint8_t index, uint8_t code) {
+    if (index >= DEFAULT_TOTAL_STEPS || !isValidRatchet(code)) {
         return false;
     }
 
-    // A new triplet cannot overlap an existing one: an existing start conflicts
-    // when it lies in startIndex - 2 ... startIndex + 2. Guard the lower bound
-    // to avoid unsigned underflow.
-    const uint8_t firstCandidate =
-        (startIndex >= 2) ? static_cast<uint8_t>(startIndex - 2) : 0;
+    const uint8_t byteIndex = index >> 1;      // two nibbles per byte
+    const bool highNibble = (index & 0x01) != 0;
 
-    const uint8_t lastCandidate =
-        static_cast<uint8_t>(startIndex + 2);
-
-    for (uint8_t existingStart = firstCandidate;
-         existingStart <= lastCandidate;
-         ++existingStart) {
-
-        if (existingStart > DEFAULT_TOTAL_STEPS - 3) {
-            break;
-        }
-
-        if (isTripletStart(existingStart)) {
-            return false;
-        }
+    if (highNibble) {
+        packedRatchets[byteIndex] =
+            static_cast<uint8_t>((packedRatchets[byteIndex] & 0x0F) |
+                                 static_cast<uint8_t>(code << 4));
+    } else {
+        packedRatchets[byteIndex] =
+            static_cast<uint8_t>((packedRatchets[byteIndex] & 0xF0) | (code & 0x0F));
     }
-
-    const uint8_t byteIndex = startIndex >> 3;
-    const uint8_t bitIndex = startIndex & 0x07;
-    const uint8_t mask = static_cast<uint8_t>(1u << bitIndex);
-
-    tripletStarts[byteIndex] |= mask;
 
     return true;
 }
 
-bool Pattern::removeTriplet(uint8_t startIndex) {
-    if (startIndex >= DEFAULT_TOTAL_STEPS) {
-        return false;
-    }
-
-    if (!isTripletStart(startIndex)) {
-        return false;
-    }
-
-    const uint8_t byteIndex = startIndex >> 3;
-    const uint8_t bitIndex = startIndex & 0x07;
-    const uint8_t mask = static_cast<uint8_t>(1u << bitIndex);
-
-    tripletStarts[byteIndex] &= static_cast<uint8_t>(~mask);
-
-    return true;
-}
-
-bool Pattern::isTripletStart(uint8_t index) const {
+uint8_t Pattern::getRatchet(uint8_t index) const {
     if (index >= DEFAULT_TOTAL_STEPS) {
-        return false;
+        return RATCHET_NONE;
     }
 
-    const uint8_t byteIndex = index >> 3;
-    const uint8_t bitIndex = index & 0x07;
-    const uint8_t mask = static_cast<uint8_t>(1u << bitIndex);
+    const uint8_t byteIndex = index >> 1;
+    const bool highNibble = (index & 0x01) != 0;
 
-    return (tripletStarts[byteIndex] & mask) != 0;
+    return highNibble ? static_cast<uint8_t>(packedRatchets[byteIndex] >> 4)
+                      : static_cast<uint8_t>(packedRatchets[byteIndex] & 0x0F);
 }
 
-bool Pattern::isTripletStep(uint8_t index) const {
-    if (index >= DEFAULT_TOTAL_STEPS) {
-        return false;
+void Pattern::clearRatchets() {
+    for (uint8_t i = 0; i < 12; ++i) {
+        packedRatchets[i] = 0;
     }
-
-    for (uint8_t start = 0; start <= DEFAULT_TOTAL_STEPS - 3; ++start) {
-        if (!isTripletStart(start)) {
-            continue;
-        }
-
-        if (index >= start && index < start + 3) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-void Pattern::clearTriplets() {
-    tripletStarts[0] = 0;
-    tripletStarts[1] = 0;
-    tripletStarts[2] = 0;
 }
 
 } // namespace flexseq

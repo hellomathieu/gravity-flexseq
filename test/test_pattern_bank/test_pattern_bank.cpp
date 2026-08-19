@@ -11,8 +11,8 @@ void setUp() {}
 void tearDown() {}
 
 void test_pattern_bank_has_expected_memory_footprint() {
-    // 16 shared patterns * 6 bytes = 96 bytes (versus 672 for the old 6x16).
-    TEST_ASSERT_EQUAL_UINT(96, sizeof(PatternBank));
+    // 16 shared patterns * 15 bytes = 240 bytes (steps + per-step ratchets).
+    TEST_ASSERT_EQUAL_UINT(240, sizeof(PatternBank));
     TEST_ASSERT_EQUAL_UINT(PATTERN_COUNT * sizeof(Pattern), sizeof(PatternBank));
 }
 

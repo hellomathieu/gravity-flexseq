@@ -10,7 +10,7 @@ using flexseq::Transport;
 void setUp() {}
 void tearDown() {}
 
-static const uint16_t STEP = SequencerEngine::TICKS_PER_SIXTEENTH; // 24
+static const uint16_t STEP = SequencerEngine::PPQN; // 96 = default ticksPerStep (/1)
 
 void test_tick_advances_only_while_running() {
     SequencerEngine e;

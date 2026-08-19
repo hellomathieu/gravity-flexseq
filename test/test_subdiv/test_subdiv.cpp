@@ -26,8 +26,8 @@ void test_negative_multiplies_faster() {
     TEST_ASSERT_EQUAL_UINT16(4, subdivToTicks(-24));
 }
 
-void test_default_subdiv_is_one_sixteenth() {
-    TEST_ASSERT_EQUAL_UINT16(24, subdivToTicks(DEFAULT_SUBDIV));
+void test_default_subdiv_is_a_quarter() {
+    TEST_ASSERT_EQUAL_UINT16(96, subdivToTicks(DEFAULT_SUBDIV));
 }
 
 void test_matches_libgravity_clock_mod_pulses() {
@@ -51,7 +51,7 @@ int main() {
     RUN_TEST(test_unity_is_a_quarter_note);
     RUN_TEST(test_positive_divides_slower);
     RUN_TEST(test_negative_multiplies_faster);
-    RUN_TEST(test_default_subdiv_is_one_sixteenth);
+    RUN_TEST(test_default_subdiv_is_a_quarter);
     RUN_TEST(test_matches_libgravity_clock_mod_pulses);
     RUN_TEST(test_rejects_zero);
     return UNITY_END();

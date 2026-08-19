@@ -28,6 +28,14 @@
  */
 
 import { subdivToTicks, DEFAULT_SUBDIV } from "./subdiv.js";
+import type { PatternBank } from "./PatternBank.js";
+import { ratchetSpan, ratchetTriggers, RATCHET_NONE } from "./Pattern.js";
+
+/** Separation de mesure : une barre tous les N steps. GRAPHIQUE uniquement. */
+export const BAR_NONE = 0;
+export const DEFAULT_BAR_LENGTH = 4;
+/** Seules les valeurs qui divisent une ligne de 12 sans reste. */
+export const BAR_LENGTHS: readonly number[] = [BAR_NONE, 2, 3, 4, 6];
 
 /** Ticks par noire de l'horloge interne libGravity (resolution de reference). */
 export const PPQN = 96;
@@ -53,6 +61,12 @@ interface ChannelState {
   effectiveLength: number;
   subdiv: number; // valeur SUBDIV (libGravity) ; determine ticksPerStep
   ticksPerStep: number;
+  barLength: number; // separation de mesure (graphique), en steps
+  /** Timing du step COURANT, recalcule a chaque frontiere (pas de division en boucle). */
+  stepTicks: number; // ticksPerStep x span
+  slotTicks: number; // stepTicks / triggers
+  triggers: number; // declenchements dans ce step
+  subOnset: number; // sous-declenchements deja emis
   localStep: number; // position locale, dans [0, effectiveLength)
   acc: number; // ticks accumules dans le step courant, dans [0, ticksPerStep)
   stepped: boolean; // a franchi une frontiere de step lors du dernier advance()
@@ -61,6 +75,8 @@ interface ChannelState {
 export class SequencerEngine {
   private phase = 0; // masterPhase, en ticks (uint32)
   private running = false;
+  private bank: PatternBank | null = null;
+  private readonly onsets: number[];
   private readonly channels: ChannelState[];
 
   constructor(channelCount: number = CHANNEL_COUNT) {
@@ -68,11 +84,108 @@ export class SequencerEngine {
       selectedPattern: 0,
       effectiveLength: DEFAULT_LENGTH,
       subdiv: DEFAULT_SUBDIV,
-      ticksPerStep: TICKS_PER_SIXTEENTH,
+      ticksPerStep: subdivToTicks(DEFAULT_SUBDIV),
+      barLength: DEFAULT_BAR_LENGTH,
+      stepTicks: subdivToTicks(DEFAULT_SUBDIV),
+      slotTicks: subdivToTicks(DEFAULT_SUBDIV),
+      triggers: 1,
+      subOnset: 0,
       localStep: 0,
       acc: 0,
       stepped: false,
     }));
+    this.onsets = new Array<number>(this.channels.length).fill(0);
+    for (let ch = 0; ch < this.channels.length; ++ch) this.refreshStepTiming(ch);
+  }
+
+  /**
+   * Recalcule la duree et le nombre de declenchements du step courant a partir
+   * de son code de ratchet. Appele a chaque frontiere de step et sur tout
+   * changement de cadence : le chemin chaud ne fait donc aucune division.
+   */
+  private refreshStepTiming(ch: number, resetSubOnset = true): void {
+    const c = this.channels[ch];
+    if (!c) return;
+
+    let code = RATCHET_NONE;
+    if (this.bank) {
+      const pattern = this.bank.getPattern(c.selectedPattern);
+      if (pattern) code = pattern.getRatchet(c.localStep);
+    }
+
+    const span = ratchetSpan(code);
+    let triggers = ratchetTriggers(code);
+    c.stepTicks = c.ticksPerStep * span;
+
+    // Un sous-slot doit tomber sur un tick entier ; sinon le ratchet est ignore
+    // pour cette combinaison (repli documente, aucune derive).
+    if (triggers > 1 && c.stepTicks % triggers !== 0) triggers = 1;
+
+    c.triggers = triggers;
+    c.slotTicks = c.stepTicks / triggers;
+    if (resetSubOnset) {
+      c.subOnset = 0;
+    } else if (c.subOnset >= c.triggers) {
+      // Conserve les declenchements deja emis dans ce step : une edition ne
+      // doit pas les refaire jouer.
+      c.subOnset = c.triggers - 1;
+    }
+  }
+
+  /**
+   * Relit le ratchet du step courant apres une modification du CONTENU du
+   * pattern. Sans cela l'edition ne serait prise en compte qu'au passage
+   * suivant sur ce step.
+   */
+  refreshTiming(channel?: number): void {
+    if (channel === undefined) {
+      for (let ch = 0; ch < this.channels.length; ++ch) this.refreshStepTiming(ch, false);
+      return;
+    }
+    if (this.channel(channel)) this.refreshStepTiming(channel, false);
+  }
+
+  /**
+   * Banque partagee optionnelle. Une fois fournie, un step appartenant a un
+   * groupe ternaire LOCAL du pattern selectionne dure `ticksPerStep / 3` : les
+   * trois steps tiennent dans la duree d'UN step (ils passent plus vite). Sans
+   * banque, la duree de step reste uniforme.
+   */
+  setPatternBank(bank: PatternBank | null): void {
+    this.bank = bank;
+    for (let ch = 0; ch < this.channels.length; ++ch) this.refreshStepTiming(ch);
+  }
+
+  /**
+   * Duree en ticks du step COURANT du channel (ticksPerStep, ou son tiers dans
+   * un groupe ternaire). 0 si le channel est invalide.
+   */
+  currentStepTicks(channel: number): number {
+    return this.channel(channel)?.stepTicks ?? 0;
+  }
+
+  /** Nombre de declenchements emis par le step courant. */
+  currentStepTriggers(channel: number): number {
+    return this.channel(channel)?.triggers ?? 0;
+  }
+
+  /** Declenchements emis lors du DERNIER advance() (1 par step, N si ratchet). */
+  onsetCount(channel: number): number {
+    return Number.isInteger(channel) ? (this.onsets[channel] ?? 0) : 0;
+  }
+
+  /** Separation de mesure du channel (en steps), ou -1 si invalide. */
+  getBarLength(channel: number): number {
+    return this.channel(channel)?.barLength ?? -1;
+  }
+
+  /** Definit la separation de mesure (graphique). Rejette hors de BAR_LENGTHS. */
+  setBarLength(channel: number, steps: number): boolean {
+    const c = this.channel(channel);
+    if (!c) return false;
+    if (!BAR_LENGTHS.includes(steps)) return false;
+    c.barLength = steps;
+    return true;
   }
 
   // --- Transport ---------------------------------------------------------
@@ -98,9 +211,11 @@ export class SequencerEngine {
   /** Reset global : masterPhase a 0 et realignement de tous les channels. */
   reset(): void {
     this.phase = 0;
-    for (const c of this.channels) {
+    for (let ch = 0; ch < this.channels.length; ++ch) {
+      const c = this.channels[ch]!;
       c.localStep = 0;
       c.acc = 0;
+      this.refreshStepTiming(ch);
     }
   }
 
@@ -110,17 +225,32 @@ export class SequencerEngine {
    */
   advance(ticks = 1): void {
     for (const c of this.channels) c.stepped = false; // report only THIS advance
+    this.onsets.fill(0);
     if (!this.running) return;
     if (!Number.isInteger(ticks) || ticks < 0) return;
 
     this.phase = (this.phase + ticks) % PHASE_MODULO;
 
-    for (const c of this.channels) {
+    for (let ch = 0; ch < this.channels.length; ++ch) {
+      const c = this.channels[ch]!;
       c.acc += ticks;
-      while (c.acc >= c.ticksPerStep) {
-        c.acc -= c.ticksPerStep;
-        c.localStep = (c.localStep + 1) % c.effectiveLength;
-        c.stepped = true;
+
+      for (;;) {
+        // Sous-declenchements a l'interieur du step courant (ratchet).
+        if (c.subOnset + 1 < c.triggers && c.acc >= c.slotTicks * (c.subOnset + 1)) {
+          c.subOnset += 1;
+          this.onsets[ch] = (this.onsets[ch] ?? 0) + 1;
+          continue;
+        }
+        if (c.stepTicks > 0 && c.acc >= c.stepTicks) {
+          c.acc -= c.stepTicks;
+          c.localStep = (c.localStep + 1) % c.effectiveLength;
+          c.stepped = true;
+          this.refreshStepTiming(ch); // nouveau step -> nouvelle duree
+          this.onsets[ch] = (this.onsets[ch] ?? 0) + 1;
+          continue;
+        }
+        break;
       }
     }
   }
@@ -142,6 +272,7 @@ export class SequencerEngine {
     if (!c) return false;
     if (!Number.isInteger(index) || index < 0 || index >= PATTERN_COUNT) return false;
     c.selectedPattern = index;
+    this.refreshStepTiming(channel);
     return true;
   }
 
@@ -161,7 +292,10 @@ export class SequencerEngine {
       return false;
     }
     c.effectiveLength = length;
-    if (c.localStep >= length) c.localStep %= length;
+    if (c.localStep >= length) {
+      c.localStep %= length;
+      this.refreshStepTiming(channel);
+    }
     return true;
   }
 
@@ -175,7 +309,8 @@ export class SequencerEngine {
     if (!c) return false;
     if (!Number.isInteger(ticks) || ticks < 1) return false;
     c.ticksPerStep = ticks;
-    if (c.acc >= ticks) c.acc %= ticks;
+    this.refreshStepTiming(channel);
+    if (c.acc >= c.stepTicks) c.acc %= c.stepTicks;
     return true;
   }
 
@@ -197,7 +332,8 @@ export class SequencerEngine {
     if (ticks < 1) return false;
     c.subdiv = subdiv;
     c.ticksPerStep = ticks;
-    if (c.acc >= ticks) c.acc %= ticks;
+    this.refreshStepTiming(channel);
+    if (c.acc >= c.stepTicks) c.acc %= c.stepTicks;
     return true;
   }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Pattern } from "../src/domain/Pattern.js";
+import { Pattern, RATCHET_3 } from "../src/domain/Pattern.js";
 import { viewPattern, toAscii, CELL_SYMBOL } from "../src/sim/PatternView.js";
 
 describe("PatternView — viewPattern", () => {
@@ -34,18 +34,12 @@ describe("PatternView — viewPattern", () => {
 
     expect(cells[20]!.kind).toBe("beyond");
   });
-
-  it("flags triplet membership and start", () => {
+  it("carries each step's ratchet code", () => {
     const p = new Pattern();
-    p.addTriplet(3);
-    const cells = viewPattern(p, 24);
-
-    expect(cells[3]!.tripletStart).toBe(true);
-    expect(cells[3]!.tripletStep).toBe(true);
-    expect(cells[4]!.tripletStep).toBe(true);
-    expect(cells[5]!.tripletStep).toBe(true);
-    expect(cells[4]!.tripletStart).toBe(false);
-    expect(cells[6]!.tripletStep).toBe(false);
+    p.setRatchet(3, RATCHET_3);
+    const cells = viewPattern(p, 16);
+    expect(cells[3]!.ratchet).toBe(RATCHET_3);
+    expect(cells[4]!.ratchet).toBe(0);
   });
 });
 
@@ -62,12 +56,12 @@ describe("PatternView — toAscii", () => {
     expect(lines[2]!.trim()).toBe("");
   });
 
-  it("draws the triplet marker above a group", () => {
+  it("marks a ratchet step above the row", () => {
     const p = new Pattern();
-    p.addTriplet(0);
+    p.setRatchet(0, RATCHET_3);
     const lines = toAscii(viewPattern(p, 16)).split("\n");
 
-    expect(lines[0]).toBe("‾‾‾" + " ".repeat(9));
+    expect(lines[0]).toBe("‾" + " ".repeat(11)); // un seul step porte le ratchet
     expect(lines[1]!.startsWith(CELL_SYMBOL.inactive)).toBe(true);
   });
 });

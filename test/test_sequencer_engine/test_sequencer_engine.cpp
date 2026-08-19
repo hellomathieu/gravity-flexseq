@@ -1,14 +1,20 @@
 #include <stdint.h>
 #include <unity.h>
 
+#include <flexseq/PatternBank.h>
 #include <flexseq/SequencerEngine.h>
 
+using flexseq::PatternBank;
 using flexseq::SequencerEngine;
+using flexseq::RATCHET_3;
+using flexseq::RATCHET_4;
+using flexseq::RATCHET_6;
+using flexseq::RATCHET_TRIPLET;
 
 void setUp() {}
 void tearDown() {}
 
-static const uint16_t STEP = SequencerEngine::TICKS_PER_SIXTEENTH; // 24
+static const uint16_t STEP = SequencerEngine::PPQN; // 96 = default ticksPerStep (/1)
 
 /*
  * Transport & masterPhase
@@ -168,8 +174,8 @@ void test_supports_different_ticks_per_step_per_channel() {
     e.start();
     TEST_ASSERT_TRUE(e.setTicksPerStep(1, STEP * 2)); // channel 1 half as fast
     e.advance(STEP * 4);
-    TEST_ASSERT_EQUAL_INT8(4, e.effectiveStep(0)); // 96/24 = 4 steps
-    TEST_ASSERT_EQUAL_INT8(2, e.effectiveStep(1)); // 96/48 = 2 steps
+    TEST_ASSERT_EQUAL_INT8(4, e.effectiveStep(0)); // 384/96 = 4 steps
+    TEST_ASSERT_EQUAL_INT8(2, e.effectiveStep(1)); // 384/192 = 2 steps
 }
 
 void test_rejects_invalid_channel_and_ticks_per_step() {
@@ -241,13 +247,13 @@ void test_rejects_out_of_range_pattern_and_channel() {
 
 void test_default_subdiv_and_setSubdiv_rate() {
     SequencerEngine e;
-    TEST_ASSERT_EQUAL_INT16(-4, e.getSubdiv(0)); // 1/16
-    TEST_ASSERT_EQUAL_UINT16(24, e.getTicksPerStep(0));
+    TEST_ASSERT_EQUAL_INT16(1, e.getSubdiv(0)); // /1 = quarter (noire), default
+    TEST_ASSERT_EQUAL_UINT16(96, e.getTicksPerStep(0));
 
     e.start();
-    TEST_ASSERT_TRUE(e.setSubdiv(0, 1)); // quarter note = 96 ticks
-    TEST_ASSERT_EQUAL_UINT16(96, e.getTicksPerStep(0));
-    e.advance(96);
+    TEST_ASSERT_TRUE(e.setSubdiv(0, -4)); // 1/16 = 24 ticks
+    TEST_ASSERT_EQUAL_UINT16(24, e.getTicksPerStep(0));
+    e.advance(24);
     TEST_ASSERT_EQUAL_INT8(1, e.effectiveStep(0));
 }
 
@@ -266,6 +272,178 @@ void test_rejects_invalid_subdiv() {
     TEST_ASSERT_FALSE(e.setSubdiv(0, 0));
     TEST_ASSERT_FALSE(e.setSubdiv(6, 1));
     TEST_ASSERT_EQUAL_INT16(0, e.getSubdiv(6));
+}
+
+/*
+ * Ratchets — N triggers inside one step; the triplet stretches time
+ */
+
+void test_plain_step_fires_one_onset_per_step() {
+    PatternBank bank;
+    SequencerEngine e;
+    e.setPatternBank(&bank);
+    e.start();
+    TEST_ASSERT_EQUAL_UINT16(96, e.currentStepTicks(0));
+    TEST_ASSERT_EQUAL_UINT8(1, e.currentStepTriggers(0));
+    e.advance(96);
+    TEST_ASSERT_EQUAL_UINT8(1, e.onsetCount(0));
+    TEST_ASSERT_TRUE(e.hasStepped(0));
+}
+
+void test_ratchet_fires_n_onsets_inside_one_step_duration() {
+    PatternBank bank;
+    SequencerEngine e;
+    e.setPatternBank(&bank);
+    e.setSelectedPattern(0, 0);
+    bank.getPattern(0)->setRatchet(1, RATCHET_3);
+    e.start();
+
+    e.advance(96); // -> step 1, the ratchet step
+    TEST_ASSERT_EQUAL_INT8(1, e.effectiveStep(0));
+    TEST_ASSERT_EQUAL_UINT8(3, e.currentStepTriggers(0));
+    // The step duration is UNCHANGED: only the trigger density grows.
+    TEST_ASSERT_EQUAL_UINT16(96, e.currentStepTicks(0));
+
+    e.advance(32);
+    TEST_ASSERT_EQUAL_UINT8(1, e.onsetCount(0)); // 2nd of three
+    TEST_ASSERT_EQUAL_INT8(1, e.effectiveStep(0)); // still the same step
+    e.advance(32);
+    TEST_ASSERT_EQUAL_UINT8(1, e.onsetCount(0)); // 3rd of three
+    e.advance(32);
+    TEST_ASSERT_EQUAL_INT8(2, e.effectiveStep(0)); // now the next step
+}
+
+void test_ratchet_step_keeps_the_pattern_duration() {
+    PatternBank bank;
+    SequencerEngine e;
+    e.setPatternBank(&bank);
+    e.setSelectedPattern(0, 0);
+    e.setEffectiveLength(0, 4);
+    bank.getPattern(0)->setRatchet(0, RATCHET_6);
+    e.start();
+    e.advance(96 * 4); // four plain step durations
+    TEST_ASSERT_EQUAL_INT8(0, e.effectiveStep(0)); // full loop, back to start
+}
+
+void test_ratchet_counts_all_onsets_in_a_batched_advance() {
+    PatternBank bank;
+    SequencerEngine e;
+    e.setPatternBank(&bank);
+    e.setSelectedPattern(0, 0);
+    bank.getPattern(0)->setRatchet(1, RATCHET_4);
+    e.start();
+    e.advance(96);       // -> step 1 (ratchet 4)
+    e.advance(96);       // whole ratchet step in one drain: 3 sub + 1 step onset
+    TEST_ASSERT_EQUAL_UINT8(4, e.onsetCount(0));
+}
+
+void test_triplet_stretches_the_step_to_two_units() {
+    PatternBank bank;
+    SequencerEngine e;
+    e.setPatternBank(&bank);
+    e.setSelectedPattern(0, 0);
+    bank.getPattern(0)->setRatchet(1, RATCHET_TRIPLET);
+    e.start();
+
+    e.advance(96); // -> step 1, the triplet
+    TEST_ASSERT_EQUAL_UINT16(192, e.currentStepTicks(0)); // two units
+    TEST_ASSERT_EQUAL_UINT8(3, e.currentStepTriggers(0));
+
+    e.advance(64); // 192 / 3
+    TEST_ASSERT_EQUAL_UINT8(1, e.onsetCount(0));
+    TEST_ASSERT_EQUAL_INT8(1, e.effectiveStep(0));
+    e.advance(64);
+    TEST_ASSERT_EQUAL_UINT8(1, e.onsetCount(0));
+    e.advance(64); // end of the stretched step
+    TEST_ASSERT_EQUAL_INT8(2, e.effectiveStep(0));
+}
+
+void test_triplet_pushes_the_rest_of_the_pattern_later() {
+    PatternBank bank;
+    SequencerEngine plain;
+    SequencerEngine withTriplet;
+    plain.setPatternBank(&bank);
+    withTriplet.setPatternBank(&bank);
+
+    PatternBank tripletBank;
+    tripletBank.getPattern(0)->setRatchet(0, RATCHET_TRIPLET);
+    withTriplet.setPatternBank(&tripletBank);
+
+    plain.start();
+    withTriplet.start();
+    plain.advance(96 * 3);
+    withTriplet.advance(96 * 3);
+    // The triplet consumed two units, so this channel is one step behind.
+    TEST_ASSERT_EQUAL_INT8(3, plain.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(2, withTriplet.effectiveStep(0));
+}
+
+void test_ratchet_ignored_when_the_slot_is_not_a_whole_tick() {
+    PatternBank bank;
+    SequencerEngine e;
+    e.setPatternBank(&bank);
+    e.setSelectedPattern(0, 0);
+    bank.getPattern(0)->setRatchet(0, RATCHET_3);
+    // x3 -> 32 ticks per step: a third would be 10.67 ticks.
+    TEST_ASSERT_TRUE(e.setSubdiv(0, -3));
+    TEST_ASSERT_EQUAL_UINT8(1, e.currentStepTriggers(0)); // documented fallback
+}
+
+void test_without_bank_every_step_is_plain() {
+    PatternBank bank;
+    bank.getPattern(0)->setRatchet(0, RATCHET_6);
+    SequencerEngine e; // no setPatternBank
+    e.start();
+    TEST_ASSERT_EQUAL_UINT8(1, e.currentStepTriggers(0));
+    e.advance(96);
+    TEST_ASSERT_EQUAL_UINT8(1, e.onsetCount(0));
+}
+
+void test_ratchets_do_not_shift_masterphase() {
+    PatternBank bank;
+    SequencerEngine e;
+    e.setPatternBank(&bank);
+    bank.getPattern(0)->setRatchet(0, RATCHET_TRIPLET);
+    e.start();
+    e.advance(192);
+    TEST_ASSERT_EQUAL_UINT32(192, e.masterPhase());
+}
+
+/*
+ * Measure separation — graphical only
+ */
+
+void test_bar_length_defaults_and_accepts_the_allowed_set() {
+    SequencerEngine e;
+    TEST_ASSERT_EQUAL_INT8(4, e.getBarLength(0)); // default 4/4
+    TEST_ASSERT_TRUE(e.setBarLength(0, 0));       // none
+    TEST_ASSERT_TRUE(e.setBarLength(0, 2));
+    TEST_ASSERT_TRUE(e.setBarLength(0, 3));
+    TEST_ASSERT_TRUE(e.setBarLength(0, 6));
+    TEST_ASSERT_EQUAL_INT8(6, e.getBarLength(0));
+}
+
+void test_bar_length_rejects_values_that_do_not_divide_twelve() {
+    SequencerEngine e;
+    TEST_ASSERT_FALSE(e.setBarLength(0, 5));
+    TEST_ASSERT_FALSE(e.setBarLength(0, 8));
+    TEST_ASSERT_FALSE(e.setBarLength(6, 4)); // invalid channel
+    TEST_ASSERT_EQUAL_INT8(-1, e.getBarLength(6));
+}
+
+void test_bar_length_never_affects_timing() {
+    PatternBank bank;
+    SequencerEngine a;
+    SequencerEngine b;
+    a.setPatternBank(&bank);
+    b.setPatternBank(&bank);
+    b.setBarLength(0, 3);
+    a.start();
+    b.start();
+    a.advance(96 * 5);
+    b.advance(96 * 5);
+    TEST_ASSERT_EQUAL_INT8(a.effectiveStep(0), b.effectiveStep(0));
+    TEST_ASSERT_EQUAL_UINT32(a.masterPhase(), b.masterPhase());
 }
 
 int main() {
@@ -300,6 +478,20 @@ int main() {
     RUN_TEST(test_default_subdiv_and_setSubdiv_rate);
     RUN_TEST(test_subdiv_per_channel_gives_different_rates);
     RUN_TEST(test_rejects_invalid_subdiv);
+
+    RUN_TEST(test_plain_step_fires_one_onset_per_step);
+    RUN_TEST(test_ratchet_fires_n_onsets_inside_one_step_duration);
+    RUN_TEST(test_ratchet_step_keeps_the_pattern_duration);
+    RUN_TEST(test_ratchet_counts_all_onsets_in_a_batched_advance);
+    RUN_TEST(test_triplet_stretches_the_step_to_two_units);
+    RUN_TEST(test_triplet_pushes_the_rest_of_the_pattern_later);
+    RUN_TEST(test_ratchet_ignored_when_the_slot_is_not_a_whole_tick);
+    RUN_TEST(test_without_bank_every_step_is_plain);
+    RUN_TEST(test_ratchets_do_not_shift_masterphase);
+
+    RUN_TEST(test_bar_length_defaults_and_accepts_the_allowed_set);
+    RUN_TEST(test_bar_length_rejects_values_that_do_not_divide_twelve);
+    RUN_TEST(test_bar_length_never_affects_timing);
 
     return UNITY_END();
 }

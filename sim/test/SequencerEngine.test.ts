@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   SequencerEngine,
-  TICKS_PER_SIXTEENTH,
+  PPQN,
   DEFAULT_LENGTH,
   CHANNEL_COUNT,
 } from "../src/domain/SequencerEngine.js";
+import { PatternBank } from "../src/domain/PatternBank.js";
+import { RATCHET_3, RATCHET_4, RATCHET_6, RATCHET_TRIPLET } from "../src/domain/Pattern.js";
 
-const STEP = TICKS_PER_SIXTEENTH; // 24 ticks = 1/16 (provisoire)
+const STEP = PPQN; // 96 ticks = default ticksPerStep (/1 = noire)
 
 describe("SequencerEngine — transport & masterPhase", () => {
   it("starts stopped at phase 0 with default per-channel state", () => {
@@ -241,18 +243,18 @@ describe("SequencerEngine — hasStepped (onset)", () => {
 });
 
 describe("SequencerEngine — SUBDIV", () => {
-  it("defaults each channel to SUBDIV -4 (1/16 = 24 ticks)", () => {
+  it("defaults each channel to SUBDIV /1 (quarter = 96 ticks)", () => {
     const e = new SequencerEngine();
-    expect(e.getSubdiv(0)).toBe(-4);
-    expect(e.getTicksPerStep(0)).toBe(24);
+    expect(e.getSubdiv(0)).toBe(1);
+    expect(e.getTicksPerStep(0)).toBe(96);
   });
 
   it("setSubdiv updates the step rate", () => {
     const e = new SequencerEngine();
     e.start();
-    expect(e.setSubdiv(0, 1)).toBe(true); // quarter note = 96 ticks
-    expect(e.getTicksPerStep(0)).toBe(96);
-    e.advance(96);
+    expect(e.setSubdiv(0, -4)).toBe(true); // 1/16 = 24 ticks
+    expect(e.getTicksPerStep(0)).toBe(24);
+    e.advance(24);
     expect(e.effectiveStep(0)).toBe(1);
   });
 
@@ -271,5 +273,147 @@ describe("SequencerEngine — SUBDIV", () => {
     expect(e.setSubdiv(0, 0)).toBe(false);
     expect(e.setSubdiv(6, 1)).toBe(false);
     expect(e.getSubdiv(6)).toBe(0);
+  });
+});
+
+describe("SequencerEngine — ratchets", () => {
+  function rig() {
+    const bank = new PatternBank();
+    const e = new SequencerEngine();
+    e.setPatternBank(bank);
+    e.setSelectedPattern(0, 0);
+    return { bank, e };
+  }
+
+  it("un step simple emet un declenchement par step", () => {
+    const { e } = rig();
+    e.start();
+    expect(e.currentStepTicks(0)).toBe(96);
+    expect(e.currentStepTriggers(0)).toBe(1);
+    e.advance(96);
+    expect(e.onsetCount(0)).toBe(1);
+    expect(e.hasStepped(0)).toBe(true);
+  });
+
+  it("un ratchet emet N declenchements SANS changer la duree du step", () => {
+    const { bank, e } = rig();
+    bank.getPattern(0)!.setRatchet(1, RATCHET_3);
+    e.start();
+
+    e.advance(96); // -> step 1
+    expect(e.currentStepTriggers(0)).toBe(3);
+    expect(e.currentStepTicks(0)).toBe(96); // duree inchangee
+
+    e.advance(32);
+    expect(e.onsetCount(0)).toBe(1);
+    expect(e.effectiveStep(0)).toBe(1); // toujours le meme step
+    e.advance(32);
+    expect(e.onsetCount(0)).toBe(1);
+    e.advance(32);
+    expect(e.effectiveStep(0)).toBe(2);
+  });
+
+  it("un ratchet ne change pas la duree totale du pattern", () => {
+    const { bank, e } = rig();
+    e.setEffectiveLength(0, 4);
+    bank.getPattern(0)!.setRatchet(0, RATCHET_6);
+    e.start();
+    e.advance(96 * 4);
+    expect(e.effectiveStep(0)).toBe(0); // boucle complete
+  });
+
+  it("compte tous les declenchements d'un advance groupe", () => {
+    const { bank, e } = rig();
+    bank.getPattern(0)!.setRatchet(1, RATCHET_4);
+    e.start();
+    e.advance(96);
+    e.advance(96); // tout le step ratchet en une passe
+    expect(e.onsetCount(0)).toBe(4);
+  });
+
+  it("le triolet etire le step sur DEUX unites", () => {
+    const { bank, e } = rig();
+    bank.getPattern(0)!.setRatchet(1, RATCHET_TRIPLET);
+    e.start();
+    e.advance(96); // -> step 1
+    expect(e.currentStepTicks(0)).toBe(192);
+    expect(e.currentStepTriggers(0)).toBe(3);
+    e.advance(64);
+    expect(e.onsetCount(0)).toBe(1);
+    expect(e.effectiveStep(0)).toBe(1);
+    e.advance(64);
+    e.advance(64);
+    expect(e.effectiveStep(0)).toBe(2);
+  });
+
+  it("le triolet decale la suite du pattern", () => {
+    const plainBank = new PatternBank();
+    const tripletBank = new PatternBank();
+    tripletBank.getPattern(0)!.setRatchet(0, RATCHET_TRIPLET);
+
+    const plain = new SequencerEngine();
+    const stretched = new SequencerEngine();
+    plain.setPatternBank(plainBank);
+    stretched.setPatternBank(tripletBank);
+    plain.start();
+    stretched.start();
+    plain.advance(96 * 3);
+    stretched.advance(96 * 3);
+    expect(plain.effectiveStep(0)).toBe(3);
+    expect(stretched.effectiveStep(0)).toBe(2); // un step de retard
+  });
+
+  it("ignore le ratchet quand le sous-slot n'est pas un tick entier", () => {
+    const { bank, e } = rig();
+    bank.getPattern(0)!.setRatchet(0, RATCHET_3);
+    expect(e.setSubdiv(0, -3)).toBe(true); // 32 ticks : un tiers = 10,67
+    expect(e.currentStepTriggers(0)).toBe(1); // repli documente
+  });
+
+  it("sans banque, tous les steps sont simples", () => {
+    const bank = new PatternBank();
+    bank.getPattern(0)!.setRatchet(0, RATCHET_6);
+    const e = new SequencerEngine(); // pas de setPatternBank
+    e.start();
+    expect(e.currentStepTriggers(0)).toBe(1);
+    e.advance(96);
+    expect(e.onsetCount(0)).toBe(1);
+  });
+
+  it("les ratchets ne decalent pas masterPhase", () => {
+    const { bank, e } = rig();
+    bank.getPattern(0)!.setRatchet(0, RATCHET_TRIPLET);
+    e.start();
+    e.advance(192);
+    expect(e.masterPhase).toBe(192);
+  });
+});
+
+describe("SequencerEngine — separation de mesure (graphique)", () => {
+  it("vaut 4 par defaut et accepte le jeu autorise", () => {
+    const e = new SequencerEngine();
+    expect(e.getBarLength(0)).toBe(4);
+    for (const n of [0, 2, 3, 4, 6]) expect(e.setBarLength(0, n)).toBe(true);
+    expect(e.getBarLength(0)).toBe(6);
+  });
+
+  it("rejette une valeur qui ne divise pas 12", () => {
+    const e = new SequencerEngine();
+    expect(e.setBarLength(0, 5)).toBe(false);
+    expect(e.setBarLength(0, 8)).toBe(false);
+    expect(e.setBarLength(6, 4)).toBe(false);
+    expect(e.getBarLength(6)).toBe(-1);
+  });
+
+  it("n'a AUCUN effet sur le temps", () => {
+    const a = new SequencerEngine();
+    const b = new SequencerEngine();
+    b.setBarLength(0, 3);
+    a.start();
+    b.start();
+    a.advance(96 * 5);
+    b.advance(96 * 5);
+    expect(b.effectiveStep(0)).toBe(a.effectiveStep(0));
+    expect(b.masterPhase).toBe(a.masterPhase);
   });
 });

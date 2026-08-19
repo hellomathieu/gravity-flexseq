@@ -13,7 +13,7 @@ using flexseq::TriggerSequencer;
 void setUp() {}
 void tearDown() {}
 
-static const uint16_t STEP = SequencerEngine::TICKS_PER_SIXTEENTH; // 24
+static const uint16_t STEP = SequencerEngine::PPQN; // 96 = default ticksPerStep (/1)
 
 void test_triggers_only_on_active_step_onset() {
     PatternBank bank;

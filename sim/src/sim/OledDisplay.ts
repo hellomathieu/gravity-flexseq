@@ -1,55 +1,77 @@
 /**
  * OledDisplay — apercu fidele de l'ecran OLED du Gravity (128 x 64, 1-bit).
  *
- * Reproduit l'ecran EDIT PATTERN avec les elements REELS du firmware
- * (voir Gravity/UI.ino) :
- *   - police bitmap `velvetscreen` decodee au pixel pres (titre + pastilles) ;
- *   - pastilles 'q' = step actif (disque plein) / 'p' = step inactif (anneau) ;
- *   - curseur = cadre carre autour du step courant.
+ * Geometrie reprise du POC Wokwi (`flexseq-oled-playground/sketch.ino`), qui
+ * fait foi : 24 steps en 2 lignes de 12, pas horizontal de 10 px, grille
+ * centree, glyphes 5x5 identiques au firmware d'origine, cadre de selection
+ * 9x9, step courant marque par le pixel central inverse.
  *
- * Adaptation FlexSeq (PRD) : 24 positions en 2 lignes de 12 (le firmware
- * d'origine en montre 16 en 2x8) et `•` discret au-dela de LENGTH. L'espacement
- * est resserre pour loger 12 pastilles par ligne dans 128 px.
- *
- * Le canvas logique fait 128x64 px reels ; l'agrandissement CSS se fait en
- * `image-rendering: pixelated` pour garder l'aspect blocky de l'OLED.
+ * Vocabulaire (voir la legende du PRD) :
+ *   o  anneau 5x5      step inactif
+ *   *  disque 5x5      step actif
+ *   ^  triangle 5x5    step actif en TRIOLET (3 declenchements sur 2 unites)
+ *   .  1 pixel         position au-dela de LENGTH
+ *   chiffre sous le step : ratchet 2/3/4/6 (N declenchements dans le step)
+ *   barre verticale dans la gouttiere : separation de mesure (GRAPHIQUE seule)
  */
 import type { CellView } from "./PatternView.js";
-import { glyphPixels, textPixels, textWidth, GLYPH_HEIGHT } from "./oledFont.js";
+import { textPixels, textWidth } from "./oledFont.js";
+import { RATCHET_NONE, RATCHET_TRIPLET } from "../domain/Pattern.js";
 
 export const OLED_W = 128;
 export const OLED_H = 64;
 
-const MARGIN_X = 11;
+const PAPER = "#f4f4f2";
+const INK = "#111";
+
+// --- Geometrie (sketch.ino) -------------------------------------------------
 const PER_ROW = 12;
-const ROW_Y = [30, 48] as const;
-const CURSOR_SIDE = 9;
+const COL_SPACING = 10;
+const GRID_WIDTH = (PER_ROW - 1) * COL_SPACING; // 110
+const COL_X0 = Math.floor((OLED_W - GRID_WIDTH + 1) / 2); // 9
+const ROW_CY = [20, 38] as const; // centres verticaux des 2 lignes
+const GLYPH_HALF = 2; // glyphe 5x5
+const SELECT_HALF = 4; // cadre 9x9
+const SELECT_SIZE = 9;
+const RATCHET_DY = 5; // chiffre de ratchet sous le glyphe
+
 const TITLE_TOP = 2;
-const SEPARATOR_Y = 11;
+const HEADER_LINE_Y = 11;
+const HEADER_LINE_X = 4;
+const HEADER_LINE_W = 120;
 
 export interface StepCenter {
   x: number;
   y: number;
 }
 
+function colX(index: number): number {
+  return COL_X0 + (index % PER_ROW) * COL_SPACING;
+}
+
+function rowOf(index: number): number {
+  return Math.floor(index / PER_ROW);
+}
+
 /** Centres des 24 positions (index 0..23), 2 lignes de 12. Pur, deterministe. */
 export function stepCenters(): StepCenter[] {
-  const gap = (OLED_W - 2 * MARGIN_X) / (PER_ROW - 1);
   const centers: StepCenter[] = [];
-  for (let i = 0; i < 24; ++i) {
-    const row = Math.floor(i / PER_ROW);
-    const col = i % PER_ROW;
-    centers.push({ x: Math.round(MARGIN_X + col * gap), y: ROW_Y[row]! });
-  }
+  for (let i = 0; i < 24; ++i) centers.push({ x: colX(i), y: ROW_CY[rowOf(i)]! });
   return centers;
 }
 
 export interface OledModel {
   title: string;
   cells: CellView[];
+  /** Step en cours d'edition : cadre 9x9. -1 pour masquer. */
   cursor: number;
-  /** Step joue (effectiveStep) marque par un tiret sous la pastille. -1 pour masquer. */
+  /** Step joue : pixel central inverse. -1 pour masquer. */
   playhead?: number;
+  /**
+   * Separation de mesure : barre tous les N steps (0 = aucune). GRAPHIQUE
+   * uniquement — n'a aucun effet sur la duree des steps ni sur la SUBDIV.
+   */
+  barLength?: number;
 }
 
 /** Sous-ensemble de CanvasRenderingContext2D utilise (testable/mockable). */
@@ -61,59 +83,117 @@ function px(ctx: OledCtx, x: number, y: number): void {
   ctx.fillRect(x, y, 1, 1);
 }
 
-function boxOutline(ctx: OledCtx, x: number, y: number, side: number): void {
-  ctx.fillRect(x, y, side, 1);
-  ctx.fillRect(x, y + side - 1, side, 1);
-  ctx.fillRect(x, y, 1, side);
-  ctx.fillRect(x + side - 1, y, 1, side);
+function hline(ctx: OledCtx, x: number, y: number, w: number): void {
+  ctx.fillRect(x, y, w, 1);
 }
 
-function drawGlyphCentered(ctx: OledCtx, ch: string, cx: number, cy: number): void {
-  const half = (GLYPH_HEIGHT - 1) >> 1; // 5px -> 2
-  for (const p of glyphPixels(ch)) px(ctx, cx - half + p.x, cy - half + p.y);
+function blitText(ctx: OledCtx, text: string, x: number, y: number): void {
+  for (const p of textPixels(text)) px(ctx, x + p.x, y + p.y);
+}
+
+// --- Glyphes 5x5 ------------------------------------------------------------
+
+/** Anneau : step inactif. */
+function drawRing(ctx: OledCtx, cx: number, cy: number): void {
+  const x = cx - GLYPH_HALF;
+  const y = cy - GLYPH_HALF;
+  hline(ctx, x + 1, y, 3);
+  px(ctx, x, y + 1);
+  px(ctx, x + 4, y + 1);
+  px(ctx, x, y + 2);
+  px(ctx, x + 4, y + 2);
+  px(ctx, x, y + 3);
+  px(ctx, x + 4, y + 3);
+  hline(ctx, x + 1, y + 4, 3);
+}
+
+/** Disque plein : step actif. */
+function drawDisc(ctx: OledCtx, cx: number, cy: number): void {
+  const x = cx - GLYPH_HALF;
+  const y = cy - GLYPH_HALF;
+  hline(ctx, x + 1, y, 3);
+  hline(ctx, x, y + 1, 5);
+  hline(ctx, x, y + 2, 5);
+  hline(ctx, x, y + 3, 5);
+  hline(ctx, x + 1, y + 4, 3);
+}
+
+/** Triangle plein : step actif en TRIOLET (3 declenchements sur 2 unites). */
+function drawTriangle(ctx: OledCtx, cx: number, cy: number): void {
+  const y = cy - GLYPH_HALF;
+  px(ctx, cx, y);
+  hline(ctx, cx - 1, y + 1, 3);
+  hline(ctx, cx - 1, y + 2, 3);
+  hline(ctx, cx - 2, y + 3, 5);
+  hline(ctx, cx - 2, y + 4, 5);
+}
+
+function frame(ctx: OledCtx, cx: number, cy: number): void {
+  const x = cx - SELECT_HALF;
+  const y = cy - SELECT_HALF;
+  hline(ctx, x, y, SELECT_SIZE);
+  hline(ctx, x, y + SELECT_SIZE - 1, SELECT_SIZE);
+  ctx.fillRect(x, y, 1, SELECT_SIZE);
+  ctx.fillRect(x + SELECT_SIZE - 1, y, 1, SELECT_SIZE);
 }
 
 export function drawOled(ctx: OledCtx, model: OledModel): void {
-  // Fond "papier" clair, encre noire (comme la maquette).
-  ctx.fillStyle = "#f4f4f2";
+  ctx.fillStyle = PAPER;
   ctx.fillRect(0, 0, OLED_W, OLED_H);
-  ctx.fillStyle = "#111";
+  ctx.fillStyle = INK;
 
-  // Titre centre en police velvetscreen + ligne de separation.
+  // En-tete : titre centre + filet.
   const title = model.title.toUpperCase();
-  const x0 = Math.round((OLED_W - textWidth(title)) / 2);
-  for (const p of textPixels(title)) px(ctx, x0 + p.x, TITLE_TOP + p.y);
-  ctx.fillRect(6, SEPARATOR_Y, OLED_W - 12, 1);
+  blitText(ctx, title, Math.round((OLED_W - textWidth(title)) / 2), TITLE_TOP);
+  hline(ctx, HEADER_LINE_X, HEADER_LINE_Y, HEADER_LINE_W);
 
-  const centers = stepCenters();
+  // Separations de mesure : barre dans la gouttiere, jamais en bord de ligne.
+  const bar = model.barLength ?? 0;
+  if (bar > 0) {
+    for (let k = bar; k < 24; k += bar) {
+      if (k % PER_ROW === 0) continue;
+      const bx = colX(k) - Math.floor(COL_SPACING / 2);
+      const cy = ROW_CY[rowOf(k)]!;
+      for (let y = cy - SELECT_HALF; y <= cy + SELECT_HALF; ++y) px(ctx, bx, y);
+    }
+  }
 
   for (const cell of model.cells) {
-    const c = centers[cell.index];
-    if (!c) continue;
+    const cx = colX(cell.index);
+    const cy = ROW_CY[rowOf(cell.index)]!;
 
-    // Indicateur de groupe ternaire, au-dessus du step.
-    if (cell.tripletStep) {
-      ctx.fillRect(c.x - 3, c.y - 6, 7, 1);
+    if (cell.kind === "beyond") {
+      px(ctx, cx, cy); // au-dela de LENGTH : simple point
+      continue;
     }
 
     if (cell.kind === "active") {
-      drawGlyphCentered(ctx, "q", c.x, c.y);
-    } else if (cell.kind === "inactive") {
-      drawGlyphCentered(ctx, "p", c.x, c.y);
+      if (cell.ratchet === RATCHET_TRIPLET) drawTriangle(ctx, cx, cy);
+      else drawDisc(ctx, cx, cy);
     } else {
-      px(ctx, c.x, c.y); // au-dela de LENGTH : point discret
+      drawRing(ctx, cx, cy);
+    }
+
+    // Ratchet chiffre sous le step (le triolet a deja son triangle).
+    if (cell.ratchet !== RATCHET_NONE && cell.ratchet !== RATCHET_TRIPLET) {
+      const label = String(cell.ratchet);
+      blitText(ctx, label, cx - Math.floor(textWidth(label) / 2), cy + RATCHET_DY);
     }
   }
 
-  // Curseur d'edition : cadre carre autour du step courant.
-  const cur = centers[model.cursor];
-  if (cur) {
-    boxOutline(ctx, cur.x - (CURSOR_SIDE >> 1), cur.y - (CURSOR_SIDE >> 1), CURSOR_SIDE);
+  // Cadre d'edition autour du step courant.
+  if (model.cursor >= 0 && model.cursor < 24) {
+    frame(ctx, colX(model.cursor), ROW_CY[rowOf(model.cursor)]!);
   }
 
-  // Playhead (effectiveStep) : tiret sous la pastille jouee.
-  if (model.playhead !== undefined && model.playhead >= 0) {
-    const ph = centers[model.playhead];
-    if (ph) ctx.fillRect(ph.x - 3, ph.y + 5, 7, 1);
+  // Step joue : pixel central inverse (blanc sur un step actif, noir sinon).
+  const head = model.playhead;
+  if (head !== undefined && head >= 0 && head < 24) {
+    const cell = model.cells.find((c) => c.index === head);
+    if (cell && cell.kind !== "beyond") {
+      ctx.fillStyle = cell.kind === "active" ? PAPER : INK;
+      px(ctx, colX(head), ROW_CY[rowOf(head)]!);
+      ctx.fillStyle = INK;
+    }
   }
 }

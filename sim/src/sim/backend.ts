@@ -26,10 +26,14 @@ export interface SimBackend {
   setLength(channel: number, length: number): boolean;
   getSubdiv(channel: number): number;
   setSubdiv(channel: number, subdiv: number): boolean;
+  /** Separation de mesure (graphique) : une barre tous les N steps. */
+  getBarLength(channel: number): number;
+  setBarLength(channel: number, steps: number): boolean;
   view(channel: number): CellView[];
   toggleStep(channel: number, index: number): void;
-  /** Ajoute le triolet s'il est absent (et valide), le retire s'il est present. */
-  toggleTriplet(channel: number, startIndex: number): boolean;
+  /** Code de ratchet d'un step du pattern selectionne. */
+  getRatchet(channel: number, index: number): number;
+  setRatchet(channel: number, index: number, code: number): boolean;
 
   // --- transport & modele temporel ---
   play(): void;
@@ -39,8 +43,10 @@ export interface SimBackend {
   advanceTicks(ticks: number): void;
   masterPhase(): number;
   effectiveStep(channel: number): number;
-  /** Vrai si le channel vient de declencher un trigger (onset sur step actif). Valide apres advanceTicks(). */
+  /** Vrai si le channel vient de declencher un trigger. Valide apres advanceTicks(). */
   triggered(channel: number): boolean;
+  /** Nombre de declenchements dus pour le dernier advanceTicks() (ratchets inclus). */
+  triggerCount(channel: number): number;
 }
 
 /** Backend de reference : banque partagee + moteur, en TypeScript. */
@@ -51,6 +57,11 @@ export class TsReferenceBackend implements SimBackend {
   private readonly bank = new PatternBank();
   private readonly engine = new SequencerEngine();
   private readonly triggers = new TriggerSequencer(this.bank, this.engine);
+
+  constructor() {
+    // Le moteur consulte la banque pour la duree des steps ternaires.
+    this.engine.setPatternBank(this.bank);
+  }
 
   private patternOf(channel: number) {
     return this.bank.getPattern(this.engine.getSelectedPattern(channel));
@@ -82,6 +93,14 @@ export class TsReferenceBackend implements SimBackend {
     return this.engine.setSubdiv(channel, subdiv);
   }
 
+  getBarLength(channel: number): number {
+    return this.engine.getBarLength(channel);
+  }
+
+  setBarLength(channel: number, steps: number): boolean {
+    return this.engine.setBarLength(channel, steps);
+  }
+
   view(channel: number): CellView[] {
     const pattern = this.patternOf(channel);
     return pattern ? viewPattern(pattern, this.engine.getEffectiveLength(channel)) : [];
@@ -95,12 +114,15 @@ export class TsReferenceBackend implements SimBackend {
     pattern.writeStep(index, !current);
   }
 
-  toggleTriplet(channel: number, startIndex: number): boolean {
-    const pattern = this.patternOf(channel);
-    if (!pattern) return false;
-    return pattern.isTripletStart(startIndex)
-      ? pattern.removeTriplet(startIndex)
-      : pattern.addTriplet(startIndex);
+  getRatchet(channel: number, index: number): number {
+    return this.patternOf(channel)?.getRatchet(index) ?? 0;
+  }
+
+  setRatchet(channel: number, index: number, code: number): boolean {
+    const ok = this.patternOf(channel)?.setRatchet(index, code) ?? false;
+    // Le pattern est PARTAGE : l'edition peut concerner plusieurs channels.
+    if (ok) this.engine.refreshTiming();
+    return ok;
   }
 
   // --- transport & modele temporel --------------------------------------
@@ -135,5 +157,9 @@ export class TsReferenceBackend implements SimBackend {
 
   triggered(channel: number): boolean {
     return this.triggers.triggered(channel);
+  }
+
+  triggerCount(channel: number): number {
+    return this.triggers.triggerCount(channel);
   }
 }

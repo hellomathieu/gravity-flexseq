@@ -9,7 +9,7 @@ void setUp() {}
 void tearDown() {}
 
 void test_pattern_has_expected_memory_footprint() {
-    TEST_ASSERT_EQUAL_UINT16(6, sizeof(Pattern));
+    TEST_ASSERT_EQUAL_UINT16(15, sizeof(Pattern)); // 3 steps + 12 ratchet nibbles
 }
 
 void test_pattern_defaults_to_all_steps_off() {
@@ -73,152 +73,89 @@ void test_pattern_rejects_step_index_24_without_mutation() {
     TEST_ASSERT_TRUE(active);
 }
 
-void test_pattern_clear_turns_all_steps_off_and_removes_triplets() {
+void test_pattern_defaults_to_no_ratchet() {
     Pattern pattern;
-
     for (uint8_t i = 0; i < Pattern::DEFAULT_TOTAL_STEPS; ++i) {
-        TEST_ASSERT_TRUE(pattern.writeStep(i, true));
+        TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, pattern.getRatchet(i));
     }
-    TEST_ASSERT_TRUE(pattern.addTriplet(0));
+}
 
+void test_pattern_sets_and_reads_ratchet_per_step() {
+    Pattern pattern;
+    TEST_ASSERT_TRUE(pattern.setRatchet(0, flexseq::RATCHET_2));
+    TEST_ASSERT_TRUE(pattern.setRatchet(1, flexseq::RATCHET_3));
+    TEST_ASSERT_TRUE(pattern.setRatchet(23, flexseq::RATCHET_TRIPLET));
+
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_2, pattern.getRatchet(0));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_3, pattern.getRatchet(1));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_TRIPLET, pattern.getRatchet(23));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, pattern.getRatchet(2));
+}
+
+void test_pattern_ratchet_nibbles_do_not_bleed() {
+    // Neighbouring steps share a byte: writing one must not disturb the other.
+    Pattern pattern;
+    for (uint8_t i = 0; i < Pattern::DEFAULT_TOTAL_STEPS; ++i) {
+        TEST_ASSERT_TRUE(pattern.setRatchet(i, (i % 2 == 0) ? flexseq::RATCHET_6
+                                                            : flexseq::RATCHET_3));
+    }
+    for (uint8_t i = 0; i < Pattern::DEFAULT_TOTAL_STEPS; ++i) {
+        TEST_ASSERT_EQUAL_UINT8((i % 2 == 0) ? flexseq::RATCHET_6 : flexseq::RATCHET_3,
+                                pattern.getRatchet(i));
+    }
+}
+
+void test_pattern_any_step_can_carry_a_ratchet() {
+    // No overlap or start-index constraint any more: every step may carry one.
+    Pattern pattern;
+    for (uint8_t i = 0; i < Pattern::DEFAULT_TOTAL_STEPS; ++i) {
+        TEST_ASSERT_TRUE(pattern.setRatchet(i, flexseq::RATCHET_TRIPLET));
+    }
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_TRIPLET, pattern.getRatchet(21));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_TRIPLET, pattern.getRatchet(22));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_TRIPLET, pattern.getRatchet(23));
+}
+
+void test_pattern_rejects_invalid_ratchet_code_and_index() {
+    Pattern pattern;
+    TEST_ASSERT_FALSE(pattern.setRatchet(0, 1));  // 1 is meaningless
+    TEST_ASSERT_FALSE(pattern.setRatchet(0, 5));  // 5 is not representable
+    TEST_ASSERT_FALSE(pattern.setRatchet(0, 15));
+    TEST_ASSERT_FALSE(pattern.setRatchet(24, flexseq::RATCHET_2));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, pattern.getRatchet(0));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, pattern.getRatchet(24));
+}
+
+void test_ratchet_trigger_counts_and_spans() {
+    TEST_ASSERT_EQUAL_UINT8(1, flexseq::ratchetTriggers(flexseq::RATCHET_NONE));
+    TEST_ASSERT_EQUAL_UINT8(2, flexseq::ratchetTriggers(flexseq::RATCHET_2));
+    TEST_ASSERT_EQUAL_UINT8(3, flexseq::ratchetTriggers(flexseq::RATCHET_3));
+    TEST_ASSERT_EQUAL_UINT8(4, flexseq::ratchetTriggers(flexseq::RATCHET_4));
+    TEST_ASSERT_EQUAL_UINT8(6, flexseq::ratchetTriggers(flexseq::RATCHET_6));
+    // The triplet fires three times but over TWO step durations.
+    TEST_ASSERT_EQUAL_UINT8(3, flexseq::ratchetTriggers(flexseq::RATCHET_TRIPLET));
+    TEST_ASSERT_EQUAL_UINT8(2, flexseq::ratchetSpan(flexseq::RATCHET_TRIPLET));
+    TEST_ASSERT_EQUAL_UINT8(1, flexseq::ratchetSpan(flexseq::RATCHET_4));
+}
+
+void test_pattern_clear_resets_steps_and_ratchets() {
+    Pattern pattern;
+    pattern.writeStep(3, true);
+    pattern.setRatchet(3, flexseq::RATCHET_4);
     pattern.clear();
 
-    for (uint8_t i = 0; i < Pattern::DEFAULT_TOTAL_STEPS; ++i) {
-        bool active = true;
-        TEST_ASSERT_TRUE(pattern.readStep(i, active));
-        TEST_ASSERT_FALSE(active);
-        TEST_ASSERT_FALSE(pattern.isTripletStep(i));
-    }
+    bool active = true;
+    TEST_ASSERT_TRUE(pattern.readStep(3, active));
+    TEST_ASSERT_FALSE(active);
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, pattern.getRatchet(3));
 }
 
-/*
- * Triplet tests — independent of length (24-step grid only).
- */
-
-void test_pattern_has_no_triplets_by_default() {
+void test_pattern_ratchets_survive_step_edits() {
     Pattern pattern;
-
-    for (uint8_t i = 0; i < Pattern::DEFAULT_TOTAL_STEPS; ++i) {
-        TEST_ASSERT_FALSE(pattern.isTripletStart(i));
-        TEST_ASSERT_FALSE(pattern.isTripletStep(i));
-    }
-}
-
-void test_pattern_adds_triplet_at_beginning() {
-    Pattern pattern;
-
-    TEST_ASSERT_TRUE(pattern.addTriplet(0));
-    TEST_ASSERT_TRUE(pattern.isTripletStart(0));
-    TEST_ASSERT_TRUE(pattern.isTripletStep(0));
-    TEST_ASSERT_TRUE(pattern.isTripletStep(1));
-    TEST_ASSERT_TRUE(pattern.isTripletStep(2));
-    TEST_ASSERT_FALSE(pattern.isTripletStep(3));
-}
-
-void test_pattern_adds_triplet_at_end_of_grid() {
-    Pattern pattern;
-
-    TEST_ASSERT_TRUE(pattern.addTriplet(21));
-    TEST_ASSERT_TRUE(pattern.isTripletStep(21));
-    TEST_ASSERT_TRUE(pattern.isTripletStep(22));
-    TEST_ASSERT_TRUE(pattern.isTripletStep(23));
-    TEST_ASSERT_FALSE(pattern.isTripletStep(20));
-}
-
-void test_pattern_rejects_triplet_start_22_and_23() {
-    Pattern pattern;
-
-    TEST_ASSERT_FALSE(pattern.addTriplet(22));
-    TEST_ASSERT_FALSE(pattern.addTriplet(23));
-}
-
-void test_pattern_allows_triplet_start_at_any_valid_position() {
-    Pattern pattern;
-
-    TEST_ASSERT_TRUE(pattern.addTriplet(0));
-    TEST_ASSERT_TRUE(pattern.removeTriplet(0));
-    TEST_ASSERT_TRUE(pattern.addTriplet(1));
-    TEST_ASSERT_TRUE(pattern.removeTriplet(1));
-    TEST_ASSERT_TRUE(pattern.addTriplet(2));
-    TEST_ASSERT_TRUE(pattern.removeTriplet(2));
-    TEST_ASSERT_TRUE(pattern.addTriplet(21));
-}
-
-void test_pattern_rejects_overlapping_triplets() {
-    Pattern pattern;
-
-    TEST_ASSERT_TRUE(pattern.addTriplet(3));
-    TEST_ASSERT_FALSE(pattern.addTriplet(1));
-    TEST_ASSERT_FALSE(pattern.addTriplet(2));
-    TEST_ASSERT_FALSE(pattern.addTriplet(4));
-    TEST_ASSERT_FALSE(pattern.addTriplet(5));
-    TEST_ASSERT_TRUE(pattern.isTripletStart(3));
-}
-
-void test_pattern_allows_adjacent_triplets_without_overlap() {
-    Pattern pattern;
-
-    TEST_ASSERT_TRUE(pattern.addTriplet(0));
-    TEST_ASSERT_TRUE(pattern.addTriplet(3));
-
-    for (uint8_t i = 0; i < 6; ++i) {
-        TEST_ASSERT_TRUE(pattern.isTripletStep(i));
-    }
-}
-
-void test_pattern_allows_maximum_eight_triplets() {
-    Pattern pattern;
-
-    const uint8_t starts[] = {0, 3, 6, 9, 12, 15, 18, 21};
-
-    for (uint8_t i = 0; i < sizeof(starts) / sizeof(starts[0]); ++i) {
-        TEST_ASSERT_TRUE(pattern.addTriplet(starts[i]));
-    }
-}
-
-void test_pattern_rejects_duplicate_triplet() {
-    Pattern pattern;
-
-    TEST_ASSERT_TRUE(pattern.addTriplet(6));
-    TEST_ASSERT_FALSE(pattern.addTriplet(6));
-    TEST_ASSERT_TRUE(pattern.isTripletStart(6));
-}
-
-void test_pattern_removes_triplet() {
-    Pattern pattern;
-
-    TEST_ASSERT_TRUE(pattern.addTriplet(6));
-    TEST_ASSERT_TRUE(pattern.isTripletStep(7));
-
-    TEST_ASSERT_TRUE(pattern.removeTriplet(6));
-    TEST_ASSERT_FALSE(pattern.isTripletStart(6));
-    TEST_ASSERT_FALSE(pattern.isTripletStep(6));
-    TEST_ASSERT_FALSE(pattern.isTripletStep(7));
-}
-
-void test_pattern_rejects_removing_nonexistent_triplet() {
-    Pattern pattern;
-    TEST_ASSERT_FALSE(pattern.removeTriplet(6));
-}
-
-void test_pattern_clear_triplets_preserves_steps() {
-    Pattern pattern;
-
-    TEST_ASSERT_TRUE(pattern.writeStep(0, true));
-    TEST_ASSERT_TRUE(pattern.writeStep(6, true));
-    TEST_ASSERT_TRUE(pattern.addTriplet(0));
-    TEST_ASSERT_TRUE(pattern.addTriplet(6));
-
-    pattern.clearTriplets();
-
-    TEST_ASSERT_FALSE(pattern.isTripletStart(0));
-    TEST_ASSERT_FALSE(pattern.isTripletStart(6));
-
-    bool active = false;
-    TEST_ASSERT_TRUE(pattern.readStep(0, active));
-    TEST_ASSERT_TRUE(active);
-    TEST_ASSERT_TRUE(pattern.readStep(6, active));
-    TEST_ASSERT_TRUE(active);
+    pattern.setRatchet(5, flexseq::RATCHET_3);
+    pattern.writeStep(5, true);
+    pattern.writeStep(5, false);
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_3, pattern.getRatchet(5));
 }
 
 int main() {
@@ -229,20 +166,15 @@ int main() {
     RUN_TEST(test_pattern_writes_and_reads_all_24_steps);
     RUN_TEST(test_pattern_covers_bit_boundaries_0_7_8_15_16_23);
     RUN_TEST(test_pattern_rejects_step_index_24_without_mutation);
-    RUN_TEST(test_pattern_clear_turns_all_steps_off_and_removes_triplets);
 
-    RUN_TEST(test_pattern_has_no_triplets_by_default);
-    RUN_TEST(test_pattern_adds_triplet_at_beginning);
-    RUN_TEST(test_pattern_adds_triplet_at_end_of_grid);
-    RUN_TEST(test_pattern_rejects_triplet_start_22_and_23);
-    RUN_TEST(test_pattern_allows_triplet_start_at_any_valid_position);
-    RUN_TEST(test_pattern_rejects_overlapping_triplets);
-    RUN_TEST(test_pattern_allows_adjacent_triplets_without_overlap);
-    RUN_TEST(test_pattern_allows_maximum_eight_triplets);
-    RUN_TEST(test_pattern_rejects_duplicate_triplet);
-    RUN_TEST(test_pattern_removes_triplet);
-    RUN_TEST(test_pattern_rejects_removing_nonexistent_triplet);
-    RUN_TEST(test_pattern_clear_triplets_preserves_steps);
+    RUN_TEST(test_pattern_defaults_to_no_ratchet);
+    RUN_TEST(test_pattern_sets_and_reads_ratchet_per_step);
+    RUN_TEST(test_pattern_ratchet_nibbles_do_not_bleed);
+    RUN_TEST(test_pattern_any_step_can_carry_a_ratchet);
+    RUN_TEST(test_pattern_rejects_invalid_ratchet_code_and_index);
+    RUN_TEST(test_ratchet_trigger_counts_and_spans);
+    RUN_TEST(test_pattern_clear_resets_steps_and_ratchets);
+    RUN_TEST(test_pattern_ratchets_survive_step_edits);
 
     return UNITY_END();
 }

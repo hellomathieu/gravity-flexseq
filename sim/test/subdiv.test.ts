@@ -19,8 +19,8 @@ describe("subdiv — SUBDIV -> ticksPerStep (libGravity 96 PPQN)", () => {
     expect(subdivToTicks(-24)).toBe(4);
   });
 
-  it("default SUBDIV is 1/16 (24 ticks)", () => {
-    expect(subdivToTicks(DEFAULT_SUBDIV)).toBe(24);
+  it("default SUBDIV is /1 (quarter = 96 ticks)", () => {
+    expect(subdivToTicks(DEFAULT_SUBDIV)).toBe(96);
   });
 
   it("matches libGravity CLOCK_MOD_PULSES for every official value", () => {

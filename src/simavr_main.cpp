@@ -49,8 +49,10 @@ void setup() {
     pattern->writeStep(8, true);
     pattern->writeStep(12, true);
 
+    engine.setPatternBank(&patternBank);
     engine.setSelectedPattern(TEST_CHANNEL, 0);
     engine.setEffectiveLength(TEST_CHANNEL, 16);
+    engine.setSubdiv(TEST_CHANNEL, -4);  // 1/16 steps (24 ticks) for this harness
 
     transport.start();  // global reset + run
 }

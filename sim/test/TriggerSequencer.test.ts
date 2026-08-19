@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { PatternBank } from "../src/domain/PatternBank.js";
-import { SequencerEngine, TICKS_PER_SIXTEENTH } from "../src/domain/SequencerEngine.js";
+import { SequencerEngine, PPQN } from "../src/domain/SequencerEngine.js";
 import { TriggerSequencer } from "../src/domain/TriggerSequencer.js";
 
-const STEP = TICKS_PER_SIXTEENTH; // 24
+const STEP = PPQN; // 96 = default ticksPerStep (/1)
 
 describe("TriggerSequencer", () => {
   it("triggers only on the onset of an active step", () => {

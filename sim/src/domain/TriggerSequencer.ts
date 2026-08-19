@@ -3,7 +3,7 @@
  *
  * Donne, pour chaque channel, s'il doit emettre un trigger MAINTENANT : il vient
  * de franchir l'onset d'un step ACTIF de son pattern selectionne. Appeler
- * `triggered()` juste apres `SequencerEngine.advance()` (moment ou `hasStepped()`
+ * `triggered()` juste apres `SequencerEngine.advance()` (moment ou `onsetCount()`
  * est valide). Aucune dependance materielle : cote firmware C++ un `true` devient
  * une impulsion DigitalOutput ; cote simulateur, un flash visuel.
  */
@@ -19,9 +19,18 @@ export class TriggerSequencer {
     this.engine = engine;
   }
 
-  triggered(channel: number): boolean {
-    if (!this.engine.hasStepped(channel)) return false;
+  /** Nombre d'impulsions dues pour le dernier advance() (ratchets inclus). */
+  triggerCount(channel: number): number {
+    const onsets = this.engine.onsetCount(channel);
+    if (!onsets) return 0;
+    return this.activeStep(channel) ? onsets : 0;
+  }
 
+  triggered(channel: number): boolean {
+    return this.triggerCount(channel) > 0;
+  }
+
+  private activeStep(channel: number): boolean {
     const patternIndex = this.engine.getSelectedPattern(channel);
     if (patternIndex < 0) return false;
 

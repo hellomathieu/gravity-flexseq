@@ -27,6 +27,9 @@ void onOutputTick(uint32_t) {
 void setup() {
     gravity.Init();
 
+    // The engine reads the bank to shorten triplet steps (3 in one step's time).
+    engine.setPatternBank(&patternBank);
+
     // Drive the master phase from the unified 96-PPQN output clock (internal
     // and external sources both surface here).
     gravity.clock.AttachIntHandler(onOutputTick);
@@ -47,9 +50,12 @@ void loop() {
     if (ticks > 0) {
         transport.tick(ticks);
 
-        // Emit a trigger on every channel that just stepped onto an active step.
+        // Emit a pulse on every channel that owes one. A ratchet step owes
+        // several onsets; the output can only be re-armed once per drain, so a
+        // pulse is emitted here and the remaining onsets land on the following
+        // drains (ticks arrive far more often than steps).
         for (uint8_t ch = 0; ch < flexseq::SequencerEngine::CHANNEL_COUNT; ++ch) {
-            if (triggers.triggered(ch)) {
+            if (triggers.triggerCount(ch) > 0) {
                 gravity.outputs[ch].Trigger();
             }
         }

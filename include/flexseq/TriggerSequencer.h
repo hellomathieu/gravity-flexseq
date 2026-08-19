@@ -11,19 +11,30 @@ namespace flexseq {
 // TriggerSequencer — pure decision layer: given the shared PatternBank and the
 // SequencerEngine, decides which channels must emit a trigger RIGHT NOW.
 //
-// A channel triggers when it just stepped onto an active step of its selected
-// pattern. Call triggered() immediately after SequencerEngine::advance() (that
-// is when hasStepped() is valid). The firmware turns a true result into a real
-// DigitalOutput pulse; this class touches no hardware, so it is unit testable.
+// A channel triggers on every ONSET that lands on an active step of its
+// selected pattern. A plain step yields one onset; a ratchet step yields N (see
+// Pattern's ratchet codes). Call triggered()/triggerCount() immediately after
+// SequencerEngine::advance() (that is when the onset count is valid). The
+// firmware turns the result into real DigitalOutput pulses; this class touches
+// no hardware, so it is unit testable.
 class TriggerSequencer {
 public:
     TriggerSequencer(const PatternBank& bank, const SequencerEngine& engine)
         : bank_(bank), engine_(engine) {}
 
-    bool triggered(uint8_t channel) const {
-        if (!engine_.hasStepped(channel)) {
-            return false;
+    // Number of trigger pulses the channel owes for the last advance().
+    uint8_t triggerCount(uint8_t channel) const {
+        const uint8_t onsets = engine_.onsetCount(channel);
+        if (onsets == 0) {
+            return 0;
         }
+        return activeStep(channel) ? onsets : 0;
+    }
+
+    bool triggered(uint8_t channel) const { return triggerCount(channel) > 0; }
+
+private:
+    bool activeStep(uint8_t channel) const {
         const int8_t patternIndex = engine_.getSelectedPattern(channel);
         if (patternIndex < 0) {
             return false;
@@ -43,7 +54,6 @@ public:
         return active;
     }
 
-private:
     const PatternBank& bank_;
     const SequencerEngine& engine_;
 };

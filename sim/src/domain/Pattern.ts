@@ -1,30 +1,76 @@
 /**
  * Pattern — CONTENU d'un pattern (modele de reference TypeScript).
  *
- * Depuis la ré-architecture "banque partagee" (2026-08-16), un Pattern ne
- * contient QUE son contenu musical — 24 steps binaires + groupes ternaires
- * locaux. Il est PARTAGE : plusieurs channels peuvent referencer le meme
- * Pattern (via leur `selectedPattern`), comme le firmware Sitka original
- * (seqA1..seqB8 partages, channel.seqPattern selecteur).
+ * Un Pattern ne contient QUE son contenu musical — 24 steps binaires + un code
+ * de RATCHET par step. Il est PARTAGE : plusieurs channels peuvent referencer
+ * le meme Pattern (via leur `selectedPattern`), comme le firmware Sitka
+ * original (seqA1..seqB8 partages, channel.seqPattern selecteur).
  *
- * La LONGUEUR n'est PLUS une propriete du Pattern : elle est par channel
- * (etat d'execution, voir SequencerEngine). Par consequent la validite d'un
- * triolet ne depend plus de la longueur — un groupe ternaire est valide sur la
- * grille de 24 (depart <= 21, sans chevauchement), conformement au PRD
- * (« triolets independants de LENGTH »).
+ * La LONGUEUR n'est PAS une propriete du Pattern : elle est par channel (etat
+ * d'execution, voir SequencerEngine). La separation de mesure non plus : c'est
+ * une aide de lecture par channel, purement graphique.
  *
- * NB memoire (C++/AVR, hors modele TS) : le Pattern packe visera desormais
- * 6 octets (packedSteps[3] + tripletStarts[3], sans baseLength).
+ * NB memoire (C++/AVR, hors modele TS) : 15 octets
+ * (packedSteps[3] + packedRatchets[12], un quartet par step).
  */
+
+/**
+ * Code de ratchet par step. Un step reste UNE position de grille ; le ratchet
+ * dit combien de declenchements il emet et combien de temps il dure.
+ *
+ *  - NONE : 1 declenchement, 1 unite de temps
+ *  - 2/3/4/6 : N declenchements DANS la duree d'un step (duree inchangee)
+ *  - TRIPLET : 3 declenchements sur DEUX unites (« un triolet de noires vaut
+ *    une blanche ») — seul code qui ETIRE le temps et decale la suite.
+ *
+ * Le ratchet 5 est volontairement absent : a 96 PPQN (2^5 x 3) un cinquieme
+ * n'est exact que sur 2 des 25 valeurs de SUBDIV.
+ */
+export const RATCHET_NONE = 0;
+export const RATCHET_2 = 2;
+export const RATCHET_3 = 3;
+export const RATCHET_4 = 4;
+export const RATCHET_6 = 6;
+export const RATCHET_TRIPLET = 7;
+
+/** Codes de ratchet stockables, dans l'ordre d'edition. */
+export const RATCHET_CODES: readonly number[] = [
+  RATCHET_NONE, RATCHET_2, RATCHET_3, RATCHET_4, RATCHET_6, RATCHET_TRIPLET,
+];
+
+export function isValidRatchet(code: number): boolean {
+  return RATCHET_CODES.includes(code);
+}
+
+/** Nombre de declenchements emis par un step portant ce code (>= 1). */
+export function ratchetTriggers(code: number): number {
+  if (code === RATCHET_TRIPLET) return 3;
+  if (code === RATCHET_2 || code === RATCHET_3 || code === RATCHET_4 || code === RATCHET_6) {
+    return code;
+  }
+  return 1;
+}
+
+/** Nombre d'unites de temps occupees par le step (1, ou 2 pour le triolet). */
+export function ratchetSpan(code: number): number {
+  return code === RATCHET_TRIPLET ? 2 : 1;
+}
+
+/** Libelle court affiche sous le step (vide si aucun ratchet). */
+export function ratchetLabel(code: number): string {
+  if (code === RATCHET_TRIPLET) return "3T";
+  if (code === RATCHET_NONE) return "";
+  return String(code);
+}
 export class Pattern {
   static readonly DEFAULT_TOTAL_STEPS = 24;
 
   private readonly steps: boolean[];
-  private readonly tripletStarts: boolean[];
+  private readonly ratchets: number[];
 
   constructor() {
     this.steps = new Array<boolean>(Pattern.DEFAULT_TOTAL_STEPS).fill(false);
-    this.tripletStarts = new Array<boolean>(Pattern.DEFAULT_TOTAL_STEPS).fill(false);
+    this.ratchets = new Array<number>(Pattern.DEFAULT_TOTAL_STEPS).fill(RATCHET_NONE);
   }
 
   private static isValidIndex(index: number): boolean {
@@ -47,7 +93,7 @@ export class Pattern {
   /** Efface tous les steps ET les triolets. */
   clear(): void {
     this.steps.fill(false);
-    this.clearTriplets();
+    this.clearRatchets();
   }
 
   /**
@@ -56,46 +102,21 @@ export class Pattern {
    *  - le groupe tient dans la grille : startIndex <= DEFAULT_TOTAL_STEPS - 3 ;
    *  - pas de chevauchement : aucun depart existant T avec |startIndex - T| <= 2.
    */
-  addTriplet(startIndex: number): boolean {
-    if (!Number.isInteger(startIndex) || startIndex < 0) return false;
-    if (startIndex > Pattern.DEFAULT_TOTAL_STEPS - 3) return false;
+  /** Code de ratchet du step, ou RATCHET_NONE si l'index est hors bornes. */
+  getRatchet(index: number): number {
+    if (!Pattern.isValidIndex(index)) return RATCHET_NONE;
+    return this.ratchets[index] ?? RATCHET_NONE;
+  }
 
-    const first = Math.max(0, startIndex - 2);
-    const last = Math.min(Pattern.DEFAULT_TOTAL_STEPS - 3, startIndex + 2);
-    for (let existing = first; existing <= last; ++existing) {
-      if (this.tripletStarts[existing]) return false;
-    }
-
-    this.tripletStarts[startIndex] = true;
+  /** Definit le ratchet d'un step. Rejette un index ou un code invalide. */
+  setRatchet(index: number, code: number): boolean {
+    if (!Pattern.isValidIndex(index) || !isValidRatchet(code)) return false;
+    this.ratchets[index] = code;
     return true;
   }
 
-  /** Retire le groupe ternaire demarrant a `startIndex`. `false` si absent/hors bornes. */
-  removeTriplet(startIndex: number): boolean {
-    if (!Pattern.isValidIndex(startIndex)) return false;
-    if (!this.tripletStarts[startIndex]) return false;
-    this.tripletStarts[startIndex] = false;
-    return true;
+  clearRatchets(): void {
+    this.ratchets.fill(RATCHET_NONE);
   }
 
-  /** Vrai si un groupe ternaire demarre exactement a `index`. */
-  isTripletStart(index: number): boolean {
-    if (!Pattern.isValidIndex(index)) return false;
-    return this.tripletStarts[index] ?? false;
-  }
-
-  /** Vrai si `index` appartient a un groupe ternaire (start, +1 ou +2). */
-  isTripletStep(index: number): boolean {
-    if (!Pattern.isValidIndex(index)) return false;
-    for (let start = 0; start <= Pattern.DEFAULT_TOTAL_STEPS - 3; ++start) {
-      if (!this.tripletStarts[start]) continue;
-      if (index >= start && index < start + 3) return true;
-    }
-    return false;
-  }
-
-  /** Efface uniquement les groupes ternaires. */
-  clearTriplets(): void {
-    this.tripletStarts.fill(false);
-  }
 }

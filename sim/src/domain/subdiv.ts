@@ -14,8 +14,8 @@
 /** Ticks par noire a 96 PPQN (unite SUBDIV). Egal a SequencerEngine.PPQN. */
 export const QUARTER_TICKS = 96;
 
-/** Valeur SUBDIV par defaut : 1/16 (24 ticks), pas historique du sequenceur. */
-export const DEFAULT_SUBDIV = -4;
+/** Valeur SUBDIV par defaut : /1 = noire (96 ticks), comme le channel Sitka d'origine. */
+export const DEFAULT_SUBDIV = 1;
 
 /**
  * Valeurs SUBDIV officielles (libGravity CLOCK_MOD), ordonnees du plus rapide

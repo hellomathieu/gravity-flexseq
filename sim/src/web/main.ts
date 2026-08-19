@@ -17,10 +17,18 @@ import { TsReferenceBackend, type SimBackend } from "../sim/backend.js";
 import { drawOled, type OledCtx } from "../sim/OledDisplay.js";
 import { PPQN } from "../domain/SequencerEngine.js";
 import { SUBDIVS, subdivLabel } from "../domain/subdiv.js";
+import { BAR_LENGTHS } from "../domain/SequencerEngine.js";
+import { RATCHET_CODES } from "../domain/Pattern.js";
 
 const backend: SimBackend = new TsReferenceBackend();
 
-const state = { channel: 0, cursor: 0, tripletMode: false, bpm: 120 };
+const state = {
+  channel: 0,
+  cursor: 0,
+  ratchet: 0, // code applique au clic quand ratchetMode est actif
+  ratchetMode: false,
+  bpm: 120,
+};
 
 // Trigger flash: timestamp (perf clock) until which each channel's LED stays lit.
 const FLASH_MS = 120;
@@ -47,6 +55,18 @@ function render(): void {
     (v) => `<option value="${v}" ${v === sub ? "selected" : ""}>${subdivLabel(v)}</option>`,
   ).join("");
 
+  const barLen = backend.getBarLength(channel);
+  const barLabel = (n: number): string => (n === 0 ? "aucune" : `${n}/4`);
+  const barOptions = BAR_LENGTHS.map(
+    (n) => `<option value="${n}" ${n === barLen ? "selected" : ""}>${barLabel(n)}</option>`,
+  ).join("");
+  const ratchetOptions = RATCHET_CODES.map(
+    (c) =>
+      `<option value="${c}" ${c === state.ratchet ? "selected" : ""}>${
+        c === 0 ? "aucun" : c === 7 ? "triolet ▲" : `x${c}`
+      }</option>`,
+  ).join("");
+
   const channelButtons = Array.from({ length: backend.channelCount }, (_, c) =>
     `<button data-ch="${c}" class="${c === channel ? "sel" : ""}">CH${c + 1}</button>`,
   ).join("");
@@ -60,12 +80,16 @@ function render(): void {
       <div class="row"><span class="label">Channel</span>${channelButtons}</div>
       <div class="row"><span class="label">Pattern</span>${patternButtons}</div>
       <div class="row">
-        <span class="label">LENGTH</span>
-        <input id="len" type="number" min="1" max="24" value="${length}" />
+        <span class="label">MESURE</span>
+        <select id="meter">${barOptions}</select>
         <span class="label" style="width:auto;margin-left:8px">SUBDIV</span>
         <select id="subdiv">${subdivOptions}</select>
-        <button id="triplet" class="toggle ${state.tripletMode ? "on" : ""}">
-          Mode triolet : ${state.tripletMode ? "ON" : "off"}
+        <span class="label" style="width:auto;margin-left:8px">LENGTH</span>
+        <input id="len" type="number" min="1" max="24" value="${length}" />
+        <span class="label" style="width:auto;margin-left:8px">RATCHET</span>
+        <select id="ratchet">${ratchetOptions}</select>
+        <button id="ratchetmode" class="toggle ${state.ratchetMode ? "on" : ""}">
+          Appliquer au clic : ${state.ratchetMode ? "ON" : "off"}
         </button>
       </div>
       <div class="row">
@@ -82,7 +106,7 @@ function render(): void {
     <div class="panel">
       <div class="grid">${gridRows()}</div>
       <p class="hint">
-        Clic = <code>${state.tripletMode ? "triolet ⟷ (départ)" : "toggle step"}</code> ·
+        Clic = <code>${state.ratchetMode ? "applique le ratchet" : "toggle step"}</code> ·
         pattern <b>partagé</b> (édité ici = vu par tout channel qui le sélectionne) ·
         <span style="color:var(--active)">■</span> actif ·
         <span style="color:var(--inactive)">□</span> inactif ·
@@ -96,7 +120,9 @@ function render(): void {
     </div>
 
     <div class="panel">
-      <div class="label" style="width:auto;margin-bottom:8px">Écran Gravity (aperçu OLED 128×64) — CH${channel + 1}</div>
+      <div class="row" style="margin-bottom:8px">
+        <span class="label" style="width:auto">Écran Gravity (aperçu OLED 128×64) — CH${channel + 1}</span>
+      </div>
       <canvas id="oled" class="oled" width="128" height="64"></canvas>
     </div>
   `;
@@ -114,7 +140,7 @@ function gridRows(): string {
       const rowCells = cells
         .slice(rowStart, rowStart + 12)
         .map((cell) => {
-          const trip = cell.tripletStep ? " trip" : "";
+          const trip = cell.ratchet ? " trip" : "";
           return `
             <div class="cellwrap${trip}">
               <div class="tmark"></div>
@@ -132,11 +158,14 @@ function drawOledScreen(): void {
   const ctx = canvas?.getContext("2d");
   if (!ctx) return;
 
+  const label = patternLabel(curPat());
+
   drawOled(ctx as unknown as OledCtx, {
-    title: `EDIT PATTERN ${patternLabel(curPat())}`,
+    title: `EDIT PATTERN ${label}`,
     cells: backend.view(state.channel),
     cursor: state.cursor,
     playhead: backend.effectiveStep(state.channel),
+    barLength: backend.getBarLength(state.channel),
   });
 }
 
@@ -230,8 +259,8 @@ function wire(): void {
     c.addEventListener("click", () => {
       const idx = Number(c.dataset.idx);
       state.cursor = idx;
-      if (state.tripletMode) {
-        backend.toggleTriplet(state.channel, idx);
+      if (state.ratchetMode) {
+        backend.setRatchet(state.channel, idx, state.ratchet);
       } else {
         backend.toggleStep(state.channel, idx);
       }
@@ -251,8 +280,21 @@ function wire(): void {
     render();
   });
 
-  app.querySelector<HTMLButtonElement>("#triplet")?.addEventListener("click", () => {
-    state.tripletMode = !state.tripletMode;
+  const meter = app.querySelector<HTMLSelectElement>("#meter");
+  meter?.addEventListener("change", () => {
+    backend.setBarLength(state.channel, Number(meter.value));
+    render();
+  });
+
+  const ratchet = app.querySelector<HTMLSelectElement>("#ratchet");
+  ratchet?.addEventListener("change", () => {
+    state.ratchet = Number(ratchet.value);
+    render();
+  });
+
+
+  app.querySelector<HTMLButtonElement>("#ratchetmode")?.addEventListener("click", () => {
+    state.ratchetMode = !state.ratchetMode;
     render();
   });
 

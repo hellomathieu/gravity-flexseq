@@ -43,8 +43,9 @@ npm run typecheck # tsc --noEmit
 - [x] Pattern actif **par channel** + bande multi-channels (6 playheads simultanés) (P3.1).
 - [x] `SequencerEngine.hasStepped` + `TriggerSequencer` (parité C++) ; **flash des triggers** par channel dans le sim.
 - [x] **SUBDIV → ticksPerStep** par channel (convention libGravity 96 PPQN) + sélecteur SUBDIV (parité C++).
-- [ ] METER / MEASURES.
-- [ ] Grille musicale METER/SUBDIV/MEASURES ; sorties trigger.
+- [x] **Révision 2026-08-17 — un step = une unité de temps.** METER/MEASURES **supprimés** ; séparation de mesure **purement graphique** (aucune/2/3/4/6, par channel).
+- [x] **RATCHETS par step** (`2·3·4·6` = N déclenchements dans le step ; `▲` triolet = 3 sur 2 unités, étire le temps). Ratchet 5 écarté (non représentable à 96 PPQN).
+- [x] **Écran EDIT PATTERN** aligné sur le POC Wokwi (`flexseq-oled-playground/sketch.ino`) : 2×12, pas de 10 px, glyphes 5×5 `○`/`●`, `▲` triolet, `.` hors pattern, chiffre de ratchet, barres de mesure, cadre 9×9, pixel central inversé pour le step joué.
 - [ ] Couche Transport réelle (clock/MIDI) ; port C++ du moteur.
 - [ ] Backend avr8js (branché sur le même seam `SimBackend`).
 

@@ -21,8 +21,8 @@ export type CellKind = "active" | "inactive" | "beyond";
 export interface CellView {
   index: number;
   kind: CellKind;
-  tripletStep: boolean;
-  tripletStart: boolean;
+  /** Code de ratchet du step (voir Pattern) : 0 = aucun. */
+  ratchet: number;
 }
 
 export const CELL_SYMBOL: Record<CellKind, string> = {
@@ -52,8 +52,7 @@ export function viewPattern(pattern: Pattern, length: number): CellView[] {
     cells.push({
       index,
       kind,
-      tripletStep: pattern.isTripletStep(index),
-      tripletStart: pattern.isTripletStart(index),
+      ratchet: pattern.getRatchet(index),
     });
   }
 
@@ -72,7 +71,7 @@ export function toAscii(cells: CellView[]): string {
 
   for (let start = 0; start < cells.length; start += ROW_WIDTH) {
     const row = cells.slice(start, start + ROW_WIDTH);
-    const marker = row.map((c) => (c.tripletStep ? "‾" : " ")).join("");
+    const marker = row.map((c) => (c.ratchet ? "‾" : " ")).join("");
     const symbols = row.map((c) => CELL_SYMBOL[c.kind]).join("");
     lines.push(marker, symbols);
   }
