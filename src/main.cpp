@@ -74,9 +74,98 @@ void beginUiFrame() {
     uiScreen.begin(gravity.display, model);
 }
 
+// --- Sonde de pile (build de mesure seulement) -------------------------------
+// Le linker ne compte que la RAM statique : un debordement de pile ne se
+// manifeste jamais comme une erreur de lien, seulement comme une corruption
+// silencieuse. On mesure donc la pile a l'execution, par PEINTURE : la RAM
+// libre est remplie d'un motif au demarrage, et le point le plus bas atteint se
+// lit ensuite comme la premiere adresse qui ne porte plus ce motif.
+//
+// Le resultat sort en LARGEUR D'IMPULSION sur la sortie CH1 : 100 us par octet,
+// ce qui le rend lisible dans le VCD de simavr (la seule trace fiable de cette
+// version : `sram16` n'emet que des horodatages sans valeur). Une impulsion de
+// mesure depasse 10 ms, un trigger musical en fait 5 : aucune confusion.
+//
+// Compile UNIQUEMENT dans env:stackprobe (-DFLEXSEQ_STACK_PROBE). Le firmware de
+// production ne contient pas une instruction de tout ceci.
+#ifdef FLEXSEQ_STACK_PROBE
+// Symbole du linker : fin de .bss, donc premier octet de la RAM libre. Il n'a
+// pas de nom C++ — d'ou le `extern "C"`, sans quoi il serait cherche dans
+// l'espace de noms anonyme.
+extern "C" uint8_t _end;
+constexpr uint8_t PROBE_PATTERN = 0xC5;
+constexpr uint16_t PROBE_PERIOD_MS = 1000;
+constexpr uint8_t PROBE_US_PER_BYTE = 100;
+constexpr uint8_t PROBE_CONFIRM = 8;   // octets peints consecutifs exiges
+constexpr uint16_t PROBE_REF = 100;    // largeur d'etalonnage, en "octets"
+uint32_t probeLastMs = 0;
+
+// Remplit la RAM libre, de la fin de .bss jusqu'a un peu sous le pointeur de
+// pile courant. Ce qui s'est passe AVANT cet appel (constructeurs globaux,
+// init() d'Arduino) n'est donc pas couvert : la mesure porte sur la phase de
+// fonctionnement.
+void probePaint() {
+    uint8_t* p = &_end;
+    uint8_t* const top = reinterpret_cast<uint8_t*>(SP) - 16;
+    while (p < top) {
+        *p++ = PROBE_PATTERN;
+    }
+}
+
+// Profondeur maximale atteinte, en octets, depuis RAMEND.
+//
+// On balaie du HAUT vers le bas, et non l'inverse : le bas de la RAM libre est
+// le debut du tas (`__heap_start` == `_end`), et une allocation posterieure a la
+// peinture y ecrirait, ce qui ferait conclure a tort que la pile est descendue
+// jusque-la. Depuis le haut, la premiere zone encore peinte est la frontiere.
+//
+// PROBE_CONFIRM octets consecutifs sont exiges : un seul octet de pile valant
+// par hasard 0xC5 arreterait sinon le balayage trop tot.
+uint16_t probeStackUsed() {
+    const uint8_t* p = reinterpret_cast<const uint8_t*>(RAMEND);
+    const uint8_t* const floor = &_end + PROBE_CONFIRM;
+    while (p > floor) {
+        bool clean = true;
+        for (uint8_t i = 0; i < PROBE_CONFIRM; ++i) {
+            if (p[-i] != PROBE_PATTERN) {
+                clean = false;
+                break;
+            }
+        }
+        if (clean) {
+            break;
+        }
+        --p;
+    }
+    return static_cast<uint16_t>(RAMEND - reinterpret_cast<uint16_t>(p));
+}
+
+// Une impulsion dure `n` iterations de delayMicroseconds(100) — donc un peu
+// PLUS de 100 us par iteration, a cause du surcout de boucle. On emet donc
+// d'abord une impulsion d'ETALONNAGE de PROBE_REF iterations : le rapport des
+// deux largeurs donne le nombre d'octets sans que cette derive intervienne.
+void probePulse(uint16_t iterations) {
+    gravity.outputs[0].High();
+    for (uint16_t i = 0; i < iterations; ++i) {
+        delayMicroseconds(PROBE_US_PER_BYTE);
+    }
+    gravity.outputs[0].Low();
+}
+
+void probeReport() {
+    const uint16_t used = probeStackUsed();
+    probePulse(PROBE_REF);  // reference : PROBE_REF "octets"
+    delay(2);
+    probePulse(used);
+}
+#endif
+
 }  // namespace
 
 void setup() {
+#ifdef FLEXSEQ_STACK_PROBE
+    probePaint();  // avant tout appel profond
+#endif
     gravity.Init();
 
     // libGravity ne definit aucune police : police integree U8g2 (evite aussi
@@ -135,6 +224,13 @@ void loop() {
             }
         }
     }
+
+#ifdef FLEXSEQ_STACK_PROBE
+    if (millis() - probeLastMs >= PROBE_PERIOD_MS) {
+        probeLastMs = millis();
+        probeReport();
+    }
+#endif
 
     // Auto-off safeguard. gravity.Process() also does this, but libGravity's
     // loop uses an uninitialised index (libGravity.cpp), so drive it explicitly.

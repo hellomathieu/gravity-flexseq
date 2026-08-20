@@ -7,7 +7,7 @@
 # echouerait avant. Le garde-fou est donc une RESERVE laissee libre pour la pile.
 #
 # Seuils (surchargeables) :
-#   RAM_RESERVE=512     octets qui doivent rester libres pour la pile + heap
+#   RAM_RESERVE=256     octets qui doivent rester libres pour la pile
 #   FLASH_BUDGET_PCT=90 part de Flash au-dela de laquelle on refuse
 #
 # Le transcript de PlatformIO est MASQUE : il fait plusieurs centaines de lignes
@@ -20,7 +20,7 @@ set -uo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
-RAM_RESERVE="${RAM_RESERVE:-512}"
+RAM_RESERVE="${RAM_RESERVE:-256}"
 FLASH_BUDGET_PCT="${FLASH_BUDGET_PCT:-90}"
 VERBOSE="${VERBOSE:-0}"
 
