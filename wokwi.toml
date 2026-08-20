@@ -1,0 +1,28 @@
+# Extension Wokwi pour VS Code — validation VISUELLE du rendu OLED.
+#
+# Wokwi execute ici le FIRMWARE REEL compile par PlatformIO : meme domaine, meme
+# renderer, meme objet display de libGravity. Aucune copie de code, donc aucune
+# derive possible : il n'existe AUCUNE copie du code pour Wokwi.
+#
+# Avant de lancer la simulation, compiler la cible :
+#     pio run -e wokwi
+#
+# `env:wokwi` = firmware reel + un contenu de demonstration precharge
+# (src/wokwi_main.cpp), pour rendre visibles tous les cas de la legende.
+# Pour observer le firmware de production a la place (ecran quasi vide, aucun
+# pattern n'etant preenregistre), pointer sur env:nanoatmega328 :
+#     firmware = ".pio/build/nanoatmega328/firmware.hex"
+#     elf      = ".pio/build/nanoatmega328/firmware.elf"
+
+# ROTATION — geree cote SCHEMA, pas cote code : `diagram.json` applique
+# "rotate": 180 a l'ecran, ce qui modelise le montage PHYSIQUE du Gravity (OLED
+# monte tete en bas). Le firmware garde donc son `U8G2_R2` d'origine, sans la
+# moindre divergence, et l'affichage apparait a l'endroit.
+# L'OLED est place AU-DESSUS de la carte : tourne a 180 degres, ses broches
+# passent sur son bord inferieur et font donc face au Nano — les fils ne
+# traversent pas la zone d'affichage.
+
+[wokwi]
+version = 1
+firmware = ".pio/build/wokwi/firmware.hex"
+elf = ".pio/build/wokwi/firmware.elf"
