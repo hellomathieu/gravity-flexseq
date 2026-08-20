@@ -28,6 +28,19 @@ la dependance, anomalies incluses : 7 assertions echouent par construction.
 Ne jamais les affaiblir pour obtenir du vert — ce serait masquer un defaut de
 la dependance.
 
+Le critere de cette suite n'est donc PAS « tout passe », c'est « conforme a
+l'audit ». Un module qui reproduit exactement les anomalies auditees est VERT.
+Le rouge est reserve a une derive : un echec hors reference, ou une anomalie
+auditee qui se met a passer — ce qui signifierait que la dependance epinglee a
+change sous nos pieds.
+
+Les trois seules facons de rendre ces 7 assertions vertes sont toutes fermees :
+patcher la dependance (interdit, elle est epinglee), affaiblir les tests
+(interdit, et c'est ce qui a masque la panne pendant quatre mois), ou contourner
+cote FlexSeq — ce qui est le role de la couche d'adaptation, mais ne change rien
+au comportement de libGravity, donc ces tests resteraient rouges, et a juste
+titre.
+
     ./tools/run-libgravity-tests.sh
 
 Le script ne se contente pas de lancer la suite : il compare l'ensemble des

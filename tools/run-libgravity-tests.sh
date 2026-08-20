@@ -131,36 +131,38 @@ echo
 echo "${C_B}========== CARACTERISATION libGravity @ 9be88be1f4 ==========${C_0}"
 echo
 
-# Recap par module, dans l'ordre d'execution. Un module est :
-#   ✅ aucune assertion en echec
-#   ⚠️  uniquement des anomalies auditees (resultat attendu)
-#   ❌ au moins un echec hors reference
+# Recap par module, dans l'ordre d'execution. Le critere n'est PAS « tout
+# passe » mais « conforme a l'audit » : un module qui reproduit exactement les
+# anomalies auditees est donc VERT. Un rouge signifierait que la dependance
+# figee ne se comporte plus comme auditee.
+#   OK  conforme — aucun echec, ou uniquement des anomalies auditees
+#   KO  au moins un echec hors reference auditee
 printf '%s\n' "$ASSERTIONS" | awk '!seen[$1]++{print $1}' | while read -r mod; do
   m_all=$(printf '%s\n' "$ASSERTIONS" | awk -v m="$mod" '$1==m' | grep -c .)
   m_fail_names=$(printf '%s\n' "$ASSERTIONS" | awk -v m="$mod" '$1==m && $3=="FAILED"{print $2}')
   m_fail=$(printf '%s\n' "$m_fail_names" | grep -c .)
-  m_ok=$(( m_all - m_fail ))
   m_unexpected=0
   for n in $m_fail_names; do
     printf '%s\n' "$EXPECTED_NAMES" | grep -qx "$n" || m_unexpected=$((m_unexpected + 1))
   done
   if [ "$m_unexpected" -gt 0 ]; then
-    [ "$m_unexpected" -gt 1 ] && w="echecs INATTENDUS" || w="echec INATTENDU"
-    printf '  %s❌ %-22s %2d/%-2d  %d %s%s\n' \
-      "$C_ERR" "$mod" "$m_ok" "$m_all" "$m_unexpected" "$w" "$C_0"
+    [ "$m_unexpected" -gt 1 ] && w="echecs HORS AUDIT" || w="echec HORS AUDIT"
+    printf '  %s❌ %-22s %2d assertions  %d %s%s\n' \
+      "$C_ERR" "$mod" "$m_all" "$m_unexpected" "$w" "$C_0"
   elif [ "$m_fail" -gt 0 ]; then
-    [ "$m_fail" -gt 1 ] && w="anomalies auditees" || w="anomalie auditee"
-    printf '  %s⚠  %-22s %2d/%-2d  %d %s%s\n' \
-      "$C_WARN" "$mod" "$m_ok" "$m_all" "$m_fail" "$w" "$C_0"
+    [ "$m_fail" -gt 1 ] && w="anomalies auditees reproduites" || w="anomalie auditee reproduite"
+    printf '  %s✅ %-22s %2d assertions%s  %s%d %s%s\n' \
+      "$C_OK" "$mod" "$m_all" "$C_0" "$C_DIM" "$m_fail" "$w" "$C_0"
   else
-    printf '  %s✅ %-22s %2d/%-2d%s\n' "$C_OK" "$mod" "$m_ok" "$m_all" "$C_0"
+    printf '  %s✅ %-22s %2d assertions%s\n' "$C_OK" "$mod" "$m_all" "$C_0"
   fi
 done
 
 # Detail des anomalies reproduites, avec ce qu'elles documentent.
 if [ -n "$OBSERVED" ]; then
   echo
-  echo "  ${C_DIM}Anomalies reproduites — echec ATTENDU, ne pas corriger :${C_0}"
+  echo "  ${C_DIM}Defauts de la dependance figee, correctement reproduits."
+  echo "  Leur echec EST le resultat attendu — ne pas les corriger :${C_0}"
   printf '%s\n' "$EXPECTED" | sed '/^$/d' | while IFS='|' read -r n label; do
     printf '%s\n' "$OBSERVED" | grep -qx "$n" || continue
     printf '    %s·%s %s\n' "$C_WARN" "$C_0" "$label"
@@ -190,10 +192,12 @@ fi
 
 echo
 if [ "$status" = "0" ]; then
-  printf '  %s%s✅ Conforme au comportement audite%s : %d anomalies auditees reproduites,\n' \
+  printf '  %s%s✅ CONFORME%s — les %d anomalies auditees de libGravity sont\n' \
     "$C_OK" "$C_B" "$C_0" "$(printf '%s\n' "$EXPECTED_NAMES" | grep -c .)"
-  printf '     aucune de plus, aucune de moins. %s(%d assertions, %d vertes)%s\n' \
-    "$C_DIM" "$n_total" "$n_pass" "$C_0"
+  printf '     reproduites, aucune de plus, aucune de moins.\n'
+  printf '     %sCe qui est verifie ici est la conformite a l audit, pas l absence\n' "$C_DIM"
+  printf '     d echec : %d assertions, dont %d rouges par construction.%s\n' \
+    "$n_total" "$n_fail" "$C_0"
 fi
 echo "${C_B}=============================================================${C_0}"
 
