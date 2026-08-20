@@ -6,9 +6,23 @@
 # et le heap ne sont pas mesures : un seuil a 100 % serait inutile, le build
 # echouerait avant. Le garde-fou est donc une RESERVE laissee libre pour la pile.
 #
+# GARDE-FOU DE DERIVE, en plus des plafonds. Un plafond ne se declenche qu'a
+# 90 % de Flash : une fonctionnalite qui prend 3 ko passerait sans un mot. Le
+# script compare donc chaque build a un RELEVE VERSIONNE (tools/memory-baseline)
+# et refuse une croissance au-dela d'un seuil. Accepter la nouvelle empreinte est
+# un acte deliberé :
+#
+#     ./tools/run-build-memory.sh --accept
+#
+# Une BAISSE n'est jamais un echec : elle est signalee, et `--accept` rafraichit
+# le releve. Le fichier absent n'est pas un echec non plus — le script propose de
+# le creer.
+#
 # Seuils (surchargeables) :
 #   RAM_RESERVE=256     octets qui doivent rester libres pour la pile
 #   FLASH_BUDGET_PCT=90 part de Flash au-dela de laquelle on refuse
+#   RAM_DRIFT=16        croissance de RAM acceptee sans acquittement
+#   FLASH_DRIFT=512     croissance de Flash acceptee sans acquittement
 #
 # Le transcript de PlatformIO est MASQUE : il fait plusieurs centaines de lignes
 # (U8g2 compile ~150 pilotes d'ecran) pour trois chiffres utiles. `VERBOSE=1` le
@@ -22,6 +36,16 @@ cd "$(git rev-parse --show-toplevel)"
 
 RAM_RESERVE="${RAM_RESERVE:-256}"
 FLASH_BUDGET_PCT="${FLASH_BUDGET_PCT:-90}"
+RAM_DRIFT="${RAM_DRIFT:-16}"
+FLASH_DRIFT="${FLASH_DRIFT:-512}"
+BASELINE="tools/memory-baseline"
+ACCEPT=0
+for arg in "$@"; do
+  case "$arg" in
+    --accept) ACCEPT=1 ;;
+    *) echo "argument inconnu : $arg (attendu : --accept)" >&2; exit 2 ;;
+  esac
+done
 VERBOSE="${VERBOSE:-0}"
 
 if [ -t 1 ]; then
@@ -162,8 +186,56 @@ printf '  %s Flash         %5d / %d o  (%d.%d %%)  %s— budget %d %% = %d o%s\n
   "$C_DIM" "$FLASH_BUDGET_PCT" "$FLASH_MAX" "$C_0"
 echo "${C_B}===================================================================${C_0}"
 
+# --- Derive par rapport au releve versionne ------------------------------------
+BASE_RAM=""; BASE_FLASH=""; BASE_DATE=""
+if [ -f "$BASELINE" ]; then
+  BASE_RAM="$(sed -n 's/^ram=//p' "$BASELINE" | head -1)"
+  BASE_FLASH="$(sed -n 's/^flash=//p' "$BASELINE" | head -1)"
+  BASE_DATE="$(sed -n 's/^date=//p' "$BASELINE" | head -1)"
+fi
+
+write_baseline() {
+  {
+    echo "# Empreinte de reference du firmware de production (env:nanoatmega328)."
+    echo "# Mise a jour deliberee : ./tools/run-build-memory.sh --accept"
+    echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "commit=$(git rev-parse --short HEAD 2>/dev/null || echo inconnu)"
+    echo "ram=$RAM_USED"
+    echo "flash=$FLASH_USED"
+  } > "$BASELINE"
+}
+
+if [ "$ACCEPT" = "1" ]; then
+  write_baseline
+  printf '  %s✅%s releve mis a jour : RAM %d o, Flash %d o (%s)\n' \
+    "$C_OK" "$C_0" "$RAM_USED" "$FLASH_USED" "$BASELINE"
+elif [ -z "$BASE_RAM" ]; then
+  printf '  %s—%s aucun releve de reference. Le creer : %s--accept%s\n' \
+    "$C_DIM" "$C_0" "$C_B" "$C_0"
+else
+  d_ram=$(( RAM_USED - BASE_RAM ))
+  d_flash=$(( FLASH_USED - BASE_FLASH ))
+  drift=0
+  [ "$d_ram" -gt "$RAM_DRIFT" ] && drift=1
+  [ "$d_flash" -gt "$FLASH_DRIFT" ] && drift=1
+  if [ "$drift" = "1" ]; then
+    printf '  %s❌%s DERIVE  RAM %+d o, Flash %+d o  %spar rapport au %s%s\n' \
+      "$C_ERR" "$C_0" "$d_ram" "$d_flash" "$C_DIM" "$BASE_DATE" "$C_0"
+    echo "     Seuils : RAM +$RAM_DRIFT o, Flash +$FLASH_DRIFT o. Une croissance"
+    echo "     au-dela ne doit pas passer inapercue. L'acquitter si elle est"
+    echo "     voulue : ./tools/run-build-memory.sh --accept"
+    fail=1
+  elif [ "$d_ram" -lt "-$RAM_DRIFT" ] || [ "$d_flash" -lt "-$FLASH_DRIFT" ]; then
+    printf '  %s✅%s derive   RAM %+d o, Flash %+d o  %s— baisse ; --accept pour rafraichir%s\n' \
+      "$C_OK" "$C_0" "$d_ram" "$d_flash" "$C_DIM" "$C_0"
+  else
+    printf '  %s✅%s derive   RAM %+d o, Flash %+d o  %s— dans les seuils%s\n' \
+      "$C_OK" "$C_0" "$d_ram" "$d_flash" "$C_DIM" "$C_0"
+  fi
+fi
+
 if [ "$fail" = "0" ]; then
-  echo "  Les deux budgets sont respectes."
+  echo "  Les budgets sont respectes."
   exit 0
 fi
 
