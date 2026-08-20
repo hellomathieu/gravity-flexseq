@@ -90,9 +90,12 @@ echo "VCD         OK"
 echo
 echo "==> TESTS"
 
+# test_square_wave.py assertionne LE VCD DE CE SCRIPT. Auparavant on lancait ici
+# test_ch1_signal.py, qui lit celui de run_firmware_ch1_test.sh : la simulation
+# de main.c n'etait verifiee par rien.
 python3 -m unittest -v \
   test_vcd_parser.py \
-  test_ch1_signal.py
+  test_square_wave.py
 
 echo
 echo "TESTS       OK"
