@@ -39,9 +39,20 @@ Faits mesurés ou vérifiés dans les sources :
 
 ## Décision
 
-Le rendu est **étalé : une bande par passage de la boucle principale**, piloté
-par une machine à états dans `src/main.cpp`. Le renderer n'est pas modifié — il
-est déjà pur, ce qui est précisément ce qui rend l'étalement possible.
+Le rendu est **étalé : une bande par passage de la boucle principale**. Le
+renderer n'est pas modifié — il est déjà pur, ce qui est précisément ce qui rend
+l'étalement possible.
+
+La séquence vit dans `include/flexseq/PagedScreen.h`, **templatisée sur le type
+d'affichage** comme `PatternScreen` l'est sur le canvas : le firmware l'instancie
+sur `gravity.display`, un test natif sur un faux affichage. Le `Display` est
+passé à chaque appel plutôt que conservé, pour ne pas payer 2 octets de
+référence. Deux appels seulement : `begin()` gèle et dessine la première bande,
+`advance()` transfère la bande courante et dessine la suivante.
+
+`src/main.cpp` et `src/wokwi_main.cpp` l'utilisent **tous deux** : le harnais de
+validation visuelle doit exercer le chemin de rendu réel, sans quoi il ne valide
+plus le firmware (PRD §14).
 
 Le modèle est **gelé au début de l'image** et les 8 bandes sont dessinées depuis
 cette copie : `PatternScreenModel` (8 octets) **plus une copie du `Pattern`**
@@ -52,15 +63,22 @@ bandes de la même image pourraient montrer des contenus différents.
 ## Conséquences
 
 - Le blocage au pire cas passe de l'image entière à **une bande**, soit de
-  l'ordre de 3 ms au lieu de 25.
+  l'ordre de 3 ms au lieu de 25. Une image occupe 9 passages : un pour le gel et
+  la première bande — `firstPage()` ne transfère rien — puis 8 transferts.
 - Le bénéfice principal n'est pas l'affichage mais le **chronométrage des
   triggers** : pendant un blocage, les ticks s'accumulent et les onsets se
   tassent au drainage suivant.
 - Rend praticable la destination **CV → RESET par channel** (PRD §10), dont la
   détection de front est échantillonnée dans la boucle principale.
-- Coût accepté : 23 octets de RAM, une machine à états dans `main.cpp`, et une
-  image qui s'étale désormais sur plusieurs passages — l'affichage retarde donc
-  la réalité de quelques passages.
+- Coût **mesuré** (build `nanoatmega328`) : RAM **1466 → 1490 o** (+24 : les 23
+  du gel plus le drapeau d'état), Flash **20100 → 20236 o** (+136). Une image
+  s'étale désormais sur plusieurs passages : l'affichage retarde la réalité
+  d'autant.
+- Couvert par `test/test_paged_screen` (6 assertions) : une image tient
+  exactement 8 bandes, l'écran reste occupé jusqu'à la dernière, `advance()` hors
+  image ne transfère rien, et **une édition survenue pendant l'image ne la
+  déchire pas**. Cette dernière assertion a été vérifiée par mutation — le gel
+  retiré, elle rougit (500 pixels sur la première bande, 707 sur la suivante).
 - **Ne dispense pas de mesurer.** La largeur minimale d'impulsion réellement
   captée reste à établir, rendu et chronométrage tournant ensemble.
 
@@ -78,6 +96,7 @@ bandes de la même image pourraient montrer des contenus différents.
 ## Références
 
 - PRD §10 (CV), §12 (UI / contrainte d'affichage), §14 (niveaux de validation).
-- `src/main.cpp`, `include/flexseq/PatternScreen.h`.
+- `include/flexseq/PagedScreen.h`, `src/main.cpp`, `src/wokwi_main.cpp`,
+  `include/flexseq/PatternScreen.h`, `test/test_paged_screen/`.
 - U8g2 : `clib/u8x8_d_ssd1306_128x64_noname.c`, `U8x8lib.cpp`.
 - libGravity `9be88be1f4` : `libGravity.cpp` (`initDisplay`).

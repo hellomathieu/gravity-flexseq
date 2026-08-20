@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <libGravity.h>
 
+#include <flexseq/PagedScreen.h>
 #include <flexseq/PatternBank.h>
 #include <flexseq/PatternScreen.h>
 #include <flexseq/SequencerEngine.h>
@@ -32,9 +33,12 @@ flexseq::Transport transport(engine);
 constexpr uint8_t CH = 0;
 constexpr int8_t CURSOR = 5; // volontairement colle a la barre du step 6
 
-// Le transfert I2C d'une trame bloque la boucle (~23 ms) : on ne redessine que
-// lorsque le playhead a bouge.
+// On ne redessine que lorsque le playhead a bouge, et le rendu est ETALE — une
+// bande par passage de loop(), comme dans main.cpp (ADR 0001). Ce harnais doit
+// exercer le MEME chemin de rendu que le firmware, sinon il ne valide plus rien.
 int8_t lastDrawnStep = -2;
+
+flexseq::PagedScreen<decltype(gravity.display)> screen;
 
 volatile uint16_t pendingTicks = 0;
 
@@ -42,8 +46,9 @@ void onOutputTick(uint32_t) {
     ++pendingTicks;
 }
 
-// Mode _1_ de libGravity => 8 passes : drawPatternScreen() doit rester pure.
-void draw() {
+// Ouvre une image. PagedScreen gele le modele, puis en rend une bande par appel
+// a advance() ; drawPatternScreen() doit rester pure.
+void beginFrame() {
     flexseq::PatternScreenModel model;
     model.title = "EDIT PATTERN A1";
     model.pattern = patternBank.getPattern(0);
@@ -52,10 +57,7 @@ void draw() {
     model.playhead = engine.effectiveStep(CH);
     model.barLength = static_cast<uint8_t>(engine.getBarLength(CH));
 
-    gravity.display.firstPage();
-    do {
-        flexseq::drawPatternScreen(gravity.display, model);
-    } while (gravity.display.nextPage());
+    screen.begin(gravity.display, model);
 }
 
 }  // namespace
@@ -101,9 +103,13 @@ void loop() {
         transport.tick(ticks);
     }
 
-    const int8_t step = engine.effectiveStep(CH);
-    if (step != lastDrawnStep) {
-        lastDrawnStep = step;
-        draw();
+    if (screen.busy()) {
+        screen.advance(gravity.display);
+    } else {
+        const int8_t step = engine.effectiveStep(CH);
+        if (step != lastDrawnStep) {
+            lastDrawnStep = step;
+            beginFrame();
+        }
     }
 }

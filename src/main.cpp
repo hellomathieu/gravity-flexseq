@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <libGravity.h>
 
+#include <flexseq/PagedScreen.h>
 #include <flexseq/PatternBank.h>
 #include <flexseq/PatternScreen.h>
 #include <flexseq/SequencerEngine.h>
@@ -15,11 +16,16 @@ flexseq::Transport transport(engine);
 flexseq::TriggerSequencer triggers(patternBank, engine);
 
 // --- UI ---------------------------------------------------------------------
-// Le rendu bloque la boucle le temps du transfert I2C (~23 ms pour une trame de
-// 1024 o a 400 kHz, la vitesse par defaut de ce profil U8g2). On ne redessine
-// donc QUE lorsque l'affichage a reellement change, et jamais plus souvent que
-// UI_MIN_INTERVAL_MS : le drainage des ticks et l'emission des triggers passent
-// toujours en premier dans loop().
+// Rendu ETALE : UNE BANDE PAR PASSAGE de loop() (ADR 0001). Le mode _1_ de
+// libGravity n'alloue que 128 o de tampon pour un ecran de 1024 : U8g2 rend donc
+// l'image en 8 bandes horizontales. Les enchainer dans un seul appel bloquerait
+// la boucle le temps de l'image entiere (~25 ms de bus a 400 kHz), pendant
+// lesquels les ticks s'accumulent et les onsets se tassent au drainage suivant.
+// Une bande a la fois ramene le pire cas a ~3 ms.
+//
+// On ne redessine QUE lorsque l'affichage a reellement change, et on ne demarre
+// jamais une image plus souvent que UI_MIN_INTERVAL_MS : le drainage des ticks
+// et l'emission des triggers passent toujours en premier dans loop().
 constexpr uint8_t UI_CHANNEL = 0;
 constexpr int8_t UI_CURSOR = 0;
 constexpr uint16_t UI_MIN_INTERVAL_MS = 40;
@@ -33,6 +39,11 @@ uint32_t uiLastDrawMs = 0;
 int8_t uiLastStep = -2;
 int8_t uiLastPattern = -2;
 
+// L'image en cours. PagedScreen gele le modele et le contenu du pattern, puis
+// rend une bande par appel. `decltype` evite de reecrire ici le type d'affichage
+// de libGravity.
+flexseq::PagedScreen<decltype(gravity.display)> uiScreen;
+
 // Incremented in the uClock 96-PPQN output ISR (AttachIntHandler), drained in
 // loop() so the engine is only mutated in main-loop context (no torn reads of
 // its multi-byte state).
@@ -42,9 +53,9 @@ void onOutputTick(uint32_t) {
     ++pendingTicks;
 }
 
-// Redessine l'ecran EDIT PATTERN. Le mode _1_ de libGravity impose 8 passes :
-// drawPatternScreen() doit donc rester PURE (elle l'est).
-void drawUi() {
+// Ouvre une image : releve l'etat a afficher et le confie a PagedScreen, qui le
+// gele. Sans effet si rien n'est affichable.
+void beginUiFrame() {
     const int8_t selected = engine.getSelectedPattern(UI_CHANNEL);
     if (selected < 0) {
         return;
@@ -60,10 +71,7 @@ void drawUi() {
     model.playhead = engine.effectiveStep(UI_CHANNEL);
     model.barLength = static_cast<uint8_t>(engine.getBarLength(UI_CHANNEL));
 
-    gravity.display.firstPage();
-    do {
-        flexseq::drawPatternScreen(gravity.display, model);
-    } while (gravity.display.nextPage());
+    uiScreen.begin(gravity.display, model);
 }
 
 }  // namespace
@@ -109,17 +117,22 @@ void loop() {
         }
     }
 
-    // Rendu de l'ecran : seulement si l'affichage a change, et jamais plus
-    // souvent que UI_MIN_INTERVAL_MS (le transfert I2C bloque la boucle).
-    const int8_t step = engine.effectiveStep(UI_CHANNEL);
-    const int8_t pat = engine.getSelectedPattern(UI_CHANNEL);
-    if (step != uiLastStep || pat != uiLastPattern) {
-        const uint32_t now = millis();
-        if (now - uiLastDrawMs >= UI_MIN_INTERVAL_MS) {
-            uiLastDrawMs = now;
-            uiLastStep = step;
-            uiLastPattern = pat;
-            drawUi();
+    // Rendu de l'ecran : UNE bande par passage (ADR 0001). Une image en cours
+    // se poursuit jusqu'a son terme ; on n'en ouvre une nouvelle que si
+    // l'affichage a change, et jamais avant UI_MIN_INTERVAL_MS.
+    if (uiScreen.busy()) {
+        uiScreen.advance(gravity.display);
+    } else {
+        const int8_t step = engine.effectiveStep(UI_CHANNEL);
+        const int8_t pat = engine.getSelectedPattern(UI_CHANNEL);
+        if (step != uiLastStep || pat != uiLastPattern) {
+            const uint32_t now = millis();
+            if (now - uiLastDrawMs >= UI_MIN_INTERVAL_MS) {
+                uiLastDrawMs = now;
+                uiLastStep = step;
+                uiLastPattern = pat;
+                beginUiFrame();
+            }
         }
     }
 
