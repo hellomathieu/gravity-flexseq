@@ -48,7 +48,12 @@ constexpr uint8_t DIGIT_DY = 5; // premiere ligne du chiffre, depuis cy
 constexpr uint8_t BAR_HALF_H = 6;
 constexpr uint8_t BAR_HEIGHT = 2 * BAR_HALF_H + 1; // 13 px
 
-constexpr uint8_t TITLE_BASELINE_Y = 8; // drawStr() aligne sur la LIGNE DE BASE
+// Ligne de base du titre. 7 et non 8 : les glyphes 5x7 occupent alors y 1..7,
+// donc UNE SEULE bande de 8 pixels. A 8 ils debordaient sur la bande voisine, qui
+// redessinait tout le titre pour une seule ligne de pixels — 2,1 ms par image
+// mesurees (voir tools/run-blocking-probe.sh). Le titre monte d'un pixel ; l'ecart
+// au filet passe de 1 a 2 px.
+constexpr uint8_t TITLE_BASELINE_Y = 7; // drawStr() aligne sur la LIGNE DE BASE
 constexpr uint8_t HEADER_LINE_X = 4;
 constexpr uint8_t HEADER_LINE_Y = 10;
 constexpr uint8_t HEADER_LINE_W = 120;
@@ -93,6 +98,14 @@ inline bool touches(const Band& band, int16_t top, int16_t bottom) {
 // Pattern a la volee (aucun tableau intermediaire, donc aucune RAM).
 struct PatternScreenModel {
     const char* title;
+    // Largeur du titre en pixels, pour le centrer. 0 = la demander au canvas.
+    //
+    // Pourquoi la porter dans le modele : `getStrWidth()` parcourt la chaine et
+    // decode la police, ce qui coute ~1 ms par appel sur ce MCU. En mode page, le
+    // renderer tourne une fois par bande : la mesurer a chaque fois est du travail
+    // repete pour un resultat constant. `PagedScreen` la calcule une fois par
+    // image, au moment du gel.
+    uint8_t titleWidth;
     const Pattern* pattern;
     uint8_t length;    // LENGTH du channel : au-dela -> simple point
     int8_t cursor;     // step en cours d'edition, -1 pour masquer
@@ -187,7 +200,9 @@ void drawPatternScreen(Canvas& canvas, const PatternScreenModel& model,
     // En-tete : titre centre + filet. getStrWidth() parcourt la chaine, donc on
     // l'evite aussi quand la bande ne porte pas le titre.
     if (model.title != nullptr && touches(band, 0, screen::TITLE_BASELINE_Y)) {
-        const uint8_t w = static_cast<uint8_t>(canvas.getStrWidth(model.title));
+        const uint8_t w = model.titleWidth != 0
+                              ? model.titleWidth
+                              : static_cast<uint8_t>(canvas.getStrWidth(model.title));
         canvas.drawStr(static_cast<uint8_t>((screen::WIDTH - w) / 2),
                        screen::TITLE_BASELINE_Y, model.title);
     }

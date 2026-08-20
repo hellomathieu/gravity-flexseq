@@ -46,6 +46,11 @@ public:
     // firstPage() ne transfere RIEN — cet appel ne coute que du CPU.
     void begin(Display& display, const PatternScreenModel& model) {
         model_ = model;
+        // La largeur du titre une seule fois pour les 8 bandes : `getStrWidth()`
+        // decode la police et coute ~1 ms par appel.
+        if (model_.title != nullptr && model_.titleWidth == 0) {
+            model_.titleWidth = static_cast<uint8_t>(display.getStrWidth(model_.title));
+        }
         if (model.pattern != nullptr) {
             pattern_ = *model.pattern;
             model_.pattern = &pattern_;

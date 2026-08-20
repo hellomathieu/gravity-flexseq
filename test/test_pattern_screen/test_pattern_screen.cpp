@@ -102,6 +102,7 @@ static PatternScreenModel model(uint8_t length = 24, int8_t cursor = -1,
                                 int8_t playhead = -1, uint8_t bar = 0) {
     PatternScreenModel m;
     m.title = nullptr; // pas de titre : on isole la grille
+    m.titleWidth = 0;
     m.pattern = &pattern;
     m.length = length;
     m.cursor = cursor;

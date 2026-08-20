@@ -267,6 +267,12 @@ int main(int argc, char **argv)
     static double frame_len[MAX_TX / BANDS_PER_FRAME + 1];
     /* Un regime par image : une image a cheval sur la bascule est ecartee, ses
      * passages n'appartenant proprement a aucun des deux. */
+    /* Cout par POSITION dans l'image : l'intervalle k couvre le transfert de la
+     * bande k-1 plus le DESSIN de la bande k. C'est ce qui dit ou part le temps,
+     * au lieu de le deduire de la geometrie. */
+    static double by_index[BANDS_PER_FRAME];
+    static int n_index[BANDS_PER_FRAME];
+
     static double per_a[MAX_TX];  /* ADC active */
     static double per_b[MAX_TX];  /* ADC coupee */
     int na = 0, nbp = 0, straddling = 0;
@@ -280,6 +286,10 @@ int main(int argc, char **argv)
             band_per[np++] = d;
             if (first_a != last_a) continue;
             if (first_a) per_a[na++] = d; else per_b[nbp++] = d;
+            if (!first_a) {           /* regime sans ADC : le cout du dessin nu */
+                by_index[k] += d;
+                ++n_index[k];
+            }
         }
         if (first_a != last_a) ++straddling;
         frame_len[fr] = us(band_start[base + BANDS_PER_FRAME - 1] - band_start[base])
@@ -310,6 +320,13 @@ int main(int argc, char **argv)
     double med_per = np ? band_per[np / 2] : 0, max_per = np ? band_per[np - 1] : 0;
 
     /* --- les deux regimes, et l'estimation materielle ----------------------- */
+    printf("=== COUT PAR POSITION DANS L'IMAGE (regime sans ADC) ===\n");
+    printf("  intervalle k = transfert de la bande k-1 + dessin de la bande k\n");
+    for (int k = 1; k < BANDS_PER_FRAME; ++k)
+        if (n_index[k])
+            printf("    k=%d  %8.3f us   (n=%d)\n", k, by_index[k] / n_index[k], n_index[k]);
+    printf("\n");
+
     printf("=== DEUX REGIMES ===\n");
     stats("passage, ADC active (simulee)", per_a, na, "us");
     stats("passage, ADC coupee", per_b, nbp, "us");

@@ -66,6 +66,7 @@ void beginUiFrame() {
 
     flexseq::PatternScreenModel model;
     model.title = uiTitle;
+    model.titleWidth = 0;  // PagedScreen la mesure une fois par image
     model.pattern = patternBank.getPattern(static_cast<uint8_t>(selected));
     model.length = engine.getEffectiveLength(UI_CHANNEL);
     model.cursor = UI_CURSOR;

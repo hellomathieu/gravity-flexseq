@@ -51,6 +51,7 @@ void onOutputTick(uint32_t) {
 void beginFrame() {
     flexseq::PatternScreenModel model;
     model.title = "EDIT PATTERN A1";
+    model.titleWidth = 0;  // PagedScreen la mesure une fois par image
     model.pattern = patternBank.getPattern(0);
     model.length = engine.getEffectiveLength(CH);
     model.cursor = CURSOR;
