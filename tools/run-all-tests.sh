@@ -1,12 +1,21 @@
 #!/usr/bin/env bash
 #
-# Lance TOUTE la suite de tests FlexSeq : C++ domaine (env host-native) + modele
-# TypeScript (sim/). Aucun hardware requis.
+# Lance TOUTE la suite de tests FlexSeq : C++ domaine (env host-native), modele
+# TypeScript (sim/), puis caracterisation de la dependance libGravity figee.
+# Aucun hardware requis.
+#
+# Les deux categories restent DISTINCTES (regle CLAUDE.md) :
+#   - acceptation FlexSeq  -> doit etre verte ;
+#   - caracterisation libGravity -> reproduit des anomalies auditees, donc
+#     partiellement rouge par construction. Ce qui est verifie la, c'est que
+#     l'ensemble des echecs est EXACTEMENT celui audite (voir
+#     tools/run-libgravity-tests.sh).
 #
 # Usage :
-#   ./tools/run-all-tests.sh          # C++ puis TS, avec recap
-#   ./tools/run-all-tests.sh --ts     # TS uniquement
-#   ./tools/run-all-tests.sh --cpp    # C++ uniquement
+#   ./tools/run-all-tests.sh              # les trois suites, avec recap
+#   ./tools/run-all-tests.sh --ts         # TypeScript uniquement
+#   ./tools/run-all-tests.sh --cpp        # C++ acceptation uniquement
+#   ./tools/run-all-tests.sh --libgravity # caracterisation uniquement
 #
 # Sort en erreur (code != 0) si au moins une suite echoue.
 set -uo pipefail
@@ -16,15 +25,18 @@ cd "$REPO_ROOT"
 
 RUN_CPP=1
 RUN_TS=1
+RUN_LIB=1
 case "${1:-}" in
-  --ts)  RUN_CPP=0 ;;
-  --cpp) RUN_TS=0 ;;
+  --ts)         RUN_CPP=0; RUN_LIB=0 ;;
+  --cpp)        RUN_TS=0;  RUN_LIB=0 ;;
+  --libgravity) RUN_CPP=0; RUN_TS=0  ;;
   "")    ;;
-  *) echo "argument inconnu : $1 (attendu : --ts | --cpp | rien)" >&2; exit 2 ;;
+  *) echo "argument inconnu : $1 (attendu : --ts | --cpp | --libgravity | rien)" >&2; exit 2 ;;
 esac
 
 cpp_status="skip"
 ts_status="skip"
+lib_status="skip"
 
 if [ "$RUN_CPP" = "1" ]; then
   echo "=========================================="
@@ -54,13 +66,26 @@ if [ "$RUN_TS" = "1" ]; then
   echo
 fi
 
+if [ "$RUN_LIB" = "1" ]; then
+  echo "=========================================="
+  echo "  Caracterisation libGravity @ 9be88be1f4"
+  echo "=========================================="
+  if "$REPO_ROOT/tools/run-libgravity-tests.sh"; then
+    lib_status="OK"
+  else
+    lib_status="ECHEC"
+  fi
+  echo
+fi
+
 echo "=================== RECAP ==================="
-printf "  C++ (native) : %s\n" "$cpp_status"
-printf "  TypeScript   : %s\n" "$ts_status"
+printf "  C++ acceptation (native)   : %s\n" "$cpp_status"
+printf "  TypeScript (sim/)          : %s\n" "$ts_status"
+printf "  libGravity caracterisation : %s\n" "$lib_status"
 echo "============================================"
 
 # Code de sortie : erreur si l'une des suites lancees a echoue.
-if [ "$cpp_status" = "ECHEC" ] || [ "$ts_status" = "ECHEC" ]; then
+if [ "$cpp_status" = "ECHEC" ] || [ "$ts_status" = "ECHEC" ] || [ "$lib_status" = "ECHEC" ]; then
   exit 1
 fi
 exit 0

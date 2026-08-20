@@ -1,11 +1,68 @@
+Tests PlatformIO du projet Gravity FlexSeq.
 
-This directory is intended for PlatformIO Test Runner and project tests.
+Ce repertoire contient DEUX categories de tests qu'il ne faut jamais melanger.
+Elles vivent dans deux environnements PlatformIO distincts, et c'est
+deliberement structurel : c'est ce qui permet a la suite d'acceptation de
+rester un signal fiable.
 
-Unit Testing is a software testing method by which individual units of
-source code, sets of one or more MCU program modules together with associated
-control data, usage procedures, and operating procedures, are tested to
-determine whether they are fit for use. Unit testing finds problems early
-in the development cycle.
+-------------------------------------------------------------------------------
+1. Acceptation / regression FlexSeq  ->  env `native`
+-------------------------------------------------------------------------------
+    test_pattern, test_pattern_bank, test_pattern_screen,
+    test_sequencer_engine, test_subdiv, test_transport, test_trigger_sequencer
 
-More information about PlatformIO Unit Testing:
-- https://docs.platformio.org/en/latest/advanced/unit-testing/index.html
+Domaine pur C++, sans Arduino ni libGravity. DOIT etre vert : une phase n'est
+pas terminee tant qu'un de ces tests echoue.
+
+    ./tools/run-cpp-tests.sh [nom_du_test]
+
+-------------------------------------------------------------------------------
+2. Caracterisation libGravity  ->  env `native_libgravity`
+-------------------------------------------------------------------------------
+    test_analog_input, test_button, test_clock, test_digital_output,
+    test_encoder, test_gravity
+
+En-tetes de libGravity (figee au commit 9be88be1f4) compilees contre les
+bouchons Arduino de `test/mocks/`. Ces tests decrivent le comportement REEL de
+la dependance, anomalies incluses : 7 assertions echouent par construction.
+Ne jamais les affaiblir pour obtenir du vert — ce serait masquer un defaut de
+la dependance.
+
+    ./tools/run-libgravity-tests.sh
+
+Le script ne se contente pas de lancer la suite : il compare l'ensemble des
+assertions en echec a la reference auditee et signale toute derive dans les
+deux sens (une anomalie qui disparait, une qui apparait). Un rouge attendu
+n'est pas un signal ; un rouge qui change en est un.
+
+Prerequis : l'env AVR doit avoir ete construit une fois, les en-tetes etant
+lues dans `.pio/libdeps/nanoatmega328/`. Le script s'en charge si besoin.
+
+A savoir : sur `platform = native`, `pio test` presente le code de sortie du
+binaire Unity (= nombre d'assertions en echec) comme un signal — « SIGINT
+(Interrupt: 2) » pour 2 echecs, « SIGHUP (Hangup: 1) » pour 1. Ce n'est pas un
+crash, et le statut ERRORED qui en decoule n'est pas exploitable : c'est
+pourquoi le script lit les assertions elles-memes.
+
+-------------------------------------------------------------------------------
+Les deux, plus le modele TypeScript
+-------------------------------------------------------------------------------
+    ./tools/run-all-tests.sh                # les trois suites
+    ./tools/run-all-tests.sh --cpp          # acceptation C++ seule
+    ./tools/run-all-tests.sh --ts           # TypeScript seul
+    ./tools/run-all-tests.sh --libgravity   # caracterisation seule
+
+-------------------------------------------------------------------------------
+Historique — pourquoi ce README existe
+-------------------------------------------------------------------------------
+Les six tests de caracterisation ont ete introduits par `0574600`, ou l'env
+`native` portait `-I.pio/libdeps/nanoatmega328/libGravity/src -Itest/mocks`.
+Le commit `f0d6134` (PR #1) a reecrit cet env pour les tests de domaine : il a
+supprime ces deux `-I` ET ajoute `test_filter = test_pattern*` dans le meme
+commit. Les tests ont donc cesse de compiler sans jamais etre collectes — donc
+sans emettre le moindre signal, pendant quatre mois.
+
+La lecon est structurelle : un `test_filter` qui restreint la collecte peut
+masquer une panne de compilation. C'est pourquoi les deux categories ont
+desormais chacune leur environnement, et pourquoi la caracterisation est
+lancee par defaut par `run-all-tests.sh`.
