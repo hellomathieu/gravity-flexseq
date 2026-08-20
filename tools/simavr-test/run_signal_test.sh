@@ -12,28 +12,27 @@ ELF="gravity-ch1-test.elf"
 HEX="gravity-ch1-test.hex"
 VCD="gravity-ch1-test.vcd"
 
-# Resolution de simavr : PATH d'abord, puis le clone local en REPLI. L'ancienne
-# version codait ce clone en dur, ce qui faisait dependre le harnais d'un dossier
-# hors du depot (invisible a un `git clone`, et dans ~/Downloads qu'on vide). On
-# charge desormais le .hex avec -m/-f explicites : le simavr d'Homebrew refuse
-# les ELF (`ELF format is not supported by this build`), le clone les accepte —
-# le .hex marche avec les deux. Le clone reste un confort (support ELF, sources
-# des pieces virtuelles), plus un prerequis.
+# Resolution de simavr : le PATH, et rien d'autre. Pas de repli vers un binaire
+# hors du PATH — il autoriserait silencieusement une autre version de simavr que
+# celle installee, et les assertions de ce harnais portent sur des durees. Une
+# absence doit etre une erreur claire. Le binaire retenu est affiche, pour qu'une
+# divergence se voie dans le log.
+#
+# On charge le .hex avec -m/-f explicites, seul format que tout build accepte :
+# celui d'Homebrew refuse les ELF (`ELF format is not supported by this build`).
 find_simavr() {
-  for candidate in \
-      "$(command -v simavr 2>/dev/null || true)" \
-      "$(command -v run_avr 2>/dev/null || true)" \
-      "$HOME/Downloads/simavr-source/simavr/run_avr"; do
-    if [ -n "$candidate" ] && [ -x "$candidate" ]; then echo "$candidate"; return 0; fi
+  for candidate in simavr run_avr; do
+    if command -v "$candidate" >/dev/null 2>&1; then command -v "$candidate"; return 0; fi
   done
   return 1
 }
 
 if ! SIMAVR="$(find_simavr)"; then
-  echo "erreur : ni 'simavr' ni 'run_avr' trouves (PATH, puis ~/Downloads/simavr-source)." >&2
+  echo "erreur : ni 'simavr' ni 'run_avr' dans le PATH." >&2
   echo "Installe-le : brew install simavr" >&2
   exit 127
 fi
+echo "simavr      $SIMAVR"
 
 echo "==> BUILD"
 

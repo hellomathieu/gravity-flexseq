@@ -65,15 +65,14 @@ else
   die "'pio' introuvable (ni PATH, ni ~/.platformio/penv/bin). Installe PlatformIO Core." 127
 fi
 
-# run_avr charge les ELF ; le simavr d'Homebrew, selon son build, peut ne pas les
-# supporter — on lui donne alors le .hex, avec -m/-f explicites.
+# Le PATH, et rien d'autre : un repli vers un build personnel autoriserait
+# silencieusement une autre version de simavr. On charge le .hex avec -m/-f
+# explicites, seul format que tout build accepte (celui d'Homebrew refuse l'ELF).
 SIMAVR=""
-for candidate in "$(command -v simavr 2>/dev/null || true)" \
-                 "$(command -v run_avr 2>/dev/null || true)" \
-                 "$HOME/Downloads/simavr-source/simavr/run_avr"; do
-  if [ -n "$candidate" ] && [ -x "$candidate" ]; then SIMAVR="$candidate"; break; fi
+for candidate in simavr run_avr; do
+  if command -v "$candidate" >/dev/null 2>&1; then SIMAVR="$(command -v "$candidate")"; break; fi
 done
-[ -n "$SIMAVR" ] || die "'simavr' / 'run_avr' introuvable. brew install simavr" 127
+[ -n "$SIMAVR" ] || die "ni 'simavr' ni 'run_avr' dans le PATH. brew install simavr" 127
 
 LOG="$(mktemp)"
 WORK="$(mktemp -d)"
@@ -111,8 +110,8 @@ progress "simulation ($DURATION s)"
     "$ROOT/.pio/build/stackprobe/firmware.hex" >/dev/null 2>&1 )
 
 [ -s "$WORK/probe.vcd" ] || die "aucun VCD produit — la simulation n'a rien trace."
-printf '  %s✅%s simulation             %s%s s, VCD %s o%s\n' "$C_OK" "$C_0" "$C_DIM" \
-  "$DURATION" "$(wc -c < "$WORK/probe.vcd" | tr -d ' ')" "$C_0"
+printf '  %s✅%s simulation             %s%s s, VCD %s o, %s%s\n' "$C_OK" "$C_0" "$C_DIM" \
+  "$DURATION" "$(wc -c < "$WORK/probe.vcd" | tr -d ' ')" "$SIMAVR" "$C_0"
 
 # --- 3. Verdict --------------------------------------------------------------
 python3 - "$WORK/probe.vcd" "$PROD_ELF" "$RAM_RESERVE" <<'PY'

@@ -7,10 +7,8 @@ PROVENANCE. The font data belongs to the original Sitka firmware
 only decodes it; the generated atlas carries that provenance.
 
 SOURCE. The reference is the GravityFW clone sitting NEXT TO this repository, as
-CLAUDE.md's source hierarchy expects. It used to be a hardcoded absolute path
-into ~/Downloads -- a stray copy (byte-identical, verified 2026-08-20) in a
-folder people empty. Override with --src or GRAVITY_FW_INO when the clone lives
-elsewhere.
+CLAUDE.md's source hierarchy expects. Override with --src or GRAVITY_FW_INO when
+the clone lives elsewhere.
 """
 import argparse, os, re, json, sys
 from pathlib import Path
