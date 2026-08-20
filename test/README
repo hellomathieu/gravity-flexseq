@@ -35,14 +35,27 @@ assertions en echec a la reference auditee et signale toute derive dans les
 deux sens (une anomalie qui disparait, une qui apparait). Un rouge attendu
 n'est pas un signal ; un rouge qui change en est un.
 
+Il produit son propre rapport et MASQUE le transcript de `pio test` : recap par
+module, puis liste des anomalies reproduites avec le defaut libGravity que
+chacune documente. `VERBOSE=1` reaffiche le transcript brut, `VERBOSE=2`
+l'affiche en `-vvv`.
+
 Prerequis : l'env AVR doit avoir ete construit une fois, les en-tetes etant
 lues dans `.pio/libdeps/nanoatmega328/`. Le script s'en charge si besoin.
 
-A savoir : sur `platform = native`, `pio test` presente le code de sortie du
-binaire Unity (= nombre d'assertions en echec) comme un signal — « SIGINT
-(Interrupt: 2) » pour 2 echecs, « SIGHUP (Hangup: 1) » pour 1. Ce n'est pas un
-crash, et le statut ERRORED qui en decoule n'est pas exploitable : c'est
-pourquoi le script lit les assertions elles-memes.
+Pourquoi le transcript de pio est masque — trois de ses sorties induisent en
+erreur sur `platform = native` :
+
+  - il presente le code de sortie du binaire Unity (= nombre d'assertions en
+    echec) comme un signal : « SIGINT (Interrupt: 2) » pour 2 echecs, « SIGHUP
+    (Hangup: 1) » pour 1. Ce n'est pas un crash ;
+  - le statut ERRORED qui en decoule n'est donc pas exploitable, et il masque
+    la distinction entre « echoue comme prevu » et « ne compile pas » ;
+  - son total est faux : « 69 test cases » pour 65 assertions reelles, une
+    pseudo-assertion etant ajoutee par module ERRORED.
+
+S'y ajoute une gene pratique : PlatformIO retire ses couleurs des que sa sortie
+est capturee, ce qui rend PASSED et FAILED indiscernables dans un journal.
 
 -------------------------------------------------------------------------------
 Les deux, plus le modele TypeScript
