@@ -1,39 +1,37 @@
 #!/usr/bin/env bash
 #
-# Mesure la PILE reellement consommee par le firmware, a l'execution.
+# Mesure la PILE du firmware de production, a l'execution, sans l'instrumenter.
 #
-# Pourquoi : sur AVR le linker ne compte que la RAM statique (.data + .bss). Un
+# Pourquoi. Sur AVR le linker ne compte que la RAM statique (.data + .bss). Un
 # debordement de pile ne produit donc jamais d'erreur de lien, seulement une
 # corruption silencieuse. Le seuil RAM_RESERVE de run-build-memory.sh etait un
 # garde-fou pose a l'estime ; ce script le remplace par un nombre.
 #
-# Methode : peinture. env:stackprobe = le firmware de production plus une sonde
-# (-DFLEXSEQ_STACK_PROBE, bloc dedie de src/main.cpp) qui remplit la RAM libre
-# d'un motif au demarrage, puis publie une fois par seconde la profondeur
-# atteinte, encodee en LARGEUR D'IMPULSION sur CH1. Chaque releve emet DEUX
-# impulsions : une d'etalonnage puis la mesure. Le rapport des deux annule le
-# surcout de boucle de delayMicroseconds, qui vaut ~0,5 %.
+# Methode : peinture. tools/simavr-ssd1306/stack_probe.c ecrit un motif dans la
+# RAM libre de la machine simulee AVANT le premier cycle, laisse tourner le
+# firmware, puis relit la frontiere du motif intact depuis le HAUT (le bas de la
+# RAM libre est le debut du tas : une allocation salirait le motif sans que la
+# pile y soit descendue).
 #
-# Pourquoi cet encodage : la trace `sram16` de simavr n'emet que des
-# horodatages, sans valeur (`$var wire 0`) ; seule `portpin` est exploitable. Et
-# l'avr-gdb de la toolchain PlatformIO (2019) est lie a Python 2.7 et ne demarre
-# plus sur macOS recent, ce qui exclut la lecture directe de la RAM.
+# LES DEUX ANGLES MORTS SONT FERMES depuis le 2026-08-20, et ils coutaient 43 o.
+# La version precedente peignait depuis le firmware au debut de `setup()` et
+# publiait le resultat en largeur d'impulsion, faute de pouvoir lire la memoire du
+# simulateur. Elle exigeait une sonde dans main.cpp et un environnement dedie, et
+# elle ne voyait ni la pile d'avant `setup()` (constructeurs globaux, init()
+# d'Arduino : +24 o) ni les ISR d'entree, jamais exercees (+19 o). Un harnais C
+# peint avant le premier cycle et injecte de quoi faire entrer les ISR : le
+# binaire mesure est desormais celui qui sera flashe, sans un octet de sonde.
 #
-# VERDICT — deux criteres, chacun marque ✅ ou ❌ :
-#   1. le pic tient dans RAM_RESERVE (defaut 256 o, le garde-fou du projet) ;
-#   2. le pic tient dans la RAM libre du firmware de PRODUCTION — condition
-#      absolue : au-dela, la pile ecrase .bss.
-# Sortie 0 si les deux passent, 1 si l'un echoue, 127 si un outil manque.
+# VERDICT — trois criteres :
+#   1. toutes les interruptions surveillees ont ete PARCOURUES. Sans cela la
+#      mesure est incomplete en silence, ce qui etait exactement le defaut d'avant ;
+#   2. le pic tient dans RAM_RESERVE, le garde-fou du projet ;
+#   3. le pic tient dans la RAM libre — condition absolue : au-dela, la pile
+#      ecrase .bss.
+# Sortie 0 si les trois passent, 1 sinon, 127 si un outil manque.
 #
-# Ce que la mesure NE couvre PAS :
-#   - la pile utilisee avant setup() : constructeurs globaux, init() d'Arduino ;
-#   - les chemins non exerces par la simulation : ISR USART (aucun MIDI en
-#     entree), ISR PCINT (aucun geste sur l'encodeur ni les boutons).
-# L'ISR de l'ADC, elle, EST exercee depuis que le CV est echantillonne sous
-# interruption : elle tourne en permanence pendant la mesure. Une ISR non
-# exercee s'empilerait PAR-DESSUS le pic mesure ici.
-#
-# Reglages : RAM_RESERVE (defaut 256), DURATION (defaut 8 s de simulation).
+# Reglages : RAM_RESERVE (defaut 256), DURATION (defaut 8 s), QUIET=1 pour
+# mesurer sans injection (utile pour attribuer l'ecart aux ISR).
 
 set -u
 
@@ -42,155 +40,109 @@ RAM_RESERVE="${RAM_RESERVE:-256}"
 DURATION="${DURATION:-8}"
 
 if [ -t 1 ]; then
-  C_OK=$'\033[32m'; C_ERR=$'\033[31m'; C_DIM=$'\033[2m'; C_B=$'\033[1m'; C_0=$'\033[0m'
-  TTY=1
+  C_OK=$'\033[32m'; C_ERR=$'\033[31m'; C_DIM=$'\033[2m'; C_B=$'\033[1m'; C_0=$'\033[0m'; TTY=1
 else
   C_OK=""; C_ERR=""; C_DIM=""; C_B=""; C_0=""; TTY=0
 fi
-
-# Ligne de progression effacee par la ligne de resultat. Uniquement sur un
-# terminal : capturee, le \r resterait litteral et dupliquerait la ligne.
 progress() { [ "$TTY" = "1" ] && printf '  %s…%s %s\r' "$C_DIM" "$C_0" "$1"; return 0; }
+die() { printf '  %s❌%s %s\n' "$C_ERR" "$C_0" "$1" >&2; exit "${2:-1}"; }
 
-die() {
-  printf '  %s❌%s %s\n' "$C_ERR" "$C_0" "$1" >&2
-  exit "${2:-1}"
-}
-
-# Meme resolution que les autres scripts du projet : PATH, puis l'installation
-# PlatformIO par defaut.
-if command -v pio >/dev/null 2>&1; then
-  PIO="$(command -v pio)"
-elif [ -x "$HOME/.platformio/penv/bin/pio" ]; then
-  PIO="$HOME/.platformio/penv/bin/pio"
-else
-  die "'pio' introuvable (ni PATH, ni ~/.platformio/penv/bin). Installe PlatformIO Core." 127
+if command -v pio >/dev/null 2>&1; then PIO="pio"
+elif [ -x "$HOME/.platformio/penv/bin/pio" ]; then PIO="$HOME/.platformio/penv/bin/pio"
+else die "'pio' introuvable (ni PATH, ni ~/.platformio/penv/bin)." 127
 fi
 
-# Le PATH, et rien d'autre : un repli vers un build personnel autoriserait
-# silencieusement une autre version de simavr. On charge le .hex avec -m/-f
-# explicites, seul format que tout build accepte (celui d'Homebrew refuse l'ELF).
-SIMAVR=""
-for candidate in simavr run_avr; do
-  if command -v "$candidate" >/dev/null 2>&1; then SIMAVR="$(command -v "$candidate")"; break; fi
-done
-[ -n "$SIMAVR" ] || die "ni 'simavr' ni 'run_avr' dans le PATH. brew install simavr" 127
+PREFIX="$(brew --prefix 2>/dev/null || echo /opt/homebrew)"
+[ -f "$PREFIX/lib/libsimavrparts.a" ] || die "simavr absent ($PREFIX). brew install simavr" 127
+AVR_NM="$(command -v avr-nm || echo "$HOME/.platformio/packages/toolchain-atmelavr/bin/avr-nm")"
+[ -x "$AVR_NM" ] || die "avr-nm introuvable." 127
 
-LOG="$(mktemp)"
-WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK" "$LOG"' EXIT
+LOG="$(mktemp)"; BIN="$(mktemp -d)/stack_probe"
+trap 'rm -f "$LOG"; rm -rf "$(dirname "$BIN")"' EXIT
 
-# --- 1. Builds ---------------------------------------------------------------
-# La RAM libre de reference est celle du firmware de PRODUCTION, pas celle de la
-# sonde : on le construit donc aussi s'il manque (PlatformIO invalide les
-# repertoires de build des que platformio.ini change).
-PROD_ELF="$ROOT/.pio/build/nanoatmega328/firmware.elf"
-
-if [ ! -f "$PROD_ELF" ]; then
-  progress "build env:nanoatmega328 (RAM libre de reference)"
-  if "$PIO" run -e nanoatmega328 -d "$ROOT" > "$LOG" 2>&1; then
-    printf '  %s✅%s build env:nanoatmega328\n' "$C_OK" "$C_0"
-  else
-    printf '\n'; tail -30 "$LOG"; die "build env:nanoatmega328 en echec"
-  fi
-fi
-
-progress "build env:stackprobe"
-if "$PIO" run -e stackprobe -d "$ROOT" > "$LOG" 2>&1; then
-  printf '  %s✅%s build env:stackprobe   %s%s%s\n' "$C_OK" "$C_0" "$C_DIM" \
+progress "build env:nanoatmega328"
+if "$PIO" run -e nanoatmega328 -d "$ROOT" > "$LOG" 2>&1; then
+  printf '  %s✅%s firmware               %s%s%s\n' "$C_OK" "$C_0" "$C_DIM" \
     "$(grep -E '^RAM:' "$LOG" | sed 's/.*(used /RAM /; s/ bytes from .*/ o/')" "$C_0"
 else
-  printf '\n'; tail -30 "$LOG"; die "build env:stackprobe en echec"
+  printf '\n'; tail -30 "$LOG"; die "build en echec"
 fi
 
-# --- 2. Simulation -----------------------------------------------------------
-# run_avr n'honore pas un chemin de VCD absolu : on travaille dans un repertoire
-# temporaire et on ecrit le VCD en relatif.
+ELF="$ROOT/.pio/build/nanoatmega328/firmware.elf"
+END_HEX="$("$AVR_NM" --radix=x "$ELF" | grep -E " _end$" | head -1 | cut -d' ' -f1)"
+[ -n "$END_HEX" ] || die "symbole '_end' introuvable dans le firmware"
+END="$(printf '0x%x' $(( 0x$END_HEX - 0x800000 )))"
+printf '  %s✅%s symbole                %s_end %s%s\n' "$C_OK" "$C_0" "$C_DIM" "$END" "$C_0"
+
+progress "compilation du harnais"
+if cc -O2 -Wall -I"$PREFIX/include/simavr" -I"$PREFIX/include" \
+     "$ROOT/tools/simavr-ssd1306/stack_probe.c" -o "$BIN" \
+     -L"$PREFIX/lib" -lsimavrparts -lsimavr -lelf > "$LOG" 2>&1; then
+  printf '  %s✅%s harnais compile        %s%s%s\n' "$C_OK" "$C_0" "$C_DIM" "$PREFIX" "$C_0"
+else
+  printf '\n'; cat "$LOG"; die "compilation du harnais en echec"
+fi
+
 progress "simulation ($DURATION s)"
-( cd "$WORK" && timeout "$DURATION" "$SIMAVR" -m atmega328p -f 16000000 \
-    -o probe.vcd --add-trace CH1=portpin@0x07/0x44 \
-    "$ROOT/.pio/build/stackprobe/firmware.hex" >/dev/null 2>&1 )
+"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$END" "$DURATION" > "$LOG" 2>/dev/null \
+  || die "la sonde a echoue"
+printf '  %s✅%s simulation             %s%s s%s%s\n' "$C_OK" "$C_0" "$C_DIM" "$DURATION" \
+  "${QUIET:+, sans injection}" "$C_0"
 
-[ -s "$WORK/probe.vcd" ] || die "aucun VCD produit — la simulation n'a rien trace."
-printf '  %s✅%s simulation             %s%s s, VCD %s o, %s%s\n' "$C_OK" "$C_0" "$C_DIM" \
-  "$DURATION" "$(wc -c < "$WORK/probe.vcd" | tr -d ' ')" "$SIMAVR" "$C_0"
+RAM_RESERVE="$RAM_RESERVE" QUIET="${QUIET:-}" python3 - "$LOG" <<'PY'
+import os, re, sys
 
-# --- 3. Verdict --------------------------------------------------------------
-python3 - "$WORK/probe.vcd" "$PROD_ELF" "$RAM_RESERVE" <<'PY'
-import os, re, subprocess, sys
-from pathlib import Path
-
-vcd, prod_elf, reserve = sys.argv[1], Path(sys.argv[2]), int(sys.argv[3])
+txt = open(sys.argv[1], errors='replace').read()
 tty = sys.stdout.isatty()
 OK, ERR, DIM, B, Z = ('\033[32m', '\033[31m', '\033[2m', '\033[1m', '\033[0m') if tty else ('',) * 5
 mark = lambda good: f"{OK}✅{Z}" if good else f"{ERR}❌{Z}"
+reserve = int(os.environ["RAM_RESERVE"])
+quiet = bool(os.environ.get("QUIET"))
 
-# --- relevés dans le VCD -----------------------------------------------------
-t, edges = 0, []
-for line in Path(vcd).read_text().splitlines():
-    if line.startswith('#'):
-        t = int(line[1:])
-    elif line and line[0] in '01' and '!' in line:
-        edges.append((t, int(line[0])))
+m = re.search(r"pic (\d+) o sur (\d+) libres, marge (\d+)", txt)
+if not m:
+    print(f"  {mark(False)} sortie du harnais illisible"); print(txt); sys.exit(1)
+peak, free, margin = int(m[1]), int(m[2]), int(m[3])
 
-pulses = [edges[i + 1][0] - edges[i][0] for i in range(len(edges) - 1) if edges[i][1] == 1]
-probe = [w for w in pulses if w > 5_000_000]  # > 5 ms : jamais un trigger musical
-values = [round(probe[i + 1] / probe[i] * 100) for i in range(0, len(probe) - 1, 2) if probe[i]]
-
-if not values:
-    print(f"  {mark(False)} aucun relevé exploitable dans le VCD "
-          f"({len(pulses)} impulsions, dont {len(probe)} de sonde)")
-    sys.exit(1)
-
-peak = max(values)
-
-# --- RAM libre du firmware de production -------------------------------------
-free = None
-tools = ['avr-size', str(Path.home() / '.platformio/packages/toolchain-atmelavr/bin/avr-size')]
-for tool in tools:
-    try:
-        out = subprocess.run([tool, '-A', str(prod_elf)],
-                             capture_output=True, text=True, check=True).stdout
-        sizes = {m[1]: int(m[2]) for m in re.finditer(r'^(\.\w+)\s+(\d+)', out, re.M)}
-        free = 2048 - sizes.get('.data', 0) - sizes.get('.bss', 0)
-        break
-    except Exception:
-        continue
+isrs = re.findall(r"^  (\S+\s+\S+.*?)\s+(\d+)$", txt, re.M)
+silent = [name.strip() for name, n in isrs if int(n) == 0]
+all_entered = not silent
 
 fits_reserve = peak <= reserve
-fits_ram = free is None or peak <= free
-pct = peak * 100 // reserve
-spread = f"  (relevés : {', '.join(str(v) for v in sorted(set(values)))})" if len(set(values)) > 1 else ""
+fits_ram = peak <= free
 
 print()
-print(f"{B}=================== PILE (mesuree a l'execution) =================={Z}")
-print(f"  {mark(fits_reserve)} Pic de pile    {peak:5d} o   {DIM}— reserve exigee {reserve} o "
-      f"({pct} % utilises){Z}")
-if free is None:
-    print(f"  {mark(True)} RAM libre        {'?':>5}     {DIM}— avr-size introuvable, marge non calculee{Z}")
+print(f"{B}=================== PILE (firmware de production) =================={Z}")
+if quiet:
+    print(f"  {mark(True)} Interruptions      injection desactivee (QUIET) "
+          f"{DIM}— mesure volontairement partielle{Z}")
 else:
-    print(f"  {mark(fits_ram)} Marge          {free - peak:5d} o   {DIM}— RAM libre {free} o "
-          f"apres .data + .bss{Z}")
+    print(f"  {mark(all_entered)} Interruptions      "
+          f"{len(isrs) - len(silent)}/{len(isrs)} vecteurs parcourus"
+          + (f"  {ERR}muets : {', '.join(silent)}{Z}" if silent else
+             f"  {DIM}(encodeur, uClock, millis, MIDI, ADC){Z}"))
+print(f"  {mark(fits_reserve)} Pic de pile        {peak:4d} o   "
+      f"{DIM}— reserve exigee {reserve} o ({peak * 100 // reserve} % utilises){Z}")
+print(f"  {mark(fits_ram)} Marge              {margin:4d} o   "
+      f"{DIM}— RAM libre {free} o apres .data + .bss{Z}")
 print(f"{B}==================================================================={Z}")
-print(f"  {len(values)} relevés sur la simulation{spread}")
 
-if fits_reserve and fits_ram:
-    ratio = reserve / peak
-    print(f"  La reserve couvre le pic mesure ({ratio:.1f}x).")
-elif not fits_ram:
-    print(f"  {ERR}DEBORDEMENT{Z} : le pic depasse la RAM libre — la pile ecrase .bss.")
-    print("  Corruption silencieuse a la cle : reduire la RAM statique, tout de suite.")
+if not fits_ram:
+    print(f"  {ERR}DEBORDEMENT : le pic depasse la RAM libre — la pile ecrase .bss.{Z}")
+elif not fits_reserve:
+    print(f"  {ERR}La reserve de {reserve} o ne couvre plus le pic de {peak} o.{Z}")
+    print("  Reduire la pile, ou relever RAM_RESERVE en connaissance de cause —")
+    print("  jamais pour faire passer un build.")
+elif not all_entered and not quiet:
+    print(f"  {ERR}Un vecteur muet rend la mesure incomplete{Z} : une ISR non parcourue")
+    print("  s'empilerait par-dessus ce pic sans apparaitre ici.")
 else:
-    print(f"  {ERR}La reserve de {reserve} o ne couvre plus le pic mesure de {peak} o.{Z}")
-    print("  Deux issues : reduire la pile, ou relever RAM_RESERVE en connaissance de")
-    print("  cause — jamais pour faire passer un build.")
+    print(f"  La reserve couvre le pic mesure ({reserve / peak:.1f}x).")
+    print(f"{DIM}  Couvert : la pile d'avant setup() (constructeurs globaux, init()"
+          f" d'Arduino){Z}")
+    print(f"{DIM}  et les six familles d'ISR, injection comprise. Restent hors mesure les{Z}")
+    print(f"{DIM}  chemins que le firmware n'emprunte pas encore — l'ecriture EEPROM de la{Z}")
+    print(f"{DIM}  persistance, notamment, qui n'existe pas.{Z}")
 
-print()
-print(f"{DIM}  Hors mesure : la pile d'avant setup() (constructeurs globaux, init()"
-      f" d'Arduino){Z}")
-print(f"{DIM}  et les ISR que la simulation n'exerce pas : USART/MIDI et PCINT (encodeur,{Z}")
-print(f"{DIM}  boutons). Celle de l'ADC EST exercee — elle tourne en permanence. Une ISR{Z}")
-print(f"{DIM}  non exercee s'empilerait PAR-DESSUS ce pic.{Z}")
-
-sys.exit(0 if (fits_reserve and fits_ram) else 1)
+sys.exit(0 if (fits_reserve and fits_ram and (quiet or all_entered)) else 1)
 PY

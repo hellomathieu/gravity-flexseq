@@ -1,0 +1,175 @@
+/*
+ * stack_probe — mesure la pile du firmware DE PRODUCTION, sans l'instrumenter,
+ * et en exercant les interruptions.
+ *
+ * Pourquoi ce harnais remplace le precedent. La premiere version peignait la RAM
+ * depuis le firmware lui-meme et publiait le resultat en LARGEUR D'IMPULSION,
+ * faute de pouvoir lire la memoire du simulateur : cela exigeait une sonde dans
+ * `main.cpp`, un environnement dedie, un etalonnage, et cela laissait deux
+ * angles morts.
+ *   - La peinture avait lieu au debut de `setup()`, donc APRES les constructeurs
+ *     globaux et le `init()` d'Arduino : leur pile n'etait pas comptee.
+ *   - Aucune interruption d'entree n'etait exercee : ni l'USART (MIDI), ni le
+ *     PCINT de l'encodeur. Or une ISR s'empile PAR-DESSUS le pic.
+ *
+ * Un harnais C n'a ni l'une ni l'autre limite : il ecrit le motif dans la RAM
+ * simulee AVANT le premier cycle — donc avant tout ce que fait le firmware — et
+ * relit la frontiere a la fin. Le binaire mesure est celui qui sera flashe, sans
+ * un octet de sonde. Et il peut injecter des octets MIDI et remuer les broches de
+ * l'encodeur, ce qui fait entrer les ISR dans la mesure.
+ *
+ * Le balayage part du HAUT : le bas de la RAM libre est le debut du tas
+ * (`__heap_start` == `_end`), et une allocation salirait le motif sans que la
+ * pile y soit descendue. PATTERN_RUN octets consecutifs sont exiges, un octet de
+ * pile pouvant valoir 0xC5 par hasard.
+ *
+ * L'esclave SSD1306 est attache : sans lui la boucle ne rend pas vraiment, et le
+ * chemin de dessin — le plus profond — ne serait pas parcouru.
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <inttypes.h>
+
+#include <sim_avr.h>
+#include <sim_elf.h>
+#include <sim_hex.h>
+#include <sim_irq.h>
+#include <sim_interrupts.h>
+#include <avr_twi.h>
+#include <avr_uart.h>
+#include <avr_ioport.h>
+#include <parts/ssd1306_virt.h>
+
+#define MCU         "atmega328p"
+#define F_CPU_HZ    16000000UL
+#define PATTERN     0xC5
+#define PATTERN_RUN 8
+
+/* Vecteurs de l'ATmega328P dont on veut savoir s'ils ont ete parcourus. */
+static const struct { uint8_t v; const char* name; } WATCHED[] = {
+    {4,  "PCINT1  encodeur (PC3)"},
+    {5,  "PCINT2  encodeur (PD4)"},
+    {11, "TIMER1  uClock"},
+    {16, "TIMER0  millis"},
+    {18, "USART   MIDI (RX)"},
+    {21, "ADC     CV"},
+};
+#define WATCHED_COUNT (sizeof(WATCHED) / sizeof(WATCHED[0]))
+
+static uint32_t isr_count[WATCHED_COUNT];
+
+static void isr_hook(struct avr_irq_t* irq, uint32_t value, void* param)
+{
+    if (value) ++isr_count[(size_t)param];
+}
+
+int main(int argc, char** argv)
+{
+    if (argc < 3) {
+        fprintf(stderr, "usage: %s <firmware.hex> <adresse_de__end> [duree_s]\n", argv[0]);
+        return 2;
+    }
+    const char* fw = argv[1];
+    const uint16_t end_addr = (uint16_t)strtol(argv[2], NULL, 0);
+    const double seconds = (argc > 3) ? atof(argv[3]) : 8.0;
+    const int quiet = getenv("QUIET") != NULL;   /* sans injection, pour comparer */
+
+    elf_firmware_t f = {{0}};
+    sim_setup_firmware(fw, 0, &f, "stack_probe");
+    strcpy(f.mmcu, MCU);
+    f.frequency = F_CPU_HZ;
+    f.vcc = f.avcc = f.aref = 5000;
+
+    avr_t* avr = avr_make_mcu_by_name(MCU);
+    if (!avr) { fprintf(stderr, "MCU inconnu\n"); return 1; }
+    avr_init(avr);
+    avr_load_firmware(avr, &f);
+
+    const uint16_t ramend = (uint16_t)avr->ramend;
+    if (end_addr >= ramend) {
+        fprintf(stderr, "_end (0x%04x) au-dela de RAMEND (0x%04x)\n", end_addr, ramend);
+        return 2;
+    }
+
+    /* La peinture, AVANT le premier cycle : elle couvre donc les constructeurs
+     * globaux et le init() d'Arduino, que la sonde embarquee ne voyait pas.
+     * On peint au-dessus de _end, la ou .init4 n'ecrit rien. */
+    for (uint16_t a = end_addr; a <= ramend; ++a) avr->data[a] = PATTERN;
+    const uint16_t free_ram = (uint16_t)(ramend - end_addr + 1);
+
+    static ssd1306_t oled;
+    ssd1306_init(avr, &oled, 128, 64);
+    avr_irq_t* twi_out = avr_io_getirq(avr, AVR_IOCTL_TWI_GETIRQ(0), TWI_IRQ_OUTPUT);
+    avr_irq_t* twi_in = avr_io_getirq(avr, AVR_IOCTL_TWI_GETIRQ(0), TWI_IRQ_INPUT);
+    avr_connect_irq(twi_out, oled.irq + IRQ_SSD1306_TWI_OUT);
+    avr_connect_irq(oled.irq + IRQ_SSD1306_TWI_IN, twi_in);
+
+    for (size_t i = 0; i < WATCHED_COUNT; ++i) {
+        avr_irq_t* v = avr_get_interrupt_irq(avr, WATCHED[i].v);
+        if (v) avr_irq_register_notify(v + AVR_INT_IRQ_RUNNING, isr_hook, (void*)i);
+    }
+
+    /* Les entrees a remuer : broches de l'encodeur (les seules sous PCINT dans
+     * libGravity ; les boutons sont scrutes) et l'USART, ou le MIDI arrive. */
+    avr_irq_t* encA = avr_io_getirq(avr, AVR_IOCTL_IOPORT_GETIRQ('C'), 3);  /* PC3 = A3 */
+    avr_irq_t* encB = avr_io_getirq(avr, AVR_IOCTL_IOPORT_GETIRQ('D'), 4);  /* PD4 */
+    avr_irq_t* midi = avr_io_getirq(avr, AVR_IOCTL_UART_GETIRQ('0'), UART_IRQ_INPUT);
+
+    const uint64_t target = (uint64_t)(seconds * (double)F_CPU_HZ);
+    const uint64_t enc_period = (uint64_t)(0.005 * F_CPU_HZ);   /* rotation vive */
+    const uint64_t midi_period = (uint64_t)(0.002 * F_CPU_HZ);  /* > 320 us / octet */
+    uint64_t next_enc = (uint64_t)(0.5 * F_CPU_HZ);
+    uint64_t next_midi = next_enc;
+    uint8_t enc_phase = 0;
+    uint32_t enc_edges = 0, midi_bytes = 0;
+
+    printf("firmware   %s\n", fw);
+    printf("RAM libre  %u o  (_end 0x%04x .. RAMEND 0x%04x)\n", free_ram, end_addr, ramend);
+    printf("injection  %s\n\n", quiet ? "AUCUNE (QUIET)" : "encodeur + MIDI");
+
+    while (avr->cycle < target) {
+        const int state = avr_run(avr);
+        if (state == cpu_Done || state == cpu_Crashed) {
+            printf("!! CPU arrete (state=%d)\n", state);
+            break;
+        }
+        if (quiet) continue;
+
+        if (avr->cycle >= next_enc && encA && encB) {
+            next_enc += enc_period;
+            /* Quadrature : une broche puis l'autre, ce qui produit des fronts sur
+             * les deux vecteurs PCINT. */
+            enc_phase = (uint8_t)((enc_phase + 1) & 3);
+            avr_raise_irq(encA, (enc_phase == 1 || enc_phase == 2) ? 1 : 0);
+            avr_raise_irq(encB, (enc_phase == 2 || enc_phase == 3) ? 1 : 0);
+            ++enc_edges;
+        }
+        if (avr->cycle >= next_midi && midi) {
+            next_midi += midi_period;
+            avr_raise_irq(midi, 0xF8);   /* MIDI clock */
+            ++midi_bytes;
+        }
+    }
+
+    /* Frontiere du motif, depuis le haut. */
+    uint16_t watermark = ramend + 1;
+    for (uint16_t a = ramend; a > end_addr + PATTERN_RUN; --a) {
+        int clean = 1;
+        for (uint8_t k = 0; k < PATTERN_RUN; ++k)
+            if (avr->data[a - k] != PATTERN) { clean = 0; break; }
+        if (clean) { watermark = a; break; }
+    }
+    const uint16_t used = (uint16_t)(ramend - watermark);
+
+    printf("=== INTERRUPTIONS PARCOURUES ===\n");
+    for (size_t i = 0; i < WATCHED_COUNT; ++i)
+        printf("  %-24s %10u\n", WATCHED[i].name, isr_count[i]);
+    if (!quiet)
+        printf("  (injecte : %u transitions d'encodeur, %u octets MIDI)\n", enc_edges, midi_bytes);
+
+    printf("\n=== PILE ===\n");
+    printf("  pic %u o sur %u libres, marge %u o\n", used, free_ram,
+           (uint16_t)(free_ram - used));
+    return 0;
+}
