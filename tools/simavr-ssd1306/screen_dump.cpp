@@ -16,6 +16,15 @@
  * cette transformation la place. Un rendu sans rotation, ou une geometrie
  * derivee, echoue.
  *
+ * WATCH=<ms> — SURVEILLANCE CONTINUE. Echantillonne la memoire du panneau a
+ * intervalle regulier pendant toute la simulation et verifie qu'aucune bande,
+ * UNE FOIS QU'ELLE A PORTE DE L'ENCRE, ne se retrouve vide. C'est la seule facon
+ * dont un scintillement pourrait apparaitre : PagedScreen saute les bandes
+ * inchangees, et si le cycle etait coupe au mauvais endroit — tampon efface puis
+ * envoye sans avoir ete redessine — la bande disparaitrait le temps d'une image.
+ * Le SSD1306 etant a memoire, ne rien envoyer ne peut rien effacer ; c'est
+ * l'erreur d'implementation qu'on cherche, pas le comportement de l'ecran.
+ *
  * La rotation se lit alors d'elle-meme : le titre, en haut du canvas logique,
  * doit apparaitre EN BAS du panneau. C'est ce qui justifie le montage physique
  * de l'OLED a 180 degres, et donc le `"rotate": 180` de diagram.json.
@@ -143,9 +152,42 @@ int main(int argc, char** argv)
     avr_irq_register_notify(twi_out, twi_watch, NULL);
 
     const uint64_t target = (uint64_t)(seconds * (double)F_CPU_HZ);
+
+    /* Surveillance : encre par bande a chaque echantillon. */
+    const double watch_ms = getenv("WATCH") ? atof(getenv("WATCH")) : 0.0;
+    const uint64_t watch_period = (uint64_t)(watch_ms / 1000.0 * F_CPU_HZ);
+    uint64_t next_watch = watch_period;
+    int inked[8] = {0}, blanked[8] = {0};
+    uint16_t low[8], high[8];
+    uint32_t samples = 0;
+    for (int b = 0; b < 8; ++b) { low[b] = 0xFFFF; high[b] = 0; }
+
     while (avr->cycle < target) {
         const int state = avr_run(avr);
         if (state == cpu_Done || state == cpu_Crashed) break;
+
+        if (watch_period && avr->cycle >= next_watch) {
+            next_watch += watch_period;
+            ++samples;
+            for (int b = 0; b < 8; ++b) {
+                uint16_t n = 0;
+                for (int c = 0; c < PANEL_W; ++c) {
+                    uint8_t v = oled.vram[b][c];
+                    while (v) { n += (v & 1); v >>= 1; }
+                }
+                /* Le minimum ne compte qu'APRES la premiere encre : avant, la
+                 * bande est vide parce que rien n'y a encore ete ecrit, ce qui
+                 * n'est pas une disparition. */
+                if (n > 0) {
+                    inked[b] = 1;
+                    if (n < low[b]) low[b] = n;
+                } else if (inked[b]) {
+                    low[b] = 0;
+                    blanked[b] = 1;   /* elle a PERDU son contenu */
+                }
+                if (n > high[b]) high[b] = n;
+            }
+        }
     }
 
     printf("firmware  %s\nsimulation %.1f s\n", fw, seconds);
@@ -188,6 +230,21 @@ int main(int argc, char** argv)
      * qui atterrit en panneau ~16 : les deux premieres bandes sont vides. */
     const int inkTop = inkInRows(0, 15);
 
+    int watch_ok = 1;
+    if (watch_period) {
+        printf("=== SURVEILLANCE (%u echantillons, un toutes les %.1f ms) ===\n",
+               samples, watch_ms);
+        for (int b = 0; b < 8; ++b) {
+            if (!inked[b]) { printf("    bande %d : jamais d'encre\n", b); continue; }
+            printf("    bande %d : encre de %u a %u pixels%s\n", b, low[b], high[b],
+                   blanked[b] ? "   <-- S'EST VIDEE" : "");
+            if (blanked[b]) watch_ok = 0;
+        }
+        printf("  %s\n\n", watch_ok
+               ? "aucune bande ne s'est jamais videe : pas de scintillement possible"
+               : "UNE BANDE S'EST VIDEE : un cycle a ete coupe au mauvais endroit");
+    }
+
     printf("=== GEOMETRIE (apres U8G2_R2) ===\n");
     if (skip_geometry) {
         printf("  ignoree (SKIP_GEOMETRY)\n");
@@ -205,5 +262,5 @@ int main(int argc, char** argv)
     const int rotation_ok = (inkTitleBand > 0 && inkTop == 0);
     printf("\n  geometrie %s   rotation %s\n",
            geometry_ok ? "OK" : "KO", rotation_ok ? "OK" : "KO");
-    return (geometry_ok && rotation_ok) ? 0 : 1;
+    return (geometry_ok && rotation_ok && watch_ok) ? 0 : 1;
 }

@@ -117,6 +117,33 @@ bandes de la même image pourraient montrer des contenus différents.
   Le gain est donc réel mais **plus modeste** qu'annoncé : −24 % sur le passage
   médian et −20 % sur l'image, au lieu du facteur 2 rapporté. Et le **pire** cas
   ne bouge quasiment pas.
+- **Saut des bandes inchangées (2026-08-20).** La boucle `firstPage()/nextPage()`
+  est remplacée par une boucle de pages **manuelle** —
+  `setBufferCurrTileRow` + `clearBuffer` + dessin + `sendBuffer` — qui fait
+  exactement ce que fait celle de U8g2, mais permet de **ne pas faire ce cycle
+  du tout** pour une bande inchangée. Le SSD1306 est un écran à mémoire : une
+  bande non envoyée continue d'afficher ce qu'elle affichait.
+  ⚠️ **Le cycle est indivisible** : effacer sans redessiner puis envoyer ferait
+  disparaître la bande le temps d'une image. C'est le seul défaut visible que
+  cette optimisation puisse produire, et il est écarté par construction.
+  Ce qui est sauté est la bande du **titre**, dont la rastérisation coûte 8,8 ms
+  alors qu'il ne change qu'au changement de pattern. La condition est
+  **géométrique** — une bande entièrement au-dessus du filet d'en-tête ne peut
+  contenir que le titre — donc solidaire de la mise en page : si celle-ci
+  changeait, la condition cesserait de s'appliquer et l'on retomberait sur le
+  rendu complet.
+  **Filet :** une image sur 16 est rendue intégralement, quoi qu'en dise la
+  comparaison. Non par doute sur le modèle de l'écran, qui est certain, mais
+  contre un défaut de notre propre logique : un oubli se répare alors seul.
+  Mesuré : passage médian **6,48 → 5,79 ms**, p90 **15,3 → 7,96 ms**, image
+  **47 → 41,7 ms**. Le pic de 14,5 ms ne subsiste que sur le rafraîchissement
+  périodique. Coût : **+9 o de RAM, +160 o de Flash**.
+  **Vérifié qu'aucune bande ne se vide jamais** : 20 000 relevés de la mémoire du
+  panneau, un toutes les 0,5 ms (`WATCH=` sur `tools/run-screen-dump.sh`). Les
+  minima bas mais non nuls sont des états **en cours de transfert** — une bande
+  part en 6 transactions Wire, donc le panneau montre brièvement un mélange de
+  l'ancien et du nouveau. Inhérent à toute mise à jour partielle, et antérieur à
+  ce changement.
 - **Pourquoi le pire cas résiste : l'écartement a CONCENTRÉ le dessin.** La
   distribution est bimodale — six bandes sur huit ne portent aucun élément et
   coûtent le seul transfert (~5,5 ms), tandis que celles qui portent une ligne de

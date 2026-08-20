@@ -1,6 +1,6 @@
 # Empreinte de reference du firmware de production (env:nanoatmega328).
 # Mise a jour deliberee : ./tools/run-build-memory.sh --accept
-date=2026-08-20T19:40:25Z
-commit=d5751cd
-ram=1519
-flash=21244
+date=2026-08-20T20:20:33Z
+commit=b1edd61
+ram=1528
+flash=21404

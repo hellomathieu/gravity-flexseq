@@ -78,11 +78,12 @@
  * sur le tas ci-dessous. */
 #define MAX_TX       20000
 #define U8G2_CTRL_DATA 0x40   /* octet de controle U8g2 : donnees d'affichage */
-#define BANDS_PER_FRAME 8     /* mode _1_ de U8g2 : 8 bandes par image (ADR 0001) */
+#define BANDS_PER_FRAME 8      /* mode _1_ de U8g2 : au PLUS 8 bandes par image */
+#define FRAME_GAP_US    100000 /* au-dela, on a change d'image */
 #define ADCSRA_ADDR    0x7A   /* ATmega328P */
 #define ADIE_BIT       (1 << 3)
 
-typedef struct { uint64_t start, stop; uint32_t bytes; uint8_t ctrl; } tx_t;
+typedef struct { uint64_t start, stop; uint32_t bytes; uint8_t ctrl, page; } tx_t;
 
 static tx_t txs[MAX_TX];
 static int tx_count;
@@ -100,13 +101,22 @@ static void twi_watch(struct avr_irq_t *irq, uint32_t value, void *param)
             txs[tx_count].stop  = g_avr->cycle;
             txs[tx_count].bytes = 0;
             txs[tx_count].ctrl = 0xFF;
+            txs[tx_count].page = 0xFF;
             tx_open = 1;
         }
     }
     if (tx_open && (v.u.twi.msg & TWI_COND_WRITE)) {
         /* L'adresse voyage dans le message START ; le premier octet ECRIT est
          * donc l'octet de controle U8g2. */
-        if (txs[tx_count].bytes == 0) txs[tx_count].ctrl = v.u.twi.data;
+        if (txs[tx_count].bytes == 0) {
+            txs[tx_count].ctrl = v.u.twi.data;
+        } else if (txs[tx_count].ctrl != U8G2_CTRL_DATA &&
+                   (v.u.twi.data & 0xF8) == 0xB0) {
+            /* Adressage de page du SSD1306 : 0xB0 | page. U8g2 groupe plusieurs
+             * commandes dans une transaction, donc on le cherche parmi TOUS les
+             * octets et non seulement le premier. */
+            txs[tx_count].page = (uint8_t)(v.u.twi.data & 0x07);
+        }
         txs[tx_count].bytes++;
         txs[tx_count].stop = g_avr->cycle;
     }
@@ -227,6 +237,7 @@ int main(int argc, char **argv)
     }
 
     /* --- bandes : suites maximales de transactions de DONNEES -------------- */
+    static uint8_t band_page[MAX_TX];   /* adresse de page qui precede la bande */
     static double band_len[MAX_TX];
     static double band_per[MAX_TX];
     static double band_bytes[MAX_TX];
@@ -234,14 +245,23 @@ int main(int argc, char **argv)
     static uint64_t band_start[MAX_TX];
     int nb = 0;
 
+    uint8_t page_seen = 0xFF;
     for (int i = 0; i < tx_count; ) {
-        if (txs[i].ctrl != U8G2_CTRL_DATA) { i++; continue; }
+        if (txs[i].ctrl != U8G2_CTRL_DATA) {
+            /* Adressage de page du SSD1306 : 0xB0 | page. C'est ce qui delimite
+             * les images sans aucun seuil de temps — la sequence redescend a 0 a
+             * chaque nouvelle image, meme quand des bandes sont sautees. */
+            if (txs[i].page != 0xFF) page_seen = txs[i].page;
+            i++;
+            continue;
+        }
         int j = i;
         uint32_t bytes = 0;
         while (j < tx_count && txs[j].ctrl == U8G2_CTRL_DATA) {
             bytes += txs[j].bytes - 1;   /* moins l'octet de controle */
             j++;
         }
+        band_page[nb] = page_seen;
         band_start[nb] = txs[i].start;
         band_len[nb] = us(txs[j - 1].stop - txs[i].start);
         band_bytes[nb] = bytes;
@@ -255,55 +275,83 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    /* Une image fait BANDS_PER_FRAME bandes : on groupe par 8 plutot que par un
-     * seuil de temps. Un seuil serait faux — les passages mesures vont de 5 a
-     * 16 ms selon la charge, donc aucune valeur ne separe proprement un passage
-     * d'une frontiere d'image. Le controle des 128 octets valide le decoupage en
-     * bandes, et l'ADR 0001 fixe les 8 bandes par image.
+    /* Les images ne font PLUS un nombre fixe de bandes : depuis que PagedScreen
+     * saute les bandes inchangees (le titre), il en envoie 7 la plupart du temps
+     * et 8 lors du rafraichissement complet periodique. On les delimite donc par
+     * l'ECART, et le nombre de bandes par image devient une OBSERVATION.
+     *
+     * Le seuil est legitime ici, contrairement au decoupage en bandes : les deux
+     * populations sont separees d'un facteur ~50 — quelques millisecondes entre
+     * deux bandes d'une meme image, des centaines entre deux images. Le programme
+     * imprime la distribution pour que cela se verifie.
+     *
      * Les intervalles ne sont retenus qu'A L'INTERIEUR d'une image : entre deux
-     * images, la boucle ne rend rien et l'attente ne mesure aucun blocage. */
-    int frames = nb / BANDS_PER_FRAME;
-    int np = 0;
-    static double frame_len[MAX_TX / BANDS_PER_FRAME + 1];
-    /* Un regime par image : une image a cheval sur la bascule est ecartee, ses
-     * passages n'appartenant proprement a aucun des deux. */
-    /* Cout par POSITION dans l'image : l'intervalle k couvre le transfert de la
-     * bande k-1 plus le DESSIN de la bande k. C'est ce qui dit ou part le temps,
-     * au lieu de le deduire de la geometrie. */
+     * images la boucle ne rend rien, et l'attente ne mesure aucun blocage. */
+    static double frame_len[MAX_TX];
+    static int frame_bands[MAX_TX];
     static double by_index[BANDS_PER_FRAME];
     static int n_index[BANDS_PER_FRAME];
-
     static double per_a[MAX_TX];  /* ADC active */
     static double per_b[MAX_TX];  /* ADC coupee */
-    int na = 0, nbp = 0, straddling = 0;
+    int frames = 0, np = 0, na = 0, nbp = 0, straddling = 0;
 
-    for (int fr = 0; fr < frames; fr++) {
-        int base = fr * BANDS_PER_FRAME;
-        const int first_a = band_start[base] < switch_cycle;
-        const int last_a = band_start[base + BANDS_PER_FRAME - 1] < switch_cycle;
-        for (int k = 1; k < BANDS_PER_FRAME; k++) {
-            const double d = us(band_start[base + k] - band_start[base + k - 1]);
+    int pages_known = 1;
+    for (int k = 0; k < nb; k++) if (band_page[k] == 0xFF) pages_known = 0;
+
+    int i = 0;
+    while (i < nb) {
+        int j = i + 1;
+        if (pages_known) {
+            /* Nouvelle image des que l'adresse de page cesse de croitre. */
+            while (j < nb && band_page[j] > band_page[j - 1]) ++j;
+        } else {
+            /* Repli si l'adressage n'a pas ete observe : l'ecart de temps. */
+            while (j < nb && us(band_start[j] - band_start[j - 1]) < FRAME_GAP_US) ++j;
+        }
+        /* [i, j) est une image. */
+        const int first_a = band_start[i] < switch_cycle;
+        const int last_a = band_start[j - 1] < switch_cycle;
+        for (int k = i + 1; k < j; ++k) {
+            const double d = us(band_start[k] - band_start[k - 1]);
             band_per[np++] = d;
             if (first_a != last_a) continue;
-            if (first_a) per_a[na++] = d; else per_b[nbp++] = d;
-            if (!first_a) {           /* regime sans ADC : le cout du dessin nu */
-                by_index[k] += d;
-                ++n_index[k];
+            if (first_a) {
+                per_a[na++] = d;
+            } else {
+                per_b[nbp++] = d;
+                const int pos = k - i;
+                if (pos < BANDS_PER_FRAME) {
+                    by_index[pos] += d;
+                    ++n_index[pos];
+                }
             }
         }
         if (first_a != last_a) ++straddling;
-        frame_len[fr] = us(band_start[base + BANDS_PER_FRAME - 1] - band_start[base])
-                        + band_len[base + BANDS_PER_FRAME - 1];
+        frame_len[frames] = us(band_start[j - 1] - band_start[i]) + band_len[j - 1];
+        frame_bands[frames] = j - i;
+        ++frames;
+        i = j;
     }
 
-    /* Verification du decoupage : une bande DOIT faire 128 octets. */
-    int wrong = 0;
-    for (int i = 0; i < nb; i++) if (band_bytes[i] != 128) wrong++;
+    /* Verification du decoupage : une bande DOIT faire 128 octets, et une image
+     * ne peut pas depasser 8 bandes. */
+    int wrong = 0, oversized = 0;
+    for (int k = 0; k < nb; k++) if (band_bytes[k] != 128) wrong++;
+    for (int k = 0; k < frames; k++) if (frame_bands[k] > BANDS_PER_FRAME) oversized++;
 
     printf("=== TRAFIC ===\n");
     printf("  %d transactions START..STOP\n", tx_count);
-    printf("  %d bandes de donnees, soit %d images de %d bandes (reste %d)\n",
-           nb, frames, BANDS_PER_FRAME, nb % BANDS_PER_FRAME);
+    printf("  %d bandes de donnees en %d images  %s\n", nb, frames,
+           pages_known ? "(delimitees par l'adressage de page)" : "(delimitees par le temps)");
+    {
+        int hist[BANDS_PER_FRAME + 1] = {0};
+        for (int k = 0; k < frames; k++)
+            if (frame_bands[k] <= BANDS_PER_FRAME) ++hist[frame_bands[k]];
+        printf("  bandes par image :");
+        for (int b = 1; b <= BANDS_PER_FRAME; ++b)
+            if (hist[b]) printf("  %d->%d fois", b, hist[b]);
+        printf("%s\n", oversized ? "   <-- IMAGE TROP LONGUE" : "");
+    }
     printf("  decoupage : %d bandes sur %d font exactement 128 octets%s\n",
            nb - wrong, nb, wrong ? "  <-- INCOHERENT" : "  (conforme)");
     printf("  %d transactions Wire par bande, %d octets de donnees chacune\n\n",
@@ -332,7 +380,7 @@ int main(int argc, char **argv)
     stats("passage, ADC coupee", per_b, nbp, "us");
     if (straddling) printf("  %d image(s) a cheval sur la bascule, ecartee(s)\n", straddling);
 
-    double corrected_max = 0.0, corrected_med = 0.0;
+    double corrected_max = 0.0, corrected_med = 0.0, corrected_p90 = 0.0;
     if (na > 0 && nbp > 0) {
         qsort(per_a, na, sizeof(double), cmp_d);
         qsort(per_b, nbp, sizeof(double), cmp_d);
@@ -358,6 +406,7 @@ int main(int argc, char **argv)
         const double factor = (f_hw < 0.5) ? 1.0 / (1.0 - f_hw) : 0.0;
 
         corrected_med = med_b * factor;
+        corrected_p90 = per_b[(nbp * 9) / 10] * factor;
         corrected_max = per_b[nbp - 1] * factor;
 
         printf("\n  CPU vole par l'ISR : %.1f %% en simulation", 100.0 * f_sim);
@@ -383,8 +432,8 @@ int main(int argc, char **argv)
     printf("            la boucle resterait bloquee cela, plus les %d dessins.\n",
            BANDS_PER_FRAME);
     if (corrected_max > 0.0)
-        printf("  ESTIME SUR MATERIEL : %.2f ms au pire, %.2f ms en median\n",
-               corrected_max / 1000.0, corrected_med / 1000.0);
+        printf("  ESTIME SUR MATERIEL : %.2f ms au pire, %.2f ms en p90, %.2f ms en median\n",
+               corrected_max / 1000.0, corrected_p90 / 1000.0, corrected_med / 1000.0);
 
     return 0;
 }

@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <string.h>
+#include <flexseq/PatternScreen.h>
 #include <unity.h>
 
 #include <flexseq/PagedScreen.h>
@@ -23,24 +24,29 @@ namespace screen = flexseq::screen;
 struct FakeDisplay {
     static constexpr uint8_t PAGES = 8;
 
-    bool px[screen::HEIGHT][screen::WIDTH];
+    bool buffer[screen::HEIGHT][screen::WIDTH];  /* le tampon de page */
+    bool panel[screen::HEIGHT][screen::WIDTH];   /* ce que le panneau AFFICHE */
     uint8_t color;
 
     uint8_t page;
-    uint8_t firstPageCalls;
-    uint8_t nextPageCalls;
+    uint8_t clearCalls;
+    uint8_t sendCalls;
     uint8_t bands;
+    bool sent[PAGES];
     bool clipped;   /* false : pas de decoupe, pour rendre une image de reference */
     uint16_t ops;   /* appels de dessin recus, decoupe ou non : "le rendu a tourne" */
 
     FakeDisplay() { reset(); }
 
     void reset() {
-        memset(px, 0, sizeof(px));
+        memset(buffer, 0, sizeof(buffer));
+        memset(panel, 0, sizeof(panel));
+        memset(sent, 0, sizeof(sent));
         color = 1;
         page = 0;
-        firstPageCalls = 0;
-        nextPageCalls = 0;
+        clearCalls = 0;
+        sendCalls = 0;
+        memset(opsPerPage, 0, sizeof(opsPerPage));
         bands = 0;
         clipped = true;
         ops = 0;
@@ -48,29 +54,59 @@ struct FakeDisplay {
 
     // --- pagination ---------------------------------------------------------
 
-    void firstPage() {
-        ++firstPageCalls;
-        page = 0;
-        bands = 0;
-        memset(px, 0, sizeof(px));   /* nouvelle image */
+    // Le contrat de la boucle de pages MANUELLE : PagedScreen positionne la
+    // ligne, efface, dessine, envoie. On enregistre les bandes ENVOYEES : ce sont
+    // les seules qui atteignent le panneau.
+    void setBufferCurrTileRow(uint8_t row) { page = row; }
+
+    void clearBuffer() {
+        ++clearCalls;
+        // Efface la bande courante seulement, comme le tampon de 128 octets.
+        for (uint8_t y = page * 8; y < page * 8 + 8 && y < screen::HEIGHT; ++y) {
+            for (uint8_t x = 0; x < screen::WIDTH; ++x) buffer[y][x] = false;
+        }
     }
 
-    uint8_t nextPage() {
-        ++nextPageCalls;
+    void sendBuffer() {
+        ++sendCalls;
+        sent[page] = true;
         ++bands;
-        ++page;
-        return (page < PAGES) ? 1 : 0;
+        // Le panneau est a MEMOIRE : la bande envoyee remplace la precedente, les
+        // autres restent telles quelles.
+        for (uint8_t y = page * 8; y < page * 8 + 8 && y < screen::HEIGHT; ++y) {
+            for (uint8_t x = 0; x < screen::WIDTH; ++x) panel[y][x] = buffer[y][x];
+        }
     }
 
-    // Ce que PagedScreen interroge pour connaitre la bande a dessiner.
-    uint8_t getBufferCurrTileRow() const { return page; }
     uint8_t getBufferTileHeight() const { return 1; }
 
+    // Pour un rendu de REFERENCE, non pagine : tout le tampon d'un coup.
+    void commit() {
+        for (uint8_t y = 0; y < screen::HEIGHT; ++y)
+            for (uint8_t x = 0; x < screen::WIDTH; ++x) panel[y][x] = buffer[y][x];
+    }
+
+    // Appels de dessin recus par bande : c'est ainsi qu'on constate qu'une bande
+    // n'a pas ete dessinee du tout, meme quand elle ne porte pas de pixels (le
+    // texte n'est pas rasterise ici).
+    uint16_t opsPerPage[PAGES];
+
+    // Encre AFFICHEE par le panneau — la seule qui compte.
     uint16_t ink() const {
         uint16_t n = 0;
         for (uint8_t y = 0; y < screen::HEIGHT; ++y) {
             for (uint8_t x = 0; x < screen::WIDTH; ++x) {
-                if (px[y][x]) ++n;
+                if (panel[y][x]) ++n;
+            }
+        }
+        return n;
+    }
+
+    uint16_t inkInBand(uint8_t row) const {
+        uint16_t n = 0;
+        for (uint8_t y = row * 8; y < row * 8 + 8 && y < screen::HEIGHT; ++y) {
+            for (uint8_t x = 0; x < screen::WIDTH; ++x) {
+                if (panel[y][x]) ++n;
             }
         }
         return n;
@@ -86,10 +122,14 @@ struct FakeDisplay {
     // l'envers ; sans lui il reste aveugle a l'erreur la plus facile a commettre.
     void drawPixel(uint8_t x, uint8_t y) {
         ++ops;
+        if (page < PAGES) ++opsPerPage[page];
         if (x >= screen::WIDTH || y >= screen::HEIGHT) return;
-        const uint8_t dy = static_cast<uint8_t>(screen::HEIGHT - 1 - y);  // U8G2_R2
+        // Le tampon et le panneau sont en coordonnees d'AFFICHAGE, comme le
+        // materiel : la rotation U8G2_R2 s'applique donc ICI, avant le decoupage
+        // et avant l'ecriture. C'est l'ordre reel de U8g2.
+        const uint8_t dy = static_cast<uint8_t>(screen::HEIGHT - 1 - y);
         if (clipped && (dy < page * 8 || dy > page * 8 + 7)) return;
-        px[y][x] = (color != 0);
+        buffer[dy][x] = (color != 0);
     }
 
     void drawHLine(uint8_t x, uint8_t y, uint8_t w) {
@@ -107,7 +147,11 @@ struct FakeDisplay {
         drawVLine(static_cast<uint8_t>(x + w - 1), y, h);
     }
 
-    uint8_t drawStr(uint8_t, uint8_t, const char* s) { ++ops; return getStrWidth(s); }
+    uint8_t drawStr(uint8_t, uint8_t, const char* s) {
+        ++ops;
+        if (page < PAGES) ++opsPerPage[page];
+        return getStrWidth(s);
+    }
 
     uint8_t getStrWidth(const char* s) const {
         return static_cast<uint8_t>(5 * strlen(s));
@@ -151,34 +195,34 @@ void reset() {
 
 }  // namespace
 
-// begin() ouvre l'image sans rien transferer : firstPage() seul.
-void test_begin_opens_a_frame_without_transferring(void) {
+// begin() rend et ENVOIE deja la premiere bande : la boucle manuelle ne perd
+// plus un passage a preparer sans transferer, comme le faisait firstPage().
+void test_begin_renders_and_sends_the_first_band(void) {
     reset();
     source.writeStep(0, true);
 
     paged.begin(display, modelOf(source));
 
-    TEST_ASSERT_EQUAL_UINT8(1, display.firstPageCalls);
-    TEST_ASSERT_EQUAL_UINT8(0, display.nextPageCalls);
+    TEST_ASSERT_EQUAL_UINT8(1, display.sendCalls);
+    TEST_ASSERT_EQUAL_UINT8(1, display.clearCalls);
     TEST_ASSERT_TRUE(paged.busy());
 }
 
-// Une image = 8 transferts, donc 8 appels a nextPage(), le dernier terminant.
-void test_frame_spans_exactly_eight_bands(void) {
+// Une image FRAICHE touche les 8 bandes : rien n'est encore connu du panneau.
+void test_a_first_frame_sends_every_band(void) {
     reset();
     source.writeStep(0, true);
 
     paged.begin(display, modelOf(source));
-    const uint8_t calls = finishFrame();
+    finishFrame();
 
-    TEST_ASSERT_EQUAL_UINT8(FakeDisplay::PAGES, calls);
-    TEST_ASSERT_EQUAL_UINT8(FakeDisplay::PAGES, display.nextPageCalls);
-    TEST_ASSERT_EQUAL_UINT8(FakeDisplay::PAGES, display.bands);
+    TEST_ASSERT_EQUAL_UINT8(FakeDisplay::PAGES, display.sendCalls);
+    for (uint8_t r = 0; r < FakeDisplay::PAGES; ++r) {
+        TEST_ASSERT_TRUE_MESSAGE(display.sent[r], "une bande n'a pas ete envoyee");
+    }
     TEST_ASSERT_FALSE(paged.busy());
 }
 
-// L'ecran reste occupe tant que l'image n'est pas complete : c'est ce drapeau
-// que la boucle principale lit pour ne pas ouvrir une image par-dessus l'autre.
 void test_screen_stays_busy_until_the_last_band(void) {
     reset();
     paged.begin(display, modelOf(source));
@@ -197,8 +241,107 @@ void test_advance_without_a_frame_does_nothing(void) {
     reset();
 
     TEST_ASSERT_FALSE(paged.advance(display));
-    TEST_ASSERT_EQUAL_UINT8(0, display.nextPageCalls);
-    TEST_ASSERT_EQUAL_UINT8(0, display.firstPageCalls);
+    TEST_ASSERT_EQUAL_UINT8(0, display.sendCalls);
+    TEST_ASSERT_EQUAL_UINT8(0, display.clearCalls);
+}
+
+// --- LE SAUT DE BANDE --------------------------------------------------------
+
+// Le titre inchange : sa bande n'est NI effacee, NI dessinee, NI envoyee. Les
+// trois ensemble : effacer sans redessiner puis envoyer ferait disparaitre le
+// titre le temps d'une image, et c'est le seul defaut de cette optimisation qui
+// serait visible.
+//
+// Que le panneau continue de l'AFFICHER est une propriete du materiel, verifiee
+// sur le vrai modele SSD1306 par tools/run-screen-dump.sh — pas ici.
+void test_an_unchanged_title_skips_its_band(void) {
+    reset();
+    source.writeStep(0, true);
+
+    paged.begin(display, modelOf(source));   // premiere image : tout
+    finishFrame();
+    const uint8_t TITLE = FakeDisplay::PAGES - 1;
+    TEST_ASSERT_TRUE(display.sent[TITLE]);
+    TEST_ASSERT_GREATER_THAN_UINT16(0, display.opsPerPage[TITLE]);
+
+    memset(display.sent, 0, sizeof(display.sent));
+    memset(display.opsPerPage, 0, sizeof(display.opsPerPage));
+    const uint8_t sendsBefore = display.sendCalls;
+    const uint8_t clearsBefore = display.clearCalls;
+
+    paged.begin(display, modelOf(source));   // seconde image : titre identique
+    finishFrame();
+
+    TEST_ASSERT_FALSE_MESSAGE(display.sent[TITLE], "bande du titre renvoyee sans raison");
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(0, display.opsPerPage[TITLE],
+                                     "bande du titre redessinee sans raison");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(FakeDisplay::PAGES - 1,
+        static_cast<uint8_t>(display.sendCalls - sendsBefore), "un envoi de trop");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(FakeDisplay::PAGES - 1,
+        static_cast<uint8_t>(display.clearCalls - clearsBefore),
+        "le tampon de la bande a ete efface alors qu'elle est sautee");
+}
+
+// Titre change : sa bande revient.
+void test_a_changed_title_redraws_its_band(void) {
+    reset();
+    static char title[] = "EDIT PATTERN A1";
+    PatternScreenModel m = modelOf(source);
+    m.title = title;
+
+    paged.begin(display, m);
+    finishFrame();
+
+    memset(display.sent, 0, sizeof(display.sent));
+    title[14] = '2';                          // A1 -> A2
+    m.titleWidth = 0;
+    paged.begin(display, m);
+    finishFrame();
+
+    TEST_ASSERT_TRUE_MESSAGE(display.sent[FakeDisplay::PAGES - 1],
+                             "le titre a change et sa bande n'a pas ete refaite");
+}
+
+// « A2 » et « B1 » ont la meme somme de caracteres : l'empreinte ne doit pas s'y
+// tromper, ce sont deux titres voisins.
+void test_two_titles_with_the_same_character_sum_are_distinguished(void) {
+    reset();
+    static char title[] = "EDIT PATTERN A2";
+    PatternScreenModel m = modelOf(source);
+    m.title = title;
+
+    paged.begin(display, m);
+    finishFrame();
+
+    memset(display.sent, 0, sizeof(display.sent));
+    title[13] = 'B';
+    title[14] = '1';
+    m.titleWidth = 0;
+    paged.begin(display, m);
+    finishFrame();
+
+    TEST_ASSERT_TRUE_MESSAGE(display.sent[FakeDisplay::PAGES - 1],
+                             "A2 et B1 confondus par l'empreinte");
+}
+
+// Le filet : une image sur FULL_REFRESH_EVERY est rendue integralement, meme si
+// rien n'a change. Un oubli de notre logique se repare donc tout seul.
+void test_the_safety_net_forces_a_full_frame_periodically(void) {
+    reset();
+    source.writeStep(0, true);
+
+    uint8_t fullFrames = 0;
+    for (uint8_t f = 0; f < 2 * PagedScreen<FakeDisplay>::FULL_REFRESH_EVERY; ++f) {
+        memset(display.sent, 0, sizeof(display.sent));
+        paged.begin(display, modelOf(source));
+        finishFrame();
+        if (display.sent[FakeDisplay::PAGES - 1]) {
+            ++fullFrames;
+        }
+    }
+
+    // Deux periodes : deux images completes, ni plus ni moins.
+    TEST_ASSERT_EQUAL_UINT8(2, fullFrames);
 }
 
 // Le coeur de l'affaire : une edition survenue PENDANT l'image ne la dechire
@@ -217,6 +360,7 @@ void test_editing_during_a_frame_does_not_tear_it(void) {
     reference.reset();
     reference.clipped = false;
     flexseq::drawPatternScreen(reference, modelOf(source));
+    reference.commit();
     const uint16_t expected = reference.ink();
 
     paged.begin(display, modelOf(source));
@@ -303,13 +447,17 @@ void test_a_whole_frame_leaves_ink(void) {
 
 int main(int, char**) {
     UNITY_BEGIN();
-    RUN_TEST(test_begin_opens_a_frame_without_transferring);
-    RUN_TEST(test_frame_spans_exactly_eight_bands);
+    RUN_TEST(test_begin_renders_and_sends_the_first_band);
+    RUN_TEST(test_a_first_frame_sends_every_band);
     RUN_TEST(test_screen_stays_busy_until_the_last_band);
     RUN_TEST(test_advance_without_a_frame_does_nothing);
     RUN_TEST(test_editing_during_a_frame_does_not_tear_it);
     RUN_TEST(test_the_edit_shows_up_on_the_next_frame);
     RUN_TEST(test_the_band_conversion_is_the_right_way_round);
     RUN_TEST(test_a_whole_frame_leaves_ink);
+    RUN_TEST(test_an_unchanged_title_skips_its_band);
+    RUN_TEST(test_a_changed_title_redraws_its_band);
+    RUN_TEST(test_two_titles_with_the_same_character_sum_are_distinguished);
+    RUN_TEST(test_the_safety_net_forces_a_full_frame_periodically);
     return UNITY_END();
 }
