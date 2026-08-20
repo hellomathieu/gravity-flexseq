@@ -80,10 +80,15 @@ struct FakeDisplay {
 
     void setDrawColor(uint8_t c) { color = c; }
 
+    // Le decoupage se fait en coordonnees d'AFFICHAGE, apres la rotation de 180
+    // degres qu'applique U8G2_R2 — c'est l'ordre reel de U8g2. Modeliser cet
+    // ordre est ce qui rend le test capable de voir une bande convertie a
+    // l'envers ; sans lui il reste aveugle a l'erreur la plus facile a commettre.
     void drawPixel(uint8_t x, uint8_t y) {
         ++ops;
         if (x >= screen::WIDTH || y >= screen::HEIGHT) return;
-        if (clipped && (y < page * 8 || y > page * 8 + 7)) return;  /* mode page */
+        const uint8_t dy = static_cast<uint8_t>(screen::HEIGHT - 1 - y);  // U8G2_R2
+        if (clipped && (dy < page * 8 || dy > page * 8 + 7)) return;
         px[y][x] = (color != 0);
     }
 
@@ -146,12 +151,8 @@ void reset() {
 
 }  // namespace
 
-// begin() prepare et dessine, mais ne transfere rien : firstPage() seul.
-//
-// On verifie que le rendu a TOURNE (appels de dessin recus), pas qu'il a laisse
-// de l'encre : la premiere bande ne porte que le titre, et ce faux affichage ne
-// rasterise pas le texte.
-void test_begin_draws_the_first_band_without_transferring(void) {
+// begin() ouvre l'image sans rien transferer : firstPage() seul.
+void test_begin_opens_a_frame_without_transferring(void) {
     reset();
     source.writeStep(0, true);
 
@@ -160,7 +161,6 @@ void test_begin_draws_the_first_band_without_transferring(void) {
     TEST_ASSERT_EQUAL_UINT8(1, display.firstPageCalls);
     TEST_ASSERT_EQUAL_UINT8(0, display.nextPageCalls);
     TEST_ASSERT_TRUE(paged.busy());
-    TEST_ASSERT_GREATER_THAN_UINT16(0, display.ops);
 }
 
 // Une image = 8 transferts, donc 8 appels a nextPage(), le dernier terminant.
@@ -252,30 +252,64 @@ void test_the_edit_shows_up_on_the_next_frame(void) {
     TEST_ASSERT_NOT_EQUAL_UINT16(before, display.ink());
 }
 
-// L'ecartement par bande doit AGIR : la derniere bande (y 56..63) est sous tout
-// element, elle ne doit rien poser.
-void test_the_last_band_draws_nothing(void) {
+// LE SENS de la conversion de bande, et rien d'autre.
+//
+// U8G2_R2 fait tourner de 180 degres AVANT le decoupage : la bande d'AFFICHAGE 0
+// (lignes 0..7) montre donc les lignes LOGIQUES 56..63, ou aucun element ne se
+// trouve — le plus bas est le chiffre de ratchet de la seconde ligne, a y 47. Les
+// deux premieres bandes d'affichage ne doivent donc recevoir aucun appel de
+// dessin, et la DERNIERE doit en recevoir : elle porte le titre, en haut du
+// canvas logique.
+//
+// Inverser la conversion echange ces deux constats. C'est exactement le defaut
+// qui laissait l'ecran quasi blanc, et qu'aucun test ne voyait tant que le faux
+// affichage ne modelisait pas la rotation.
+void test_the_band_conversion_is_the_right_way_round(void) {
     reset();
     source.writeStep(0, true);
+    source.setRatchet(0, flexseq::RATCHET_2);
+
+    uint16_t opsPerBand[FakeDisplay::PAGES];
 
     paged.begin(display, modelOf(source));
-    for (uint8_t i = 1; i < FakeDisplay::PAGES - 1; ++i) {
+    opsPerBand[0] = display.ops;
+    for (uint8_t i = 1; i < FakeDisplay::PAGES; ++i) {
+        const uint16_t before = display.ops;
         paged.advance(display);
+        opsPerBand[i] = static_cast<uint16_t>(display.ops - before);
     }
-    const uint16_t before_last = display.ink();
-    paged.advance(display);   /* bande 7 */
 
-    TEST_ASSERT_EQUAL_UINT16(before_last, display.ink());
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(0, opsPerBand[0],
+                                     "bande d'affichage 0 = logique 56..63, donc vide");
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(0, opsPerBand[1],
+                                     "bande d'affichage 1 = logique 48..55, donc vide");
+    TEST_ASSERT_GREATER_THAN_UINT16_MESSAGE(0, opsPerBand[FakeDisplay::PAGES - 1],
+                                            "la derniere bande porte le titre");
+}
+
+// Une image complete laisse de l'encre : la reunion des bandes montre quelque
+// chose, quel que soit le detail du decoupage.
+void test_a_whole_frame_leaves_ink(void) {
+    reset();
+    source.writeStep(0, true);
+    source.writeStep(13, true);
+
+    paged.begin(display, modelOf(source));
+    finishFrame();
+
+    TEST_ASSERT_EQUAL_UINT8(FakeDisplay::PAGES, display.bands);
+    TEST_ASSERT_GREATER_THAN_UINT16(0, display.ink());
 }
 
 int main(int, char**) {
     UNITY_BEGIN();
-    RUN_TEST(test_begin_draws_the_first_band_without_transferring);
+    RUN_TEST(test_begin_opens_a_frame_without_transferring);
     RUN_TEST(test_frame_spans_exactly_eight_bands);
     RUN_TEST(test_screen_stays_busy_until_the_last_band);
     RUN_TEST(test_advance_without_a_frame_does_nothing);
     RUN_TEST(test_editing_during_a_frame_does_not_tear_it);
     RUN_TEST(test_the_edit_shows_up_on_the_next_frame);
-    RUN_TEST(test_the_last_band_draws_nothing);
+    RUN_TEST(test_the_band_conversion_is_the_right_way_round);
+    RUN_TEST(test_a_whole_frame_leaves_ink);
     return UNITY_END();
 }

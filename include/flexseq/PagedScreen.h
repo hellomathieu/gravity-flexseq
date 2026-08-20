@@ -73,15 +73,31 @@ public:
     }
 
 private:
-    // La bande que U8g2 s'apprete a transferer. On la donne au renderer pour
-    // qu'il ecarte ce qui n'y tombe pas : sans cela il redessine les 24 steps a
-    // chaque bande, ce qui coutait autant que le transfert lui-meme (ADR 0001).
+    // La bande que U8g2 s'apprete a transferer, RAMENEE EN COORDONNEES LOGIQUES.
+    //
+    // On la donne au renderer pour qu'il ecarte ce qui n'y tombe pas : sans cela
+    // il redessine les 24 steps a chaque bande, ce qui coutait autant que le
+    // transfert lui-meme (ADR 0001).
+    //
+    // LA CONVERSION EST INDISPENSABLE. libGravity construit son objet en
+    // `U8G2_R2` : U8g2 fait donc tourner de 180 degres AVANT de decouper a la
+    // bande courante (`u8g2_draw_l90_r2` transforme, puis le decoupage se fait
+    // contre `pixel_curr_row`, en coordonnees d'AFFICHAGE). Le renderer, lui,
+    // travaille en coordonnees logiques. Sans l'inversion, chaque bande recevait
+    // exactement la MOITIE INVERSE de ce qu'elle affiche, et l'ecran restait
+    // quasi blanc — defaut constate en lisant la memoire du panneau
+    // (tools/run-screen-dump.sh), invisible aux tests natifs qui fournissaient la
+    // bande deja en coordonnees logiques.
+    //
+    // Sous R2 : logique = HEIGHT - 1 - affichage, ce qui echange les bornes.
     static Band bandOf(Display& display) {
-        const uint16_t y0 = static_cast<uint16_t>(display.getBufferCurrTileRow()) * 8u;
-        const uint16_t y1 =
-            y0 + static_cast<uint16_t>(display.getBufferTileHeight()) * 8u - 1u;
-        return Band{static_cast<uint8_t>(y0),
-                    static_cast<uint8_t>(y1 < screen::HEIGHT ? y1 : screen::HEIGHT - 1)};
+        const uint16_t d0 = static_cast<uint16_t>(display.getBufferCurrTileRow()) * 8u;
+        uint16_t d1 = d0 + static_cast<uint16_t>(display.getBufferTileHeight()) * 8u - 1u;
+        if (d1 >= screen::HEIGHT) {
+            d1 = screen::HEIGHT - 1;
+        }
+        return Band{static_cast<uint8_t>(screen::HEIGHT - 1 - d1),
+                    static_cast<uint8_t>(screen::HEIGHT - 1 - d0)};
     }
 
     PatternScreenModel model_;

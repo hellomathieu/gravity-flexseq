@@ -65,6 +65,19 @@ demandée au canvas, pour qu'il reste sans dépendance et testable sur n'importe
 quelle bande ; `PagedScreen` l'obtient de l'affichage
 (`getBufferCurrTileRow()`, `getBufferTileHeight()`).
 
+⚠️ **La bande obtenue est en coordonnées d'AFFICHAGE, le renderer travaille en
+coordonnées LOGIQUES.** libGravity construit son objet en `U8G2_R2` : U8g2 fait
+tourner de 180° *avant* de découper (`u8g2_draw_l90_r2` transforme, puis le
+découpage se fait contre `pixel_curr_row`). `PagedScreen::bandOf()` applique donc
+l'inverse — sous R2, `logique = 63 − affichage`, ce qui échange les bornes.
+Omettre cette inversion donnait à chaque bande **la moitié inverse** de ce
+qu'elle affiche : l'écran restait quasi blanc. Le défaut a vécu un commit, et
+c'est la lecture de la mémoire du panneau (`tools/run-screen-dump.sh`) qui l'a
+trouvé — aucun test natif ne pouvait le voir, tous fournissaient la bande déjà en
+coordonnées logiques. `test_paged_screen` modélise désormais la rotation dans son
+faux affichage, et `test_the_band_conversion_is_the_right_way_round` fixe le
+sens.
+
 La séquence vit dans `include/flexseq/PagedScreen.h`, **templatisée sur le type
 d'affichage** comme `PatternScreen` l'est sur le canvas : le firmware l'instancie
 sur `gravity.display`, un test natif sur un faux affichage. Le `Display` est
