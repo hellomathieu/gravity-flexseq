@@ -1,9 +1,48 @@
 #!/usr/bin/env python3
 """Decode a U8g2 bitmap font embedded as an octal-escaped C string in Gravity.ino.
-Extracts every glyph into a {charcode: {w,h,xoff,yoff,advance,rows[]}} atlas."""
-import re, json, sys
+Extracts every glyph into a {charcode: {w,h,xoff,yoff,advance,rows[]}} atlas.
 
-SRC = "/Users/mathieu.carpentier/Downloads/Gravity/Gravity.ino"
+PROVENANCE. The font data belongs to the original Sitka firmware
+(https://git.sitkainstruments.com/Oleksiy/GravityFW), which is GPLv3. This script
+only decodes it; the generated atlas carries that provenance.
+
+SOURCE. The reference is the GravityFW clone sitting NEXT TO this repository, as
+CLAUDE.md's source hierarchy expects. It used to be a hardcoded absolute path
+into ~/Downloads -- a stray copy (byte-identical, verified 2026-08-20) in a
+folder people empty. Override with --src or GRAVITY_FW_INO when the clone lives
+elsewhere.
+"""
+import argparse, os, re, json, sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_SRC = ROOT.parent / "GravityFW" / "src" / "Gravity" / "Gravity.ino"
+DEFAULT_OUT = ROOT / "sim" / "src" / "sim" / "velvetscreen.font.json"
+
+
+def resolve_src(explicit):
+    """--src, sinon $GRAVITY_FW_INO, sinon le clone GravityFW voisin.
+
+    Une source DESIGNEE (option ou variable) est honoree ou echoue : pas de
+    repli silencieux, qui decoderait un autre fichier que celui demande.
+    """
+    for value, origin in ((explicit, "--src"),
+                          (os.environ.get("GRAVITY_FW_INO"), "$GRAVITY_FW_INO")):
+        if value:
+            path = Path(value).expanduser()
+            if not path.is_file():
+                sys.exit(f"{origin} designe un fichier inexistant : {path}")
+            return path
+
+    if DEFAULT_SRC.is_file():
+        return DEFAULT_SRC
+
+    sys.exit(
+        f"Gravity.ino introuvable : {DEFAULT_SRC}\n\n"
+        "Cloner le firmware d'origine a cote de ce depot :\n"
+        "  git clone https://git.sitkainstruments.com/Oleksiy/GravityFW\n"
+        "ou designer le fichier : --src <chemin>/Gravity.ino"
+    )
 
 def extract_literal(text, varname):
     # Find `... varname[NNN] ... = <adjacent string literals> ;`
@@ -98,7 +137,16 @@ def show(g):
     for row in g["rows"]:
         print("  " + row.replace("0", "·").replace("1", "█"))
 
-text = open(SRC).read()
+parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+parser.add_argument("--src", help="chemin de Gravity.ino (defaut : clone GravityFW voisin)")
+parser.add_argument("--out", default=DEFAULT_OUT, type=Path,
+                    help=f"atlas JSON a ecrire (defaut : {DEFAULT_OUT.relative_to(ROOT)})")
+args = parser.parse_args()
+
+src = resolve_src(args.src)
+print(f"source : {src}")
+
+text = src.read_text()
 raw = c_unescape(extract_literal(text, "velvetscreen"))
 print(f"velvetscreen raw bytes = {len(raw)}")
 cnt, glyphs = decode(raw)
@@ -114,6 +162,6 @@ for ch in "pqADEIT1":
 
 # emit atlas
 atlas = {str(k): v for k, v in glyphs.items()}
-out = "/Users/mathieu.carpentier/Documents/GitHub/gravity-flexseq/sim/src/sim/velvetscreen.font.json"
-json.dump({"name": "velvetscreen", "glyphs": atlas}, open(out, "w"), indent=0)
-print(f"\nwrote {out}")
+with args.out.open("w") as fh:
+    json.dump({"name": "velvetscreen", "glyphs": atlas}, fh, indent=0)
+print(f"\nwrote {args.out}")
