@@ -157,9 +157,38 @@ static uint8_t digital_pin_state[32] = {};
 static uint8_t digital_pin_output_state[32] = {};
 static unsigned long current_millis = 0;
 
+// Compteurs de LECTURES, par broche. Ils servent a caracteriser ce qu'une
+// fonction de libGravity va REELLEMENT chercher sur le materiel — par exemple a
+// figer la composition de `Gravity::Process()`, dont FlexSeq n'appelle plus que
+// certains morceaux (voir test_gravity).
+static uint16_t analog_read_count[32] = {};
+static uint16_t digital_read_count[32] = {};
+
+inline uint16_t analogReads(uint8_t pin) {
+    return (pin < 32) ? analog_read_count[pin] : 0;
+}
+
+inline uint16_t digitalReads(uint8_t pin) {
+    return (pin < 32) ? digital_read_count[pin] : 0;
+}
+
+inline uint16_t totalAnalogReads() {
+    uint16_t n = 0;
+    for (auto count : analog_read_count) n = static_cast<uint16_t>(n + count);
+    return n;
+}
+
 inline void reset() {
     for (auto &state : digital_pin_state) {
         state = HIGH;
+    }
+
+    for (auto &count : analog_read_count) {
+        count = 0;
+    }
+
+    for (auto &count : digital_read_count) {
+        count = 0;
     }
 
     for (auto &state : digital_pin_output_state) {
@@ -216,6 +245,9 @@ inline void pinMode(uint8_t pin, uint8_t mode) {
 }
 
 inline int digitalRead(uint8_t pin) {
+    if (pin < 32) {
+        ++ArduinoMock::digital_read_count[pin];
+    }
     return ArduinoMock::getDigitalPin(pin);
 }
 
@@ -232,7 +264,9 @@ inline void digitalWrite(uint8_t pin, uint8_t state) {
 #ifndef ARDUINO_MOCK_NO_GPIO
 
 inline int analogRead(uint8_t pin) {
-    (void)pin;
+    if (pin < 32) {
+        ++ArduinoMock::analog_read_count[pin];
+    }
     return 0;
 }
 

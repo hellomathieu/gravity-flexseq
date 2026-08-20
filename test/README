@@ -24,9 +24,22 @@ pas terminee tant qu'un de ces tests echoue.
 
 En-tetes de libGravity (figee au commit 9be88be1f4) compilees contre les
 bouchons Arduino de `test/mocks/`. Ces tests decrivent le comportement REEL de
-la dependance, anomalies incluses : 7 assertions echouent par construction.
+la dependance, anomalies incluses : 7 assertions echouent par construction, sur
+68.
 Ne jamais les affaiblir pour obtenir du vert — ce serait masquer un defaut de
 la dependance.
+
+`test_gravity` porte en plus, depuis le 2026-08-20, la CARACTERISATION de
+`Gravity::Process()` : elle lit exactement deux entrees analogiques — CV1 et CV2,
+une fois chacune — et scrute les deux boutons plus le bouton de l'encodeur.
+FlexSeq n'appelle plus cette fonction, le convertisseur appartenant desormais a
+une ISR (PRD 10.6). Le risque n'est donc pas de rater une evolution amont — la
+dependance est epinglee par decision — mais d'oublier de re-auditer cette
+fonction au prochain changement d'epingle. Ces assertions transforment cet oubli
+en echec. Un test jumeau verifie que les morceaux appeles a la place couvrent les
+memes entrees avec ZERO lecture analogique : c'est l'invariant qui rend le
+contournement correct. Les compteurs de lectures par broche sont dans
+`test/mocks/Arduino.h`.
 
 Le critere de cette suite n'est donc PAS « tout passe », c'est « conforme a
 l'audit ». Un module qui reproduit exactement les anomalies auditees est VERT.
@@ -64,7 +77,7 @@ erreur sur `platform = native` :
     (Hangup: 1) » pour 1. Ce n'est pas un crash ;
   - le statut ERRORED qui en decoule n'est donc pas exploitable, et il masque
     la distinction entre « echoue comme prevu » et « ne compile pas » ;
-  - son total est faux : « 69 test cases » pour 65 assertions reelles, une
+  - son total est faux : il ajoute une pseudo-assertion par module ERRORED, une
     pseudo-assertion etant ajoutee par module ERRORED.
 
 S'y ajoute une gene pratique : PlatformIO retire ses couleurs des que sa sortie
