@@ -109,6 +109,23 @@ inline uint16_t rawFromCalibrated(int16_t value, int16_t low, int16_t high, int1
     return static_cast<uint16_t>(raw);
 }
 
+// L'ALLER : unites brutes -> convention +/-512 de `AnalogInput::Read()`. C'est
+// exactement ce que fait `AnalogInput::Process()`, `map()` tronquant compris.
+// Utile a qui veut AFFICHER une valeur de CV sans repasser par libGravity, dont
+// le `Process()` n'est plus appele (voir CvSampler.h).
+inline int16_t calibratedFromRaw(uint16_t raw, int16_t low, int16_t high, int16_t offset) {
+    const int32_t mapped =
+        static_cast<int32_t>(raw) * (static_cast<int32_t>(high) - low) / 1023 + low;
+    int32_t value = mapped - offset;
+    if (value < -512) {
+        value = -512;
+    }
+    if (value > 512) {
+        value = 512;
+    }
+    return static_cast<int16_t>(value);
+}
+
 }  // namespace flexseq
 
 #endif // FLEXSEQ_CV_GATE_H

@@ -4,6 +4,7 @@
 #include <flexseq/CvGate.h>
 
 using flexseq::CvGate;
+using flexseq::calibratedFromRaw;
 using flexseq::rawFromCalibrated;
 
 // Seuils par defaut de libGravity : +1 V -> 634, +0,5 V -> 585 (PRD 10.5).
@@ -95,13 +96,6 @@ void test_two_pulses_before_consumption_latch_once(void) {
     gate.update(ARM + 1);
     TEST_ASSERT_TRUE(gate.takeEdge());
     TEST_ASSERT_FALSE(gate.takeEdge());
-}
-
-// L'ALLER de libGravity, reproduit ici pour verifier l'inverse : c'est
-// exactement `AnalogInput::Process()`, `map()` tronquant compris.
-static int16_t calibratedFromRaw(uint16_t raw, int16_t low, int16_t high, int16_t offset) {
-    const int32_t mapped = static_cast<int32_t>(raw) * (high - low) / 1023 + low;
-    return static_cast<int16_t>(mapped - offset);
 }
 
 // L'aller-retour, plutot que des nombres calcules a la main. `map()` tronquant

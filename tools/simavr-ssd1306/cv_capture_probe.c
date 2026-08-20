@@ -17,6 +17,12 @@
  *
  * L'esclave SSD1306 est attache : sans lui les transferts avortent sur NACK, la
  * boucle est irrealistement rapide, et la mesure ne prouverait rien.
+ *
+ * DEUX MODES. Par defaut le harnais consomme le verrou lui-meme, ce qu'il faut
+ * pour un firmware qui n'a pas encore de consommateur. Avec EDGE_COUNTER=<adr>,
+ * il n'y touche pas et compte les incrementations d'un compteur 16 bits du
+ * firmware : la chaine verifiee inclut alors le consommateur reel. C'est le mode
+ * utile pour env:bringup, et il le restera quand CV -> RESET existera.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -82,7 +88,7 @@ int main(int argc, char **argv)
     const char *fw = argv[1];
     const uint16_t pending_addr = (uint16_t)strtol(argv[2], NULL, 0);
     const double width_us = atof(argv[3]);
-    const double period_us = (argc > 4) ? atof(argv[4]) : 120000.0;
+    const double period_us = (argc > 4) ? atof(argv[4]) : 400000.0;
     const double seconds = (argc > 5) ? atof(argv[5]) : 6.0;
     const uint16_t done_addr = (argc > 6) ? (uint16_t)strtol(argv[6], NULL, 0) : 0;
 
@@ -128,16 +134,48 @@ int main(int argc, char **argv)
      * d'injecter : une impulsion perdue pendant l'initialisation ne dirait rien
      * du regime de fonctionnement. */
     const uint64_t warmup = (uint64_t)(1.0 * (double)F_CPU_HZ);
-    const uint64_t grace = (uint64_t)(0.050 * F_CPU_HZ);  /* large : un pire passage */
+    /* Fenetre de grace LARGE, et deliberement. Le verrou tient l'evenement : ce
+     * qui est verifie est qu'il n'est pas PERDU, pas qu'il est consomme vite. Un
+     * consommateur peut etre en retard d'un rendu entier — 56 ms pour une image
+     * complete non etalee (env:bringup). 200 ms laisse la place, et la latence
+     * reelle est mesuree puis rapportee plutot que confondue avec une perte. */
+    const double grace_ms = getenv("GRACE_MS") ? atof(getenv("GRACE_MS")) : 200.0;
+    const uint64_t grace = (uint64_t)(grace_ms / 1000.0 * F_CPU_HZ);
+
+    /* La PERIODE doit dominer la fenetre de grace : sinon l'injection suivante
+     * declare perdue une impulsion qui n'avait pas fini d'attendre son
+     * consommateur. Diagnostique en obtenant 42 % de captures avec une periode
+     * de 120 ms pour une latence allant jusqu'a 116 ms. GRACE_MS la regle : elle
+     * borne la latence du CONSOMMATEUR, qui depend du firmware, et non la
+     * garantie de capture, qui est celle du verrou. */
+    if (period_cycles <= grace + pulse_cycles) {
+        fprintf(stderr,
+                "periode (%.0f us) trop courte : il faut plus que la fenetre de grace "
+                "(%.0f us) plus la largeur d'impulsion\n",
+                period_us, 1e6 * grace / F_CPU_HZ);
+        return 2;
+    }
     uint64_t next_pulse = warmup;
     uint32_t detected = 0, missed = 0;
     uint64_t deadline = 0;   /* fin de la fenetre de grace d'une impulsion */
     int awaiting = 0;
+    uint64_t await_start = 0;
+    double lat_sum = 0.0, lat_max = 0.0, lat_min = 1e18;
 
     printf("firmware    %s\n", fw);
     printf("impulsion   %.0f us toutes les %.0f us, %.1f s simulees\n",
            width_us, period_us, seconds);
     printf("drapeau     0x%04x (RAM simulee)\n\n", pending_addr);
+
+    /* EDGE_COUNTER=<adresse> : observer le compteur du firmware au lieu de
+     * consommer le verrou nous-memes. */
+    const uint16_t counter_addr =
+        getenv("EDGE_COUNTER") ? (uint16_t)strtol(getenv("EDGE_COUNTER"), NULL, 0) : 0;
+    uint16_t counter_seen = 0;
+    if (counter_addr) {
+        counter_seen = (uint16_t)(avr->data[counter_addr] | (avr->data[counter_addr + 1] << 8));
+        printf("compteur    0x%04x (observe, verrou laisse au firmware)\n", counter_addr);
+    }
 
     /* DEBUG=<adresse de `latest`> : suit ce que le firmware echantillonne. */
     const uint16_t dbg = getenv("DEBUG") ? (uint16_t)strtol(getenv("DEBUG"), NULL, 0) : 0;
@@ -172,17 +210,33 @@ int main(int argc, char **argv)
             pulse_start = avr->cycle;
             ++injected;
             awaiting = 1;
+            await_start = avr->cycle;
             /* Fenetre de grace : le temps d'un pire passage de boucle, large. */
             deadline = avr->cycle + pulse_cycles + grace;
             next_pulse += period_cycles;
         }
 
-        /* Le harnais joue le consommateur du verrou. */
-        if (awaiting && (avr->data[pending_addr] & 0x01)) {
+        if (counter_addr) {
+            /* Mode observation : le firmware consomme, on compte ses increments. */
+            const uint16_t now_count =
+                (uint16_t)(avr->data[counter_addr] | (avr->data[counter_addr + 1] << 8));
+            if (awaiting && now_count != counter_seen) {
+                counter_seen = now_count;
+                const double lat_ms =
+                    (double)(avr->cycle - await_start) * 1000.0 / F_CPU_HZ;
+                lat_sum += lat_ms;
+                if (lat_ms > lat_max) lat_max = lat_ms;
+                if (lat_ms < lat_min) lat_min = lat_ms;
+                ++detected;
+                awaiting = 0;
+            }
+        } else if (awaiting && (avr->data[pending_addr] & 0x01)) {
+            /* Mode consommation : le harnais joue le consommateur du verrou. */
             avr->data[pending_addr] &= (uint8_t)~0x01;
             ++detected;
             awaiting = 0;
-        } else if (awaiting && avr->cycle > deadline) {
+        }
+        if (awaiting && avr->cycle > deadline) {
             ++missed;
             awaiting = 0;
         }
@@ -195,6 +249,12 @@ int main(int argc, char **argv)
     printf("=== CAPTURE ===\n");
     printf("  injectees %u   vues %u   ratees %u   taux %.1f %%\n",
            injected, detected, missed, injected ? 100.0 * detected / injected : 0.0);
+    if (counter_addr && detected) {
+        /* La latence n'a de sens qu'en mode observation : en mode consommation le
+         * harnais est un consommateur instantane. */
+        printf("  latence de consommation : min %.1f  moy %.1f  max %.1f ms\n",
+               lat_min, lat_sum / detected, lat_max);
+    }
 
     if (done_addr) {
         const uint32_t done = (uint32_t)avr->data[done_addr] |

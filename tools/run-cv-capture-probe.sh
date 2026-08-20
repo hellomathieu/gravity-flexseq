@@ -28,14 +28,18 @@
 # VERDICT : capture a 100 %, et cadence materielle sous la largeur garantie.
 # Sortie 0 si les deux passent, 1 sinon, 127 si un outil manque.
 #
-# Reglages : CV_PULSE_US (defaut 1000), PERIOD_US (defaut 120000), DURATION (6 s).
+# La PERIODE doit depasser la fenetre de grace du harnais (200 ms), sans quoi une
+# impulsion encore en attente de son consommateur serait declaree perdue a
+# l'injection suivante — d'ou 400 ms par defaut.
+#
+# Reglages : CV_PULSE_US (defaut 1000), PERIOD_US (defaut 400000), DURATION (12 s).
 
 set -u
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CV_PULSE_US="${CV_PULSE_US:-1000}"
-PERIOD_US="${PERIOD_US:-120000}"
-DURATION="${DURATION:-6}"
+PERIOD_US="${PERIOD_US:-400000}"
+DURATION="${DURATION:-12}"
 
 if [ -t 1 ]; then
   C_OK=$'\033[32m'; C_ERR=$'\033[31m'; C_DIM=$'\033[2m'; C_B=$'\033[1m'; C_0=$'\033[0m'; TTY=1
@@ -90,8 +94,16 @@ else
 fi
 
 progress "simulation ($DURATION s, impulsions de $CV_PULSE_US us)"
-"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$PENDING" \
-       "$CV_PULSE_US" "$PERIOD_US" "$DURATION" "$COMPLETED" > "$LOG" 2>/dev/null
+ERRLOG="$(mktemp)"
+if ! "$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$PENDING" \
+       "$CV_PULSE_US" "$PERIOD_US" "$DURATION" "$COMPLETED" > "$LOG" 2>"$ERRLOG"; then
+  # Le harnais rend 2 sur un argument incoherent : son message porte le
+  # diagnostic, on ne le jette pas.
+  if [ -s "$ERRLOG" ] && ! grep -q "injectees" "$LOG"; then
+    printf '\n'; cat "$ERRLOG" >&2; rm -f "$ERRLOG"; die "le harnais a refuse de mesurer"
+  fi
+fi
+rm -f "$ERRLOG"
 printf '  %s✅%s simulation             %s%s s%s\n' "$C_OK" "$C_0" "$C_DIM" "$DURATION" "$C_0"
 
 CV_PULSE_US="$CV_PULSE_US" python3 - "$LOG" <<'PY'
