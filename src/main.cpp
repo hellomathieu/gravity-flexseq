@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <libGravity.h>
 
+#include <flexseq/CvSampler.h>
 #include <flexseq/PagedScreen.h>
 #include <flexseq/PatternBank.h>
 #include <flexseq/PatternScreen.h>
@@ -175,6 +176,15 @@ void setup() {
     // The engine reads the bank to shorten triplet steps (3 in one step's time).
     engine.setPatternBank(&patternBank);
 
+    // Echantillonnage du CV SOUS INTERRUPTION. FlexSeq prend la propriete du
+    // convertisseur : voir include/flexseq/CvSampler.h. La calibration est lue
+    // sur les objets de libGravity, qui la detiennent.
+    flexseq::cv::configure(flexseq::cv::CV1, gravity.cv1.GetCalibrationLow(),
+                           gravity.cv1.GetCalibrationHigh(), gravity.cv1.GetOffset());
+    flexseq::cv::configure(flexseq::cv::CV2, gravity.cv2.GetCalibrationLow(),
+                           gravity.cv2.GetCalibrationHigh(), gravity.cv2.GetOffset());
+    flexseq::cv::start();
+
     // Drive the master phase from the unified 96-PPQN output clock (internal
     // and external sources both surface here).
     gravity.clock.AttachIntHandler(onOutputTick);
@@ -183,7 +193,14 @@ void setup() {
 }
 
 void loop() {
-    gravity.Process();
+    // PAS gravity.Process() : il appelle cv1/cv2.Process(), donc un analogRead
+    // bloquant qui entrerait en collision avec les conversions de l'ISR
+    // (CvSampler.h). On appelle ses morceaux ; les sorties etaient deja pilotees
+    // explicitement plus bas, de sorte que FlexSeq ne depend plus du tout de
+    // cette fonction — ni de son index de boucle non initialise.
+    gravity.shift_button.Process();
+    gravity.play_button.Process();
+    gravity.encoder.Process();
 
     // Atomically drain the ticks accumulated by the ISR, then advance once.
     uint16_t ticks;

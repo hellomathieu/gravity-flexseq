@@ -17,17 +17,26 @@
 # VERDICT — deux criteres :
 #   1. la mesure est coherente : toutes les bandes font 128 octets et leur nombre
 #      est un multiple de 8 (le decoupage se verifie, il ne se suppose pas) ;
-#   2. le pire passage reste sous CV_PULSE_MS — le CV n'etant echantillonne
-#      qu'une fois par passage, une impulsion plus courte peut passer inapercue.
+#   2. le pire passage reste sous PASS_BUDGET_MS. Ce critere ne concerne PLUS le
+#      CV : celui-ci est echantillonne sous interruption depuis le 2026-08-20
+#      (voir tools/run-cv-capture-probe.sh), donc independamment de la boucle. Il
+#      borne ce qui depend encore du passage : reactivite de l'UI, granularite
+#      d'emission des triggers, marge du tampon MIDI.
+#
+# ATTENTION A LA FIDELITE depuis que l'ADC tourne sous interruption. simavr
+# planifie la fin d'une conversion apres `prescale` cycles au lieu de 13 x
+# prescale : son ISR se declenche toutes les ~26 us au lieu de ~104, soit une
+# taxe CPU de 13,7 % en simulation contre 3,4 % sur materiel. Les durees
+# ci-dessous sont donc SUREVALUEES ; le facteur se deduit des deux cadences
+# qu'affiche tools/run-cv-capture-probe.sh.
 # Sortie 0 si les deux passent, 1 sinon, 127 si un outil manque.
 #
-# Reglages : CV_PULSE_MS (defaut 10, le bas de la fourchette d'un trigger
-# Eurorack), DURATION (defaut 8 s de simulation).
+# Reglages : PASS_BUDGET_MS (defaut 10), DURATION (defaut 8 s de simulation).
 
 set -u
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-CV_PULSE_MS="${CV_PULSE_MS:-10}"
+PASS_BUDGET_MS="${PASS_BUDGET_MS:-12}"
 DURATION="${DURATION:-8}"
 
 if [ -t 1 ]; then
@@ -78,14 +87,14 @@ if ! "$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$DURATION" > "$LOG" 2
 fi
 printf '  %s✅%s simulation             %s%s s simulees%s\n' "$C_OK" "$C_0" "$C_DIM" "$DURATION" "$C_0"
 
-CV_PULSE_MS="$CV_PULSE_MS" python3 - "$LOG" <<'PY'
+PASS_BUDGET_MS="$PASS_BUDGET_MS" python3 - "$LOG" <<'PY'
 import os, re, sys
 
 txt = open(sys.argv[1], errors='replace').read()  # la sortie contient des octets bruts d'UART
 tty = sys.stdout.isatty()
 OK, ERR, DIM, B, Z = ('\033[32m', '\033[31m', '\033[2m', '\033[1m', '\033[0m') if tty else ('',) * 5
 mark = lambda good: f"{OK}✅{Z}" if good else f"{ERR}❌{Z}"
-budget = float(os.environ["CV_PULSE_MS"])
+budget = float(os.environ["PASS_BUDGET_MS"])
 
 
 def grab(pattern, cast=float):
@@ -118,7 +127,7 @@ print(f"{B}============ BLOCAGE DE LA BOUCLE (esclave SSD1306 reel) ============
 print(f"  {mark(sane)} Mesure coherente   {bands} bandes de 128 o, {frames} images de 8 "
       f"{DIM}(reste {rest}, {chunks} transactions Wire/bande){Z}")
 print(f"  {mark(fits)} Pire passage       {pass_max/1000:6.2f} ms   "
-      f"{DIM}— budget CV {budget:g} ms ; median {pass_med/1000:.2f} ms{Z}")
+      f"{DIM}— budget {budget:g} ms ; median {pass_med/1000:.2f} ms{Z}")
 print(f"{B}====================================================================={Z}")
 print(f"  Transfert d'une bande : {band_med/1000:.2f} ms (med) / {band_max/1000:.2f} ms (max)")
 print(f"  Image entiere de 8 bandes : {frame_med/1000:.1f} ms, etalee sur 9 passages")
@@ -128,13 +137,14 @@ print()
 if not sane:
     print(f"  {ERR}Le decoupage en bandes ne se verifie pas — mesure a ne pas croire.{Z}")
 elif fits:
-    print(f"  Une impulsion CV de {budget:g} ms est vue a coup sur : le CV est")
-    print("  echantillonne une fois par passage, et aucun passage ne depasse ce budget.")
+    print(f"  Aucun passage ne depasse {budget:g} ms.")
+    print("  Rappel : ces durees sont surevaluees, l'ISR de l'ADC etant ~4x trop")
+    print("  frequente en simulation. Le CV ne depend plus de la boucle.")
 else:
-    print(f"  {ERR}Une impulsion CV de {budget:g} ms peut passer inapercue.{Z} Le CV n'est")
-    print(f"  echantillonne qu'une fois par passage, et le pire passage dure")
-    print(f"  {pass_max/1000:.2f} ms. Voir PRD 10.6 : le repli est l'echantillonnage du")
-    print("  convertisseur sous interruption — decision a prendre sur cette mesure.")
+    print(f"  {ERR}Le pire passage ({pass_max/1000:.2f} ms) depasse le budget de {budget:g} ms.{Z}")
+    print("  Ces durees sont surevaluees : l'ISR de l'ADC est ~4x trop frequente en")
+    print("  simulation (13,7 % de CPU au lieu de 3,4 %). La capture du CV, elle, ne")
+    print("  depend plus de la boucle — voir tools/run-cv-capture-probe.sh.")
 
 sys.exit(0 if (sane and fits) else 1)
 PY

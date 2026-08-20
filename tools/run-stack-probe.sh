@@ -29,7 +29,9 @@
 #   - la pile utilisee avant setup() : constructeurs globaux, init() d'Arduino ;
 #   - les chemins non exerces par la simulation : ISR USART (aucun MIDI en
 #     entree), ISR PCINT (aucun geste sur l'encodeur ni les boutons).
-# Une ISR s'empile PAR-DESSUS le point le plus profond mesure ici.
+# L'ISR de l'ADC, elle, EST exercee depuis que le CV est echantillonne sous
+# interruption : elle tourne en permanence pendant la mesure. Une ISR non
+# exercee s'empilerait PAR-DESSUS le pic mesure ici.
 #
 # Reglages : RAM_RESERVE (defaut 256), DURATION (defaut 8 s de simulation).
 
@@ -186,8 +188,9 @@ else:
 print()
 print(f"{DIM}  Hors mesure : la pile d'avant setup() (constructeurs globaux, init()"
       f" d'Arduino){Z}")
-print(f"{DIM}  et les ISR non exercees par la simulation (USART/MIDI, PCINT encodeur et{Z}")
-print(f"{DIM}  boutons). Une ISR s'empile PAR-DESSUS ce pic.{Z}")
+print(f"{DIM}  et les ISR que la simulation n'exerce pas : USART/MIDI et PCINT (encodeur,{Z}")
+print(f"{DIM}  boutons). Celle de l'ADC EST exercee — elle tourne en permanence. Une ISR{Z}")
+print(f"{DIM}  non exercee s'empilerait PAR-DESSUS ce pic.{Z}")
 
 sys.exit(0 if (fits_reserve and fits_ram) else 1)
 PY
