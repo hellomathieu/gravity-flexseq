@@ -83,3 +83,6 @@ sim/coverage/
 tools/simavr-test/gravity-ch1-test.elf
 tools/simavr-test/__pycache__/
 tools/simavr-test/*.vcd
+
+# Etat local du Knowledge Checkpoint (jeton consomme par le hook PreCompact)
+.claude/state/
