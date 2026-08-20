@@ -26,16 +26,26 @@ Faits mesurés ou vérifiés dans les sources :
   contente de `display.begin()`.
 - Une image pleine représente 1024 octets de données d'affichage, soit de
   l'ordre de **25 ms** de temps de bus à 400 kHz.
-- Les 8 bandes s'enchaînent aujourd'hui **dans un seul appel**
-  (`src/main.cpp`) : la boucle principale est bloquée pendant l'image entière.
+- Les 8 bandes s'enchaînaient **dans un seul appel** (`src/main.cpp`) : la
+  boucle principale était bloquée pendant l'image entière. C'est ce que cette
+  décision remplace ; elle est implémentée depuis le 2026-08-20.
 - Le rendu est limité à une image toutes les 40 ms et seulement si l'écran a
   changé (`UI_MIN_INTERVAL_MS`). Cette limite réduit la **fréquence** des
   blocages, pas leur **durée**.
 - La boucle principale est l'endroit où les ticks sont drainés et les triggers
   émis, et une sortie ne peut être réarmée qu'une fois par drainage.
-- **Non mesuré :** rendu et chronométrage n'ont jamais tourné ensemble.
-  `src/simavr_main.cpp` ne contient aucun rendu, donc les durées de step
-  validées en simavr l'ont été sans affichage.
+- **`Gravity::Process()` ne touche ni au display ni à `Wire`** — seulement les
+  boutons, l'encodeur, les CV (`analogRead`) et les sorties (`libGravity.cpp`).
+  C'est ce qui rend l'entrelacement sûr : entre deux bandes, rien d'autre
+  n'utilise l'objet d'affichage ni le bus I2C, donc aucune image ne peut être
+  corrompue par ce qui tourne entre deux passages.
+- **Non mesuré à la date de la décision :** rendu et chronométrage n'avaient
+  jamais tourné ensemble. `src/simavr_main.cpp` ne contient aucun rendu, donc
+  les durées de step validées en simavr l'ont été sans affichage.
+  *Mise à jour du 2026-08-20 :* le firmware complet, rendu compris, a depuis
+  tourné sous simavr — la **pile** y a été mesurée (pic 120 o, PRD §15). Le
+  **blocage réel** reste inconnu : simavr n'a aucun esclave I2C sur le bus, donc
+  la durée d'un transfert n'y est pas fidèle. Wokwi ou le module trancheront.
 
 ## Décision
 
