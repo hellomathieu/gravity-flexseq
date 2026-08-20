@@ -101,19 +101,29 @@ bandes de la même image pourraient montrer des contenus différents.
   occupe 9 passages : un pour le gel et la première bande — `firstPage()` ne
   transfère rien — puis 8 transferts.
 - **Mesuré le 2026-08-20** (`tools/run-blocking-probe.sh`, esclave SSD1306 réel
-  dans simavr), avant puis après l'écartement par bande :
+  dans simavr). ⚠️ **Chiffres révisés** : une première série avait été relevée sur
+  le build où la conversion de bande était fausse, donc où l'écran **ne dessinait
+  presque rien** — « 47 ms par image, 7,74 ms au pire, dessin à 1,24 ms » mesurait
+  surtout l'absence de dessin. Comparaison à rendu correct des deux côtés, ADC
+  hors interruption ou son artefact corrigé :
 
   | | rendu complet à chaque bande | écarté à la bande |
   |---|---|---|
-  | pire passage | 16,16 ms | **7,74 ms** |
-  | passage médian | 8,52 ms | **5,84 ms** |
-  | image entière | 74,0 ms | **47,1 ms** |
-  | dessin par passage | ~3,92 ms | **~1,24 ms** |
-  | transfert d'une bande | 4,60 ms | 4,60 ms |
+  | passage médian | 8,52 ms | **6,48 ms** |
+  | passage au pire | 16,16 ms | **15,32 ms** |
+  | image entière | 74,0 ms | **59,1 ms** |
+  | transfert d'une bande | 4,60 ms | 4,62 ms |
 
-  Le transfert ne bouge pas : c'est le bus, et il est déjà à 400 kHz. Le dessin,
-  lui, tombe de **68 %**. Sans étalement du tout, la boucle resterait bloquée
-  l'image entière d'un seul bloc.
+  Le gain est donc réel mais **plus modeste** qu'annoncé : −24 % sur le passage
+  médian et −20 % sur l'image, au lieu du facteur 2 rapporté. Et le **pire** cas
+  ne bouge quasiment pas.
+- **Pourquoi le pire cas résiste : l'écartement a CONCENTRÉ le dessin.** La
+  distribution est bimodale — six bandes sur huit ne portent aucun élément et
+  coûtent le seul transfert (~5,5 ms), tandis que celles qui portent une ligne de
+  12 steps coûtent ~15 ms. Le p90 vaut 15,3 ms, soit environ un passage sur sept.
+  Réduire le total sans réduire le pic était le résultat attendu du procédé ; le
+  pic reste donc la cible d'une optimisation ultérieure, distincte de cette
+  décision.
 - **Plancher atteint.** Un passage ne peut plus descendre sous les ~4,6 ms du
   transfert d'une bande, qui domine désormais. Aller plus bas demanderait
   d'envoyer moins qu'une bande par passage — la granularité de U8g2 est la ligne

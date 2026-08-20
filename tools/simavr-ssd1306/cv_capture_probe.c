@@ -96,10 +96,16 @@ int main(int argc, char **argv)
     period_cycles = (uint64_t)(period_us * (double)F_CPU_HZ / 1e6);
     if (pulse_cycles == 0) pulse_cycles = 1;
 
+    /* Sortie NON TAMPONNEE : redirigee vers un fichier, stdout l'est par blocs,
+     * et le rapport disparaissait entierement si le harnais plantait — on
+     * cherchait alors le defaut la ou il n'etait pas. */
+    setvbuf(stdout, NULL, _IONBF, 0);
+
     elf_firmware_t f = {{0}};
-    sim_setup_firmware(fw, 0, &f, "cv_capture_probe");
+    /* AVANT le chargement : voir blocking_probe.c. */
     strcpy(f.mmcu, MCU);
     f.frequency = F_CPU_HZ;
+    sim_setup_firmware(fw, 0, &f, "cv_capture_probe");
     /* Les tensions d'alimentation et de reference, en millivolts. Elles viennent
      * normalement de la section .mmcu du firmware, que le .hex ne porte pas :
      * sans elles simavr retient une reference de ~3,3 V, et 2625 mV de repos se

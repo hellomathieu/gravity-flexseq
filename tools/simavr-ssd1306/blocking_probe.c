@@ -23,6 +23,28 @@
  * une fois par passage (gravity.Process()), donc une impulsion plus courte que
  * le pire passage peut passer inapercue.
  *
+ * DEUX REGIMES DANS UNE SEULE EXECUTION, pour retirer un artefact du chiffre
+ * publie. simavr planifie la fin d'une conversion apres `prescale` cycles au lieu
+ * de 13 x prescale : son ISR d'ADC se declenche ~4x trop souvent, ce qui gonfle
+ * la duree d'un passage. A la moitie de la simulation, le harnais efface le bit
+ * ADIE d'ADCSRA — et comme c'est l'ISR qui relance les conversions, les couper les
+ * arrete toutes. On obtient donc, du MEME binaire et dans les memes conditions :
+ *   - regime 1 : la boucle telle que simavr la fait tourner, ADC comprise ;
+ *   - regime 2 : la meme boucle sans aucune activite d'ADC.
+ * La taxe simulee est leur difference. La taxe REELLE en est le quart, dans le
+ * rapport des deux cadences d'ISR — celle de simavr etant MESUREE au compteur de
+ * conversions du firmware, non supposee. L'estimation materielle publiee est donc
+ * regime 2 + taxe/4.
+ *
+ * AUCUNE ALLOCATION APRES avr_init(). Le tas est corrompu pendant un run : la
+ * premiere version de ce harnais allouait ses tableaux de statistiques, et un run
+ * sur deux mourait dans `libsystem_malloc` (EXC_BAD_ACCESS dans `mfm_alloc`) —
+ * apres avoir imprime son rapport complet, et avec des compteurs prouves dans
+ * leurs bornes. Les trois autres harnais, qui n'allouent rien apres
+ * l'initialisation, n'ont jamais fauté. On travaille donc sur des tableaux
+ * statiques : les mesures ne changent pas, et on ne retouche pas un allocateur
+ * dont l'etat n'est plus garanti.
+ *
  * Regroupement, sans aucun seuil arbitraire. U8g2 passe par Wire, dont le tampon
  * borne chaque transaction : une bande de 128 octets part en PLUSIEURS
  * transactions START..STOP. Mais le protocole les distingue lui-meme — le
@@ -51,9 +73,14 @@
 
 #define MCU          "atmega328p"
 #define F_CPU_HZ     16000000UL
-#define MAX_TX       200000
+/* Borne des transactions retenues. Un run de 16 s en produit ~2100 : 20000 laisse
+ * dix fois la marge. Les tableaux sont STATIQUES et non alloues — voir la note
+ * sur le tas ci-dessous. */
+#define MAX_TX       20000
 #define U8G2_CTRL_DATA 0x40   /* octet de controle U8g2 : donnees d'affichage */
 #define BANDS_PER_FRAME 8     /* mode _1_ de U8g2 : 8 bandes par image (ADR 0001) */
+#define ADCSRA_ADDR    0x7A   /* ATmega328P */
+#define ADIE_BIT       (1 << 3)
 
 typedef struct { uint64_t start, stop; uint32_t bytes; uint8_t ctrl; } tx_t;
 
@@ -104,23 +131,35 @@ static void stats(const char *label, double *v, int n, const char *unit)
     qsort(v, n, sizeof(double), cmp_d);
     double sum = 0;
     for (int i = 0; i < n; i++) sum += v[i];
-    printf("  %-34s n=%-5d min %8.3f  med %8.3f  max %8.3f  moy %8.3f %s\n",
-           label, n, v[0], v[n / 2], v[n - 1], sum / n, unit);
+    printf("  %-34s n=%-5d min %8.3f  med %8.3f  p90 %8.3f  max %8.3f %s\n",
+           label, n, v[0], v[n / 2], v[(n * 9) / 10], v[n - 1], unit);
+    (void)sum;
 }
 
 int main(int argc, char **argv)
 {
     const char *fw = (argc > 1) ? argv[1] : ".pio/build/nanoatmega328/firmware.hex";
     double seconds = (argc > 2) ? atof(argv[2]) : 4.0;
+    /* Adresse du compteur `completed` de CvSampler : sert a MESURER la cadence
+     * d'ISR simulee, donc le facteur de correction. */
+    const uint16_t done_addr = (argc > 3) ? (uint16_t)strtol(argv[3], NULL, 0) : 0;
 
     /* On charge le .hex : la libsimavr installee est compilee SANS libelf, donc
      * elf_read_firmware() echoue meme depuis un harnais — la limite n'est pas
      * propre au binaire run_avr. Le .hex ne portant ni cible ni frequence, on les
      * renseigne nous-memes, exactement comme les -m/-f de la ligne de commande. */
+    /* Sortie NON TAMPONNEE : redirigee vers un fichier, stdout l'est par blocs,
+     * et le rapport disparaissait entierement si le harnais plantait — on
+     * cherchait alors le defaut la ou il n'etait pas. */
+    setvbuf(stdout, NULL, _IONBF, 0);
+
     elf_firmware_t f = {{0}};
-    sim_setup_firmware(fw, 0, &f, "blocking_probe");
+    /* AVANT le chargement : le loader de .hex utilise ces champs, et les
+     * renseigner apres coup laissait simavr travailler sur une structure non
+     * configuree — SIGTRAP intermittent, deux fois sur trois. */
     strcpy(f.mmcu, MCU);
     f.frequency = F_CPU_HZ;
+    sim_setup_firmware(fw, 0, &f, "blocking_probe");
 
     avr_t *avr = avr_make_mcu_by_name(MCU);
     if (!avr) { fprintf(stderr, "MCU inconnu : %s\n", MCU); return 1; }
@@ -143,11 +182,26 @@ int main(int argc, char **argv)
     printf("firmware   %s\n", fw);
     printf("simulation %.1f s (%" PRIu64 " cycles a %lu Hz)\n\n", seconds, target, F_CPU_HZ);
 
+    const uint64_t switch_cycle = target / 2;
+    int adc_off = 0;
+    uint32_t conv_at_switch = 0;
+
     while (avr->cycle < target) {
         int state = avr_run(avr);
         if (state == cpu_Done || state == cpu_Crashed) {
             printf("!! CPU arrete (state=%d) a %" PRIu64 " cycles\n", state, avr->cycle);
             break;
+        }
+        if (!adc_off && avr->cycle >= switch_cycle) {
+            if (done_addr) {
+                conv_at_switch = (uint32_t)avr->data[done_addr] |
+                                 ((uint32_t)avr->data[done_addr + 1] << 8) |
+                                 ((uint32_t)avr->data[done_addr + 2] << 16) |
+                                 ((uint32_t)avr->data[done_addr + 3] << 24);
+            }
+            avr->data[ADCSRA_ADDR] &= (uint8_t)~ADIE_BIT;  /* plus d'ISR, donc plus
+                                                            * de relance */
+            adc_off = 1;
         }
     }
 
@@ -163,17 +217,21 @@ int main(int argc, char **argv)
         printf("\n");
     }
 
+    if (tx_count >= MAX_TX) {
+        printf("!! %d transactions : borne MAX_TX atteinte, mesure tronquee\n", tx_count);
+        return 1;
+    }
     if (tx_count < 2) {
         printf("Aucun transfert I2C observe (%d) — l'esclave n'a pas repondu.\n", tx_count);
         return 1;
     }
 
     /* --- bandes : suites maximales de transactions de DONNEES -------------- */
-    double *band_len = malloc(sizeof(double) * tx_count);
-    double *band_per = malloc(sizeof(double) * tx_count);
-    double *band_bytes = malloc(sizeof(double) * tx_count);
-    int *band_chunks = malloc(sizeof(int) * tx_count);
-    uint64_t *band_start = malloc(sizeof(uint64_t) * tx_count);
+    static double band_len[MAX_TX];
+    static double band_per[MAX_TX];
+    static double band_bytes[MAX_TX];
+    static int band_chunks[MAX_TX];
+    static uint64_t band_start[MAX_TX];
     int nb = 0;
 
     for (int i = 0; i < tx_count; ) {
@@ -206,11 +264,24 @@ int main(int argc, char **argv)
      * images, la boucle ne rend rien et l'attente ne mesure aucun blocage. */
     int frames = nb / BANDS_PER_FRAME;
     int np = 0;
-    double *frame_len = malloc(sizeof(double) * (frames + 1));
+    static double frame_len[MAX_TX / BANDS_PER_FRAME + 1];
+    /* Un regime par image : une image a cheval sur la bascule est ecartee, ses
+     * passages n'appartenant proprement a aucun des deux. */
+    static double per_a[MAX_TX];  /* ADC active */
+    static double per_b[MAX_TX];  /* ADC coupee */
+    int na = 0, nbp = 0, straddling = 0;
+
     for (int fr = 0; fr < frames; fr++) {
         int base = fr * BANDS_PER_FRAME;
-        for (int k = 1; k < BANDS_PER_FRAME; k++)
-            band_per[np++] = us(band_start[base + k] - band_start[base + k - 1]);
+        const int first_a = band_start[base] < switch_cycle;
+        const int last_a = band_start[base + BANDS_PER_FRAME - 1] < switch_cycle;
+        for (int k = 1; k < BANDS_PER_FRAME; k++) {
+            const double d = us(band_start[base + k] - band_start[base + k - 1]);
+            band_per[np++] = d;
+            if (first_a != last_a) continue;
+            if (first_a) per_a[na++] = d; else per_b[nbp++] = d;
+        }
+        if (first_a != last_a) ++straddling;
         frame_len[fr] = us(band_start[base + BANDS_PER_FRAME - 1] - band_start[base])
                         + band_len[base + BANDS_PER_FRAME - 1];
     }
@@ -238,6 +309,53 @@ int main(int argc, char **argv)
     qsort(band_per, np, sizeof(double), cmp_d);
     double med_per = np ? band_per[np / 2] : 0, max_per = np ? band_per[np - 1] : 0;
 
+    /* --- les deux regimes, et l'estimation materielle ----------------------- */
+    printf("=== DEUX REGIMES ===\n");
+    stats("passage, ADC active (simulee)", per_a, na, "us");
+    stats("passage, ADC coupee", per_b, nbp, "us");
+    if (straddling) printf("  %d image(s) a cheval sur la bascule, ecartee(s)\n", straddling);
+
+    double corrected_max = 0.0, corrected_med = 0.0;
+    if (na > 0 && nbp > 0) {
+        qsort(per_a, na, sizeof(double), cmp_d);
+        qsort(per_b, nbp, sizeof(double), cmp_d);
+        const double med_a = per_a[na / 2], med_b = per_b[nbp / 2];
+
+        /* Modele : l'ISR vole une FRACTION du CPU, elle n'ajoute pas une duree
+         * fixe. Soustraire les maxima des deux regimes serait faux — leurs
+         * valeurs extremes viennent d'evenements differents.
+         *
+         *   f_sim = 1 - med_sans / med_avec       (fraction volee, en simulation)
+         *   cout par ISR = f_sim x periode_simulee
+         *   f_mat = cout / periode_materielle
+         *   duree_materielle = duree_sans / (1 - f_mat)
+         *
+         * La periode simulee est MESUREE au compteur de conversions du firmware ;
+         * la materielle est arithmetique : 13 x 128 cycles. */
+        const double f_sim = (med_a > 0.0) ? 1.0 - med_b / med_a : 0.0;
+        const double sim_conv_us = (done_addr && conv_at_switch)
+            ? us(switch_cycle) / conv_at_switch : 0.0;
+        const double hw_conv_us = 13.0 * 128.0 * 1e6 / F_CPU_HZ;
+        const double cost_us = f_sim * sim_conv_us;
+        const double f_hw = (hw_conv_us > 0.0) ? cost_us / hw_conv_us : 0.0;
+        const double factor = (f_hw < 0.5) ? 1.0 / (1.0 - f_hw) : 0.0;
+
+        corrected_med = med_b * factor;
+        corrected_max = per_b[nbp - 1] * factor;
+
+        printf("\n  CPU vole par l'ISR : %.1f %% en simulation", 100.0 * f_sim);
+        if (sim_conv_us > 0.0) {
+            printf(", soit %.2f us par ISR\n", cost_us);
+            printf("  cadence d'ISR : %.1f us simulee (mesuree) contre %.0f us materielle\n",
+                   sim_conv_us, hw_conv_us);
+            printf("  => %.1f %% sur materiel, donc un facteur %.3f sur le regime sans ADC\n",
+                   100.0 * f_hw, factor);
+        } else {
+            printf("\n  cadence d'ISR non mesuree (adresse de `completed` absente) :\n"
+                   "  la taxe est reportee telle quelle, donc SUREVALUEE\n");
+        }
+    }
+
     printf("\n=== LECTURE ===\n");
     printf("  Blocage d'un passage par le bus     : %.2f ms (mediane) / %.2f ms (pire)\n",
            med_len / 1000.0, max_len / 1000.0);
@@ -247,8 +365,9 @@ int main(int argc, char **argv)
            BANDS_PER_FRAME, med_len / 1000.0, BANDS_PER_FRAME * med_len / 1000.0);
     printf("            la boucle resterait bloquee cela, plus les %d dessins.\n",
            BANDS_PER_FRAME);
-    printf("  Impulsion CV a capter de facon sure : > %.2f ms\n", max_per / 1000.0);
+    if (corrected_max > 0.0)
+        printf("  ESTIME SUR MATERIEL : %.2f ms au pire, %.2f ms en median\n",
+               corrected_max / 1000.0, corrected_med / 1000.0);
 
-    free(frame_len); free(band_len); free(band_per); free(band_bytes); free(band_chunks); free(band_start);
     return 0;
 }

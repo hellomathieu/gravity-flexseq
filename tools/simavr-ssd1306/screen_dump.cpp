@@ -121,11 +121,14 @@ int main(int argc, char** argv)
     const uint8_t length = (argc > 3) ? (uint8_t)atoi(argv[3]) : 20;  /* LENGTH du contenu */
     const char* pgm = (argc > 4) ? argv[4] : NULL;
 
+    setvbuf(stdout, NULL, _IONBF, 0);  /* voir blocking_probe.c */
+
     elf_firmware_t f = {{0}};
-    sim_setup_firmware(fw, 0, &f, "screen_dump");
+    /* AVANT le chargement : voir blocking_probe.c. */
     strcpy(f.mmcu, MCU);
     f.frequency = F_CPU_HZ;
     f.vcc = f.avcc = f.aref = 5000;
+    sim_setup_firmware(fw, 0, &f, "screen_dump");
 
     avr_t* avr = avr_make_mcu_by_name(MCU);
     if (!avr) { fprintf(stderr, "MCU inconnu\n"); return 1; }

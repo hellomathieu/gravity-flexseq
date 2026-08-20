@@ -75,11 +75,17 @@ int main(int argc, char** argv)
     const double seconds = (argc > 3) ? atof(argv[3]) : 8.0;
     const int quiet = getenv("QUIET") != NULL;   /* sans injection, pour comparer */
 
+    /* Sortie NON TAMPONNEE : redirigee vers un fichier, stdout l'est par blocs,
+     * et le rapport disparaissait entierement si le harnais plantait — on
+     * cherchait alors le defaut la ou il n'etait pas. */
+    setvbuf(stdout, NULL, _IONBF, 0);
+
     elf_firmware_t f = {{0}};
-    sim_setup_firmware(fw, 0, &f, "stack_probe");
+    /* AVANT le chargement : voir blocking_probe.c. */
     strcpy(f.mmcu, MCU);
     f.frequency = F_CPU_HZ;
     f.vcc = f.avcc = f.aref = 5000;
+    sim_setup_firmware(fw, 0, &f, "stack_probe");
 
     avr_t* avr = avr_make_mcu_by_name(MCU);
     if (!avr) { fprintf(stderr, "MCU inconnu\n"); return 1; }

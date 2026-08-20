@@ -23,12 +23,20 @@
 #      borne ce qui depend encore du passage : reactivite de l'UI, granularite
 #      d'emission des triggers, marge du tampon MIDI.
 #
-# ATTENTION A LA FIDELITE depuis que l'ADC tourne sous interruption. simavr
-# planifie la fin d'une conversion apres `prescale` cycles au lieu de 13 x
-# prescale : son ISR se declenche toutes les ~26 us au lieu de ~104, soit une
-# taxe CPU de 13,7 % en simulation contre 3,4 % sur materiel. Les durees
-# ci-dessous sont donc SUREVALUEES ; le facteur se deduit des deux cadences
-# qu'affiche tools/run-cv-capture-probe.sh.
+# L'ARTEFACT DE L'ADC EST CORRIGE, par une mesure a DEUX REGIMES en une seule
+# execution. simavr planifie la fin d'une conversion apres `prescale` cycles au
+# lieu de 13 x prescale : son ISR se declenche ~4x trop souvent, ce qui gonfle la
+# duree d'un passage. A la moitie de la simulation, le harnais efface le bit ADIE
+# d'ADCSRA — et comme c'est l'ISR qui relance les conversions, les couper les
+# arrete toutes. Du MEME binaire on obtient donc la boucle avec, puis sans,
+# activite d'ADC.
+#
+# La correction est un rapport de FRACTIONS de CPU, non une soustraction de
+# maxima (leurs valeurs extremes viennent d'evenements differents) : la fraction
+# volee en simulation se deduit des medianes, le cout par ISR s'en tire avec la
+# cadence simulee — MESUREE au compteur de conversions du firmware — et la
+# fraction materielle vient de la cadence arithmetique de 13 x 128 cycles. Le
+# verdict porte sur l'estimation materielle.
 # Sortie 0 si les deux passent, 1 sinon, 127 si un outil manque.
 #
 # Reglages : PASS_BUDGET_MS (defaut 10), DURATION (defaut 8 s de simulation).
@@ -81,8 +89,20 @@ else
 fi
 
 # --- 3. Simulation + verdict -------------------------------------------------
-progress "simulation ($DURATION s)"
-if ! "$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$DURATION" > "$LOG" 2>/dev/null; then
+# L'adresse du compteur de conversions permet de MESURER la cadence d'ISR
+# simulee, donc le facteur de correction, au lieu de la supposer.
+AVR_NM="$(command -v avr-nm || echo "$HOME/.platformio/packages/toolchain-atmelavr/bin/avr-nm")"
+DONE=""
+if [ -x "$AVR_NM" ]; then
+  SYM="$("$AVR_NM" --radix=x "$ROOT/.pio/build/nanoatmega328/firmware.elf" \
+         | grep -E "N_19completedE\$" | head -1 | cut -d' ' -f1)"
+  [ -n "$SYM" ] && DONE="$(printf '0x%x' $(( 0x$SYM - 0x800000 )))"
+fi
+[ -n "$DONE" ] && printf '  %s\xe2\x9c\x85%s symbole                %scompleted %s%s\n' \
+  "$C_OK" "$C_0" "$C_DIM" "$DONE" "$C_0"
+
+progress "simulation ($DURATION s, deux regimes)"
+if ! "$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$DURATION" $DONE > "$LOG" 2>/dev/null; then
   cat "$LOG"; die "la sonde a echoue"
 fi
 printf '  %s✅%s simulation             %s%s s simulees%s\n' "$C_OK" "$C_0" "$C_DIM" "$DURATION" "$C_0"
@@ -90,10 +110,10 @@ printf '  %s✅%s simulation             %s%s s simulees%s\n' "$C_OK" "$C_0" "$C
 PASS_BUDGET_MS="$PASS_BUDGET_MS" python3 - "$LOG" <<'PY'
 import os, re, sys
 
-txt = open(sys.argv[1], errors='replace').read()  # la sortie contient des octets bruts d'UART
+txt = open(sys.argv[1], errors='replace').read()   # la sortie porte des octets d'UART
 tty = sys.stdout.isatty()
 OK, ERR, DIM, B, Z = ('\033[32m', '\033[31m', '\033[2m', '\033[1m', '\033[0m') if tty else ('',) * 5
-mark = lambda good: f"{OK}✅{Z}" if good else f"{ERR}❌{Z}"
+mark = lambda good: f"{OK}\u2705{Z}" if good else f"{ERR}\u274c{Z}"
 budget = float(os.environ["PASS_BUDGET_MS"])
 
 
@@ -106,45 +126,58 @@ bands = grab(r"(\d+) bandes de donnees", int)
 frames = grab(r"soit (\d+) images", int)
 rest = grab(r"\(reste (\d+)\)", int)
 conform = grab(r"decoupage : (\d+) bandes sur \d+ font exactement 128", int)
-chunks = grab(r"(\d+) transactions Wire par bande", int)
-
 band_med = grab(r"bande : transfert.*med\s+([\d.]+)")
-band_max = grab(r"bande : transfert.*max\s+([\d.]+)")
-pass_med = grab(r"bande a bande.*med\s+([\d.]+)")
-pass_max = grab(r"bande a bande.*max\s+([\d.]+)")
+med_a = grab(r"passage, ADC active.*med\s+([\d.]+)")
+max_a = grab(r"passage, ADC active.*max\s+([\d.]+)")
+med_b = grab(r"passage, ADC coupee.*med\s+([\d.]+)")
+p90_b = grab(r"passage, ADC coupee.*p90\s+([\d.]+)")
+max_b = grab(r"passage, ADC coupee.*max\s+([\d.]+)")
+f_hw = grab(r"=> ([\d.]+) % sur materiel")
+hw_max = grab(r"ESTIME SUR MATERIEL : ([\d.]+) ms au pire")
+hw_med = grab(r"au pire, ([\d.]+) ms en median")
 frame_med = grab(r"image entiere.*med\s+([\d.]+)")
 
-if None in (bands, frames, conform, band_med, pass_max, frame_med):
+if None in (bands, conform, hw_max, max_b, med_a, med_b):
     print(f"  {mark(False)} sortie de la sonde illisible")
-    print(txt)
+    print("".join(c for c in txt if 32 <= ord(c) < 127 or c == "\n"))
     sys.exit(1)
 
 sane = (conform == bands) and (rest == 0) and bands >= 8
-fits = pass_max / 1000.0 <= budget
+corrected = f_hw is not None
+fits = hw_max <= budget
 
 print()
 print(f"{B}============ BLOCAGE DE LA BOUCLE (esclave SSD1306 reel) ============{Z}")
 print(f"  {mark(sane)} Mesure coherente   {bands} bandes de 128 o, {frames} images de 8 "
-      f"{DIM}(reste {rest}, {chunks} transactions Wire/bande){Z}")
-print(f"  {mark(fits)} Pire passage       {pass_max/1000:6.2f} ms   "
-      f"{DIM}— budget {budget:g} ms ; median {pass_med/1000:.2f} ms{Z}")
+      f"{DIM}(reste {rest}){Z}")
+if corrected:
+    print(f"  {mark(True)} Artefact ADC       corrige : {f_hw:.1f} % de CPU sur materiel "
+          f"{DIM}(mesure a deux regimes){Z}")
+else:
+    print(f"  {mark(False)} Artefact ADC       {ERR}NON corrige{Z} — chiffres surevalues")
+print(f"  {mark(fits)} Pire passage       {hw_max:6.2f} ms   "
+      f"{DIM}— estime materiel ; budget {budget:g} ms ; median {hw_med:.2f} ms{Z}")
 print(f"{B}====================================================================={Z}")
-print(f"  Transfert d'une bande : {band_med/1000:.2f} ms (med) / {band_max/1000:.2f} ms (max)")
-print(f"  Image entiere de 8 bandes : {frame_med/1000:.1f} ms, etalee sur 9 passages")
-print(f"  Sans etalement, la boucle resterait bloquee cette duree d'un seul bloc.")
+print(f"  Transfert d'une bande      : {band_med/1000:.2f} ms")
+print(f"  Passage simule, ADC active : {med_a/1000:.2f} ms med / {max_a/1000:.2f} ms max")
+print(f"  Passage simule, ADC coupee : {med_b/1000:.2f} ms med / {max_b/1000:.2f} ms max")
+print(f"  Image entiere de 8 bandes  : {frame_med/1000:.1f} ms, etalee sur 9 passages")
 print()
 
 if not sane:
     print(f"  {ERR}Le decoupage en bandes ne se verifie pas — mesure a ne pas croire.{Z}")
 elif fits:
-    print(f"  Aucun passage ne depasse {budget:g} ms.")
-    print("  Rappel : ces durees sont surevaluees, l'ISR de l'ADC etant ~4x trop")
-    print("  frequente en simulation. Le CV ne depend plus de la boucle.")
+    print(f"  Aucun passage ne depasse {budget:g} ms sur materiel.")
 else:
-    print(f"  {ERR}Le pire passage ({pass_max/1000:.2f} ms) depasse le budget de {budget:g} ms.{Z}")
-    print("  Ces durees sont surevaluees : l'ISR de l'ADC est ~4x trop frequente en")
-    print("  simulation (13,7 % de CPU au lieu de 3,4 %). La capture du CV, elle, ne")
-    print("  depend plus de la boucle — voir tools/run-cv-capture-probe.sh.")
+    print(f"  {ERR}Le pire passage estime ({hw_max:.2f} ms) depasse le budget de "
+          f"{budget:g} ms.{Z}")
+    print("  Ce n'est PAS l'ADC, dont l'artefact est corrige, et ce n'est pas une")
+    print(f"  valeur isolee : le p90 du regime sans ADC vaut {p90_b/1000:.1f} ms, soit")
+    print("  environ un passage sur sept. Sept intervalles par image : c'est celui qui")
+    print("  dessine une ligne de 12 steps. L'ecartement par bande a CONCENTRE le cout")
+    print("  du dessin sur les bandes qui portent du contenu au lieu de l'etaler.")
+    print("  Piste a instruire, distincte de cette mesure.")
 
-sys.exit(0 if (sane and fits) else 1)
+sys.exit(0 if (sane and corrected and fits) else 1)
+
 PY
