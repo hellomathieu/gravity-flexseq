@@ -52,9 +52,18 @@ Faits mesurés ou vérifiés dans les sources :
 
 ## Décision
 
-Le rendu est **étalé : une bande par passage de la boucle principale**. Le
-renderer n'est pas modifié — il est déjà pur, ce qui est précisément ce qui rend
-l'étalement possible.
+Le rendu est **étalé : une bande par passage de la boucle principale**, et le
+renderer **ne dessine que ce qui tombe dans la bande courante**.
+
+Le renderer reste pur — c'est ce qui rend l'étalement possible — mais il reçoit
+désormais la bande en paramètre (`Band{y0, y1}`, par défaut tout l'écran) et
+écarte en amont les éléments hors bande. Sans cet écartement, les 24 steps, leurs
+chiffres et le titre étaient recalculés **huit fois** : U8g2 découpe ce qu'on lui
+envoie, mais l'appel a lieu quand même, et cela coûtait autant que le transfert
+I2C lui-même (chiffres ci-dessous). La bande est **passée** au renderer plutôt que
+demandée au canvas, pour qu'il reste sans dépendance et testable sur n'importe
+quelle bande ; `PagedScreen` l'obtient de l'affichage
+(`getBufferCurrTileRow()`, `getBufferTileHeight()`).
 
 La séquence vit dans `include/flexseq/PagedScreen.h`, **templatisée sur le type
 d'affichage** comme `PatternScreen` l'est sur le canvas : le firmware l'instancie
@@ -79,20 +88,36 @@ bandes de la même image pourraient montrer des contenus différents.
   occupe 9 passages : un pour le gel et la première bande — `firstPage()` ne
   transfère rien — puis 8 transferts.
 - **Mesuré le 2026-08-20** (`tools/run-blocking-probe.sh`, esclave SSD1306 réel
-  dans simavr) : transfert d'une bande **4,60 ms** (distribution serrée, 4,58 à
-  4,62), passage de boucle pendant le rendu **8,52 ms** en médiane et
-  **16,16 ms** au pire, image entière **74 ms** étalée sur ses 9 passages. Sans
-  étalement, la boucle resterait bloquée ces 74 ms d'un seul bloc : la décision
-  divise le pire cas par **4,6**, et non par 8 — un passage porte aussi le dessin
-  de la bande suivante.
+  dans simavr), avant puis après l'écartement par bande :
+
+  | | rendu complet à chaque bande | écarté à la bande |
+  |---|---|---|
+  | pire passage | 16,16 ms | **7,74 ms** |
+  | passage médian | 8,52 ms | **5,84 ms** |
+  | image entière | 74,0 ms | **47,1 ms** |
+  | dessin par passage | ~3,92 ms | **~1,24 ms** |
+  | transfert d'une bande | 4,60 ms | 4,60 ms |
+
+  Le transfert ne bouge pas : c'est le bus, et il est déjà à 400 kHz. Le dessin,
+  lui, tombe de **68 %**. Sans étalement du tout, la boucle resterait bloquée
+  l'image entière d'un seul bloc.
+- **Plancher atteint.** Un passage ne peut plus descendre sous les ~4,6 ms du
+  transfert d'une bande, qui domine désormais. Aller plus bas demanderait
+  d'envoyer moins qu'une bande par passage — la granularité de U8g2 est la ligne
+  de tuiles — ou de pousser le bus au-delà de 400 kHz, hors spécification du
+  SSD1306.
 - Estimations initiales corrigées : « ~3 ms par bande » et « ~25 ms par image »
   étaient **basses**. Une bande part en **6 transactions Wire** de ~21 octets, et
   les intervalles entre morceaux coûtent ~107 µs chacun. Le débit du bus est bien
   celui annoncé (22,5 µs d'octet à 400 kHz, plus 4,55 µs d'ISR TWI) ; c'est le
   découpage qui manquait au calcul.
-- **Le dessin coûte autant que le bus** : 8,52 − 4,60 ≈ 3,9 ms par passage hors
-  transfert, soit ~31 ms par image à redessiner les 24 steps une fois par bande.
-  Piste d'optimisation, pas une décision.
+- Coût de l'écartement : **+522 o de Flash**, **0 o de RAM** (20236 → 20758 o,
+  RAM inchangée à 1490 o).
+- **Propriété vérifiée par test** : la réunion des 8 bandes rend **exactement**
+  l'image complète, pixel pour pixel (`test_pattern_screen`). Un pixel de moins et
+  un élément aurait disparu de l'écran. Le faux canvas y découpe comme le mode
+  page — sans ce découpage le test serait faux, un élément à cheval sur deux
+  bandes étant dessiné deux fois.
 - Le bénéfice principal n'est pas l'affichage mais le **chronométrage des
   triggers** : pendant un blocage, les ticks s'accumulent et les onsets se
   tassent au drainage suivant.
@@ -108,12 +133,12 @@ bandes de la même image pourraient montrer des contenus différents.
   déchire pas**. Cette dernière assertion a été vérifiée par mutation — le gel
   retiré, elle rougit (500 pixels sur la première bande, 707 sur la suivante).
 - **Conséquence pour le CV, mesurée.** Le CV n'étant échantillonné qu'une fois
-  par passage (`gravity.Process()`), une impulsion plus courte que **16,16 ms**
-  peut passer inaperçue. C'est au-dessus de la fourchette usuelle d'un trigger
-  Eurorack (1 à 10 ms) : l'étalement ne suffit donc pas à rendre CV → RESET
-  fiable. Le repli du PRD §10.6 — échantillonnage du convertisseur sous
-  interruption — a maintenant sa preuve ; la décision reste ouverte et
-  appartient au propriétaire du PRD.
+  par passage (`gravity.Process()`), une impulsion plus courte que le pire
+  passage peut passer inaperçue. Ce seuil est passé de **16,16 à 7,74 ms** :
+  une gate de 10 ms est désormais vue à coup sûr, ce qui n'était pas le cas
+  avant. Une impulsion de 1 à 5 ms reste en revanche exposée, et le repli du
+  PRD §10.6 — échantillonnage du convertisseur sous interruption — garde son
+  sens pour ce cas. Décision ouverte, au propriétaire du PRD.
 
 ## Alternatives écartées
 

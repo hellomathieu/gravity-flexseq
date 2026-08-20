@@ -3,6 +3,7 @@
 #include <unity.h>
 
 #include <flexseq/PagedScreen.h>
+#include <flexseq/PatternScreen.h>
 #include <flexseq/Pattern.h>
 #include <flexseq/PatternScreen.h>
 
@@ -13,10 +14,12 @@ namespace screen = flexseq::screen;
 
 // Faux affichage : le canvas de PatternScreen (1 bit, setDrawColor(0) EFFACE)
 // PLUS le contrat de pagination de U8g2 — firstPage() prepare, nextPage()
-// transfere la bande courante et renvoie 0 quand l'image est complete.
+// transfere la bande courante et renvoie 0 quand l'image est complete, et
+// getBufferCurrTileRow()/getBufferTileHeight() disent quelle bande vient.
 //
-// Il compte l'encre posee entre deux frontieres de bande : c'est ce qui permet
-// de constater qu'une meme image est bien dessinee huit fois a l'identique.
+// Il DECOUPE a la bande courante, comme le mode page, et ACCUMULE l'image sur
+// toute la trame : ce qu'on verifie ensuite est la REUNION des 8 bandes, seule
+// chose que l'ecran finit par montrer.
 struct FakeDisplay {
     static constexpr uint8_t PAGES = 8;
 
@@ -27,7 +30,8 @@ struct FakeDisplay {
     uint8_t firstPageCalls;
     uint8_t nextPageCalls;
     uint8_t bands;
-    uint16_t bandInk[PAGES + 2];
+    bool clipped;   /* false : pas de decoupe, pour rendre une image de reference */
+    uint16_t ops;   /* appels de dessin recus, decoupe ou non : "le rendu a tourne" */
 
     FakeDisplay() { reset(); }
 
@@ -38,7 +42,8 @@ struct FakeDisplay {
         firstPageCalls = 0;
         nextPageCalls = 0;
         bands = 0;
-        memset(bandInk, 0, sizeof(bandInk));
+        clipped = true;
+        ops = 0;
     }
 
     // --- pagination ---------------------------------------------------------
@@ -46,25 +51,20 @@ struct FakeDisplay {
     void firstPage() {
         ++firstPageCalls;
         page = 0;
-        openBand();
+        bands = 0;
+        memset(px, 0, sizeof(px));   /* nouvelle image */
     }
 
     uint8_t nextPage() {
         ++nextPageCalls;
-        closeBand();
+        ++bands;
         ++page;
         return (page < PAGES) ? 1 : 0;
     }
 
-    void openBand() { memset(px, 0, sizeof(px)); }
-
-    void closeBand() {
-        if (bands < PAGES + 2) {
-            bandInk[bands] = ink();
-        }
-        ++bands;
-        openBand();
-    }
+    // Ce que PagedScreen interroge pour connaitre la bande a dessiner.
+    uint8_t getBufferCurrTileRow() const { return page; }
+    uint8_t getBufferTileHeight() const { return 1; }
 
     uint16_t ink() const {
         uint16_t n = 0;
@@ -81,9 +81,10 @@ struct FakeDisplay {
     void setDrawColor(uint8_t c) { color = c; }
 
     void drawPixel(uint8_t x, uint8_t y) {
-        if (x < screen::WIDTH && y < screen::HEIGHT) {
-            px[y][x] = (color != 0);
-        }
+        ++ops;
+        if (x >= screen::WIDTH || y >= screen::HEIGHT) return;
+        if (clipped && (y < page * 8 || y > page * 8 + 7)) return;  /* mode page */
+        px[y][x] = (color != 0);
     }
 
     void drawHLine(uint8_t x, uint8_t y, uint8_t w) {
@@ -101,7 +102,7 @@ struct FakeDisplay {
         drawVLine(static_cast<uint8_t>(x + w - 1), y, h);
     }
 
-    uint8_t drawStr(uint8_t, uint8_t, const char* s) { return getStrWidth(s); }
+    uint8_t drawStr(uint8_t, uint8_t, const char* s) { ++ops; return getStrWidth(s); }
 
     uint8_t getStrWidth(const char* s) const {
         return static_cast<uint8_t>(5 * strlen(s));
@@ -146,6 +147,10 @@ void reset() {
 }  // namespace
 
 // begin() prepare et dessine, mais ne transfere rien : firstPage() seul.
+//
+// On verifie que le rendu a TOURNE (appels de dessin recus), pas qu'il a laisse
+// de l'encre : la premiere bande ne porte que le titre, et ce faux affichage ne
+// rasterise pas le texte.
 void test_begin_draws_the_first_band_without_transferring(void) {
     reset();
     source.writeStep(0, true);
@@ -155,7 +160,7 @@ void test_begin_draws_the_first_band_without_transferring(void) {
     TEST_ASSERT_EQUAL_UINT8(1, display.firstPageCalls);
     TEST_ASSERT_EQUAL_UINT8(0, display.nextPageCalls);
     TEST_ASSERT_TRUE(paged.busy());
-    TEST_ASSERT_GREATER_THAN_UINT16(0, display.ink());
+    TEST_ASSERT_GREATER_THAN_UINT16(0, display.ops);
 }
 
 // Une image = 8 transferts, donc 8 appels a nextPage(), le dernier terminant.
@@ -197,10 +202,22 @@ void test_advance_without_a_frame_does_nothing(void) {
 }
 
 // Le coeur de l'affaire : une edition survenue PENDANT l'image ne la dechire
-// pas. Le contenu ayant ete copie, les 8 bandes montrent la meme chose.
+// pas. Le contenu ayant ete copie, l'image finale est celle du DEBUT de trame.
+//
+// On ne compare plus l'encre entre bandes — depuis que le renderer ecarte ce qui
+// ne tombe pas dans la bande courante, elles ne dessinent plus la meme chose. On
+// compare la REUNION des 8 bandes a une image de reference rendue d'un seul
+// tenant depuis le contenu d'origine : c'est ce que l'ecran montre vraiment.
 void test_editing_during_a_frame_does_not_tear_it(void) {
     reset();
     source.writeStep(0, true);
+
+    // Reference : le contenu tel qu'il est AVANT l'edition, rendu sans decoupe.
+    static FakeDisplay reference;
+    reference.reset();
+    reference.clipped = false;
+    flexseq::drawPatternScreen(reference, modelOf(source));
+    const uint16_t expected = reference.ink();
 
     paged.begin(display, modelOf(source));
 
@@ -212,9 +229,7 @@ void test_editing_during_a_frame_does_not_tear_it(void) {
     finishFrame();
 
     TEST_ASSERT_EQUAL_UINT8(FakeDisplay::PAGES, display.bands);
-    for (uint8_t i = 1; i < FakeDisplay::PAGES; ++i) {
-        TEST_ASSERT_EQUAL_UINT16(display.bandInk[0], display.bandInk[i]);
-    }
+    TEST_ASSERT_EQUAL_UINT16(expected, display.ink());
 }
 
 // ... et la sonde ci-dessus n'est pas aveugle : la meme edition change bien
@@ -225,17 +240,32 @@ void test_the_edit_shows_up_on_the_next_frame(void) {
 
     paged.begin(display, modelOf(source));
     finishFrame();
-    const uint16_t before = display.bandInk[0];
+    const uint16_t before = display.ink();
 
     for (uint8_t i = 1; i < 24; ++i) {
         source.writeStep(i, true);
     }
 
-    display.bands = 0;
     paged.begin(display, modelOf(source));
     finishFrame();
 
-    TEST_ASSERT_NOT_EQUAL_UINT16(before, display.bandInk[0]);
+    TEST_ASSERT_NOT_EQUAL_UINT16(before, display.ink());
+}
+
+// L'ecartement par bande doit AGIR : la derniere bande (y 56..63) est sous tout
+// element, elle ne doit rien poser.
+void test_the_last_band_draws_nothing(void) {
+    reset();
+    source.writeStep(0, true);
+
+    paged.begin(display, modelOf(source));
+    for (uint8_t i = 1; i < FakeDisplay::PAGES - 1; ++i) {
+        paged.advance(display);
+    }
+    const uint16_t before_last = display.ink();
+    paged.advance(display);   /* bande 7 */
+
+    TEST_ASSERT_EQUAL_UINT16(before_last, display.ink());
 }
 
 int main(int, char**) {
@@ -246,5 +276,6 @@ int main(int, char**) {
     RUN_TEST(test_advance_without_a_frame_does_nothing);
     RUN_TEST(test_editing_during_a_frame_does_not_tear_it);
     RUN_TEST(test_the_edit_shows_up_on_the_next_frame);
+    RUN_TEST(test_the_last_band_draws_nothing);
     return UNITY_END();
 }

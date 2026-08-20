@@ -67,6 +67,28 @@ inline uint8_t rowCY(uint8_t index) {
 
 }  // namespace screen
 
+// La BANDE en cours de rendu, en ordonnees incluses.
+//
+// Le mode _1_ rend l'image en 8 bandes de 8 pixels, et U8g2 decoupe lui-meme ce
+// qu'on lui envoie — mais l'APPEL a lieu quand meme, avec son cout. Or dessiner
+// les 24 steps, leurs chiffres et le titre huit fois coutait ~3,9 ms par passage
+// de boucle, autant que le transfert I2C lui-meme (mesure : ADR 0001). On ecarte
+// donc en amont ce qui ne touche pas la bande.
+//
+// La bande est passee en PARAMETRE plutot que demandee au canvas : le renderer
+// reste pur et sans dependance, et un test peut lui donner n'importe quelle
+// bande. Par defaut, tout l'ecran — le rendu complet reste donc possible.
+struct Band {
+    uint8_t y0;
+    uint8_t y1;
+};
+
+// Vrai si [top, bottom] rencontre la bande. En int16_t : `cy - BAR_HALF_H`
+// deborderait par le bas sur un uint8_t.
+inline bool touches(const Band& band, int16_t top, int16_t bottom) {
+    return bottom >= static_cast<int16_t>(band.y0) && top <= static_cast<int16_t>(band.y1);
+}
+
 // Ce qu'il faut afficher. Rien n'est copie : les cellules sont derivees du
 // Pattern a la volee (aucun tableau intermediaire, donc aucune RAM).
 struct PatternScreenModel {
@@ -160,14 +182,18 @@ void drawTriangle(Canvas& c, uint8_t cx, uint8_t cy) {
 }  // namespace detail
 
 template <typename Canvas>
-void drawPatternScreen(Canvas& canvas, const PatternScreenModel& model) {
-    // En-tete : titre centre + filet.
-    if (model.title != nullptr) {
+void drawPatternScreen(Canvas& canvas, const PatternScreenModel& model,
+                       Band band = Band{0, screen::HEIGHT - 1}) {
+    // En-tete : titre centre + filet. getStrWidth() parcourt la chaine, donc on
+    // l'evite aussi quand la bande ne porte pas le titre.
+    if (model.title != nullptr && touches(band, 0, screen::TITLE_BASELINE_Y)) {
         const uint8_t w = static_cast<uint8_t>(canvas.getStrWidth(model.title));
         canvas.drawStr(static_cast<uint8_t>((screen::WIDTH - w) / 2),
                        screen::TITLE_BASELINE_Y, model.title);
     }
-    canvas.drawHLine(screen::HEADER_LINE_X, screen::HEADER_LINE_Y, screen::HEADER_LINE_W);
+    if (touches(band, screen::HEADER_LINE_Y, screen::HEADER_LINE_Y)) {
+        canvas.drawHLine(screen::HEADER_LINE_X, screen::HEADER_LINE_Y, screen::HEADER_LINE_W);
+    }
 
     // Separations de mesure : verticale dans la gouttiere, jamais en bord de ligne.
     if (model.barLength > 0) {
@@ -176,63 +202,90 @@ void drawPatternScreen(Canvas& canvas, const PatternScreenModel& model) {
             if (k % screen::PER_ROW == 0) {
                 continue;
             }
+            const int16_t cy = screen::rowCY(k);
+            if (!touches(band, cy - screen::BAR_HALF_H, cy + screen::BAR_HALF_H)) {
+                continue;
+            }
             const uint8_t bx =
                 static_cast<uint8_t>(screen::colX(k) - screen::COL_SPACING / 2);
-            canvas.drawVLine(bx, static_cast<uint8_t>(screen::rowCY(k) - screen::BAR_HALF_H),
+            canvas.drawVLine(bx, static_cast<uint8_t>(cy - screen::BAR_HALF_H),
                              screen::BAR_HEIGHT);
         }
     }
 
-    for (uint8_t i = 0; i < Pattern::DEFAULT_TOTAL_STEPS; ++i) {
-        const uint8_t cx = screen::colX(i);
-        const uint8_t cy = screen::rowCY(i);
-
-        if (i >= model.length) {
-            canvas.drawPixel(cx, cy); // au-dela de LENGTH : simple point
+    // Les steps, ligne par ligne : une ligne hors bande fait sauter ses 12
+    // positions d'un coup. C'est l'economie principale — sur les 8 bandes, six
+    // ne portent aucune ligne de steps.
+    for (uint8_t row = 0; row < 2; ++row) {
+        const int16_t cy = row == 0 ? screen::ROW_CY_0 : screen::ROW_CY_1;
+        // Extension verticale d'une ligne : du haut du cadre de curseur au bas
+        // du chiffre de ratchet.
+        if (!touches(band, cy - screen::SELECT_HALF, cy + screen::DIGIT_DY + screen::DIGIT_H)) {
             continue;
         }
+        const bool glyphs = touches(band, cy - screen::GLYPH_HALF, cy + screen::GLYPH_HALF);
+        const bool digits = touches(band, cy + screen::DIGIT_DY,
+                                   cy + screen::DIGIT_DY + screen::DIGIT_H - 1);
 
-        bool active = false;
-        uint8_t ratchet = RATCHET_NONE;
-        if (model.pattern != nullptr) {
-            model.pattern->readStep(i, active);
-            ratchet = model.pattern->getRatchet(i);
-        }
+        for (uint8_t c = 0; c < screen::PER_ROW; ++c) {
+            const uint8_t i = static_cast<uint8_t>(row * screen::PER_ROW + c);
+            const uint8_t cx = screen::colX(i);
 
-        if (active) {
-            if (ratchet == RATCHET_TRIPLET) {
-                detail::drawTriangle(canvas, cx, cy);
-            } else {
-                detail::drawDisc(canvas, cx, cy);
+            if (i >= model.length) {
+                if (glyphs) {
+                    canvas.drawPixel(cx, static_cast<uint8_t>(cy)); // au-dela de LENGTH
+                }
+                continue;
             }
-        } else {
-            detail::drawRing(canvas, cx, cy);
-        }
 
-        // Chiffre de ratchet sous le step (le triolet a deja son triangle).
-        if (ratchet != RATCHET_NONE && ratchet != RATCHET_TRIPLET) {
-            detail::drawRatchetDigit(canvas, cx, cy, ratchet);
+            bool active = false;
+            uint8_t ratchet = RATCHET_NONE;
+            if (model.pattern != nullptr) {
+                model.pattern->readStep(i, active);
+                ratchet = model.pattern->getRatchet(i);
+            }
+
+            if (glyphs) {
+                if (active) {
+                    if (ratchet == RATCHET_TRIPLET) {
+                        detail::drawTriangle(canvas, cx, static_cast<uint8_t>(cy));
+                    } else {
+                        detail::drawDisc(canvas, cx, static_cast<uint8_t>(cy));
+                    }
+                } else {
+                    detail::drawRing(canvas, cx, static_cast<uint8_t>(cy));
+                }
+            }
+
+            // Chiffre de ratchet sous le step (le triolet a deja son triangle).
+            if (digits && ratchet != RATCHET_NONE && ratchet != RATCHET_TRIPLET) {
+                detail::drawRatchetDigit(canvas, cx, static_cast<uint8_t>(cy), ratchet);
+            }
         }
     }
 
     // Cadre d'edition autour du step courant.
     if (model.cursor >= 0 && model.cursor < Pattern::DEFAULT_TOTAL_STEPS) {
         const uint8_t c = static_cast<uint8_t>(model.cursor);
-        canvas.drawFrame(static_cast<uint8_t>(screen::colX(c) - screen::SELECT_HALF),
-                         static_cast<uint8_t>(screen::rowCY(c) - screen::SELECT_HALF),
-                         screen::SELECT_SIZE, screen::SELECT_SIZE);
+        const int16_t cy = screen::rowCY(c);
+        if (touches(band, cy - screen::SELECT_HALF, cy + screen::SELECT_HALF)) {
+            canvas.drawFrame(static_cast<uint8_t>(screen::colX(c) - screen::SELECT_HALF),
+                             static_cast<uint8_t>(cy - screen::SELECT_HALF),
+                             screen::SELECT_SIZE, screen::SELECT_SIZE);
+        }
     }
 
     // Step joue : pixel central inverse (efface sur un step actif, encre sinon).
     if (model.playhead >= 0 && model.playhead < Pattern::DEFAULT_TOTAL_STEPS) {
         const uint8_t h = static_cast<uint8_t>(model.playhead);
-        if (h < model.length) {
+        const int16_t cy = screen::rowCY(h);
+        if (h < model.length && touches(band, cy, cy)) {
             bool active = false;
             if (model.pattern != nullptr) {
                 model.pattern->readStep(h, active);
             }
             canvas.setDrawColor(active ? 0 : 1);
-            canvas.drawPixel(screen::colX(h), screen::rowCY(h));
+            canvas.drawPixel(screen::colX(h), static_cast<uint8_t>(cy));
             canvas.setDrawColor(1);
         }
     }

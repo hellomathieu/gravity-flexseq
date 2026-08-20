@@ -19,6 +19,10 @@ namespace screen = flexseq::screen;
 struct RecordingCanvas {
     bool px[screen::HEIGHT][screen::WIDTH];
     uint8_t color;
+    // Bande de decoupe, comme le mode page de U8g2 : hors de [clipY0, clipY1],
+    // le pixel n'est pas pose. Par defaut tout l'ecran, donc sans effet.
+    uint8_t clipY0;
+    uint8_t clipY1;
     char lastStr[32];
     uint8_t lastStrX;
     uint8_t lastStrY;
@@ -29,6 +33,8 @@ struct RecordingCanvas {
     void reset() {
         memset(px, 0, sizeof(px));
         color = 1;
+        clipY0 = 0;
+        clipY1 = screen::HEIGHT - 1;
         lastStr[0] = '\0';
         lastStrX = 0;
         lastStrY = 0;
@@ -38,7 +44,7 @@ struct RecordingCanvas {
     void setDrawColor(uint8_t c) { color = c; }
 
     void drawPixel(uint8_t x, uint8_t y) {
-        if (x < screen::WIDTH && y < screen::HEIGHT) {
+        if (x < screen::WIDTH && y < screen::HEIGHT && y >= clipY0 && y <= clipY1) {
             px[y][x] = (color != 0);
         }
     }
@@ -336,6 +342,87 @@ void test_title_is_centred_on_its_baseline() {
     TEST_ASSERT_TRUE(canvas.at(screen::HEADER_LINE_X, screen::HEADER_LINE_Y));
 }
 
+/*
+ * Ecartement par bande (ADR 0001) — LA propriete de l'optimisation.
+ *
+ * Le renderer n'est appele qu'avec la bande que U8g2 va transferer, et il ecarte
+ * ce qui n'y tombe pas. La reunion des 8 bandes doit donc rendre EXACTEMENT
+ * l'image complete : un pixel de moins et un element a disparu de l'ecran, un
+ * pixel de plus et une bande a debordé sur sa voisine.
+ */
+
+static bool sameImage(const RecordingCanvas& a, const RecordingCanvas& b, uint16_t* diff) {
+    uint16_t n = 0;
+    for (uint8_t y = 0; y < screen::HEIGHT; ++y) {
+        for (uint8_t x = 0; x < screen::WIDTH; ++x) {
+            if (a.px[y][x] != b.px[y][x]) ++n;
+        }
+    }
+    *diff = n;
+    return n == 0;
+}
+
+// Un contenu qui exerce tous les elements : glyphes des deux lignes, chiffres de
+// ratchet, triolet, barres de mesure, curseur, playhead, points au-dela de LENGTH.
+static PatternScreenModel richModel() {
+    const uint8_t active[] = {0, 2, 5, 11, 12, 15, 19};
+    for (uint8_t i = 0; i < sizeof(active); ++i) pattern.writeStep(active[i], true);
+    pattern.setRatchet(2, flexseq::RATCHET_2);
+    pattern.setRatchet(11, flexseq::RATCHET_6);
+    pattern.setRatchet(12, flexseq::RATCHET_4);
+    pattern.setRatchet(15, flexseq::RATCHET_TRIPLET);
+    pattern.setRatchet(19, flexseq::RATCHET_3);
+
+    PatternScreenModel m = model(20, 5, 12, 3);
+    m.title = "EDIT PATTERN A1";
+    return m;
+}
+
+void test_eight_bands_reunited_equal_the_whole_image(void) {
+    const PatternScreenModel m = richModel();
+
+    static RecordingCanvas whole;
+    whole.reset();
+    drawPatternScreen(whole, m); // bande par defaut = tout l'ecran
+
+    static RecordingCanvas banded;
+    banded.reset();
+    for (uint8_t row = 0; row < screen::HEIGHT / 8; ++row) {
+        const flexseq::Band band = {static_cast<uint8_t>(row * 8),
+                                    static_cast<uint8_t>(row * 8 + 7)};
+        // Le canvas decoupe comme U8g2 le ferait : un element a cheval sur deux
+        // bandes est dessine deux fois, mais chaque passe ne pose que sa part.
+        // Sans ce decoupage le test serait faux — la seconde passe reposerait le
+        // pixel central qu'un playhead avait creuse dans la premiere.
+        banded.clipY0 = band.y0;
+        banded.clipY1 = band.y1;
+        drawPatternScreen(banded, m, band);
+    }
+
+    uint16_t diff = 0;
+    TEST_ASSERT_TRUE_MESSAGE(sameImage(whole, banded, &diff),
+                             "la reunion des 8 bandes differe de l'image complete");
+    TEST_ASSERT_EQUAL_UINT16(0, diff);
+}
+
+// L'ecartement doit AGIR, pas seulement etre correct : une bande vide de tout
+// element ne doit rien poser du tout.
+void test_a_band_without_any_element_draws_nothing(void) {
+    const PatternScreenModel m = richModel();
+
+    // Bande 7 (y 56..63) : sous la derniere ligne de chiffres (max y = 38+5+4=47).
+    canvas.reset();
+    drawPatternScreen(canvas, m, flexseq::Band{56, 63});
+
+    uint16_t ink = 0;
+    for (uint8_t y = 0; y < screen::HEIGHT; ++y)
+        for (uint8_t x = 0; x < screen::WIDTH; ++x)
+            if (canvas.px[y][x]) ++ink;
+
+    TEST_ASSERT_EQUAL_UINT16(0, ink);
+    TEST_ASSERT_EQUAL_UINT8(0, canvas.strCalls); // pas meme le titre mesure
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_grid_is_two_rows_of_twelve_at_10px_pitch);
@@ -363,5 +450,8 @@ int main() {
     RUN_TEST(test_playhead_beyond_length_draws_nothing_extra);
 
     RUN_TEST(test_title_is_centred_on_its_baseline);
+
+    RUN_TEST(test_eight_bands_reunited_equal_the_whole_image);
+    RUN_TEST(test_a_band_without_any_element_draws_nothing);
     return UNITY_END();
 }

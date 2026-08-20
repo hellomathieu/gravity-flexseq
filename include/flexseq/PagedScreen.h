@@ -22,8 +22,9 @@ namespace flexseq {
 // est passe A CHAQUE APPEL et non conserve — pas de reference stockee, donc pas
 // de 2 octets de RAM pour rien.
 //
-// Interface attendue du Display : celle de U8g2 — firstPage(), nextPage(), plus
-// les primitives de dessin que PatternScreen utilise.
+// Interface attendue du Display : celle de U8g2 — firstPage(), nextPage(),
+// getBufferCurrTileRow(), getBufferTileHeight(), plus les primitives de dessin
+// que PatternScreen utilise.
 //
 // Cout RAM : le modele gele (8 o) + la copie du Pattern (15 o) + un drapeau.
 template <typename Display>
@@ -50,7 +51,7 @@ public:
             model_.pattern = &pattern_;
         }
         display.firstPage();
-        drawPatternScreen(display, model_);
+        drawPatternScreen(display, model_, bandOf(display));
         busy_ = true;
     }
 
@@ -67,11 +68,22 @@ public:
             busy_ = false;
             return false;
         }
-        drawPatternScreen(display, model_);
+        drawPatternScreen(display, model_, bandOf(display));
         return true;
     }
 
 private:
+    // La bande que U8g2 s'apprete a transferer. On la donne au renderer pour
+    // qu'il ecarte ce qui n'y tombe pas : sans cela il redessine les 24 steps a
+    // chaque bande, ce qui coutait autant que le transfert lui-meme (ADR 0001).
+    static Band bandOf(Display& display) {
+        const uint16_t y0 = static_cast<uint16_t>(display.getBufferCurrTileRow()) * 8u;
+        const uint16_t y1 =
+            y0 + static_cast<uint16_t>(display.getBufferTileHeight()) * 8u - 1u;
+        return Band{static_cast<uint8_t>(y0),
+                    static_cast<uint8_t>(y1 < screen::HEIGHT ? y1 : screen::HEIGHT - 1)};
+    }
+
     PatternScreenModel model_;
     Pattern pattern_;
     bool busy_;
