@@ -138,6 +138,69 @@ void test_raw_conversion_stays_in_range(void) {
     TEST_ASSERT_EQUAL_UINT16(0, rawFromCalibrated(102, 512, 512, 0)); // plage nulle
 }
 
+// --- entree INVERSEE : le sens vient de l'ordre des seuils -------------------
+//
+// libGravity nie `read_` si `SetAttenuation()` recoit un pourcentage negatif, et
+// n'expose aucun accesseur pour le savoir. Plutot que de porter cette hypothese
+// en commentaire, la porte prend les deux sens : il suffit de lui donner un
+// `arm` INFERIEUR au `rearm`.
+
+static const uint16_t INV_ARM = 390;    // la tension monte quand le brut descend
+static const uint16_t INV_REARM = 438;
+
+void test_inverted_input_arms_below_its_threshold(void) {
+    gate = CvGate();
+    gate.configure(INV_ARM, INV_REARM);
+
+    TEST_ASSERT_FALSE(gate.update(IDLE));          // repos, au-dessus des deux
+    TEST_ASSERT_TRUE(gate.update(INV_ARM - 1));    // franchit vers le BAS
+    TEST_ASSERT_TRUE(gate.high());
+}
+
+void test_inverted_input_keeps_its_hysteresis(void) {
+    gate = CvGate();
+    gate.configure(INV_ARM, INV_REARM);
+    gate.update(IDLE);
+    gate.update(INV_ARM - 1);
+    gate.takeEdge();
+
+    gate.update(INV_REARM - 10);                   // entre les deux seuils
+    TEST_ASSERT_TRUE(gate.high());
+    TEST_ASSERT_FALSE(gate.update(INV_ARM - 1));   // donc pas de nouveau front
+
+    gate.update(INV_REARM + 1);                    // repasse au-dela
+    TEST_ASSERT_FALSE(gate.high());
+    TEST_ASSERT_TRUE(gate.update(INV_ARM - 1));    // un second front
+}
+
+void test_inverted_input_ignores_a_rise(void) {
+    gate = CvGate();
+    gate.configure(INV_ARM, INV_REARM);
+    gate.update(IDLE);
+    TEST_ASSERT_FALSE(gate.update(1000));          // vers le haut : rien
+    TEST_ASSERT_FALSE(gate.pending());
+}
+
+// Deux seuils egaux suppriment l'hysteresis : la porte reste inerte plutot que
+// de claquer sur le bruit.
+void test_equal_thresholds_leave_the_gate_inert(void) {
+    gate = CvGate();
+    gate.configure(600, 600);
+    for (uint16_t v = 0; v < 1024; v = static_cast<uint16_t>(v + 37)) {
+        TEST_ASSERT_FALSE(gate.update(v));
+    }
+    TEST_ASSERT_FALSE(gate.pending());
+}
+
+// Une porte NON configuree ne produit rien : `usable_` est faux tant que
+// configure() n'a pas ete appele.
+void test_an_unconfigured_gate_never_fires(void) {
+    gate = CvGate();
+    for (uint16_t v = 0; v < 1024; v = static_cast<uint16_t>(v + 37)) {
+        TEST_ASSERT_FALSE(gate.update(v));
+    }
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_a_new_gate_is_low_and_has_no_event);
@@ -153,5 +216,11 @@ int main(int, char**) {
     RUN_TEST(test_the_two_schmitt_thresholds_are_exact);
     RUN_TEST(test_calibration_shifts_the_raw_thresholds);
     RUN_TEST(test_raw_conversion_stays_in_range);
+
+    RUN_TEST(test_inverted_input_arms_below_its_threshold);
+    RUN_TEST(test_inverted_input_keeps_its_hysteresis);
+    RUN_TEST(test_inverted_input_ignores_a_rise);
+    RUN_TEST(test_equal_thresholds_leave_the_gate_inert);
+    RUN_TEST(test_an_unconfigured_gate_never_fires);
     return UNITY_END();
 }
