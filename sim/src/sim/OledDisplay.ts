@@ -33,7 +33,22 @@ const ROW_CY = [20, 38] as const; // centres verticaux des 2 lignes
 const GLYPH_HALF = 2; // glyphe 5x5
 const SELECT_HALF = 4; // cadre 9x9
 const SELECT_SIZE = 9;
-const RATCHET_DY = 5; // chiffre de ratchet sous le glyphe
+// Chiffre de ratchet : dessine a la main en 3x5 px (et non via la police, deux
+// fois plus encombrante). Loge sous le glyphe, SOUS le cadre du curseur.
+const DIGIT_W = 3;
+const DIGIT_H = 5;
+const DIGIT_DY = 5;
+
+/** Chiffres 3x5 des seuls ratchets affichables. Bit 2 = colonne de gauche. */
+const DIGITS: Record<number, readonly number[]> = {
+  2: [0b111, 0b001, 0b111, 0b100, 0b111],
+  3: [0b111, 0b001, 0b111, 0b001, 0b111],
+  4: [0b101, 0b101, 0b111, 0b001, 0b001],
+  6: [0b111, 0b100, 0b111, 0b101, 0b111],
+};
+// La barre de mesure DEPASSE le cadre 9x9 du curseur : sinon un curseur voisin
+// l'absorbe visuellement.
+const BAR_HALF_H = 6;
 
 const TITLE_TOP = 2;
 const HEADER_LINE_Y = 11;
@@ -154,7 +169,7 @@ export function drawOled(ctx: OledCtx, model: OledModel): void {
       if (k % PER_ROW === 0) continue;
       const bx = colX(k) - Math.floor(COL_SPACING / 2);
       const cy = ROW_CY[rowOf(k)]!;
-      for (let y = cy - SELECT_HALF; y <= cy + SELECT_HALF; ++y) px(ctx, bx, y);
+      for (let y = cy - BAR_HALF_H; y <= cy + BAR_HALF_H; ++y) px(ctx, bx, y);
     }
   }
 
@@ -176,8 +191,15 @@ export function drawOled(ctx: OledCtx, model: OledModel): void {
 
     // Ratchet chiffre sous le step (le triolet a deja son triangle).
     if (cell.ratchet !== RATCHET_NONE && cell.ratchet !== RATCHET_TRIPLET) {
-      const label = String(cell.ratchet);
-      blitText(ctx, label, cx - Math.floor(textWidth(label) / 2), cy + RATCHET_DY);
+      const rows = DIGITS[cell.ratchet];
+      if (rows) {
+        for (let r = 0; r < DIGIT_H; ++r) {
+          const bits = rows[r]!;
+          for (let col = 0; col < DIGIT_W; ++col) {
+            if (bits & (1 << (DIGIT_W - 1 - col))) px(ctx, cx - 1 + col, cy + DIGIT_DY + r);
+          }
+        }
+      }
     }
   }
 
