@@ -25,7 +25,9 @@ Faits mesurés ou vérifiés dans les sources :
   et `:1367`). Ni libGravity ni FlexSeq ne la fixent : `initDisplay()` se
   contente de `display.begin()`.
 - Une image pleine représente 1024 octets de données d'affichage, soit de
-  l'ordre de **25 ms** de temps de bus à 400 kHz.
+  l'ordre de **25 ms** de temps de bus à 400 kHz. *Estimation du 2026-08-20,
+  corrigée le même jour par la mesure : **36,8 ms** de bus, l'estimation ne
+  comptant que les bits et non le surcoût logiciel par morceau.*
 - Les 8 bandes s'enchaînaient **dans un seul appel** (`src/main.cpp`) : la
   boucle principale était bloquée pendant l'image entière. C'est ce que cette
   décision remplace ; elle est implémentée depuis le 2026-08-20.
@@ -44,12 +46,9 @@ Faits mesurés ou vérifiés dans les sources :
   les durées de step validées en simavr l'ont été sans affichage.
   *Mise à jour du 2026-08-20 :* le firmware complet, rendu compris, a depuis
   tourné sous simavr — la **pile** y a été mesurée (pic 120 o, PRD §15). Le
-  **blocage réel** reste inconnu, mais pas hors d'atteinte : le binaire
-  `run_avr` n'attache aucune pièce, donc un transfert y avorte sur NACK après
-  l'octet d'adresse — en revanche simavr **modélise un esclave I2C SSD1306**
-  (`ssd1306_virt`, livré par Homebrew dans `libsimavrparts.a`). Un petit harnais
-  C sur le modèle de `examples/board_ssd1306` met donc un vrai esclave sur le
-  bus. C'est la voie à prendre, sans Wokwi ni module.
+  **blocage réel a été mesuré le même jour** par un harnais dédié
+  (`tools/simavr-ssd1306/`) qui câble l'esclave `ssd1306_virt` de simavr sur le
+  TWI : chiffres dans les conséquences ci-dessous.
 
 ## Décision
 
@@ -76,9 +75,24 @@ bandes de la même image pourraient montrer des contenus différents.
 
 ## Conséquences
 
-- Le blocage au pire cas passe de l'image entière à **une bande**, soit de
-  l'ordre de 3 ms au lieu de 25. Une image occupe 9 passages : un pour le gel et
-  la première bande — `firstPage()` ne transfère rien — puis 8 transferts.
+- Le blocage au pire cas passe de l'image entière à **une bande**. Une image
+  occupe 9 passages : un pour le gel et la première bande — `firstPage()` ne
+  transfère rien — puis 8 transferts.
+- **Mesuré le 2026-08-20** (`tools/run-blocking-probe.sh`, esclave SSD1306 réel
+  dans simavr) : transfert d'une bande **4,60 ms** (distribution serrée, 4,58 à
+  4,62), passage de boucle pendant le rendu **8,52 ms** en médiane et
+  **16,16 ms** au pire, image entière **74 ms** étalée sur ses 9 passages. Sans
+  étalement, la boucle resterait bloquée ces 74 ms d'un seul bloc : la décision
+  divise le pire cas par **4,6**, et non par 8 — un passage porte aussi le dessin
+  de la bande suivante.
+- Estimations initiales corrigées : « ~3 ms par bande » et « ~25 ms par image »
+  étaient **basses**. Une bande part en **6 transactions Wire** de ~21 octets, et
+  les intervalles entre morceaux coûtent ~107 µs chacun. Le débit du bus est bien
+  celui annoncé (22,5 µs d'octet à 400 kHz, plus 4,55 µs d'ISR TWI) ; c'est le
+  découpage qui manquait au calcul.
+- **Le dessin coûte autant que le bus** : 8,52 − 4,60 ≈ 3,9 ms par passage hors
+  transfert, soit ~31 ms par image à redessiner les 24 steps une fois par bande.
+  Piste d'optimisation, pas une décision.
 - Le bénéfice principal n'est pas l'affichage mais le **chronométrage des
   triggers** : pendant un blocage, les ticks s'accumulent et les onsets se
   tassent au drainage suivant.
@@ -93,8 +107,13 @@ bandes de la même image pourraient montrer des contenus différents.
   image ne transfère rien, et **une édition survenue pendant l'image ne la
   déchire pas**. Cette dernière assertion a été vérifiée par mutation — le gel
   retiré, elle rougit (500 pixels sur la première bande, 707 sur la suivante).
-- **Ne dispense pas de mesurer.** La largeur minimale d'impulsion réellement
-  captée reste à établir, rendu et chronométrage tournant ensemble.
+- **Conséquence pour le CV, mesurée.** Le CV n'étant échantillonné qu'une fois
+  par passage (`gravity.Process()`), une impulsion plus courte que **16,16 ms**
+  peut passer inaperçue. C'est au-dessus de la fourchette usuelle d'un trigger
+  Eurorack (1 à 10 ms) : l'étalement ne suffit donc pas à rendre CV → RESET
+  fiable. Le repli du PRD §10.6 — échantillonnage du convertisseur sous
+  interruption — a maintenant sa preuve ; la décision reste ouverte et
+  appartient au propriétaire du PRD.
 
 ## Alternatives écartées
 
