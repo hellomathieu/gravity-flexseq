@@ -44,8 +44,12 @@ Faits mesurés ou vérifiés dans les sources :
   les durées de step validées en simavr l'ont été sans affichage.
   *Mise à jour du 2026-08-20 :* le firmware complet, rendu compris, a depuis
   tourné sous simavr — la **pile** y a été mesurée (pic 120 o, PRD §15). Le
-  **blocage réel** reste inconnu : simavr n'a aucun esclave I2C sur le bus, donc
-  la durée d'un transfert n'y est pas fidèle. Wokwi ou le module trancheront.
+  **blocage réel** reste inconnu, mais pas hors d'atteinte : le binaire
+  `run_avr` n'attache aucune pièce, donc un transfert y avorte sur NACK après
+  l'octet d'adresse — en revanche simavr **modélise un esclave I2C SSD1306**
+  (`ssd1306_virt`, livré par Homebrew dans `libsimavrparts.a`). Un petit harnais
+  C sur le modèle de `examples/board_ssd1306` met donc un vrai esclave sur le
+  bus. C'est la voie à prendre, sans Wokwi ni module.
 
 ## Décision
 

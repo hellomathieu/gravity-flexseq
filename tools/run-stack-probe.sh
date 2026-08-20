@@ -68,9 +68,9 @@ fi
 # run_avr charge les ELF ; le simavr d'Homebrew, selon son build, peut ne pas les
 # supporter — on lui donne alors le .hex, avec -m/-f explicites.
 SIMAVR=""
-for candidate in "$HOME/Downloads/simavr-source/simavr/run_avr" \
+for candidate in "$(command -v simavr 2>/dev/null || true)" \
                  "$(command -v run_avr 2>/dev/null || true)" \
-                 "$(command -v simavr 2>/dev/null || true)"; do
+                 "$HOME/Downloads/simavr-source/simavr/run_avr"; do
   if [ -n "$candidate" ] && [ -x "$candidate" ]; then SIMAVR="$candidate"; break; fi
 done
 [ -n "$SIMAVR" ] || die "'simavr' / 'run_avr' introuvable. brew install simavr" 127

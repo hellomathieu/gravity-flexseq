@@ -7,10 +7,33 @@ cd "$SCRIPT_DIR"
 
 AVR_GCC="$HOME/.platformio/packages/toolchain-atmelavr/bin/avr-gcc"
 AVR_SIZE="$HOME/.platformio/packages/toolchain-atmelavr/bin/avr-size"
-SIMAVR="$HOME/Downloads/simavr-source/simavr/run_avr"
-
+AVR_OBJCOPY="$HOME/.platformio/packages/toolchain-atmelavr/bin/avr-objcopy"
 ELF="gravity-ch1-test.elf"
+HEX="gravity-ch1-test.hex"
 VCD="gravity-ch1-test.vcd"
+
+# Resolution de simavr : PATH d'abord, puis le clone local en REPLI. L'ancienne
+# version codait ce clone en dur, ce qui faisait dependre le harnais d'un dossier
+# hors du depot (invisible a un `git clone`, et dans ~/Downloads qu'on vide). On
+# charge desormais le .hex avec -m/-f explicites : le simavr d'Homebrew refuse
+# les ELF (`ELF format is not supported by this build`), le clone les accepte —
+# le .hex marche avec les deux. Le clone reste un confort (support ELF, sources
+# des pieces virtuelles), plus un prerequis.
+find_simavr() {
+  for candidate in \
+      "$(command -v simavr 2>/dev/null || true)" \
+      "$(command -v run_avr 2>/dev/null || true)" \
+      "$HOME/Downloads/simavr-source/simavr/run_avr"; do
+    if [ -n "$candidate" ] && [ -x "$candidate" ]; then echo "$candidate"; return 0; fi
+  done
+  return 1
+}
+
+if ! SIMAVR="$(find_simavr)"; then
+  echo "erreur : ni 'simavr' ni 'run_avr' trouves (PATH, puis ~/Downloads/simavr-source)." >&2
+  echo "Installe-le : brew install simavr" >&2
+  exit 127
+fi
 
 echo "==> BUILD"
 
@@ -23,6 +46,9 @@ echo "==> BUILD"
   main.c
 
 "$AVR_SIZE" "$ELF"
+
+# .hex en plus de l'ELF : c'est le format que les deux binaires simavr acceptent.
+"$AVR_OBJCOPY" -O ihex -R .eeprom "$ELF" "$HEX"
 
 echo "BUILD       OK"
 
@@ -40,7 +66,7 @@ timeout 1 \
   -f 16000000 \
   -o "$VCD" \
   --add-trace CH1=portpin@0x07/0x44 \
-  "$ELF"
+  "$HEX"
 
 SIMAVR_EXIT=$?
 
