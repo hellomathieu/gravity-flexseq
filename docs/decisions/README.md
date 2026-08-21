@@ -1,76 +1,75 @@
-# Décisions d'architecture (ADR)
+# Architecture Decision Records (ADR)
 
-**Source normative des décisions d'architecture** de Gravity FlexSeq.
+**Normative source for Gravity FlexSeq's architecture decisions.**
 
-Un ADR consigne **une** décision d'architecture **durable et significative** :
-un choix structurant qu'il faudrait justifier à nouveau si on voulait le
-défaire.
+An ADR records **one** architecture decision that is **durable and
+significant**: a structural choice that would have to be justified again if
+anyone wanted to undo it.
 
-## Ce qu'un ADR n'est pas
+## What an ADR is not
 
-- **Pas un journal de session** ni un historique d'implémentation.
-- **Pas une décision produit** — celles-ci vivent dans le **PRD Notion**, qui en
-  est la source normative. Un ADR peut le *référencer*, jamais le recopier.
-- **Pas une hypothèse** ni une proposition non confirmée.
-- **Pas un détail d'implémentation courant** — le code en est la source de
-  vérité.
+- **Not a session log**, and not an implementation history.
+- **Not a product decision** — those live in the **Notion PRD**, which is their
+  normative source. An ADR may *reference* it, never copy it.
+- **Not a hypothesis**, and not an unconfirmed proposal.
+- **Not a routine implementation detail** — the code is the source of truth for
+  those.
 
-En cas de doute : ne pas créer d'ADR.
+When in doubt: do not create an ADR.
 
-## Statuts
+## Statuses
 
-| Statut | Sens |
+| Status | Meaning |
 |---|---|
-| `proposed` | rédigé, pas encore tranché |
-| `accepted` | décision en vigueur |
-| `superseded` | remplacé par un ADR plus récent (référence obligatoire) |
-| `rejected` | envisagé puis écarté ; conservé pour ne pas re-débattre |
+| `proposed` | written, not yet decided |
+| `accepted` | decision in force |
+| `superseded` | replaced by a later ADR (reference mandatory) |
+| `rejected` | considered then set aside; kept so it is not re-debated |
 
-## Remplacement
+## Superseding
 
-Une décision remplacée **conserve son ADR**. On ne le supprime pas et on ne le
-réécrit pas : on passe son statut à `superseded` et on référence le nouvel ADR.
-Le nouvel ADR référence en retour celui qu'il remplace. L'historique des
-raisonnements reste ainsi lisible.
+A replaced decision **keeps its ADR**. It is neither deleted nor rewritten: its
+status becomes `superseded` and it references the new ADR. The new ADR references
+the one it replaces in return. The reasoning history stays readable that way.
 
-## Nommage
+## Naming
 
 ```
-docs/decisions/NNNN-titre-en-kebab-case.md
+docs/decisions/NNNN-title-in-kebab-case.md
 ```
 
-`NNNN` = numéro à 4 chiffres, séquentiel, jamais réutilisé (même après un
+`NNNN` = four-digit sequential number, never reused (not even after a
 `rejected`).
 
-## Squelette
+## Skeleton
 
 ```markdown
-# NNNN — Titre de la décision
+# NNNN — Decision title
 
-- **Statut :** proposed | accepted | superseded | rejected
-- **Date :** AAAA-MM-JJ
-- **Remplace :** (ADR ou —)
-- **Remplacé par :** (ADR ou —)
+- **Status:** proposed | accepted | superseded | rejected
+- **Date:** YYYY-MM-DD
+- **Supersedes:** (ADR or —)
+- **Superseded by:** (ADR or —)
 
-## Contexte
-Le problème, et les contraintes qui s'imposent (hardware, dépendance figée,
-budget mémoire…). Faits vérifiés uniquement.
+## Context
+The problem, and the constraints that bear on it (hardware, pinned dependency,
+memory budget…). Verified facts only.
 
-## Décision
-Ce qui est décidé, à la voix active.
+## Decision
+What is decided, in the active voice.
 
-## Conséquences
-Ce que cela rend possible, ce que cela ferme, et le coût accepté.
+## Consequences
+What this makes possible, what it closes off, and the cost accepted.
 
-## Alternatives écartées
-Uniquement si leur rejet éclaire la décision.
+## Alternatives set aside
+Only when their rejection illuminates the decision.
 
-## Références
-PRD (section), code, mesures, issues/PR.
+## References
+PRD (section), code, measurements, issues/PRs.
 ```
 
-## Rappel — une seule source normative
+## Reminder — one normative source
 
-Chaque connaissance durable a **une** source normative ; les autres peuvent la
-référencer sans en devenir des copies concurrentes. Le routage complet est dans
+Every piece of durable knowledge has **one** normative source; others may
+reference it without becoming competing copies. The full routing lives in
 `.claude/rules/knowledge-persistence.md`.

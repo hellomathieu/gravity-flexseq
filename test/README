@@ -1,107 +1,101 @@
-Tests PlatformIO du projet Gravity FlexSeq.
+PlatformIO tests for the Gravity FlexSeq project.
 
-Ce repertoire contient DEUX categories de tests qu'il ne faut jamais melanger.
-Elles vivent dans deux environnements PlatformIO distincts, et c'est
-deliberement structurel : c'est ce qui permet a la suite d'acceptation de
-rester un signal fiable.
-
--------------------------------------------------------------------------------
-1. Acceptation / regression FlexSeq  ->  env `native`
--------------------------------------------------------------------------------
-    test_pattern, test_pattern_bank, test_pattern_screen,
-    test_sequencer_engine, test_subdiv, test_transport, test_trigger_sequencer
-
-Domaine pur C++, sans Arduino ni libGravity. DOIT etre vert : une phase n'est
-pas terminee tant qu'un de ces tests echoue.
-
-    ./tools/run-cpp-tests.sh [nom_du_test]
+This directory holds TWO categories of test that must never be mixed. They live
+in two distinct PlatformIO environments, and that is deliberately structural:
+it is what lets the acceptance suite stay a reliable signal.
 
 -------------------------------------------------------------------------------
-2. Caracterisation libGravity  ->  env `native_libgravity`
+1. FlexSeq acceptance / regression  ->  env `native`
+-------------------------------------------------------------------------------
+    test_cv_gate, test_paged_screen, test_pattern, test_pattern_bank,
+    test_pattern_screen, test_sequencer_engine, test_subdiv, test_transport,
+    test_trigger_sequencer
+
+Pure C++ domain, no Arduino and no libGravity. MUST be green: a phase is not
+finished while one of these fails. 124 assertions as of 2026-08-21.
+
+    ./tools/run-cpp-tests.sh [test_name]
+
+-------------------------------------------------------------------------------
+2. libGravity characterization  ->  env `native_libgravity`
 -------------------------------------------------------------------------------
     test_analog_input, test_button, test_clock, test_digital_output,
     test_encoder, test_gravity
 
-En-tetes de libGravity (figee au commit 9be88be1f4) compilees contre les
-bouchons Arduino de `test/mocks/`. Ces tests decrivent le comportement REEL de
-la dependance, anomalies incluses : 7 assertions echouent par construction, sur
-68.
-Ne jamais les affaiblir pour obtenir du vert — ce serait masquer un defaut de
-la dependance.
+libGravity headers (pinned at commit 9be88be1f4) compiled against the Arduino
+stubs in `test/mocks/`. These tests describe the REAL behaviour of the pinned
+dependency, defects included: 7 assertions out of 68 fail by construction.
+Never weaken them to obtain green — that would hide a defect of the dependency.
 
-`test_gravity` porte en plus, depuis le 2026-08-20, la CARACTERISATION de
-`Gravity::Process()` : elle lit exactement deux entrees analogiques — CV1 et CV2,
-une fois chacune — et scrute les deux boutons plus le bouton de l'encodeur.
-FlexSeq n'appelle plus cette fonction, le convertisseur appartenant desormais a
-une ISR (PRD 10.6). Le risque n'est donc pas de rater une evolution amont — la
-dependance est epinglee par decision — mais d'oublier de re-auditer cette
-fonction au prochain changement d'epingle. Ces assertions transforment cet oubli
-en echec. Un test jumeau verifie que les morceaux appeles a la place couvrent les
-memes entrees avec ZERO lecture analogique : c'est l'invariant qui rend le
-contournement correct. Les compteurs de lectures par broche sont dans
-`test/mocks/Arduino.h`.
+Since 2026-08-20, `test_gravity` additionally CHARACTERIZES `Gravity::Process()`:
+it reads exactly two analog inputs — CV1 and CV2, once each — and polls both
+buttons plus the encoder switch. FlexSeq no longer calls that function, the
+converter now belonging to an ISR (PRD 10.6). So the risk is not missing an
+upstream change — the dependency is pinned by decision — but forgetting to
+re-audit that function at the next pin bump. These assertions turn that
+oversight into a failure. A twin test verifies that the pieces called instead
+cover the same inputs with ZERO analog reads: that is the invariant which makes
+the workaround correct. The per-pin read counters live in `test/mocks/Arduino.h`.
 
-Le critere de cette suite n'est donc PAS « tout passe », c'est « conforme a
-l'audit ». Un module qui reproduit exactement les anomalies auditees est VERT.
-Le rouge est reserve a une derive : un echec hors reference, ou une anomalie
-auditee qui se met a passer — ce qui signifierait que la dependance epinglee a
-change sous nos pieds.
+The criterion for this suite is therefore NOT "everything passes", it is
+"conforms to the audit". A module that reproduces exactly the audited anomalies
+is GREEN. Red is reserved for drift: a failure outside the reference, or an
+audited anomaly that starts passing — which would mean the pinned dependency
+changed under our feet.
 
-Les trois seules facons de rendre ces 7 assertions vertes sont toutes fermees :
-patcher la dependance (interdit, elle est epinglee), affaiblir les tests
-(interdit, et c'est ce qui a masque la panne pendant quatre mois), ou contourner
-cote FlexSeq — ce qui est le role de la couche d'adaptation, mais ne change rien
-au comportement de libGravity, donc ces tests resteraient rouges, et a juste
-titre.
+The three ways of making those 7 assertions green are all closed off: patching
+the dependency (forbidden, it is pinned), weakening the tests (forbidden, and
+that is what hid the breakage for four months), or working around it on the
+FlexSeq side — which is the adapter layer's job, but changes nothing about
+libGravity's behaviour, so these tests would stay red, and rightly so.
 
     ./tools/run-libgravity-tests.sh
 
-Le script ne se contente pas de lancer la suite : il compare l'ensemble des
-assertions en echec a la reference auditee et signale toute derive dans les
-deux sens (une anomalie qui disparait, une qui apparait). Un rouge attendu
-n'est pas un signal ; un rouge qui change en est un.
+The script does more than run the suite: it compares the set of failing
+assertions against the audited reference and reports drift in either direction
+(an anomaly that disappears, one that appears). An expected red is not a signal;
+a red that changes is one.
 
-Il produit son propre rapport et MASQUE le transcript de `pio test` : recap par
-module, puis liste des anomalies reproduites avec le defaut libGravity que
-chacune documente. `VERBOSE=1` reaffiche le transcript brut, `VERBOSE=2`
-l'affiche en `-vvv`.
+It produces its own report and MASKS the `pio test` transcript: a per-module
+recap, then the list of reproduced anomalies with the libGravity defect each one
+documents. `VERBOSE=1` restores the raw transcript, `VERBOSE=2` shows it with
+`-vvv`.
 
-Prerequis : l'env AVR doit avoir ete construit une fois, les en-tetes etant
-lues dans `.pio/libdeps/nanoatmega328/`. Le script s'en charge si besoin.
+Prerequisite: the AVR env must have been built once, the headers being read from
+`.pio/libdeps/nanoatmega328/`. The script takes care of it when needed.
 
-Pourquoi le transcript de pio est masque — trois de ses sorties induisent en
-erreur sur `platform = native` :
+Why the pio transcript is masked — three of its outputs mislead on
+`platform = native`:
 
-  - il presente le code de sortie du binaire Unity (= nombre d'assertions en
-    echec) comme un signal : « SIGINT (Interrupt: 2) » pour 2 echecs, « SIGHUP
-    (Hangup: 1) » pour 1. Ce n'est pas un crash ;
-  - le statut ERRORED qui en decoule n'est donc pas exploitable, et il masque
-    la distinction entre « echoue comme prevu » et « ne compile pas » ;
-  - son total est faux : il ajoute une pseudo-assertion par module ERRORED, une
-    pseudo-assertion etant ajoutee par module ERRORED.
+  - it presents the Unity binary's exit code (= the number of failing
+    assertions) as a signal: "SIGINT (Interrupt: 2)" for 2 failures, "SIGHUP
+    (Hangup: 1)" for 1. Neither is a crash;
+  - the resulting ERRORED status is therefore unusable, and it hides the
+    distinction between "fails as expected" and "does not compile";
+  - its total is wrong: it adds one pseudo-assertion per ERRORED module.
 
-S'y ajoute une gene pratique : PlatformIO retire ses couleurs des que sa sortie
-est capturee, ce qui rend PASSED et FAILED indiscernables dans un journal.
-
--------------------------------------------------------------------------------
-Les deux, plus le modele TypeScript
--------------------------------------------------------------------------------
-    ./tools/run-all-tests.sh                # les trois suites
-    ./tools/run-all-tests.sh --cpp          # acceptation C++ seule
-    ./tools/run-all-tests.sh --ts           # TypeScript seul
-    ./tools/run-all-tests.sh --libgravity   # caracterisation seule
+A practical annoyance on top: PlatformIO strips its colours as soon as its
+output is captured, which makes PASSED and FAILED indistinguishable in a log.
 
 -------------------------------------------------------------------------------
-Historique — pourquoi ce README existe
+Both, plus the TypeScript model
 -------------------------------------------------------------------------------
-Les six tests de caracterisation ont ete introduits par `0574600`, ou l'env
-`native` portait `-I.pio/libdeps/nanoatmega328/libGravity/src -Itest/mocks`.
-Le commit `f0d6134` (PR #1) a reecrit cet env pour les tests de domaine : il a
-supprime ces deux `-I` ET ajoute `test_filter = test_pattern*` dans le meme
-commit. Les tests ont donc cesse de compiler sans jamais etre collectes — donc
-sans emettre le moindre signal, pendant quatre mois.
+    ./tools/run-all-tests.sh                # all three suites
+    ./tools/run-all-tests.sh --cpp          # C++ acceptance only
+    ./tools/run-all-tests.sh --ts           # TypeScript only
+    ./tools/run-all-tests.sh --libgravity   # characterization only
 
-La lecon est structurelle : un `test_filter` qui restreint la collecte peut
-masquer une panne de compilation. C'est pourquoi les deux categories ont
-desormais chacune leur environnement, et pourquoi la caracterisation est
-lancee par defaut par `run-all-tests.sh`.
+-------------------------------------------------------------------------------
+History — why this README exists
+-------------------------------------------------------------------------------
+The six characterization tests were introduced by `0574600`, where the `native`
+env carried `-I.pio/libdeps/nanoatmega328/libGravity/src -Itest/mocks`. Commit
+`f0d6134` (PR #1) rewrote that env for the domain tests: it removed those two
+`-I` flags AND added `test_filter = test_pattern*` in the same commit. The tests
+therefore stopped compiling without ever being collected — so without emitting
+any signal at all, for four months.
+
+The lesson is structural: a `test_filter` that narrows collection can hide a
+compilation failure. That is why the two categories now each have their own
+environment, and why the characterization suite is run by default by
+`run-all-tests.sh`.
