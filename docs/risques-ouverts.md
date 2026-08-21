@@ -21,7 +21,8 @@ soit clos sans qu'on l'ait noté, soit accepté sans qu'on l'ait dit.
 
 | # | Sujet | Gravité | État | Le fait vit | Ce qui le clôt |
 |---|---|---|---|---|---|
-| 0 | **Révision du module non confirmée.** libGravity vise la **Rev 2+** ; la Rev 1 a un autre brochage (CV sur A2/A1, horloge sur 13, sorties dans un autre ordre) | moyenne | ouvert, **à vérifier avant le flash** | PRD §2 | un coup d'œil au panneau : la Rev 1 définit `SHIFT_BTN_PIN 100`, donc **n'a pas de bouton SHIFT**. Un panneau qui en porte un est Rev 2+ |
+| 0 | ~~Révision du module non confirmée~~ | moyenne | **clos 2026-08-21** | PRD §2 | clos : le propriétaire a confirmé un **bouton SHIFT** sur son panneau, donc **Rev 2+** — le brochage de libGravity est le bon. (La Rev 1 définit `SHIFT_BTN_PIN 100`, c'est-à-dire aucun bouton SHIFT.) |
+| 1b | **Aucun binaire n'exerçait le chemin `pattern → onset → impulsion`** : `main.cpp` émet les triggers mais sa banque est vide et aucune UI n'y écrit ; `wokwi_main.cpp` a du contenu mais pas de `TriggerSequencer` | **était dominante avec la ligne 1** | **mesuré 2026-08-21** | `CLAUDE.md` (fonction musicale) | clos côté simulation : `tools/run-trigger-probe.sh` injecte le contenu en RAM simulée et observe les 7 broches du binaire de production. 6/6 sorties, 11/11 écarts, gigue 1,00 ms max (0,2 % d'un step) |
 | 1 | **Rien n'a jamais tourné sur le module.** Tout est simulation et tests natifs, et le risque grandit à chaque couche | **dominante** | ouvert, **flash différé** par décision du propriétaire (2026-08-21) — le module est disponible, l'attente est volontaire | PRD §16 | le premier flash. `env:bringup` le rend diagnosticable ligne par ligne, pas moins risqué |
 | 2 | **Le montage physique de l'OLED** conditionne que l'image tournée tombe à l'endroit — aucun simulateur ne peut le dire | **faible** depuis le 2026-08-21 (était moyenne) | ouvert, suspendu au même flash que la ligne 1 | PRD §14, PRD §2 | le premier flash. **Corroboré entre-temps** : la config Rev 2+ du firmware d'origine résout à `U8G2_R2`, exactement ce que fait FlexSeq (attention, la logique du flag `rotateScreen` est inversée : `false` → R2). C'est aussi une option de menu persistée en EEPROM, donc un module dont l'utilisateur avait inversé la rotation montrerait FlexSeq à l'envers — sans gravité et réversible. Repli : `U8G2_R0` dans `wokwi_main.cpp` **uniquement** |
 | 3 | ~~Le tas est corrompu pendant un run de simavr~~ — **c'était une lecture hors bornes d'un octet dans le journal UART de simavr**, tombant dans l'allocateur parce qu'elle traversait ses métadonnées | moyenne | **résolu 2026-08-21** | `CLAUDE.md` (section sonde de blocage), `tools/simavr-ssd1306/simavr_uart_quiet.h` | clos : les quatre harnais désarment `AVR_UART_FLAG_STDIO`. 2 SIGSEGV sur 5 → 0 sur 5, 3 rapports ASan sur 3 → 0 sur 3 |
@@ -33,6 +34,9 @@ soit clos sans qu'on l'ait noté, soit accepté sans qu'on l'ait dit.
 | 9 | **Wokwi non vérifié** : `"rotate"` de `board-ssd1306` et le routage des fils, dans `diagram.json` / `wokwi.toml` | faible | **accepté 2026-08-21** (décision du propriétaire) | PRD §14 | rien, et c'est assumé : hors chemin critique depuis que `run-screen-dump.sh` valide le rendu. `env:wokwi` reste utile — il sert de cible à cette sonde, sous simavr, sans rapport avec Wokwi |
 | 10 | **`decode-velvetscreen.py` exige le clone `GravityFW`** voisin | faible | acceptable | l'en-tête du script | rien : outil à usage unique, erreur explicite et URL donnée si le clone manque |
 | 11 | **`CLAUDE.md` ne survit à aucun `git clone`** — tout l'outillage y est documenté | faible | **assumé** | `.claude/rules/knowledge-persistence.md` | décision explicite du propriétaire (2026-08-19). Ne pas la rouvrir sans lui |
+
+| 12 | **L'impulsion de trigger fait 8,8 ms et non les 5 ms configurés** : l'extinction est en fin de `loop()`, donc la durée est 5 ms arrondis au passage suivant | faible | **mesuré, à surveiller** | `CLAUDE.md` (fonction musicale) | rien aujourd'hui — 1,8 % d'un step à 120 BPM en `/1`. Devient un sujet à SUBDIV rapide : à `x4` (125 ms/step) l'impulsion vaut 7 % du step, et au pire passage (15,3 ms) 12 % |
+| 13 | **`PULSE` de l'expandeur MIDI reste muet** : `main.cpp` ne pilote pas `gravity.pulse` | faible | observation | le code | une décision produit : l'expandeur n'est pas encore dans le chemin (PRD §16) |
 
 ## Règles de méthode nées de ces sujets
 
@@ -68,6 +72,14 @@ chiffre qui ne se reproduisait pas :
 Trois symptômes d'une même cause : **une grandeur qui bouge quand la durée de la
 mesure bouge n'est pas une grandeur.** C'est le test le moins coûteux à faire
 passer à un outil, et il n'avait jamais été fait.
+
+Une cinquième le même jour, sur une autre sonde : `trigger_probe` **supposait la
+phase du playhead** — que la première impulsion observée serait le premier step
+actif du pattern. Comme `transport.start()` a lieu dans `setup()`, le moteur
+tourne déjà quand le contenu arrive, et la sonde a déclaré « hors grille » un
+firmware parfaitement juste. Ce qui se vérifie sans connaître la phase est la
+**suite des écarts**, à une rotation près — et c'est aussi la seule affirmation
+qui ait un sens musical.
 
 **Une sortie perdue envoie chercher le défaut ailleurs.** `stdout` redirigé est
 tamponné par blocs : un rapport disparaissait au plantage, ce qui m'a fait
