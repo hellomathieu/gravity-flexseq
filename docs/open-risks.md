@@ -1,6 +1,6 @@
 # Open risks and watch items
 
-**Last review: 2026-08-21.** Eight open lines, eleven closed or accepted.
+**Last review: 2026-08-21.** Eight open lines, twelve closed or accepted.
 
 ## What this document is, and is not
 
@@ -31,7 +31,7 @@ below.
 | 11b | **No control is wired in `main.cpp`**: only `clock.AttachIntHandler()` is called — no EXT, no source, no tempo, no start/stop; buttons and encoder are `Process()`-ed with no callback attached | medium | **this is the next piece of work**: wire the UI (§12) and the transport (§8). Not a defect but the state of progress. Consequence: a flash today would validate the hardware chain, not the features |
 | 14 | **Three audited libGravity anomalies are latent and land exactly on the next task**: `Button` losing a release inside the debounce window, `Encoder`'s false first movement, `Clock::SetSource` ignoring the `SOURCE_LAST` sentinel. Reachability table in **PRD §18** | medium | absorb all three in the adapter layer **while wiring the UI (§12) and the transport (§8)**. None is reachable today -- no callback attached, no clock source selected (line 11b) |
 | 15 | **`DigitalOutput::Init()` does not force the output OFF**, and the audited test proves it | low | nothing today: harmless at cold boot, for the reason established in **PRD §18** (AVR reset leaves `PORT` at 0, and `gravity` is a global in `.bss`). What is left is to handle it **if a software reboot is ever added** -- that is when the pin could stay HIGH while the firmware believes it is off |
-| 16 | **`wokwi_main.cpp` is the only place still calling `gravity.Process()`** -- the function with the uninitialized loop index | low | it is the binary `run-screen-dump.sh` measures, so the render-validation harness runs code carrying that UB. It happens not to fire (the characterization test passes), but it contradicts ADR 0001's own argument that the harness must exercise the real path. Fix by calling the pieces, as `main.cpp` does |
+| 17 | **The module's EEPROM is not backed up, and its real CV calibration is out of reach.** libGravity has no notion of EEPROM, so `CvSampler` runs on the defaults `CALIBRATED_LOW = -566` / `CALIBRATED_HIGH = 512`, not on the calibration stored by the original firmware | low | flash `env:eepromdump` and capture the dump. Does **not** block line 1: FlexSeq writes no EEPROM byte, and a bootloader upload does not touch it. Becomes a real precondition at PRD §11, and the source of the real calibration for §10 |
 | 12 | **The trigger pulse measures 8.8 ms** instead of the 5 ms configured: the auto-off sits at the end of `loop()`, so 5 ms rounded up to the next pass | low | **nothing today** — 1.8 % of a step at 120 BPM in `/1`. To revisit once fast SUBDIV exists: at `x4` (125 ms/step) it is 7 % of the step, and 12 % on the worst pass. The threshold is written down; it no longer has to be rediscovered |
 
 ## What is closed or accepted
@@ -52,6 +52,7 @@ reopens them without knowing what has already been established or costed.
 | 10 | `decode-velvetscreen.py` requires the neighbouring `GravityFW` clone | **acceptable** | single-use tool; `--src`, `$GRAVITY_FW_INO`, and an explicit error carrying the clone URL |
 | 11 | `CLAUDE.md` survives no `git clone` | **closed by decision** (2026-08-19) | the owner's explicit decision, deliberate non-versioning |
 | 13 | The MIDI expander's `PULSE` stays silent | **observation, not a defect** | `main.cpp` does not drive `gravity.pulse`: the expander is not in the path yet (PRD §16) |
+| 16 | `wokwi_main.cpp` was the last active caller of `gravity.Process()`, the function with the uninitialized loop index | **closed 2026-08-21** | commit `9dda448` calls the pieces instead, exactly as `main.cpp` does. No active caller remains; `run-screen-dump.sh` stays green (24/24 steps, rotation 180), so the render harness no longer runs undefined behaviour. The two calls in `test_gravity.cpp` stay -- they characterize the pinned dependency |
 
 ### The memory budget, costed once — lines 4 and 5
 
@@ -140,3 +141,17 @@ to a rotation — and that is also the only claim with a musical meaning.
 **A lost output sends you looking for the defect elsewhere.** Redirected `stdout`
 is block-buffered: a report vanished on the crash, which sent me looking for a
 loading defect where the problem was in the allocator.
+
+**A manifest is not a measurement of the device.** PRD §2 gave the upload path as
+57600 baud, read off PlatformIO's board manifest and never off the module. The
+board is optiboot at 115200, so the first backup attempt died on `not in sync`.
+The manifest was true of the manifest and false of this unit. Cost: nothing, but
+only because the attempt came before the first flash and not during it.
+
+**A plausible artifact is not a verified one.** The same session produced an
+EEPROM dump that looked entirely credible: 1024 bytes, 1.2 % of `0xFF`, no error
+from avrdude. It was byte for byte the first kilobyte of the flash, because
+optiboot does not read EEPROM and reports nothing when asked. A check on the
+shape would have passed it. Only a check on the **content** caught it: 1024/1024
+identical to the flash. So the criterion for a backup is never its size or its
+entropy -- it is that the bytes are the ones you asked for.
