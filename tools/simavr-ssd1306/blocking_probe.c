@@ -148,6 +148,15 @@ static void stats(const char *label, double *v, int n, const char *unit)
     (void)sum;
 }
 
+/* Lecture d'un uint32_t de la RAM simulee, petit-boutien comme l'AVR. */
+static uint32_t read_u32(const avr_t *avr, uint16_t addr)
+{
+    return (uint32_t)avr->data[addr] |
+           ((uint32_t)avr->data[addr + 1] << 8) |
+           ((uint32_t)avr->data[addr + 2] << 16) |
+           ((uint32_t)avr->data[addr + 3] << 24);
+}
+
 int main(int argc, char **argv)
 {
     const char *fw = (argc > 1) ? argv[1] : ".pio/build/nanoatmega328/firmware.hex";
@@ -199,8 +208,20 @@ int main(int argc, char **argv)
     printf("simulation %.1f s (%" PRIu64 " cycles a %lu Hz)\n\n", seconds, target, F_CPU_HZ);
 
     const uint64_t switch_cycle = target / 2;
+    /* La cadence d'ISR se mesure sur une FENETRE, entre le quart et la moitie de
+     * la simulation, et non depuis le cycle zero : les conversions ne demarrent
+     * qu'a `cv::start()`, donc apres les constructeurs globaux, l'init d'Arduino
+     * et celle de l'afficheur. Diviser toute la premiere moitie par le nombre de
+     * conversions comptait cet intervalle mort comme du temps de conversion, et
+     * la cadence obtenue DEPENDAIT DE LA DUREE du run : 31,5 us a 4 s, 28,5 a 8 s,
+     * 27,2 a 16 s. Une cadence qui bouge avec la duree de la mesure n'est pas une
+     * cadence. Sur une fenetre interieure aux deux bornes, l'intervalle mort
+     * disparait de lui-meme. */
+    const uint64_t window_cycle = target / 4;
     int adc_off = 0;
+    uint32_t conv_at_window = 0;
     uint32_t conv_at_switch = 0;
+    int window_taken = 0;
 
     while (avr->cycle < target) {
         int state = avr_run(avr);
@@ -208,12 +229,13 @@ int main(int argc, char **argv)
             printf("!! CPU arrete (state=%d) a %" PRIu64 " cycles\n", state, avr->cycle);
             break;
         }
+        if (!window_taken && done_addr && avr->cycle >= window_cycle) {
+            conv_at_window = read_u32(avr, done_addr);
+            window_taken = 1;
+        }
         if (!adc_off && avr->cycle >= switch_cycle) {
             if (done_addr) {
-                conv_at_switch = (uint32_t)avr->data[done_addr] |
-                                 ((uint32_t)avr->data[done_addr + 1] << 8) |
-                                 ((uint32_t)avr->data[done_addr + 2] << 16) |
-                                 ((uint32_t)avr->data[done_addr + 3] << 24);
+                conv_at_switch = read_u32(avr, done_addr);
             }
             avr->data[ADCSRA_ADDR] &= (uint8_t)~ADIE_BIT;  /* plus d'ISR, donc plus
                                                             * de relance */
@@ -299,7 +321,26 @@ int main(int argc, char **argv)
     static int n_index[BANDS_PER_FRAME];
     static double per_a[MAX_TX];  /* ADC active */
     static double per_b[MAX_TX];  /* ADC coupee */
+    /* Le regime sans ADC est SEPARE EN DEUX POPULATIONS, par le nombre de bandes
+     * de l'image a laquelle chaque passage appartient — donc par le protocole,
+     * pas par un seuil. Une image de 8 bandes est un rafraichissement complet
+     * (PagedScreen n'a saute aucune bande), une image plus courte est une image
+     * courante. Sans cette separation, le pire passage du lot etait ETIQUETE
+     * « rafraichissement complet periodique » sans que rien ne l'etablisse : a la
+     * duree par defaut, il arrivait qu'AUCUNE image complete ne tombe dans ce
+     * regime, et le maximum d'une image courante heritait de l'etiquette. */
+    static double per_rout[MAX_TX];  /* ADC coupee, image courante */
+    static double per_full[MAX_TX];  /* ADC coupee, rafraichissement complet */
+    /* La duree d'une image entiere se mesure DANS UN SEUL REGIME. Melangees, les
+     * deux populations sont bimodales — ~41,7 ms sans ADC contre ~55,7 ms avec —
+     * et a peu pres a egalite : la mediane basculait d'un mode a l'autre selon la
+     * duree du run (41,8 ms a 8 s, 55,7 a 32 s). Une mediane qui change de mode
+     * n'est pas une mesure. */
+    static double frame_rout[MAX_TX];  /* image courante, hors ADC */
+    static double frame_full[MAX_TX];  /* image complete, hors ADC */
+    int nfr = 0, nff = 0;
     int frames = 0, np = 0, na = 0, nbp = 0, straddling = 0;
+    int nrout = 0, nfull = 0, frames_full_b = 0, frames_rout_b = 0;
 
     int pages_known = 1;
     for (int k = 0; k < nb; k++) if (band_page[k] == 0xFF) pages_known = 0;
@@ -325,6 +366,11 @@ int main(int argc, char **argv)
                 per_a[na++] = d;
             } else {
                 per_b[nbp++] = d;
+                if (j - i >= BANDS_PER_FRAME) {
+                    per_full[nfull++] = d;
+                } else {
+                    per_rout[nrout++] = d;
+                }
                 const int pos = k - i;
                 if (pos < BANDS_PER_FRAME) {
                     by_index[pos] += d;
@@ -333,7 +379,17 @@ int main(int argc, char **argv)
             }
         }
         if (first_a != last_a) ++straddling;
-        frame_len[frames] = us(band_start[j - 1] - band_start[i]) + band_len[j - 1];
+        const double this_frame = us(band_start[j - 1] - band_start[i]) + band_len[j - 1];
+        if (first_a == last_a && !first_a) {
+            if (j - i >= BANDS_PER_FRAME) {
+                ++frames_full_b;
+                frame_full[nff++] = this_frame;
+            } else {
+                ++frames_rout_b;
+                frame_rout[nfr++] = this_frame;
+            }
+        }
+        frame_len[frames] = this_frame;
         frame_bands[frames] = j - i;
         ++frames;
         i = j;
@@ -366,7 +422,8 @@ int main(int argc, char **argv)
     printf("=== MESURES ===\n");
     stats("bande : transfert (blocage bus)", band_len, nb, "us");
     stats("bande a bande (1 passage)", band_per, np, "us");
-    stats("image entiere (8 bandes)", frame_len, frames, "us");
+    stats("image entiere, TOUS REGIMES CONFONDUS", frame_len, frames, "us");
+    printf("    ^ bimodale : voir les deux lignes hors ADC ci-dessous\n");
 
     qsort(band_len, nb, sizeof(double), cmp_d);
     double med_len = band_len[nb / 2], max_len = band_len[nb - 1];
@@ -384,9 +441,18 @@ int main(int argc, char **argv)
     printf("=== DEUX REGIMES ===\n");
     stats("passage, ADC active (simulee)", per_a, na, "us");
     stats("passage, ADC coupee", per_b, nbp, "us");
+    stats("  passage, image courante", per_rout, nrout, "us");
+    stats("  passage, image complete", per_full, nfull, "us");
+    stats("  image entiere courante", frame_rout, nfr, "us");
+    stats("  image entiere complete", frame_full, nff, "us");
+    printf("  images hors ADC : %d courantes, %d completes", frames_rout_b, frames_full_b);
+    if (frames_full_b) printf("  (1 sur %.1f)", (double)(frames_rout_b + frames_full_b) / frames_full_b);
+    printf("\n");
     if (straddling) printf("  %d image(s) a cheval sur la bascule, ecartee(s)\n", straddling);
 
     double corrected_max = 0.0, corrected_med = 0.0, corrected_p90 = 0.0;
+    double corrected_full = 0.0;
+    double hw_factor = 1.0;   /* 1.0 tant que la correction n'a pas ete calculee */
     if (na > 0 && nbp > 0) {
         qsort(per_a, na, sizeof(double), cmp_d);
         qsort(per_b, nbp, sizeof(double), cmp_d);
@@ -404,16 +470,33 @@ int main(int argc, char **argv)
          * La periode simulee est MESUREE au compteur de conversions du firmware ;
          * la materielle est arithmetique : 13 x 128 cycles. */
         const double f_sim = (med_a > 0.0) ? 1.0 - med_b / med_a : 0.0;
-        const double sim_conv_us = (done_addr && conv_at_switch)
-            ? us(switch_cycle) / conv_at_switch : 0.0;
+        const uint32_t conv_in_window = (conv_at_switch > conv_at_window)
+            ? conv_at_switch - conv_at_window : 0;
+        const double sim_conv_us = conv_in_window
+            ? us(switch_cycle - window_cycle) / conv_in_window : 0.0;
         const double hw_conv_us = 13.0 * 128.0 * 1e6 / F_CPU_HZ;
         const double cost_us = f_sim * sim_conv_us;
         const double f_hw = (hw_conv_us > 0.0) ? cost_us / hw_conv_us : 0.0;
         const double factor = (f_hw < 0.5) ? 1.0 / (1.0 - f_hw) : 0.0;
+        if (factor > 0.0) hw_factor = factor;
 
-        corrected_med = med_b * factor;
-        corrected_p90 = per_b[(nbp * 9) / 10] * factor;
-        corrected_max = per_b[nbp - 1] * factor;
+        /* Le verdict porte sur l'IMAGE COURANTE : c'est le passage que la boucle
+         * fait quinze fois sur seize. Le pic du rafraichissement complet est
+         * publie a part, et seulement s'il a ete OBSERVE. */
+        if (nrout > 0) {
+            qsort(per_rout, nrout, sizeof(double), cmp_d);
+            corrected_med = per_rout[nrout / 2] * factor;
+            corrected_p90 = per_rout[(nrout * 9) / 10] * factor;
+            corrected_max = per_rout[nrout - 1] * factor;
+        } else {
+            corrected_med = med_b * factor;
+            corrected_p90 = per_b[(nbp * 9) / 10] * factor;
+            corrected_max = per_b[nbp - 1] * factor;
+        }
+        if (nfull > 0) {
+            qsort(per_full, nfull, sizeof(double), cmp_d);
+            corrected_full = per_full[nfull - 1] * factor;
+        }
 
         printf("\n  CPU vole par l'ISR : %.1f %% en simulation", 100.0 * f_sim);
         if (sim_conv_us > 0.0) {
@@ -437,9 +520,27 @@ int main(int argc, char **argv)
            BANDS_PER_FRAME, med_len / 1000.0, BANDS_PER_FRAME * med_len / 1000.0);
     printf("            la boucle resterait bloquee cela, plus les %d dessins.\n",
            BANDS_PER_FRAME);
+    /* Les durees d'image sont corrigees du meme facteur que les passages : elles
+     * sont mesurees dans le regime sans ADC, qui n'existe pas sur materiel. */
+    if (nfr > 0) {
+        qsort(frame_rout, nfr, sizeof(double), cmp_d);
+        printf("  Image courante, estimee materiel    : %.1f ms (mediane de %d)\n",
+               frame_rout[nfr / 2] * hw_factor / 1000.0, nfr);
+    }
+    if (nff > 0) {
+        qsort(frame_full, nff, sizeof(double), cmp_d);
+        printf("  Image de rafraichissement complet   : %.1f ms (mediane de %d)\n",
+               frame_full[nff / 2] * hw_factor / 1000.0, nff);
+    }
     if (corrected_max > 0.0)
         printf("  ESTIME SUR MATERIEL : %.2f ms au pire, %.2f ms en p90, %.2f ms en median\n",
                corrected_max / 1000.0, corrected_p90 / 1000.0, corrected_med / 1000.0);
+    if (corrected_full > 0.0)
+        printf("  RAFRAICHISSEMENT COMPLET : %.2f ms au pire, sur %d image(s) observee(s)\n",
+               corrected_full / 1000.0, frames_full_b);
+    else
+        printf("  RAFRAICHISSEMENT COMPLET : aucune image complete dans le regime sans"
+               " ADC — allonger DURATION\n");
 
     return 0;
 }

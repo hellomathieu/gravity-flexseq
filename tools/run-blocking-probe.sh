@@ -39,13 +39,22 @@
 # verdict porte sur l'estimation materielle.
 # Sortie 0 si les deux passent, 1 sinon, 127 si un outil manque.
 #
-# Reglages : PASS_BUDGET_MS (defaut 10), DURATION (defaut 8 s de simulation).
+# LE PIC DU RAFRAICHISSEMENT COMPLET SE MESURE, IL NE SE DEDUIT PAS. Il ne
+# concerne qu'une image sur seize (ADR 0001), et les images sont espacees de
+# ~470 ms : a 8 s de simulation il n'en tombait souvent AUCUNE dans le regime
+# sans ADC, et le maximum d'une image courante heritait alors de l'etiquette
+# « rafraichissement complet ». Le harnais separe donc les deux populations par
+# le nombre de bandes de l'image — 8 pour une image complete, moins sinon — et
+# dit explicitement quand il n'a rien observe. DURATION vaut 32 s pour qu'il en
+# observe, ce qui coute ~5 s de temps mur.
+#
+# Reglages : PASS_BUDGET_MS (defaut 12), DURATION (defaut 32 s de simulation).
 
 set -u
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PASS_BUDGET_MS="${PASS_BUDGET_MS:-12}"
-DURATION="${DURATION:-8}"
+DURATION="${DURATION:-32}"
 
 if [ -t 1 ]; then
   C_OK=$'\033[32m'; C_ERR=$'\033[31m'; C_DIM=$'\033[2m'; C_B=$'\033[1m'; C_0=$'\033[0m'; TTY=1
@@ -145,7 +154,11 @@ f_hw = grab(r"=> ([\d.]+) % sur materiel")
 hw_max = grab(r"ESTIME SUR MATERIEL : ([\d.]+) ms au pire")
 hw_p90 = grab(r"au pire, ([\d.]+) ms en p90")
 hw_med = grab(r"ms en p90, ([\d.]+) ms en median")
-frame_med = grab(r"image entiere.*med\s+([\d.]+)")
+hw_full = grab(r"RAFRAICHISSEMENT COMPLET : ([\d.]+) ms au pire")
+full_frames = grab(r"RAFRAICHISSEMENT COMPLET : [\d.]+ ms au pire, sur (\d+) image", int)
+full_ratio = grab(r"images hors ADC : \d+ courantes, \d+ completes  \(1 sur ([\d.]+)\)")
+frame_med = grab(r"Image courante, estimee materiel\s+: ([\d.]+) ms")
+frame_full = grab(r"Image de rafraichissement complet\s+: ([\d.]+) ms")
 
 if None in (bands, conform, hw_max, hw_p90, max_b, med_a, med_b):
     print(f"  {mark(False)} sortie de la sonde illisible")
@@ -167,21 +180,36 @@ else:
     print(f"  {mark(False)} Artefact ADC       {ERR}NON corrige{Z} — chiffres surevalues")
 print(f"  {mark(fits)} Passage courant    {hw_p90:6.2f} ms   "
       f"{DIM}— p90 estime materiel ; budget {budget:g} ms ; median {hw_med:.2f} ms{Z}")
-print(f"  {DIM}   Pire passage    {hw_max:6.2f} ms   — le rafraichissement complet"
-      f" periodique, 1 image sur 16{Z}")
+if hw_full is not None:
+    ratio = f"1 image sur {full_ratio:.0f}" if full_ratio else "ratio non mesure"
+    print(f"  {DIM}   Pire passage    {hw_full:6.2f} ms   — rafraichissement complet, "
+          f"{ratio}, mesure sur {full_frames}{Z}")
+else:
+    print(f"  {DIM}   Pire passage      non observe — aucune image complete dans le"
+          f" regime sans ADC ; allonger DURATION{Z}")
+    print(f"  {DIM}                    (maximum d'une image courante : {hw_max:.2f} ms){Z}")
 print(f"{B}====================================================================={Z}")
 print(f"  Transfert d'une bande      : {band_med/1000:.2f} ms")
 print(f"  Passage simule, ADC active : {med_a/1000:.2f} ms med / {max_a/1000:.2f} ms max")
 print(f"  Passage simule, ADC coupee : {med_b/1000:.2f} ms med / {max_b/1000:.2f} ms max")
-print(f"  Image entiere              : {frame_med/1000:.1f} ms, un passage par bande")
+if frame_med is not None:
+    line = f"  Image entiere              : {frame_med:.1f} ms courante"
+    if frame_full is not None:
+        line += f" / {frame_full:.1f} ms complete"
+    print(line + ", un passage par bande")
 print()
 
 if not sane:
     print(f"  {ERR}Le decoupage en bandes ne se verifie pas — mesure a ne pas croire.{Z}")
 elif fits:
-    print(f"  Le passage courant tient dans {budget:g} ms sur materiel. Le pic subsiste")
-    print("  sur le rafraichissement complet periodique, une image sur 16 — filet")
-    print("  volontaire : un oubli de la logique de bande sale s'y repare tout seul.")
+    print(f"  Le passage courant tient dans {budget:g} ms sur materiel.")
+    if hw_full is not None:
+        print(f"  Le pic de {hw_full:.2f} ms subsiste sur le rafraichissement complet,")
+        print(f"  observe {full_frames} fois, {('1 image sur %.0f' % full_ratio) if full_ratio else 'ratio non mesure'} —")
+        print("  filet volontaire : un oubli de la logique de bande sale s'y repare seul.")
+    else:
+        print("  Le pic du rafraichissement complet n'a PAS ete observe a cette duree :")
+        print("  il n'est donc ni confirme ni infirme par cette execution.")
 else:
     print(f"  {ERR}Le pire passage estime ({hw_max:.2f} ms) depasse le budget de "
           f"{budget:g} ms.{Z}")
