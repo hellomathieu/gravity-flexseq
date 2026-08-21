@@ -1,6 +1,6 @@
 # Open risks and watch items
 
-**Last review: 2026-08-21.** Eight open lines, twelve closed or accepted.
+**Last review: 2026-08-21.** Eight open lines, fourteen closed or accepted.
 
 ## What this document is, and is not
 
@@ -26,12 +26,12 @@ below.
 | # | Subject | Severity | What is left, and from whom |
 |---|---|---|---|
 | 1 | **Nothing has ever run on the module.** Everything is simulation and native tests | **dominant** | the first flash. **Deferred by the owner's decision (2026-08-21)**: the module is available, the wait is deliberate. `env:bringup` makes that flash diagnosable line by line, not less risky |
-| 2 | **The OLED's physical mounting** determines whether the rotated image lands upright | low (was medium) | nothing to do — lifts together with line 1. **Corroborated meanwhile**: the original firmware's Rev 2+ config resolves to `U8G2_R2`, exactly what FlexSeq does (mind the inverted logic of the `rotateScreen` flag: `false` → R2). It is also a menu option persisted in EEPROM, so a module whose rotation had been flipped would show FlexSeq upside down — harmless and reversible |
+| 18 | **The main loop freezes after 10 to 20 seconds on the module, while every interrupt keeps running.** Observed twice on `env:bringup`, at 2883 ticks (15.0 s) then 4083 (21.3 s), so the instant is not fixed | **dominant** | diagnosis. Measured from the host: the MIDI clock keeps flowing at **exactly 48 bytes/s for 60 s**, which is 24 PPQN at 120 BPM, so the chip, uClock and the tempo are all intact -- only the loop is stuck. Three candidates, cheapest first: **power** (the module ran on USB alone, with the analog front end unpowered) · **`Wire` blocking without a timeout** if the panel holds SDA low, which no simulation can reproduce since simavr's `ssd1306_virt` always ACKs · **`millis()` stopped**, which would starve both time-gated blocks. Next test: rack power only, no USB. If it persists, `main.cpp` is exposed to the same hang, through the same `Wire` |
+| 19 | **No physical control has been observed working**: encoder, encoder switch, SHIFT, PLAY all read zero | medium | nothing yet -- the reading is worthless while line 18 stands, because a frozen screen and a dead input look identical. Re-read once the loop survives. The handlers are attached and trivial, and `Process()` is called for all three |
 | 6 | **5.6 % of CPU** paid by the ADC ISR even with no channel routing CV | low | **deferred to §10.2 by decision (2026-08-21)**. In isolation the conditioning would be inapplicable: no channel routes CV, so conditioning would amount to switching CV off |
 | 11b | **No control is wired in `main.cpp`**: only `clock.AttachIntHandler()` is called — no EXT, no source, no tempo, no start/stop; buttons and encoder are `Process()`-ed with no callback attached | medium | **this is the next piece of work**: wire the UI (§12) and the transport (§8). Not a defect but the state of progress. Consequence: a flash today would validate the hardware chain, not the features |
 | 14 | **Three audited libGravity anomalies are latent and land exactly on the next task**: `Button` losing a release inside the debounce window, `Encoder`'s false first movement, `Clock::SetSource` ignoring the `SOURCE_LAST` sentinel. Reachability table in **PRD §18** | medium | absorb all three in the adapter layer **while wiring the UI (§12) and the transport (§8)**. None is reachable today -- no callback attached, no clock source selected (line 11b) |
 | 15 | **`DigitalOutput::Init()` does not force the output OFF**, and the audited test proves it | low | nothing today: harmless at cold boot, for the reason established in **PRD §18** (AVR reset leaves `PORT` at 0, and `gravity` is a global in `.bss`). What is left is to handle it **if a software reboot is ever added** -- that is when the pin could stay HIGH while the firmware believes it is off |
-| 17 | **The module's EEPROM is not backed up, and its real CV calibration is out of reach.** libGravity has no notion of EEPROM, so `CvSampler` runs on the defaults `CALIBRATED_LOW = -566` / `CALIBRATED_HIGH = 512`, not on the calibration stored by the original firmware | low | flash `env:eepromdump` and capture the dump. Does **not** block line 1: FlexSeq writes no EEPROM byte, and a bootloader upload does not touch it. Becomes a real precondition at PRD §11, and the source of the real calibration for §10 |
 | 12 | **The trigger pulse measures 8.8 ms** instead of the 5 ms configured: the auto-off sits at the end of `loop()`, so 5 ms rounded up to the next pass | low | **nothing today** — 1.8 % of a step at 120 BPM in `/1`. To revisit once fast SUBDIV exists: at `x4` (125 ms/step) it is 7 % of the step, and 12 % on the worst pass. The threshold is written down; it no longer has to be rediscovered |
 
 ## What is closed or accepted
@@ -41,6 +41,8 @@ reopens them without knowing what has already been established or costed.
 
 | # | Subject | State | By what |
 |---|---|---|---|
+| 2 | The OLED's physical mounting decides whether the rotated image lands upright | **closed 2026-08-21, on the module** | flashed and read with the eye: the text is upright. The panel is mounted upside down and `U8G2_R2` compensates, exactly as the firmware assumes. No simulator could settle this one -- only the hardware |
+| 17 | The module's EEPROM is not backed up, real CV calibration out of reach | **closed 2026-08-21** | `tools/run-eeprom-dump.sh`, three blocking criteria, backup verified and reproducible byte for byte. The calibration is now recoverable from it. What the defaults cost is measured: CV reads **-39 / -40** at rest instead of 0, a systematic offset consistent across both channels |
 | 0 | Module revision unconfirmed | **closed 2026-08-21** | the owner confirmed a **SHIFT button** on the panel, hence **Rev 2+**: libGravity's pin map is the right one. Rev 1 defines `SHIFT_BTN_PIN 100`, that is, no SHIFT button at all |
 | 1b | No binary exercised the `pattern → onset → pulse` path | **measured 2026-08-21** | `tools/run-trigger-probe.sh` injects the content into simulated RAM and watches the 7 pins of the production binary: 6/6 outputs, 11/11 gaps, jitter 1.00 ms worst (0.2 % of a step). Closed **on the simulation side**; the hardware remains line 1 |
 | 3 | "The heap is corrupted during a simavr run" | **resolved 2026-08-21** | it was a one-byte out-of-bounds read in simavr's UART logger. The four harnesses disarm `AVR_UART_FLAG_STDIO`: 2 SIGSEGV in 5 → 0 in 5, 3 ASan reports in 3 → 0 in 3 |
@@ -141,6 +143,18 @@ to a rotation — and that is also the only claim with a musical meaning.
 **A lost output sends you looking for the defect elsewhere.** Redirected `stdout`
 is block-buffered: a report vanished on the crash, which sent me looking for a
 loading defect where the problem was in the allocator.
+
+**A side channel tells you which half is dead.** The bring-up screen froze and
+four inputs read zero, which looks like four faults. One measurement separated
+them: the firmware emits a MIDI clock from an interrupt, so counting its bytes
+from the host proved the chip, the ISRs and the tempo were all intact and only
+the loop was stuck. Look for an output the suspected component does **not**
+drive -- it costs nothing and it halves the search.
+
+**A frozen display makes every input look broken.** Before reading any input on
+hardware, prove the screen is refreshing. The bring-up firmware's own liveness
+indicators are the `OUT` digit (moves every 800 ms) and the tick counter; without
+that check, an hour goes into inputs that were never at fault.
 
 **A manifest is not a measurement of the device.** PRD §2 gave the upload path as
 57600 baud, read off PlatformIO's board manifest and never off the module. The

@@ -131,8 +131,11 @@ char* putInt(char* p, int32_t v, uint8_t width) {
 // bande ou deux : les autres passes n'ont rien a faire.
 void bandLine(uint8_t baseline, const char* text) {
     const uint8_t row = gravity.display.getBufferCurrTileRow();
-    const int16_t y0 = static_cast<int16_t>(row) * 8;
-    const int16_t y1 = y0 + static_cast<int16_t>(gravity.display.getBufferTileHeight()) * 8 - 1;
+    const int16_t d0 = static_cast<int16_t>(row) * 8;
+    const int16_t d1 = d0 + static_cast<int16_t>(gravity.display.getBufferTileHeight()) * 8 - 1;
+    const int16_t last = static_cast<int16_t>(gravity.display.getDisplayHeight()) - 1;
+    const int16_t y0 = last - d1;
+    const int16_t y1 = last - d0;
     // Boite d'un glyphe 5x7 : de la ligne de base moins l'ascendante au bas.
     if (static_cast<int16_t>(baseline) < y0 || static_cast<int16_t>(baseline) - 7 > y1) {
         return;
