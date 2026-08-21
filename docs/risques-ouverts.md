@@ -1,6 +1,6 @@
 # Risques ouverts et sujets de vigilance
 
-**Dernière revue : 2026-08-21.**
+**Dernière revue : 2026-08-21.** Cinq lignes ouvertes, onze closes ou acceptées.
 
 ## Ce que ce document est, et n'est pas
 
@@ -17,27 +17,82 @@ produit, en ADR si elle est d'architecture.
 disparaît. Un risque qui reste écrit sans bouger pendant plusieurs revues est
 soit clos sans qu'on l'ait noté, soit accepté sans qu'on l'ait dit.
 
-## Risques
+## Ce qui reste ouvert
 
-| # | Sujet | Gravité | État | Le fait vit | Ce qui le clôt |
-|---|---|---|---|---|---|
-| 0 | ~~Révision du module non confirmée~~ | moyenne | **clos 2026-08-21** | PRD §2 | clos : le propriétaire a confirmé un **bouton SHIFT** sur son panneau, donc **Rev 2+** — le brochage de libGravity est le bon. (La Rev 1 définit `SHIFT_BTN_PIN 100`, c'est-à-dire aucun bouton SHIFT.) |
-| 1b | **Aucun binaire n'exerçait le chemin `pattern → onset → impulsion`** : `main.cpp` émet les triggers mais sa banque est vide et aucune UI n'y écrit ; `wokwi_main.cpp` a du contenu mais pas de `TriggerSequencer` | **était dominante avec la ligne 1** | **mesuré 2026-08-21** | `CLAUDE.md` (fonction musicale) | clos côté simulation : `tools/run-trigger-probe.sh` injecte le contenu en RAM simulée et observe les 7 broches du binaire de production. 6/6 sorties, 11/11 écarts, gigue 1,00 ms max (0,2 % d'un step) |
-| 1 | **Rien n'a jamais tourné sur le module.** Tout est simulation et tests natifs, et le risque grandit à chaque couche | **dominante** | ouvert, **flash différé** par décision du propriétaire (2026-08-21) — le module est disponible, l'attente est volontaire | PRD §16 | le premier flash. `env:bringup` le rend diagnosticable ligne par ligne, pas moins risqué |
-| 2 | **Le montage physique de l'OLED** conditionne que l'image tournée tombe à l'endroit — aucun simulateur ne peut le dire | **faible** depuis le 2026-08-21 (était moyenne) | ouvert, suspendu au même flash que la ligne 1 | PRD §14, PRD §2 | le premier flash. **Corroboré entre-temps** : la config Rev 2+ du firmware d'origine résout à `U8G2_R2`, exactement ce que fait FlexSeq (attention, la logique du flag `rotateScreen` est inversée : `false` → R2). C'est aussi une option de menu persistée en EEPROM, donc un module dont l'utilisateur avait inversé la rotation montrerait FlexSeq à l'envers — sans gravité et réversible. Repli : `U8G2_R0` dans `wokwi_main.cpp` **uniquement** |
-| 3 | ~~Le tas est corrompu pendant un run de simavr~~ — **c'était une lecture hors bornes d'un octet dans le journal UART de simavr**, tombant dans l'allocateur parce qu'elle traversait ses métadonnées | moyenne | **résolu 2026-08-21** | `CLAUDE.md` (section sonde de blocage), `tools/simavr-ssd1306/simavr_uart_quiet.h` | clos : les quatre harnais désarment `AVR_UART_FLAG_STDIO`. 2 SIGSEGV sur 5 → 0 sur 5, 3 rapports ASan sur 3 → 0 sur 3 |
-| 4 | **RAM et Flash croissent** à chaque fonctionnalité. 1528 / 21404 o aujourd'hui | moyenne | **sous garde** | PRD §15 | rien : c'est structurel. Le garde-fou de dérive est le seul rempart — ne jamais faire `--accept` sans regarder le diagnostic par symboles |
-| 5 | **La marge de pile se réduit** à mesure que la mesure se complète : 438 → 361 o | moyenne | surveillé | PRD §15 | remesurer après chaque changement structurant. L'écriture EEPROM de la persistance n'est **pas** dans la mesure |
-| 6 | **5,6 % de CPU payés inconditionnellement** par l'ISR de l'ADC, même sans channel routé (4,9 % publié avant le 2026-08-21 : cadence d'ISR mal mesurée) | faible | ouvert, **différé au §10.2** par décision du propriétaire (2026-08-21) | PRD §16 | l'échantillonnage conditionné au routage, à faire **avec** le §10.2. Isolé il serait inapplicable : aucun channel ne route de CV aujourd'hui, donc conditionner reviendrait à couper le CV |
-| 7 | **Pic de 15,3 ms** sur le rafraîchissement complet périodique — ratio désormais **mesuré** : 1 image sur 16,0 | faible | **délibéré** | ADR 0001 | rien : c'est un filet volontaire contre un défaut de notre propre logique de bande sale |
-| 8 | **État mixte pendant un transfert** : ~4,6 ms où une bande montre un mélange ancien/nouveau | faible | inhérent | ADR 0001 | rien. Propriété de toute mise à jour partielle, antérieure au saut de bande |
-| 9 | **Wokwi non vérifié** : `"rotate"` de `board-ssd1306` et le routage des fils, dans `diagram.json` / `wokwi.toml` | faible | **accepté 2026-08-21** (décision du propriétaire) | PRD §14 | rien, et c'est assumé : hors chemin critique depuis que `run-screen-dump.sh` valide le rendu. `env:wokwi` reste utile — il sert de cible à cette sonde, sous simavr, sans rapport avec Wokwi |
-| 10 | **`decode-velvetscreen.py` exige le clone `GravityFW`** voisin | faible | acceptable | l'en-tête du script | rien : outil à usage unique, erreur explicite et URL donnée si le clone manque |
-| 11 | **`CLAUDE.md` ne survit à aucun `git clone`** — tout l'outillage y est documenté | faible | **assumé** | `.claude/rules/knowledge-persistence.md` | décision explicite du propriétaire (2026-08-19). Ne pas la rouvrir sans lui |
+Cinq lignes, et chacune dit **ce qu'elle attend et de qui**. Une ligne qui
+n'attend rien de personne n'a plus sa place ici : elle est dans le tableau
+suivant.
 
-| 11b | **Aucun contrôle n'est relié dans `main.cpp`** : seul `clock.AttachIntHandler()` est appelé — ni EXT, ni source, ni tempo, ni start/stop ; boutons et encodeur sont `Process()`-és sans callback relié | moyenne | **constaté 2026-08-21**, état d'avancement et non défaut | PRD §16 | relier l'UI (§12) et le transport (§8). Conséquence : un flash validerait la **chaîne matérielle**, pas les fonctionnalités |
-| 12 | **L'impulsion de trigger fait 8,8 ms et non les 5 ms configurés** : l'extinction est en fin de `loop()`, donc la durée est 5 ms arrondis au passage suivant | faible | **mesuré, à surveiller** | `CLAUDE.md` (fonction musicale) | rien aujourd'hui — 1,8 % d'un step à 120 BPM en `/1`. Devient un sujet à SUBDIV rapide : à `x4` (125 ms/step) l'impulsion vaut 7 % du step, et au pire passage (15,3 ms) 12 % |
-| 13 | **`PULSE` de l'expandeur MIDI reste muet** : `main.cpp` ne pilote pas `gravity.pulse` | faible | observation | le code | une décision produit : l'expandeur n'est pas encore dans le chemin (PRD §16) |
+| # | Sujet | Gravité | Ce qui reste, et par qui |
+|---|---|---|---|
+| 1 | **Rien n'a jamais tourné sur le module.** Tout est simulation et tests natifs | **dominante** | le premier flash. **Différé par décision du propriétaire (2026-08-21)** : le module est disponible, l'attente est volontaire. `env:bringup` rend ce flash diagnosticable ligne par ligne, pas moins risqué |
+| 2 | **Le montage physique de l'OLED** conditionne que l'image tournée tombe à l'endroit | faible (était moyenne) | rien à faire — se lève avec la ligne 1. **Corroboré** : la config Rev 2+ du firmware d'origine résout à `U8G2_R2`, comme FlexSeq (la logique de `rotateScreen` est inversée : `false` → R2). C'est une option de menu persistée en EEPROM, donc un module dont la rotation avait été inversée montrerait FlexSeq à l'envers — sans gravité, réversible |
+| 6 | **5,6 % de CPU** payés par l'ISR de l'ADC même sans channel routé | faible | **différé au §10.2 par décision (2026-08-21)**. Isolé, le conditionnement serait inapplicable : aucun channel ne route de CV, donc conditionner reviendrait à couper le CV |
+| 11b | **Aucun contrôle n'est relié dans `main.cpp`** : seul `clock.AttachIntHandler()` est appelé — ni EXT, ni source, ni tempo, ni start/stop ; boutons et encodeur `Process()`-és sans callback | moyenne | **c'est le travail suivant** : relier l'UI (§12) et le transport (§8). Ce n'est pas un défaut mais l'avancement. Conséquence : un flash aujourd'hui validerait la chaîne matérielle, pas les fonctionnalités |
+| 12 | **L'impulsion de trigger fait 8,8 ms** et non les 5 ms configurés : l'extinction est en fin de `loop()`, donc 5 ms arrondis au passage suivant | faible | **rien aujourd'hui** — 1,8 % d'un step à 120 BPM en `/1`. À revoir quand SUBDIV rapide existera : à `x4` (125 ms/step) c'est 7 % du step, et 12 % au pire passage. Le seuil est écrit, il n'y a plus à le redécouvrir |
+
+## Ce qui est clos ou accepté
+
+Ces lignes **n'attendent plus rien**. Elles restent écrites pour que personne ne
+les rouvre sans savoir ce qui a déjà été établi ou chiffré.
+
+| # | Sujet | État | Par quoi |
+|---|---|---|---|
+| 0 | Révision du module non confirmée | **clos 2026-08-21** | le propriétaire a confirmé un **bouton SHIFT** sur son panneau, donc **Rev 2+** : le brochage de libGravity est le bon. La Rev 1 définit `SHIFT_BTN_PIN 100`, c'est-à-dire aucun bouton SHIFT |
+| 1b | Aucun binaire n'exerçait le chemin `pattern → onset → impulsion` | **mesuré 2026-08-21** | `tools/run-trigger-probe.sh` injecte le contenu en RAM simulée et observe les 7 broches du binaire de production : 6/6 sorties, 11/11 écarts, gigue 1,00 ms au pire (0,2 % d'un step). Clos **côté simulation** ; le matériel reste la ligne 1 |
+| 3 | « Le tas est corrompu pendant un run de simavr » | **résolu 2026-08-21** | c'était une lecture hors bornes d'un octet dans le journal UART de simavr. Les quatre harnais désarment `AVR_UART_FLAG_STDIO` : 2 SIGSEGV sur 5 → 0 sur 5, 3 rapports ASan sur 3 → 0 sur 3 |
+| 4 | RAM et Flash croissent à chaque fonctionnalité | **accepté et dimensionné 2026-08-21** | ce n'est pas un risque mais une contrainte permanente sous garde active — **et le reste à construire tient**, voir le chiffrage ci-dessous |
+| 5 | La marge de pile se réduit à mesure que la mesure se complète | **accepté et dimensionné 2026-08-21** | 159 o de pic pour 361 o de marge, six familles d'ISR démontrées parcourues. Un seul trou nommé, et son obligation est écrite ci-dessous |
+| 7 | Pic de 15,3 ms sur le rafraîchissement complet, 1 image sur 16,0 | **propriété de conception** | ADR 0001. Les deux façons de s'en débarrasser sont chiffrées ci-dessous ; ne pas rouvrir sans un meilleur chiffre |
+| 8 | État mixte pendant un transfert, ~4,6 ms | **impossible à corriger, arithmétiquement** | le seul remède est un tampon complet de 1024 o, contre 264 o disponibles. Voir ci-dessous |
+| 9 | Wokwi non vérifié : `"rotate"` et le routage des fils | **accepté 2026-08-21** (décision) | hors chemin critique depuis que `run-screen-dump.sh` valide le rendu. `env:wokwi` reste utile : il sert de cible à cette sonde, sous simavr, sans rapport avec Wokwi |
+| 10 | `decode-velvetscreen.py` exige le clone `GravityFW` voisin | **acceptable** | outil à usage unique ; `--src`, `$GRAVITY_FW_INO`, et une erreur explicite avec l'URL du clone |
+| 11 | `CLAUDE.md` ne survit à aucun `git clone` | **clos par décision** (2026-08-19) | décision explicite du propriétaire, non-versionnement délibéré.|
+| 13 | `PULSE` de l'expandeur MIDI reste muet | **observation, pas défaut** | `main.cpp` ne pilote pas `gravity.pulse` : l'expandeur n'est pas encore dans le chemin (PRD §16) |
+
+### Le budget mémoire, chiffré une fois — lignes 4 et 5
+
+Ces deux lignes disaient « surveillé » sans jamais dire **combien il reste et pour
+quoi faire**. C'est chiffré depuis le 2026-08-21, et le chiffrage vit au **PRD §15**
+— sa source normative — et non ici. Ce qu'il faut retenir pour clore ces lignes :
+
+- **264 o de RAM disponibles** pour de nouvelles données statiques (520 o libres
+  moins la réserve de pile de 256 o), contre **~52 o estimés** pour tout ce qui
+  reste à construire — UI, transport, persistance, destinations CV, RECORDING.
+  Marge d'environ **5×**. La persistance ne coûte presque rien parce que la banque
+  est **déjà** en RAM : l'écriture EEPROM la lit sur place, sans copie.
+- **6244 o de Flash** avant que le garde-fou refuse à 90 %. L'UI complète est le
+  seul poste vraiment coûteux à venir, de l'ordre de 2 à 4 ko.
+- **Le déclencheur est explicite**, il n'y a plus à en juger au cas par cas :
+  échec au-delà de +16 o de RAM ou +512 o de Flash non acquittés, plafonds à 256 o
+  libres ou 90 % de Flash. `--accept` ne se fait jamais sans regarder le
+  diagnostic par symboles.
+- **L'unique trou de la mesure de pile, et son obligation.** La sonde mesure ce
+  que le firmware **exécute pendant le run**. L'écriture EEPROM n'y est pas parce
+  qu'elle n'existe pas — mais elle n'y sera pas non plus **automatiquement** le
+  jour où elle existera : il faudra que le run la **provoque**. C'est la seule
+  chose à ne pas oublier au §11.
+
+### Les deux propriétés du rendu étalé, et le prix de s'en débarrasser — lignes 7 et 8
+
+**Ligne 7, le pic de 15,3 ms.** Deux façons de le supprimer, toutes deux évaluées :
+
+- *rastériser le titre sur deux passages*, en accumulant dans le tampon de 128 o
+  que U8g2 possède déjà — ne rien effacer ni envoyer entre les deux. Coût : 0 o de
+  RAM, mais une machine à états de dessin partiel qui **casse l'invariant du cycle
+  indivisible** sur lequel ADR 0001 repose, et une bande qui montre son ancien
+  contenu un passage de plus. Refusé : c'est beaucoup de fragilité pour un pic qui
+  concerne une image sur seize et tient déjà dans son budget ;
+- *raccourcir le titre ou réduire la police*. Refusé par le propriétaire, qui veut
+  des titres explicites.
+
+Le pic reste donc, et c'est un choix : un filet volontaire contre un défaut de
+notre propre logique de bande sale, qui se répare seul en quelques images.
+
+**Ligne 8, l'état mixte de ~4,6 ms.** Le seul remède est un double tampon, donc
+**1024 o** — contre 264 o disponibles. Ce n'est pas un arbitrage, c'est une
+impossibilité arithmétique. La ligne est close pour cette raison, et non parce
+qu'on aurait décidé de vivre avec.
 
 ## Règles de méthode nées de ces sujets
 
