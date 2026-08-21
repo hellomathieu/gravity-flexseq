@@ -37,6 +37,8 @@
 #include <avr_twi.h>
 #include <parts/ssd1306_virt.h>
 
+#include "simavr_uart_quiet.h"
+
 #define MCU      "atmega328p"
 #define F_CPU_HZ 16000000UL
 
@@ -121,6 +123,10 @@ int main(int argc, char **argv)
     g_avr = avr;
     avr_init(avr);
     avr_load_firmware(avr, &f);
+
+    /* Journal de console de l'UART desarme : le firmware emet du MIDI, et ce
+     * chemin de simavr lit un octet hors bornes. Voir simavr_uart_quiet.h. */
+    uart_quiet(avr, '0');
 
     /* L'ecran, pour que la boucle soit chargee comme en vrai. */
     static ssd1306_t oled;

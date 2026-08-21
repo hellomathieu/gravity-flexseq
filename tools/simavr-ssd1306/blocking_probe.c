@@ -71,6 +71,8 @@
 #include <avr_twi.h>
 #include <parts/ssd1306_virt.h>
 
+#include "simavr_uart_quiet.h"
+
 #define MCU          "atmega328p"
 #define F_CPU_HZ     16000000UL
 /* Borne des transactions retenues. Un run de 16 s en produit ~2100 : 20000 laisse
@@ -176,6 +178,10 @@ int main(int argc, char **argv)
     g_avr = avr;
     avr_init(avr);
     avr_load_firmware(avr, &f);
+
+    /* Journal de console de l'UART desarme : le firmware emet du MIDI, et ce
+     * chemin de simavr lit un octet hors bornes. Voir simavr_uart_quiet.h. */
+    uart_quiet(avr, '0');
 
     /* L'esclave SSD1306, cable sur le TWI dans les DEUX sens : sans le retour,
      * aucun ACK ne revient au maitre et le transfert avorte comme sous run_avr. */

@@ -44,6 +44,8 @@ extern "C" {
 
 #include <flexseq/PatternScreen.h>
 
+#include "simavr_uart_quiet.h"
+
 namespace scr = flexseq::screen;
 
 #define MCU      "atmega328p"
@@ -143,6 +145,10 @@ int main(int argc, char** argv)
     if (!avr) { fprintf(stderr, "MCU inconnu\n"); return 1; }
     avr_init(avr);
     avr_load_firmware(avr, &f);
+
+    /* Journal de console de l'UART desarme : le firmware emet du MIDI, et ce
+     * chemin de simavr lit un octet hors bornes. Voir simavr_uart_quiet.h. */
+    uart_quiet(avr, '0');
 
     ssd1306_init(avr, &oled, PANEL_W, PANEL_H);
     avr_irq_t* twi_out = avr_io_getirq(avr, AVR_IOCTL_TWI_GETIRQ(0), TWI_IRQ_OUTPUT);

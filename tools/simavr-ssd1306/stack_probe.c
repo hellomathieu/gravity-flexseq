@@ -41,6 +41,8 @@
 #include <avr_ioport.h>
 #include <parts/ssd1306_virt.h>
 
+#include "simavr_uart_quiet.h"
+
 #define MCU         "atmega328p"
 #define F_CPU_HZ    16000000UL
 #define PATTERN     0xC5
@@ -91,6 +93,10 @@ int main(int argc, char** argv)
     if (!avr) { fprintf(stderr, "MCU inconnu\n"); return 1; }
     avr_init(avr);
     avr_load_firmware(avr, &f);
+
+    /* Journal de console de l'UART desarme : le firmware emet du MIDI, et ce
+     * chemin de simavr lit un octet hors bornes. Voir simavr_uart_quiet.h. */
+    uart_quiet(avr, '0');
 
     const uint16_t ramend = (uint16_t)avr->ramend;
     if (end_addr >= ramend) {
