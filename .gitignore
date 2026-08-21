@@ -87,3 +87,10 @@ tools/simavr-test/*.hex
 
 # Etat local du Knowledge Checkpoint (jeton consomme par le hook PreCompact)
 .claude/state/
+
+# Reglages VS Code / PlatformIO : PROPRES A LA MACHINE, jamais versionnes.
+# PlatformIO les regenere avec des chemins ABSOLUS incluant le nom d'utilisateur
+# ("AUTOMATICALLY GENERATED FILE" en tete de launch.json), donc les versionner
+# publie l'identifiant du proprietaire sur un depot public. Les fichiers restent
+# en local et VS Code continue de fonctionner.
+.vscode/
