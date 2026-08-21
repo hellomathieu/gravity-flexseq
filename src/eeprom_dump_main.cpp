@@ -7,6 +7,7 @@ constexpr uint16_t EEPROM_BYTES = 1024;
 constexpr uint8_t BYTES_PER_RECORD = 16;
 constexpr uint32_t SERIAL_BAUD = 9600;
 constexpr uint16_t SETTLE_MS = 2000;
+constexpr uint8_t DUMP_REPEATS = 3;
 
 void emitHexByte(uint8_t value) {
     static const char DIGITS[] = "0123456789ABCDEF";
@@ -46,10 +47,12 @@ void setup() {
     Serial.begin(SERIAL_BAUD);
     delay(SETTLE_MS);
 
-    for (uint16_t address = 0; address < EEPROM_BYTES; address += BYTES_PER_RECORD) {
-        emitDataRecord(address);
+    for (uint8_t pass = 0; pass < DUMP_REPEATS; ++pass) {
+        for (uint16_t address = 0; address < EEPROM_BYTES; address += BYTES_PER_RECORD) {
+            emitDataRecord(address);
+        }
+        emitEndRecord();
     }
-    emitEndRecord();
     Serial.flush();
 }
 
