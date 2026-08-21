@@ -92,7 +92,9 @@ void setup() {
 }
 
 void loop() {
-    gravity.Process();
+    gravity.shift_button.Process();
+    gravity.play_button.Process();
+    gravity.encoder.Process();
 
     uint16_t ticks;
     noInterrupts();
@@ -112,5 +114,9 @@ void loop() {
             lastDrawnStep = step;
             beginFrame();
         }
+    }
+
+    for (uint8_t ch = 0; ch < flexseq::SequencerEngine::CHANNEL_COUNT; ++ch) {
+        gravity.outputs[ch].Process();
     }
 }
