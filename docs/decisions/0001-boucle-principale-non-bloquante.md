@@ -136,8 +136,16 @@ bandes de la même image pourraient montrer des contenus différents.
   comparaison. Non par doute sur le modèle de l'écran, qui est certain, mais
   contre un défaut de notre propre logique : un oubli se répare alors seul.
   Mesuré : passage médian **6,48 → 5,79 ms**, p90 **15,3 → 7,96 ms**, image
-  **47 → 41,7 ms**. Le pic de 14,5 ms ne subsiste que sur le rafraîchissement
-  périodique. Coût : **+9 o de RAM, +160 o de Flash**.
+  **47 → 41,7 ms** — chiffres **simulés**, ADC coupée. Coût : **+9 o de RAM,
+  +160 o de Flash**.
+  **Estimation matérielle, corrigée le 2026-08-21** (la taxe ADC de simavr était
+  elle-même mal mesurée, voir `CLAUDE.md`) : passage courant **6,13 ms** médian /
+  **8,44 ms** p90, image courante **44,2 ms**, et le pic du rafraîchissement
+  complet **15,31 ms** sur une image de **59,5 ms**. Le « 14,5 ms » publié avant
+  cette date était le pic *simulé*, présenté ailleurs comme s'il était matériel.
+  Le ratio du filet est désormais **mesuré et non postulé** : 1 image sur 16,0
+  sur 32 s de simulation, les images complètes étant reconnues à leurs **8**
+  bandes envoyées au lieu de 7.
   **Vérifié qu'aucune bande ne se vide jamais** : 20 000 relevés de la mémoire du
   panneau, un toutes les 0,5 ms (`WATCH=` sur `tools/run-screen-dump.sh`). Les
   minima bas mais non nuls sont des états **en cours de transfert** — une bande
