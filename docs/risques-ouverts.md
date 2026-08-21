@@ -35,6 +35,7 @@ soit clos sans qu'on l'ait noté, soit accepté sans qu'on l'ait dit.
 | 10 | **`decode-velvetscreen.py` exige le clone `GravityFW`** voisin | faible | acceptable | l'en-tête du script | rien : outil à usage unique, erreur explicite et URL donnée si le clone manque |
 | 11 | **`CLAUDE.md` ne survit à aucun `git clone`** — tout l'outillage y est documenté | faible | **assumé** | `.claude/rules/knowledge-persistence.md` | décision explicite du propriétaire (2026-08-19). Ne pas la rouvrir sans lui |
 
+| 11b | **Aucun contrôle n'est relié dans `main.cpp`** : seul `clock.AttachIntHandler()` est appelé — ni EXT, ni source, ni tempo, ni start/stop ; boutons et encodeur sont `Process()`-és sans callback relié | moyenne | **constaté 2026-08-21**, état d'avancement et non défaut | PRD §16 | relier l'UI (§12) et le transport (§8). Conséquence : un flash validerait la **chaîne matérielle**, pas les fonctionnalités |
 | 12 | **L'impulsion de trigger fait 8,8 ms et non les 5 ms configurés** : l'extinction est en fin de `loop()`, donc la durée est 5 ms arrondis au passage suivant | faible | **mesuré, à surveiller** | `CLAUDE.md` (fonction musicale) | rien aujourd'hui — 1,8 % d'un step à 120 BPM en `/1`. Devient un sujet à SUBDIV rapide : à `x4` (125 ms/step) l'impulsion vaut 7 % du step, et au pire passage (15,3 ms) 12 % |
 | 13 | **`PULSE` de l'expandeur MIDI reste muet** : `main.cpp` ne pilote pas `gravity.pulse` | faible | observation | le code | une décision produit : l'expandeur n'est pas encore dans le chemin (PRD §16) |
 
