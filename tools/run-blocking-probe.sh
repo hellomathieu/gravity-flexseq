@@ -55,6 +55,19 @@ set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PASS_BUDGET_MS="${PASS_BUDGET_MS:-12}"
 DURATION="${DURATION:-32}"
+# ENVNAME choisit le firmware mesure, et le defaut est env:wokwi — pas la
+# production — parce que l'objet de cette sonde est de BORNER la boucle quand elle
+# REND. Depuis le 2026-08-22 la production demarre sur l'ecran principal, qui ne
+# porte aucun element variant dans le temps : elle ne redessine donc presque
+# jamais, et la mesurer ainsi ne rend que quelques echantillons. env:wokwi affiche
+# EDIT PATTERN avec un playhead qui avance, avec le MEME renderer et le meme
+# etalement : c'est l'ecran que la production atteint des que l'utilisateur entre
+# dans EDIT, donc son pire cas.
+#
+# Ce que ce defaut ne porte PAS : env:wokwi n'echantillonne pas le CV, donc ses
+# chiffres n'incluent pas la charge de l'ISR de l'ADC — mesuree a 5,6 % de CPU sur
+# la production. ENVNAME=nanoatmega328 mesure la production telle qu'elle demarre.
+ENVNAME="${ENVNAME:-wokwi}"
 
 if [ -t 1 ]; then
   C_OK=$'\033[32m'; C_ERR=$'\033[31m'; C_DIM=$'\033[2m'; C_B=$'\033[1m'; C_0=$'\033[0m'; TTY=1
@@ -89,8 +102,8 @@ else
 fi
 
 # --- 2. Firmware -------------------------------------------------------------
-progress "build env:nanoatmega328"
-if "$PIO" run -e nanoatmega328 -d "$ROOT" > "$LOG" 2>&1; then
+progress "build env:$ENVNAME"
+if "$PIO" run -e "$ENVNAME" -d "$ROOT" > "$LOG" 2>&1; then
   printf '  %s✅%s firmware               %s%s%s\n' "$C_OK" "$C_0" "$C_DIM" \
     "$(grep -E '^RAM:' "$LOG" | sed 's/.*(used /RAM /; s/ bytes from .*/ o/')" "$C_0"
 else
@@ -103,7 +116,7 @@ fi
 AVR_NM="$(command -v avr-nm || echo "$HOME/.platformio/packages/toolchain-atmelavr/bin/avr-nm")"
 DONE=""
 if [ -x "$AVR_NM" ]; then
-  SYM="$("$AVR_NM" --radix=x "$ROOT/.pio/build/nanoatmega328/firmware.elf" \
+  SYM="$("$AVR_NM" --radix=x "$ROOT/.pio/build/$ENVNAME/firmware.elf" \
          | grep -E "N_19completedE\$" | head -1 | cut -d' ' -f1)"
   [ -n "$SYM" ] && DONE="$(printf '0x%x' $(( 0x$SYM - 0x800000 )))"
 fi
@@ -112,7 +125,7 @@ fi
 
 progress "simulation ($DURATION s, deux regimes)"
 set +e
-"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$DURATION" $DONE > "$LOG" 2>/dev/null
+"$BIN" "$ROOT/.pio/build/$ENVNAME/firmware.hex" "$DURATION" $DONE > "$LOG" 2>/dev/null
 PROBE=$?
 set -e
 # Le tas de simavr est corrompu pendant un run (voir l'en-tete du harnais) : la

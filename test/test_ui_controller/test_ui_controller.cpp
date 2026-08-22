@@ -492,6 +492,49 @@ void test_play_realigns_the_channels_when_it_starts() {
     }
 }
 
+// Le compteur de revisions est ce qui declenche un redessin ET une sauvegarde
+// differee : s'il ne bougeait pas, une edition resterait invisible et non
+// persistee. Une revision de trop ne coute rien, une manquante coute l'edition.
+void test_every_handled_gesture_moves_the_revision() {
+    Rig r;
+    const uint8_t start = r.ui.revision();
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_NOT_EQUAL(start, r.ui.revision());
+    const uint8_t afterRotate = r.ui.revision();
+    r.ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_NOT_EQUAL(afterRotate, r.ui.revision());
+}
+
+void test_setting_the_tempo_or_the_source_moves_the_revision() {
+    Rig r;
+    const uint8_t start = r.ui.revision();
+    TEST_ASSERT_TRUE(r.ui.setTempo(174));
+    TEST_ASSERT_NOT_EQUAL(start, r.ui.revision());
+    const uint8_t afterTempo = r.ui.revision();
+    TEST_ASSERT_TRUE(r.ui.setClockSource(3));
+    TEST_ASSERT_NOT_EQUAL(afterTempo, r.ui.revision());
+}
+
+void test_a_refused_setting_leaves_the_revision_alone() {
+    Rig r;
+    const uint8_t start = r.ui.revision();
+    TEST_ASSERT_FALSE(r.ui.setTempo(UiController::MAX_TEMPO + 1));
+    TEST_ASSERT_FALSE(r.ui.setClockSource(UiController::CLOCK_SOURCE_COUNT));
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(start, r.ui.revision(),
+        "un reglage refuse ne doit pas provoquer de sauvegarde");
+}
+
+void test_the_revision_wraps_without_ever_matching_its_neighbour() {
+    Rig r;
+    uint8_t previous = r.ui.revision();
+    for (uint16_t i = 0; i < 600; ++i) {
+        r.ui.handle(UiController::EVENT_ROTATE, 1);
+        TEST_ASSERT_NOT_EQUAL_MESSAGE(previous, r.ui.revision(),
+            "deux revisions consecutives ne doivent jamais etre egales");
+        previous = r.ui.revision();
+    }
+}
+
 void test_shift_press_is_deliberately_free_and_changes_nothing() {
     Rig r;
     r.enterEdit();
@@ -544,6 +587,10 @@ int main(int, char**) {
 
     RUN_TEST(test_play_toggles_the_transport_at_every_level);
     RUN_TEST(test_play_realigns_the_channels_when_it_starts);
+    RUN_TEST(test_every_handled_gesture_moves_the_revision);
+    RUN_TEST(test_setting_the_tempo_or_the_source_moves_the_revision);
+    RUN_TEST(test_a_refused_setting_leaves_the_revision_alone);
+    RUN_TEST(test_the_revision_wraps_without_ever_matching_its_neighbour);
     RUN_TEST(test_shift_press_is_deliberately_free_and_changes_nothing);
 
     return UNITY_END();

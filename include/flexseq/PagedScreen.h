@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+#include <flexseq/MainScreen.h>
 #include <flexseq/Pattern.h>
 #include <flexseq/PatternScreen.h>
 
@@ -53,10 +54,13 @@ public:
     static constexpr uint8_t ROWS = screen::HEIGHT / 8;   // 8 bandes
     static constexpr uint8_t FULL_REFRESH_EVERY = 16;     // filet
 
+    enum Mode : uint8_t { MODE_PATTERN, MODE_MAIN };
+
     PagedScreen()
         : busy_(false), row_(0), tiles_(1), full_(true), sinceFull_(FULL_REFRESH_EVERY),
           titleHash_(0), drawnTitleHash_(0), titleEverDrawn_(false),
-          footerHash_(0), drawnFooterHash_(0), footerEverDrawn_(false) {}
+          footerHash_(0), drawnFooterHash_(0), footerEverDrawn_(false),
+          mode_(MODE_PATTERN) {}
 
     // Vrai tant qu'une image reste a terminer.
     bool busy() const { return busy_; }
@@ -66,7 +70,28 @@ public:
     // Le contenu du Pattern est COPIE par valeur : il est partage entre channels
     // et editable pendant la lecture (PRD 6.3), donc sans copie deux bandes de la
     // meme image pourraient montrer des contenus differents.
+    Mode mode() const { return mode_; }
+
+    // L'ecran principal : pas de saut de bande, la mise en page ne s'y prete pas
+    // encore. Un changement d'ecran force une image COMPLETE, sinon les pixels de
+    // l'ecran precedent survivraient dans une bande sautee.
+    void begin(Display& display, const MainScreenModel& model) {
+        const bool switched = (mode_ != MODE_MAIN);
+        mode_ = MODE_MAIN;
+        main_ = model;
+        if (main_.headlineWidth == 0) {
+            char headline[6];
+            detail::headlineOf(main_, headline);
+            if (headline[0] != '\0') {
+                main_.headlineWidth = static_cast<uint8_t>(display.getStrWidth(headline));
+            }
+        }
+        startFrame(display, switched);
+    }
+
     void begin(Display& display, const PatternScreenModel& model) {
+        const bool switched = (mode_ != MODE_PATTERN);
+        mode_ = MODE_PATTERN;
         model_ = model;
         if (model.pattern != nullptr) {
             pattern_ = *model.pattern;
@@ -79,17 +104,7 @@ public:
         }
         titleHash_ = hashOf(model_.title);
         footerHash_ = hashOf(model_.footer);
-
-        tiles_ = display.getBufferTileHeight();
-        if (tiles_ == 0) {
-            tiles_ = 1;
-        }
-        full_ = (sinceFull_ >= FULL_REFRESH_EVERY);
-        sinceFull_ = full_ ? 1 : static_cast<uint8_t>(sinceFull_ + 1);
-
-        row_ = 0;
-        busy_ = true;
-        renderFrom(display);
+        startFrame(display, switched);
     }
 
     // Rend la bande suivante qui en a besoin. Renvoie false quand l'image est
@@ -106,6 +121,19 @@ public:
     }
 
 private:
+    void startFrame(Display& display, bool switched) {
+        tiles_ = display.getBufferTileHeight();
+        if (tiles_ == 0) {
+            tiles_ = 1;
+        }
+        full_ = switched || (sinceFull_ >= FULL_REFRESH_EVERY);
+        sinceFull_ = full_ ? 1 : static_cast<uint8_t>(sinceFull_ + 1);
+
+        row_ = 0;
+        busy_ = true;
+        renderFrom(display);
+    }
+
     // Avance jusqu'a la premiere bande a rendre, la rend, et dit s'il en restait.
     bool renderFrom(Display& display) {
         while (row_ < ROWS && skippable(row_)) {
@@ -124,6 +152,11 @@ private:
         const Band band = bandOf(row);
         display.setBufferCurrTileRow(row);
         display.clearBuffer();
+        if (mode_ == MODE_MAIN) {
+            drawMainScreen(display, main_, band);
+            display.sendBuffer();
+            return;
+        }
         drawPatternScreen(display, model_, band);
         if (titleBand(band)) {
             drawnTitleHash_ = titleHash_;
@@ -148,7 +181,7 @@ private:
     }
 
     bool skippable(uint8_t row) const {
-        if (full_) {
+        if (full_ || mode_ == MODE_MAIN) {
             return false;
         }
         const Band band = bandOf(row);
@@ -207,6 +240,8 @@ private:
     uint16_t footerHash_;
     uint16_t drawnFooterHash_;
     bool footerEverDrawn_;
+    MainScreenModel main_;
+    Mode mode_;
 };
 
 }  // namespace flexseq

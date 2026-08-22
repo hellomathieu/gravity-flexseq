@@ -79,7 +79,8 @@ UiController::UiController(SequencerEngine& engine, PatternBank& bank, Transport
       stepCursor_(0),
       fieldOpen_(false),
       tempo_(DEFAULT_TEMPO),
-      clockSource_(0) {}
+      clockSource_(0),
+      revision_(0) {}
 
 bool UiController::isChannelTab() const {
     return currentTab_ >= TAB_FIRST_CHANNEL
@@ -132,6 +133,7 @@ Pattern* UiController::currentPattern() const {
 }
 
 void UiController::handle(Event event, int8_t delta) {
+    ++revision_;
     if (event == EVENT_PLAY_PRESS) {
         togglePlay();
         return;
@@ -237,6 +239,7 @@ bool UiController::setTempo(uint16_t bpm) {
         return false;
     }
     tempo_ = bpm;
+    ++revision_;
     return true;
 }
 
@@ -245,6 +248,7 @@ bool UiController::setClockSource(uint8_t source) {
         return false;
     }
     clockSource_ = source;
+    ++revision_;
     return true;
 }
 

@@ -132,6 +132,7 @@ int main(int argc, char** argv)
     const uint64_t target = (uint64_t)(seconds * (double)F_CPU_HZ);
     const uint64_t enc_period = (uint64_t)(0.005 * F_CPU_HZ);   /* rotation vive */
     const uint64_t midi_period = (uint64_t)(0.002 * F_CPU_HZ);  /* > 320 us / octet */
+    const uint64_t inject_until = (uint64_t)(0.5 * (double)target);
     uint64_t next_enc = (uint64_t)(0.5 * F_CPU_HZ);
     uint64_t next_midi = next_enc;
     uint8_t enc_phase = 0;
@@ -139,7 +140,8 @@ int main(int argc, char** argv)
 
     printf("firmware   %s\n", fw);
     printf("RAM libre  %u o  (_end 0x%04x .. RAMEND 0x%04x)\n", free_ram, end_addr, ramend);
-    printf("injection  %s\n\n", quiet ? "AUCUNE (QUIET)" : "encodeur + MIDI");
+    printf("injection  %s\n\n",
+           quiet ? "AUCUNE (QUIET)" : "encodeur + MIDI, premiere moitie seulement");
 
     while (avr->cycle < target) {
         const int state = avr_run(avr);
@@ -147,7 +149,12 @@ int main(int argc, char** argv)
             printf("!! CPU arrete (state=%d)\n", state);
             break;
         }
-        if (quiet) continue;
+        /* L'injection s'ARRETE a mi-course. Les ISR ont alors ete parcourues, et
+         * la seconde moitie laisse au firmware le silence dont son ecriture
+         * differee a besoin : une rotation continue repousserait indefiniment le
+         * delai de calme, et le chemin d'ecriture EEPROM sortirait de la mesure
+         * sans que rien ne le dise. */
+        if (quiet || avr->cycle >= inject_until) continue;
 
         if (avr->cycle >= next_enc && encA && encB) {
             next_enc += enc_period;

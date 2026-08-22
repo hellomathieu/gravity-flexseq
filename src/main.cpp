@@ -25,8 +25,10 @@ flexseq::Preferences preferences;
 flexseq::PersistentImage persistentImage(patternBank, engine, ui, preferences);
 flexseq::PersistenceScheduler persistence;
 flexseq::EepromStorage eeprom;
-char uiFooter[] = "CH1";
+// "CH1  120BPM" : le channel et le tempo, reecrits a chaque image.
+char uiFooter[13] = "CH1  120BPM";
 constexpr uint8_t UI_FOOTER_CHANNEL = 2;
+constexpr uint8_t UI_FOOTER_TEMPO = 5;
 
 // --- UI ---------------------------------------------------------------------
 // Rendu ETALE : UNE BANDE PAR PASSAGE de loop() (ADR 0001). Le mode _1_ de
@@ -39,8 +41,6 @@ constexpr uint8_t UI_FOOTER_CHANNEL = 2;
 // On ne redessine QUE lorsque l'affichage a reellement change, et on ne demarre
 // jamais une image plus souvent que UI_MIN_INTERVAL_MS : le drainage des ticks
 // et l'emission des triggers passent toujours en premier dans loop().
-constexpr uint8_t UI_CHANNEL = 0;
-constexpr int8_t UI_CURSOR = 0;
 constexpr uint16_t UI_MIN_INTERVAL_MS = 40;
 
 // "EDIT PATTERN A1" : les deux derniers caracteres suivent le pattern courant.
@@ -50,7 +50,8 @@ constexpr uint8_t UI_TITLE_NUM = 14;
 
 uint32_t uiLastDrawMs = 0;
 int8_t uiLastStep = -2;
-int8_t uiLastPattern = -2;
+uint8_t uiLastRevision = 0xFF;
+uint8_t savedRevision = 0;
 
 // L'image en cours. PagedScreen gele le modele et le contenu du pattern, puis
 // rend une bande par appel. `decltype` evite de reecrire ici le type d'affichage
@@ -66,28 +67,70 @@ void onOutputTick(uint32_t) {
     ++pendingTicks;
 }
 
-// Ouvre une image : releve l'etat a afficher et le confie a PagedScreen, qui le
-// gele. Sans effet si rien n'est affichable.
-void beginUiFrame() {
-    const int8_t selected = engine.getSelectedPattern(UI_CHANNEL);
+void beginEditFrame(uint8_t channel) {
+    const int8_t selected = engine.getSelectedPattern(channel);
     if (selected < 0) {
         return;
     }
     uiTitle[UI_TITLE_BANK] = (selected < 8) ? 'A' : 'B';
     uiTitle[UI_TITLE_NUM] = static_cast<char>('1' + (selected % 8));
 
+    uiFooter[UI_FOOTER_CHANNEL] = static_cast<char>('1' + channel);
+    const uint8_t written =
+        flexseq::detail::writeUnsigned(uiFooter + UI_FOOTER_TEMPO, ui.tempo());
+    uiFooter[UI_FOOTER_TEMPO + written] = 'B';
+    uiFooter[UI_FOOTER_TEMPO + written + 1] = 'P';
+    uiFooter[UI_FOOTER_TEMPO + written + 2] = 'M';
+    uiFooter[UI_FOOTER_TEMPO + written + 3] = '\0';
+
     flexseq::PatternScreenModel model;
     model.title = uiTitle;
     model.titleWidth = 0;  // PagedScreen la mesure une fois par image
     model.pattern = patternBank.getPattern(static_cast<uint8_t>(selected));
-    model.length = engine.getEffectiveLength(UI_CHANNEL);
-    model.cursor = UI_CURSOR;
-    model.playhead = engine.effectiveStep(UI_CHANNEL);
-    model.barLength = static_cast<uint8_t>(engine.getBarLength(UI_CHANNEL));
-    uiFooter[UI_FOOTER_CHANNEL] = static_cast<char>('1' + UI_CHANNEL);
+    model.length = engine.getEffectiveLength(channel);
+    model.cursor = static_cast<int8_t>(ui.stepCursor());
+    model.playhead = engine.effectiveStep(channel);
+    model.barLength = static_cast<uint8_t>(engine.getBarLength(channel));
     model.footer = uiFooter;
 
     uiScreen.begin(gravity.display, model);
+}
+
+void beginMainFrame() {
+    const int8_t channel = ui.selectedChannel();
+
+    flexseq::MainScreenModel model;
+    model.tab = ui.currentTab();
+    model.insideTab = (ui.level() == flexseq::UiController::LEVEL_TAB);
+    model.cursor = ui.cursor();
+    model.fieldOpen = ui.fieldOpen();
+    model.fieldCount = ui.fieldCount();
+    model.patternIndex = channel >= 0
+        ? engine.getSelectedPattern(static_cast<uint8_t>(channel))
+        : -1;
+    model.length = channel >= 0
+        ? engine.getEffectiveLength(static_cast<uint8_t>(channel))
+        : 0;
+    model.subdiv = channel >= 0 ? engine.getSubdiv(static_cast<uint8_t>(channel)) : 0;
+    model.barLength = channel >= 0
+        ? static_cast<uint8_t>(engine.getBarLength(static_cast<uint8_t>(channel)))
+        : 0;
+    model.tempo = ui.tempo();
+    model.clockSource = ui.clockSource();
+    model.headlineWidth = 0;  // PagedScreen la mesure une fois par image
+
+    uiScreen.begin(gravity.display, model);
+}
+
+// Ouvre une image sur l'ecran que l'etat d'interface designe : EDIT PATTERN quand
+// on y est, l'ecran principal partout ailleurs.
+void beginUiFrame() {
+    const int8_t channel = ui.selectedChannel();
+    if (ui.level() == flexseq::UiController::LEVEL_EDIT && channel >= 0) {
+        beginEditFrame(static_cast<uint8_t>(channel));
+    } else {
+        beginMainFrame();
+    }
 }
 
 }  // namespace
@@ -141,6 +184,14 @@ void loop() {
     flexseq::input::process(millis());
     flexseq::transport::apply(ui);
 
+    // Toute edition rend l'etat a sauvegarder. Le compteur de revisions suffit :
+    // il change des qu'un geste a ete traite, et une sauvegarde de trop ne coute
+    // rien puisque seuls les octets reellement modifies sont ecrits (PRD 11.1).
+    if (ui.revision() != savedRevision) {
+        savedRevision = ui.revision();
+        persistence.markDirty(millis());
+    }
+
     // Atomically drain the ticks accumulated by the ISR, then advance once.
     uint16_t ticks;
     noInterrupts();
@@ -175,14 +226,23 @@ void loop() {
     if (uiScreen.busy()) {
         uiScreen.advance(gravity.display);
     } else {
-        const int8_t step = engine.effectiveStep(UI_CHANNEL);
-        const int8_t pat = engine.getSelectedPattern(UI_CHANNEL);
-        if (step != uiLastStep || pat != uiLastPattern) {
+        // Le playhead ne se lit QUE sur l'ecran EDIT : l'ecran principal ne
+        // porte aucun element qui varie dans le temps. Le redessiner a chaque
+        // step y coutait huit bandes sans rien changer a l'image, et privait la
+        // persistance de ses passages sans tick.
+        const int8_t channel = ui.selectedChannel();
+        const bool editing =
+            (ui.level() == flexseq::UiController::LEVEL_EDIT) && channel >= 0;
+        const int8_t step = editing
+            ? engine.effectiveStep(static_cast<uint8_t>(channel))
+            : -1;
+        const uint8_t revision = ui.revision();
+        if (step != uiLastStep || revision != uiLastRevision) {
             const uint32_t now = millis();
             if (now - uiLastDrawMs >= UI_MIN_INTERVAL_MS) {
                 uiLastDrawMs = now;
                 uiLastStep = step;
-                uiLastPattern = pat;
+                uiLastRevision = revision;
                 beginUiFrame();
             }
         }

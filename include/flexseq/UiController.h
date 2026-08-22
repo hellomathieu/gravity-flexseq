@@ -77,6 +77,8 @@ public:
 
     uint8_t stepCursor() const { return stepCursor_; }
 
+    uint8_t revision() const { return revision_; }
+
     uint16_t tempo() const { return tempo_; }
     uint8_t clockSource() const { return clockSource_; }
 
@@ -107,6 +109,7 @@ private:
     bool fieldOpen_;
     uint16_t tempo_;
     uint8_t clockSource_;
+    uint8_t revision_;
 };
 
 }  // namespace flexseq

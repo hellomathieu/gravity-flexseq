@@ -10,6 +10,7 @@
 
 using flexseq::PagedScreen;
 using flexseq::Pattern;
+using flexseq::MainScreenModel;
 using flexseq::PatternScreenModel;
 namespace screen = flexseq::screen;
 
@@ -147,6 +148,10 @@ struct FakeDisplay {
         drawVLine(static_cast<uint8_t>(x + w - 1), y, h);
     }
 
+    void drawBox(uint8_t x, uint8_t y, uint8_t w, uint8_t h) {
+        for (uint8_t i = 0; i < h; ++i) drawHLine(x, static_cast<uint8_t>(y + i), w);
+    }
+
     uint8_t drawStr(uint8_t, uint8_t, const char* s) {
         ++ops;
         if (page < PAGES) ++opsPerPage[page];
@@ -175,6 +180,23 @@ PatternScreenModel modelOf(const Pattern& pattern) {
     model.barLength = 4;
     model.footer = "CH1  120BPM";
     return model;
+}
+
+MainScreenModel mainModelOf() {
+    MainScreenModel m;
+    m.tab = 1;
+    m.insideTab = false;
+    m.cursor = 0;
+    m.fieldOpen = false;
+    m.fieldCount = 5;
+    m.patternIndex = 0;
+    m.length = 16;
+    m.subdiv = 1;
+    m.barLength = 4;
+    m.tempo = 120;
+    m.clockSource = 0;
+    m.headlineWidth = 0;
+    return m;
 }
 
 // Mene l'image en cours a son terme. Renvoie le nombre d'appels a advance().
@@ -502,6 +524,63 @@ void test_a_whole_frame_leaves_ink(void) {
     TEST_ASSERT_GREATER_THAN_UINT16(0, display.ink());
 }
 
+/*
+ * L'ecran principal, rendu par le meme etalement (lot 7)
+ */
+
+void test_the_main_screen_sends_every_band(void) {
+    reset();
+    const uint8_t before = display.sendCalls;
+    paged.begin(display, mainModelOf());
+    finishFrame();
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(FakeDisplay::PAGES,
+        static_cast<uint8_t>(display.sendCalls - before),
+        "l'ecran principal ne saute aucune bande");
+    TEST_ASSERT_EQUAL(flexseq::PagedScreen<FakeDisplay>::MODE_MAIN, paged.mode());
+}
+
+void test_the_main_screen_never_skips_even_on_a_second_frame(void) {
+    reset();
+    paged.begin(display, mainModelOf());
+    finishFrame();
+    const uint8_t before = display.sendCalls;
+    paged.begin(display, mainModelOf());
+    finishFrame();
+    TEST_ASSERT_EQUAL_UINT8(FakeDisplay::PAGES,
+                            static_cast<uint8_t>(display.sendCalls - before));
+}
+
+// Changer d'ecran doit forcer une image COMPLETE : sinon une bande sautee
+// garderait les pixels de l'ecran precedent, et le saut est justement conditionne
+// par une empreinte qui ne connait pas le changement d'ecran.
+void test_switching_screen_forces_a_full_frame(void) {
+    reset();
+    paged.begin(display, modelOf(source));
+    finishFrame();
+    paged.begin(display, modelOf(source));   // titre identique : bandes sautees
+    finishFrame();
+
+    paged.begin(display, mainModelOf());     // bascule vers l'ecran principal
+    finishFrame();
+
+    memset(display.sent, 0, sizeof(display.sent));
+    const uint8_t before = display.sendCalls;
+    paged.begin(display, modelOf(source));   // retour a EDIT
+    finishFrame();
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(FakeDisplay::PAGES,
+        static_cast<uint8_t>(display.sendCalls - before),
+        "le retour a EDIT doit tout redessiner, pas sauter le titre");
+    TEST_ASSERT_TRUE(display.sent[FakeDisplay::PAGES - 1]);
+    TEST_ASSERT_TRUE(display.sent[0]);
+}
+
+void test_the_main_screen_leaves_ink(void) {
+    reset();
+    paged.begin(display, mainModelOf());
+    finishFrame();
+    TEST_ASSERT_TRUE_MESSAGE(display.ops > 0, "l'ecran principal n'a rien dessine");
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_begin_renders_and_sends_the_first_band);
@@ -519,5 +598,10 @@ int main(int, char**) {
     RUN_TEST(test_without_a_footer_no_band_below_the_grid_is_skipped);
     RUN_TEST(test_two_titles_with_the_same_character_sum_are_distinguished);
     RUN_TEST(test_the_safety_net_forces_a_full_frame_periodically);
+
+    RUN_TEST(test_the_main_screen_sends_every_band);
+    RUN_TEST(test_the_main_screen_never_skips_even_on_a_second_frame);
+    RUN_TEST(test_switching_screen_forces_a_full_frame);
+    RUN_TEST(test_the_main_screen_leaves_ink);
     return UNITY_END();
 }
