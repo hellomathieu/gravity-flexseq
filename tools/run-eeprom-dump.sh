@@ -276,7 +276,10 @@ with open(OUT, "w", encoding="ascii") as handle:
 
 erased = sum(1 for v in data.values() if v == 0xFF)
 print()
-print(f"  bpm enregistre : {data[0] | (data[1] << 8)}   (adresse 0, saveState() du firmware d'origine)")
+print(f"  bpm enregistre : {data[0]}   (octet 0, saveState() du firmware d'origine)")
+code = data.get(1023)
+verdict = "conforme" if code == ord("D") else "INATTENDU, disposition possiblement differente"
+print(f"  memCode @1023  : {code} = {chr(code) if code and 32 <= code < 127 else '?'}   attendu 'D' = 68 -> {verdict}")
 print(f"  cellules jamais ecrites : {erased} sur {EEPROM_BYTES} ({100 * erased / EEPROM_BYTES:.1f} %)")
 print(f"  ecrit : {OUT}")
 PYTHON
