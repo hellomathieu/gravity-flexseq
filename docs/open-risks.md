@@ -1,6 +1,6 @@
 # Open risks and watch items
 
-**Last review: 2026-08-22.** Nine open lines, eighteen closed or accepted.
+**Last review: 2026-08-22.** Eleven open lines, eighteen closed or accepted.
 
 ## What this document is, and is not
 
@@ -19,7 +19,7 @@ either closed without anyone noting it, or accepted without anyone saying so.
 
 ## What is still open
 
-Nine lines, and each one states **what it is waiting for and from whom**. A line
+Eleven lines, and each one states **what it is waiting for and from whom**. A line
 that waits for nothing from nobody no longer belongs here: it is in the table
 below.
 
@@ -33,6 +33,8 @@ below.
 | 20 | **libGravity's encoder has no debounce, and the dependency says so**: `_rotate_change()` carries the literal comment `// Validation (TODO: add debounce check)`. Observed on the module: two fast detents produce **no event at all**, because a bounced detent gives +1 then -1 and the position returns to where it was | medium | absorb it in `InputAdapter` (**ADR 0002**), together with line 14, **while wiring the UI (PRD §12.1)**. Not a loss of counts: the library *accelerates* fast rotation (x3 under 16 ms, x2 under 32 ms), so a real fast turn would be amplified, never erased. What is seen is cancellation |
 | 21 | **Two persisted preferences of the original firmware are hardcoded or absent in FlexSeq**: `rotateScreen` (FlexSeq fixes `U8G2_R2`) and `reverseEnc` (never set, and libGravity's default is the opposite of the original's -- clockwise decrements on the module) | low | expose both in the settings tab (**PRD §4.1**, §12.1), and call `SetReverseDirection(true)` in `InputAdapter` so the default matches the original. Not a defect of either library: encoder direction depends on the wiring of the two pins, which is why both expose the setting |
 | 22 | **The re-arm threshold assumes the source falls back below +0.5 V.** A source that idles higher latches the gate for good: one reset, never another. Measured on the module: a Gravity output, switched off, presents about **+1.5 V** to a CV input (+153 in `Read()` units, against -27 with the cable out), so seen from the jack it is high-or-floating rather than high-or-low | low | **no decision taken.** Raising the threshold is an arbitration, and it needs measurements of several sources, not this one case. Decide it while implementing the CV destinations (PRD §10.2). The resting noise is measured at **-26 ± 3** on both channels, so the +1 V arm threshold keeps 128 counts of margin -- the arm side is not in question |
+| 23 | **Restoring the original firmware has never been tested, and the original is already off the module.** The backup exists and is verified, but restoring it is a claim, not a fact. PRD §17 and §19 make that ability a project constraint | **dominant** | run it. Measured on the backup (PRD §2): the bootloader is optiboot, 512 bytes at `0x7E00`, and the original application ends at `0x6BFF`, so the HEX **must be trimmed** to `0x0000`-`0x6BFF` -- sending the bootloader its own pages would fail verification. Closing criterion: the original boots, and **the owner's eight patterns and his 120 BPM are still there**, which proves the restore and the untouched EEPROM in one go. Decided 2026-08-22 to do this **before** implementing the UI, since the escape hatch is already due |
+| 24 | **1536 bytes of Flash may be available beyond what the guard assumes.** PlatformIO declares 30720 (32768 − 2048) while the bootloader measures 512 bytes | low, and it is an opportunity rather than a risk | read the `BOOTSZ` fuse, which needs an ISP programmer -- the bootloader returns `0x0` for fuses. What is measured is the *content* of the top 512 bytes, not the space `BOOTSZ` reserves, so the figure stays an inference. **30720 remains the safe assumption and is not touched.** Would matter if the Flash budget tightens at PRD §12.1 |
 | 12 | **The trigger pulse measures 8.8 ms** instead of the 5 ms configured: the auto-off sits at the end of `loop()`, so 5 ms rounded up to the next pass | low | **nothing today** — 1.8 % of a step at 120 BPM in `/1`. To revisit once fast SUBDIV exists: at `x4` (125 ms/step) it is 7 % of the step, and 12 % on the worst pass. The threshold is written down; it no longer has to be rediscovered |
 
 ## What is closed or accepted
