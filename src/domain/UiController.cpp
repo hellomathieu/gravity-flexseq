@@ -58,6 +58,20 @@ uint8_t clampIndex(uint8_t current, int16_t delta, uint8_t count) {
     return static_cast<uint8_t>(value);
 }
 
+// L'acceleration de libGravity (x3 sous 16 ms) ne sert que les plages trop
+// grandes pour se parcourir cran par cran. Le tempo est la seule. Partout
+// ailleurs un cran vaut un pas, sans quoi la navigation saute des selections —
+// constate sur le module le 2026-08-22.
+int8_t oneStep(int8_t delta) {
+    if (delta > 0) {
+        return 1;
+    }
+    if (delta < 0) {
+        return -1;
+    }
+    return 0;
+}
+
 int8_t indexOfChoice(uint8_t (*choiceAt)(uint8_t), uint8_t count, uint8_t value) {
     for (uint8_t index = 0; index < count; ++index) {
         if (choiceAt(index) == value) {
@@ -151,7 +165,7 @@ void UiController::handle(Event event, int8_t delta) {
 void UiController::handleTabBar(Event event, int8_t delta) {
     switch (event) {
         case EVENT_ROTATE:
-            currentTab_ = wrapIndex(currentTab_, delta, TAB_COUNT);
+            currentTab_ = wrapIndex(currentTab_, oneStep(delta), TAB_COUNT);
             cursor_ = 0;
             fieldOpen_ = false;
             break;
@@ -173,7 +187,7 @@ void UiController::handleTab(Event event, int8_t delta) {
             if (fieldOpen_) {
                 adjustField(delta);
             } else {
-                cursor_ = wrapIndex(cursor_, delta, fieldCount());
+                cursor_ = wrapIndex(cursor_, oneStep(delta), fieldCount());
             }
             break;
         case EVENT_SHIFT_ROTATE:
@@ -204,7 +218,7 @@ void UiController::handleTab(Event event, int8_t delta) {
 void UiController::handleEdit(Event event, int8_t delta) {
     switch (event) {
         case EVENT_ROTATE:
-            stepCursor_ = wrapIndex(stepCursor_, delta, STEP_COUNT);
+            stepCursor_ = wrapIndex(stepCursor_, oneStep(delta), STEP_COUNT);
             break;
         case EVENT_ROTATE_HELD:
             adjustRatchet(delta);
@@ -220,7 +234,8 @@ void UiController::handleEdit(Event event, int8_t delta) {
             const int8_t channel = selectedChannel();
             if (channel >= 0) {
                 const uint8_t next = wrapIndex(
-                    static_cast<uint8_t>(channel), delta, SequencerEngine::CHANNEL_COUNT
+                    static_cast<uint8_t>(channel), oneStep(delta),
+                    SequencerEngine::CHANNEL_COUNT
                 );
                 currentTab_ = static_cast<uint8_t>(TAB_FIRST_CHANNEL + next);
             }
@@ -252,8 +267,9 @@ bool UiController::setClockSource(uint8_t source) {
     return true;
 }
 
-void UiController::adjustField(int8_t delta) {
+void UiController::adjustField(int8_t accelerated) {
     const int8_t channel = selectedChannel();
+    const int8_t delta = field() == FIELD_TEMPO ? accelerated : oneStep(accelerated);
     switch (field()) {
         case FIELD_TEMPO:
             tempo_ = static_cast<uint16_t>(clampRange(
@@ -344,7 +360,8 @@ void UiController::adjustRatchet(int8_t delta) {
     if (index < 0) {
         index = 0;
     }
-    const uint8_t next = clampIndex(static_cast<uint8_t>(index), delta, RATCHET_CHOICE_COUNT);
+    const uint8_t next =
+        clampIndex(static_cast<uint8_t>(index), oneStep(delta), RATCHET_CHOICE_COUNT);
     pattern->setRatchet(stepCursor_, ratchetAtIndex(next));
     engine_.refreshTiming(static_cast<uint8_t>(selectedChannel()));
 }

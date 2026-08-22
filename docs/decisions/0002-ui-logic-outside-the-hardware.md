@@ -19,8 +19,18 @@ measured on the module on 2026-08-22, with `env:bringup`:
 - the encoder turns the **wrong way** relative to the original firmware, because
   the two libraries default in opposite directions;
 - the encoder has **no debounce**, and the dependency says so — its
-  `_rotate_change()` carries `// Validation (TODO: add debounce check)`. Two fast
-  detents produce no event at all, since a bounced detent gives +1 then −1;
+  `_rotate_change()` carries `// Validation (TODO: add debounce check)`.
+  ⚠️ **The observation that first justified this was REFUTED on 2026-08-22**: two
+  fast detents do not cancel, they give exactly −2, and fifteen seconds of fast
+  rotation accumulate −917 with zero reversals. Bounces are real but occur **only
+  at a fast turning point**, measured at 2 ms against 509 ms for the fastest
+  deliberate reversal — so the 12 ms window is validated on facts, and it fires far
+  more rarely than the design assumed;
+- the encoder **accelerates**, ×3 under 16 ms, and two events can arrive in the
+  same millisecond. On a continuous value that is wanted; on discrete navigation
+  it turns one detent into three moves, which is what the owner described as
+  chaotic on the module. This is the dependency's real cost at the input, and it
+  is absorbed in `UiController` rather than in `EncoderFilter`;
 - `Encoder` may report a **false first movement**, its `previous_pos_` being
   uninitialised;
 - `Clock::SetSource()` does not handle the `SOURCE_LAST` sentinel, so a source

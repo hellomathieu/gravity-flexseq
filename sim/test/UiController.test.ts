@@ -77,10 +77,10 @@ describe("UiController — tab bar", () => {
     expect(ui.currentTab).toBe(TAB_SETTINGS);
   });
 
-  it("honours an accelerated delta", () => {
+  it("moves one tab per detent whatever the acceleration reports", () => {
     const { ui } = rig();
     ui.handle(UiEvent.Rotate, 3);
-    expect(ui.currentTab).toBe(4);
+    expect(ui.currentTab).toBe(2);
     ui.handle(UiEvent.Rotate, -3);
     expect(ui.currentTab).toBe(1);
   });
@@ -240,6 +240,26 @@ describe("UiController — inside a tab", () => {
     expect(engine.getEffectiveLength(0)).toBe(MIN_LENGTH);
   });
 
+  it("keeps the acceleration for the tempo, and only for it", () => {
+    const { ui, gotoTab, enterTab, gotoField } = rig();
+    gotoTab(TAB_CLOCK);
+    enterTab();
+    ui.handle(UiEvent.ShiftRotate, 3);
+    expect(ui.tempo).toBe(DEFAULT_TEMPO + 3);
+    gotoField(UiField.ClockSource);
+    const before = ui.clockSource;
+    ui.handle(UiEvent.ShiftRotate, 3);
+    expect(ui.clockSource).toBe(before + 1);
+  });
+
+  it("never accelerates a short list", () => {
+    const { ui, engine, enterTab, gotoField } = rig();
+    enterTab();
+    gotoField(UiField.Length);
+    ui.handle(UiEvent.ShiftRotate, 3);
+    expect(engine.getEffectiveLength(0)).toBe(DEFAULT_LENGTH + 1);
+  });
+
   it("an accelerated turn lands on the bound instead of being refused", () => {
     const { ui, engine, enterTab, gotoField } = rig();
     enterTab();
@@ -268,7 +288,9 @@ describe("UiController — inside a tab", () => {
     expect(engine.getSubdiv(0)).toBe(DEFAULT_SUBDIV);
     ui.handle(UiEvent.ShiftRotate, 1);
     expect(engine.getSubdiv(0)).toBe(2);
-    ui.handle(UiEvent.ShiftRotate, -2);
+    ui.handle(UiEvent.ShiftRotate, -2); // ecrete a un pas
+    expect(engine.getSubdiv(0)).toBe(DEFAULT_SUBDIV);
+    ui.handle(UiEvent.ShiftRotate, -1);
     expect(engine.getSubdiv(0)).toBe(-2);
     for (let i = 0; i < SUBDIVS.length + 5; i += 1) ui.handle(UiEvent.ShiftRotate, 1);
     expect(engine.getSubdiv(0)).toBe(SUBDIVS[SUBDIVS.length - 1]);
@@ -327,14 +349,14 @@ describe("UiController — EDIT PATTERN", () => {
     expect(ui.stepCursor).toBe(STEP_COUNT - 1);
     ui.handle(UiEvent.Rotate, 1);
     expect(ui.stepCursor).toBe(0);
-    ui.handle(UiEvent.Rotate, 5);
+    for (let i = 0; i < 5; ++i) ui.handle(UiEvent.Rotate, 5);
     expect(ui.stepCursor).toBe(5);
   });
 
   it("press toggles the step under the cursor", () => {
     const { ui, bank, enterEdit } = rig();
     enterEdit();
-    ui.handle(UiEvent.Rotate, 7);
+    for (let i = 0; i < 7; ++i) ui.handle(UiEvent.Rotate, 1);
     expect(bank.getPattern(0)!.readStep(7)).toBe(false);
     ui.handle(UiEvent.Press);
     expect(bank.getPattern(0)!.readStep(7)).toBe(true);
@@ -360,7 +382,7 @@ describe("UiController — EDIT PATTERN", () => {
     enterEdit();
     engine.start();
     expect(engine.currentStepTicks(0)).toBe(PPQN);
-    ui.handle(UiEvent.RotateHeld, 5);
+    for (let i = 0; i < 5; ++i) ui.handle(UiEvent.RotateHeld, 5);
     expect(bank.getPattern(0)!.getRatchet(0)).toBe(RATCHET_TRIPLET);
     expect(engine.currentStepTicks(0)).toBe(2 * PPQN);
   });
@@ -447,10 +469,34 @@ describe("UiController — PLAY and the gesture left free", () => {
     }
   });
 
+  it("moves the revision on every handled gesture and refused setting apart", () => {
+    const { ui } = rig();
+    const start = ui.revision;
+    ui.handle(UiEvent.Rotate, 1);
+    expect(ui.revision).not.toBe(start);
+    const afterRotate = ui.revision;
+    expect(ui.setTempo(174)).toBe(true);
+    expect(ui.revision).not.toBe(afterRotate);
+    const afterTempo = ui.revision;
+    expect(ui.setTempo(MAX_TEMPO + 1)).toBe(false);
+    expect(ui.setClockSource(CLOCK_SOURCE_COUNT)).toBe(false);
+    expect(ui.revision).toBe(afterTempo);
+  });
+
+  it("never repeats a revision on two consecutive gestures", () => {
+    const { ui } = rig();
+    let previous = ui.revision;
+    for (let i = 0; i < 600; ++i) {
+      ui.handle(UiEvent.Rotate, 1);
+      expect(ui.revision).not.toBe(previous);
+      previous = ui.revision;
+    }
+  });
+
   it("shift press is deliberately free and changes nothing", () => {
     const { ui, bank, enterEdit } = rig();
     enterEdit();
-    ui.handle(UiEvent.Rotate, 3);
+    for (let i = 0; i < 3; ++i) ui.handle(UiEvent.Rotate, 1);
     ui.handle(UiEvent.ShiftPress);
     expect(ui.level).toBe(UiLevel.Edit);
     expect(ui.stepCursor).toBe(3);

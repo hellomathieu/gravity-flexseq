@@ -66,6 +66,14 @@ function clampRange(value: number, low: number, high: number): number {
   return value;
 }
 
+// L'acceleration de libGravity (x3 sous 16 ms) ne sert que les plages trop
+// grandes pour se parcourir cran par cran. Le tempo est la seule.
+function oneStep(delta: number): number {
+  if (delta > 0) return 1;
+  if (delta < 0) return -1;
+  return 0;
+}
+
 function clampIndex(current: number, delta: number, count: number): number {
   if (count === 0) return 0;
   return clampRange(current + delta, 0, count - 1);
@@ -79,12 +87,17 @@ export class UiController {
   private open = false;
   private currentTempo = DEFAULT_TEMPO;
   private source = 0;
+  private rev = 0;
 
   constructor(
     private readonly engine: SequencerEngine,
     private readonly bank: PatternBank,
     private readonly transport: Transport,
   ) {}
+
+  get revision(): number {
+    return this.rev;
+  }
 
   get level(): UiLevel {
     return this.currentLevel;
@@ -154,16 +167,19 @@ export class UiController {
   setTempo(bpm: number): boolean {
     if (bpm < MIN_TEMPO || bpm > MAX_TEMPO) return false;
     this.currentTempo = bpm;
+    this.rev = (this.rev + 1) & 0xff;
     return true;
   }
 
   setClockSource(source: number): boolean {
     if (source < 0 || source >= CLOCK_SOURCE_COUNT) return false;
     this.source = source;
+    this.rev = (this.rev + 1) & 0xff;
     return true;
   }
 
   handle(event: UiEvent, delta = 0): void {
+    this.rev = (this.rev + 1) & 0xff;
     if (event === UiEvent.PlayPress) {
       this.togglePlay();
       return;
@@ -185,7 +201,7 @@ export class UiController {
 
   private handleTabBar(event: UiEvent, delta: number): void {
     if (event === UiEvent.Rotate) {
-      this.tab = wrapIndex(this.tab, delta, TAB_COUNT);
+      this.tab = wrapIndex(this.tab, oneStep(delta), TAB_COUNT);
       this.fieldCursor = 0;
       this.open = false;
       return;
@@ -203,7 +219,7 @@ export class UiController {
         if (this.open) {
           this.adjustField(delta);
         } else {
-          this.fieldCursor = wrapIndex(this.fieldCursor, delta, this.fieldCount);
+          this.fieldCursor = wrapIndex(this.fieldCursor, oneStep(delta), this.fieldCount);
         }
         break;
       case UiEvent.ShiftRotate:
@@ -234,7 +250,7 @@ export class UiController {
   private handleEdit(event: UiEvent, delta: number): void {
     switch (event) {
       case UiEvent.Rotate:
-        this.step = wrapIndex(this.step, delta, STEP_COUNT);
+        this.step = wrapIndex(this.step, oneStep(delta), STEP_COUNT);
         break;
       case UiEvent.RotateHeld:
         this.adjustRatchet(delta);
@@ -249,7 +265,7 @@ export class UiController {
       case UiEvent.ShiftRotate: {
         const channel = this.selectedChannel;
         if (channel >= 0) {
-          this.tab = TAB_FIRST_CHANNEL + wrapIndex(channel, delta, CHANNEL_COUNT);
+          this.tab = TAB_FIRST_CHANNEL + wrapIndex(channel, oneStep(delta), CHANNEL_COUNT);
         }
         break;
       }
@@ -269,8 +285,9 @@ export class UiController {
     return this.bank.getPattern(index);
   }
 
-  private adjustField(delta: number): void {
+  private adjustField(accelerated: number): void {
     const channel = this.selectedChannel;
+    const delta = this.field === UiField.Tempo ? accelerated : oneStep(accelerated);
     switch (this.field) {
       case UiField.Tempo:
         this.currentTempo = clampRange(this.currentTempo + delta, MIN_TEMPO, MAX_TEMPO);
@@ -317,7 +334,7 @@ export class UiController {
     if (pattern === null) return;
     let index = RATCHET_CODES.indexOf(pattern.getRatchet(this.step));
     if (index < 0) index = 0;
-    const next = clampIndex(index, delta, RATCHET_CODES.length);
+    const next = clampIndex(index, oneStep(delta), RATCHET_CODES.length);
     pattern.setRatchet(this.step, RATCHET_CODES[next]!);
     this.engine.refreshTiming(this.selectedChannel);
   }

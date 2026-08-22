@@ -85,10 +85,13 @@ void test_rotate_wraps_at_both_ends_of_the_tab_bar() {
     TEST_ASSERT_EQUAL_UINT8(UiController::TAB_SETTINGS, r.ui.currentTab());
 }
 
-void test_rotate_honours_an_accelerated_delta() {
+// libGravity accelere une rotation rapide (x3 sous 16 ms). Sur une navigation
+// discrete cela fait sauter des selections — constate sur le module le
+// 2026-08-22. Un cran vaut donc UN onglet, quelle que soit l'acceleration.
+void test_an_accelerated_delta_moves_one_tab_not_three() {
     Rig r;
     r.ui.handle(UiController::EVENT_ROTATE, 3);
-    TEST_ASSERT_EQUAL_UINT8(4, r.ui.currentTab());
+    TEST_ASSERT_EQUAL_UINT8(2, r.ui.currentTab());
     r.ui.handle(UiController::EVENT_ROTATE, -3);
     TEST_ASSERT_EQUAL_UINT8(1, r.ui.currentTab());
 }
@@ -263,7 +266,9 @@ void test_the_subdiv_field_walks_the_libgravity_list_and_clamps() {
     TEST_ASSERT_EQUAL_INT16(flexseq::DEFAULT_SUBDIV, r.engine.getSubdiv(0));
     r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
     TEST_ASSERT_EQUAL_INT16(2, r.engine.getSubdiv(0));
-    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, -2);
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, -2);  // ecrete a un pas
+    TEST_ASSERT_EQUAL_INT16(flexseq::DEFAULT_SUBDIV, r.engine.getSubdiv(0));
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, -1);
     TEST_ASSERT_EQUAL_INT16(-2, r.engine.getSubdiv(0));
     for (uint8_t i = 0; i < flexseq::SUBDIV_CHOICE_COUNT + 5; ++i) {
         r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
@@ -292,31 +297,50 @@ void test_the_bar_length_field_walks_only_the_allowed_values() {
     TEST_ASSERT_EQUAL_INT8(2, r.engine.getBarLength(0));
 }
 
-void test_an_accelerated_turn_lands_on_the_bound_instead_of_being_refused() {
+// LE TEMPO EST LA SEULE EXCEPTION : sa plage compte 271 valeurs, trop pour se
+// parcourir cran par cran. Il garde donc l'acceleration de libGravity, et c'est
+// la qu'un cran accelere doit atterrir sur la borne plutot que d'etre refuse.
+void test_the_tempo_is_the_only_field_that_keeps_the_acceleration() {
+    Rig r;
+    r.gotoTab(UiController::TAB_CLOCK);
+    r.enterTab();
+    TEST_ASSERT_EQUAL(UiController::FIELD_TEMPO, r.ui.field());
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 3);
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(UiController::DEFAULT_TEMPO + 3, r.ui.tempo(),
+        "le tempo doit garder l'acceleration");
+
+    r.gotoField(UiController::FIELD_CLOCK_SOURCE);
+    const uint8_t before = r.ui.clockSource();
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 3);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(before + 1, r.ui.clockSource(),
+        "la source est une liste courte : un cran vaut un pas");
+}
+
+void test_an_accelerated_turn_on_the_tempo_lands_on_the_bound() {
+    Rig r;
+    r.gotoTab(UiController::TAB_CLOCK);
+    r.enterTab();
+    for (uint16_t i = 0; i < 60; ++i) {
+        r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 3);
+    }
+    TEST_ASSERT_EQUAL_UINT16(UiController::MAX_TEMPO, r.ui.tempo());
+    for (uint16_t i = 0; i < 100; ++i) {
+        r.ui.handle(UiController::EVENT_SHIFT_ROTATE, -3);
+    }
+    TEST_ASSERT_EQUAL_UINT16(UiController::MIN_TEMPO, r.ui.tempo());
+}
+
+// Les listes courtes n'accelerent pas : un cran, un pas, quelle que soit
+// l'amplitude que la dependance rapporte.
+void test_short_lists_never_accelerate() {
     Rig r;
     r.enterTab();
     r.gotoField(UiController::FIELD_LENGTH);
-    for (uint8_t i = 0; i < 7; ++i) {
-        r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
-    }
-    TEST_ASSERT_EQUAL_UINT8(23, r.engine.getEffectiveLength(0));
     r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 3);
-    TEST_ASSERT_EQUAL_UINT8(SequencerEngine::MAX_LENGTH, r.engine.getEffectiveLength(0));
-
-    for (uint8_t i = 0; i < 22; ++i) {
-        r.ui.handle(UiController::EVENT_SHIFT_ROTATE, -1);
-    }
-    TEST_ASSERT_EQUAL_UINT8(2, r.engine.getEffectiveLength(0));
-    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, -3);
-    TEST_ASSERT_EQUAL_UINT8(SequencerEngine::MIN_LENGTH, r.engine.getEffectiveLength(0));
-
+    TEST_ASSERT_EQUAL_UINT8(SequencerEngine::DEFAULT_LENGTH + 1, r.engine.getEffectiveLength(0));
     r.gotoField(UiController::FIELD_PATTERN);
-    for (uint8_t i = 0; i < 14; ++i) {
-        r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
-    }
-    TEST_ASSERT_EQUAL_INT8(14, r.engine.getSelectedPattern(0));
     r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 3);
-    TEST_ASSERT_EQUAL_INT8(SequencerEngine::PATTERN_COUNT - 1, r.engine.getSelectedPattern(0));
+    TEST_ASSERT_EQUAL_INT8(1, r.engine.getSelectedPattern(0));
 }
 
 void test_a_field_edit_applies_to_the_channel_of_the_current_tab() {
@@ -357,14 +381,18 @@ void test_rotate_moves_the_step_cursor_and_wraps_at_twenty_four() {
     TEST_ASSERT_EQUAL_UINT8(UiController::STEP_COUNT - 1, r.ui.stepCursor());
     r.ui.handle(UiController::EVENT_ROTATE, 1);
     TEST_ASSERT_EQUAL_UINT8(0, r.ui.stepCursor());
-    r.ui.handle(UiController::EVENT_ROTATE, 5);
+    for (uint8_t i = 0; i < 5; ++i) {
+        r.ui.handle(UiController::EVENT_ROTATE, 5);  // accelere, mais un pas chacun
+    }
     TEST_ASSERT_EQUAL_UINT8(5, r.ui.stepCursor());
 }
 
 void test_press_toggles_the_step_under_the_cursor() {
     Rig r;
     r.enterEdit();
-    r.ui.handle(UiController::EVENT_ROTATE, 7);
+    for (uint8_t i = 0; i < 7; ++i) {
+        r.ui.handle(UiController::EVENT_ROTATE, 1);
+    }
     bool active = true;
     r.bank.getPattern(0)->readStep(7, active);
     TEST_ASSERT_FALSE(active);
@@ -398,7 +426,9 @@ void test_a_ratchet_edit_takes_effect_on_the_current_step_immediately() {
     r.enterEdit();
     r.engine.start();
     TEST_ASSERT_EQUAL_UINT16(SequencerEngine::PPQN, r.engine.currentStepTicks(0));
-    r.ui.handle(UiController::EVENT_ROTATE_HELD, 5);
+    for (uint8_t i = 0; i < 5; ++i) {
+        r.ui.handle(UiController::EVENT_ROTATE_HELD, 5);
+    }
     TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_TRIPLET, r.bank.getPattern(0)->getRatchet(0));
     TEST_ASSERT_EQUAL_UINT16(2 * SequencerEngine::PPQN, r.engine.currentStepTicks(0));
 }
@@ -538,7 +568,9 @@ void test_the_revision_wraps_without_ever_matching_its_neighbour() {
 void test_shift_press_is_deliberately_free_and_changes_nothing() {
     Rig r;
     r.enterEdit();
-    r.ui.handle(UiController::EVENT_ROTATE, 3);
+    for (uint8_t i = 0; i < 3; ++i) {
+        r.ui.handle(UiController::EVENT_ROTATE, 1);
+    }
     r.ui.handle(UiController::EVENT_SHIFT_PRESS);
     TEST_ASSERT_EQUAL(UiController::LEVEL_EDIT, r.ui.level());
     TEST_ASSERT_EQUAL_UINT8(3, r.ui.stepCursor());
@@ -553,7 +585,7 @@ int main(int, char**) {
     RUN_TEST(test_starts_on_the_tab_bar_over_the_first_channel);
     RUN_TEST(test_rotate_changes_tab);
     RUN_TEST(test_rotate_wraps_at_both_ends_of_the_tab_bar);
-    RUN_TEST(test_rotate_honours_an_accelerated_delta);
+    RUN_TEST(test_an_accelerated_delta_moves_one_tab_not_three);
     RUN_TEST(test_press_enters_a_tab_that_has_fields);
     RUN_TEST(test_press_does_nothing_on_the_settings_tab_while_it_is_deferred);
     RUN_TEST(test_the_clock_tab_exposes_tempo_then_source);
@@ -571,7 +603,9 @@ int main(int, char**) {
     RUN_TEST(test_the_length_field_is_clamped_to_one_and_twenty_four);
     RUN_TEST(test_the_subdiv_field_walks_the_libgravity_list_and_clamps);
     RUN_TEST(test_the_bar_length_field_walks_only_the_allowed_values);
-    RUN_TEST(test_an_accelerated_turn_lands_on_the_bound_instead_of_being_refused);
+    RUN_TEST(test_the_tempo_is_the_only_field_that_keeps_the_acceleration);
+    RUN_TEST(test_an_accelerated_turn_on_the_tempo_lands_on_the_bound);
+    RUN_TEST(test_short_lists_never_accelerate);
     RUN_TEST(test_a_field_edit_applies_to_the_channel_of_the_current_tab);
     RUN_TEST(test_the_edit_entry_is_not_a_value);
 
