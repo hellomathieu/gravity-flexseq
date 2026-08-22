@@ -3,6 +3,7 @@
 
 #include <flexseq/CvSampler.h>
 #include <flexseq/EepromStorage.h>
+#include <flexseq/InputAdapter.h>
 #include <flexseq/Persistence.h>
 #include <flexseq/PagedScreen.h>
 #include <flexseq/PatternBank.h>
@@ -109,6 +110,8 @@ void setup() {
                            gravity.cv2.GetCalibrationHigh(), gravity.cv2.GetOffset());
     flexseq::cv::start();
 
+    flexseq::input::begin(ui);
+
     // Persistance : on relit l'image, et si l'octet de version ne repond pas on
     // repart des defauts EN LES ECRIVANT — le format est ainsi materialise des
     // le premier demarrage, pas a la premiere edition. Voir PRD 11.1.
@@ -129,9 +132,7 @@ void loop() {
     // (CvSampler.h). On appelle ses morceaux ; les sorties etaient deja pilotees
     // explicitement plus bas, de sorte que FlexSeq ne depend plus du tout de
     // cette fonction — ni de son index de boucle non initialise.
-    gravity.shift_button.Process();
-    gravity.play_button.Process();
-    gravity.encoder.Process();
+    flexseq::input::process(millis());
 
     // Atomically drain the ticks accumulated by the ISR, then advance once.
     uint16_t ticks;
