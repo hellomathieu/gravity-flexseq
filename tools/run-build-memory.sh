@@ -7,7 +7,7 @@
 # echouerait avant. Le garde-fou est donc une RESERVE laissee libre pour la pile.
 #
 # GARDE-FOU DE DERIVE, en plus des plafonds. Un plafond ne se declenche qu'a
-# 90 % de Flash : une fonctionnalite qui prend 3 ko passerait sans un mot. Le
+# 95 % de Flash : une fonctionnalite qui prend 3 ko passerait sans un mot. Le
 # script compare donc chaque build a un RELEVE VERSIONNE (tools/memory-baseline)
 # et refuse une croissance au-dela d'un seuil. Accepter la nouvelle empreinte est
 # un acte deliberé :
@@ -18,9 +18,25 @@
 # le releve. Le fichier absent n'est pas un echec non plus — le script propose de
 # le creer.
 #
+# LE PLAFOND FLASH EST PASSE DE 90 A 95 % le 2026-08-22, decide par le
+# proprietaire sur le chiffre reel. Le firmware complet — deux ecrans, les huit
+# gestes, le transport, la persistance — mesure 28050 o, soit 91,3 %. Ce n'est pas
+# un plafond qu'on repousse pour se donner de l'air : la VRAIE limite est 30720 o,
+# et 95 % laisse encore 1134 o d'avertissement avant elle. Ce qu'on accepte est
+# une reserve plus petite, pas un risque de brique — l'editeur de liens refuserait
+# bien avant.
+#
+# Deux campagnes de recherche d'economies ont precede cette decision et rendu
+# 1378 o : -mcall-prologues (534), le jeu de glyphes reduit u8g2_font_5x7_tr au
+# lieu de _tf (808), et un formateur de nombres partage (36). Mesures et ecartees :
+# le constructeur du moteur (88 o), les leviers d'inlining (0 o). Ce qui reste est
+# soit la dependance epinglee — uClock 974 o d'ISR, Wire 574, u8g2 ~1500, et
+# 586 o d'allocateur qu'uClock impose en allouant 4 octets — soit les deux
+# renderers dont l'interface a besoin.
+#
 # Seuils (surchargeables) :
 #   RAM_RESERVE=256     octets qui doivent rester libres pour la pile
-#   FLASH_BUDGET_PCT=90 part de Flash au-dela de laquelle on refuse
+#   FLASH_BUDGET_PCT=95 part de Flash au-dela de laquelle on refuse
 #   RAM_DRIFT=16        croissance de RAM acceptee sans acquittement
 #   FLASH_DRIFT=512     croissance de Flash acceptee sans acquittement
 #
@@ -35,7 +51,7 @@ set -uo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 RAM_RESERVE="${RAM_RESERVE:-256}"
-FLASH_BUDGET_PCT="${FLASH_BUDGET_PCT:-90}"
+FLASH_BUDGET_PCT="${FLASH_BUDGET_PCT:-95}"
 RAM_DRIFT="${RAM_DRIFT:-16}"
 FLASH_DRIFT="${FLASH_DRIFT:-512}"
 BASELINE="tools/memory-baseline"
