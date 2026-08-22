@@ -140,6 +140,25 @@ window gone, only the real 10 ms threshold remains.
 hash, 6 for the adapter. PRD §15 budgeted ~16 bytes for the wired UI against 264
 available, so the estimate holds.
 
+**Measured 2026-08-22, and the estimate was low.** `UiController` exists on both
+sides now. Wired through a temporary call site in `main.cpp` and then reverted,
+the AVR cost is **RAM +26 bytes, Flash +1224 bytes** — against 15 estimated
+above, and against the 2 to 4 kB PRD §15 allows for the whole UI. The state
+machine alone therefore spends between a third and two thirds of the Flash
+envelope, which is the number the Flash arbitration of PRD §12.1 needs. Nothing
+calls it yet, so the committed build is unchanged at 1528 / 21404 and the drift
+baseline is untouched: the figure is a measurement, not a regression.
+
+**Two structural points the implementation settled.** `selectedChannel` is
+**derived** from the current tab rather than stored, so the tab bar and EDIT's
+channel change cannot disagree about which channel is current. And the value
+clamp lives in `UiController` even though `SequencerEngine` already rejects
+out-of-range values: the two are not redundant, because libGravity multiplies a
+fast detent by 2 or 3, and an unclamped delta of +3 from LENGTH 23 is *refused*
+by the engine where a clamp lands on 24. A mutation sweep is what surfaced this
+— two mutations survived the first pass for exactly that reason, and the test
+they exposed now exists on both sides. 22 of 22 mutations killed, each side.
+
 ## Alternatives set aside
 
 **Putting the UI logic in `main.cpp`.** It is where the wiring naturally lands,
