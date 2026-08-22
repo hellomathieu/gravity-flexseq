@@ -55,7 +55,8 @@ public:
 
     PagedScreen()
         : busy_(false), row_(0), tiles_(1), full_(true), sinceFull_(FULL_REFRESH_EVERY),
-          titleHash_(0), drawnTitleHash_(0), titleEverDrawn_(false) {}
+          titleHash_(0), drawnTitleHash_(0), titleEverDrawn_(false),
+          footerHash_(0), drawnFooterHash_(0), footerEverDrawn_(false) {}
 
     // Vrai tant qu'une image reste a terminer.
     bool busy() const { return busy_; }
@@ -77,6 +78,7 @@ public:
             model_.titleWidth = static_cast<uint8_t>(display.getStrWidth(model_.title));
         }
         titleHash_ = hashOf(model_.title);
+        footerHash_ = hashOf(model_.footer);
 
         tiles_ = display.getBufferTileHeight();
         if (tiles_ == 0) {
@@ -127,6 +129,10 @@ private:
             drawnTitleHash_ = titleHash_;
             titleEverDrawn_ = true;
         }
+        if (belowGrid(band)) {
+            drawnFooterHash_ = footerHash_;
+            footerEverDrawn_ = true;
+        }
         display.sendBuffer();
     }
 
@@ -137,14 +143,24 @@ private:
         return band.y1 < screen::HEADER_LINE_Y;
     }
 
+    static bool belowGrid(const Band& band) {
+        return band.y0 > screen::GRID_BOTTOM_Y;
+    }
+
     bool skippable(uint8_t row) const {
-        if (full_ || model_.title == nullptr) {
+        if (full_) {
             return false;
         }
-        if (!titleBand(bandOf(row))) {
-            return false;
+        const Band band = bandOf(row);
+        if (titleBand(band)) {
+            return model_.title != nullptr && titleEverDrawn_
+                && titleHash_ == drawnTitleHash_;
         }
-        return titleEverDrawn_ && titleHash_ == drawnTitleHash_;
+        if (belowGrid(band)) {
+            return model_.footer != nullptr && footerEverDrawn_
+                && footerHash_ == drawnFooterHash_;
+        }
+        return false;
     }
 
     // La bande que l'affichage s'apprete a transferer, RAMENEE EN COORDONNEES
@@ -188,6 +204,9 @@ private:
     uint16_t titleHash_;
     uint16_t drawnTitleHash_;
     bool titleEverDrawn_;
+    uint16_t footerHash_;
+    uint16_t drawnFooterHash_;
+    bool footerEverDrawn_;
 };
 
 }  // namespace flexseq

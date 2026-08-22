@@ -15,6 +15,8 @@ flexseq::PatternBank patternBank;
 flexseq::SequencerEngine engine;
 flexseq::Transport transport(engine);
 flexseq::TriggerSequencer triggers(patternBank, engine);
+char uiFooter[] = "CH1";
+constexpr uint8_t UI_FOOTER_CHANNEL = 2;
 
 // --- UI ---------------------------------------------------------------------
 // Rendu ETALE : UNE BANDE PAR PASSAGE de loop() (ADR 0001). Le mode _1_ de
@@ -72,6 +74,8 @@ void beginUiFrame() {
     model.cursor = UI_CURSOR;
     model.playhead = engine.effectiveStep(UI_CHANNEL);
     model.barLength = static_cast<uint8_t>(engine.getBarLength(UI_CHANNEL));
+    uiFooter[UI_FOOTER_CHANNEL] = static_cast<char>('1' + UI_CHANNEL);
+    model.footer = uiFooter;
 
     uiScreen.begin(gravity.display, model);
 }

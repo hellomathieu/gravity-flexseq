@@ -228,13 +228,13 @@ int main(int argc, char** argv)
         if (inkInBox(px, py, scr::GLYPH_HALF) >= need) ++placed; else ++missing;
     }
 
-    /* --- 2. rotation : le titre est en BAS du panneau ----------------------- */
-    /* Titre logique : ligne de base y=8, glyphes de y=2 a 8 -> panneau 55..61. */
+    /* --- 2. rotation : titre en BAS du panneau, pied de page en HAUT -------- */
     const int inkTitleBand = inkInRows(rotY(scr::TITLE_BASELINE_Y) - 6,
                                       (uint8_t)(rotY(scr::TITLE_BASELINE_Y) + 2));
-    /* Rien ne doit se trouver au-dessus de la ligne 1 des chiffres de ratchet,
-     * qui atterrit en panneau ~16 : les deux premieres bandes sont vides. */
-    const int inkTop = inkInRows(0, 15);
+    const int inkFooterBand = inkInRows(rotY(scr::FOOTER_BASELINE_Y),
+                                        rotY(scr::FOOTER_TOP_Y));
+    const int inkGap = inkInRows((uint8_t)(rotY(scr::FOOTER_TOP_Y) + 1),
+                                 (uint8_t)(rotY(scr::GRID_BOTTOM_Y) - 1));
 
     int watch_ok = 1;
     if (watch_period) {
@@ -262,10 +262,13 @@ int main(int argc, char** argv)
     printf("=== ROTATION ===\n");
     printf("  bande du titre (panneau y %u..%u) : %d pixels\n",
            rotY(scr::TITLE_BASELINE_Y) - 6, rotY(scr::TITLE_BASELINE_Y) + 2, inkTitleBand);
-    printf("  haut du panneau (y 0..15)         : %d pixels\n", inkTop);
+    printf("  pied de page (panneau y %u..%u)    : %d pixels\n",
+           rotY(scr::FOOTER_BASELINE_Y), rotY(scr::FOOTER_TOP_Y), inkFooterBand);
+    printf("  entre le pied et la grille (y %u..%u) : %d pixels\n",
+           rotY(scr::FOOTER_TOP_Y) + 1, rotY(scr::GRID_BOTTOM_Y) - 1, inkGap);
 
     const int geometry_ok = skip_geometry || (missing == 0);
-    const int rotation_ok = (inkTitleBand > 0 && inkTop == 0);
+    const int rotation_ok = (inkTitleBand > 0 && inkFooterBand > 0 && inkGap == 0);
     printf("\n  geometrie %s   rotation %s\n",
            geometry_ok ? "OK" : "KO", rotation_ok ? "OK" : "KO");
     return (geometry_ok && rotation_ok && watch_ok) ? 0 : 1;

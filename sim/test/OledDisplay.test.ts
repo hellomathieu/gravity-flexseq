@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { stepCenters, drawOled, OLED_W, type OledCtx } from "../src/sim/OledDisplay.js";
+import {
+  stepCenters,
+  drawOled,
+  FOOTER_GEOMETRY,
+  OLED_W,
+  type OledCtx,
+} from "../src/sim/OledDisplay.js";
 import { RATCHET_NONE, RATCHET_3, RATCHET_TRIPLET } from "../src/domain/Pattern.js";
 
 /**
@@ -48,6 +54,33 @@ describe("OledDisplay — geometry (sketch.ino)", () => {
 
 describe("OledDisplay — step glyphs", () => {
   const has = (p: Set<string>, x: number, y: number) => p.has(`${x},${y}`);
+
+  it("draws the footer flush with the bottom, below every grid pixel", () => {
+    const { ctx, painted } = recorder();
+    drawOled(ctx, { title: "", cells: [], cursor: -1, playhead: -1, footer: "CH1  120BPM" });
+    let top = 64;
+    let bottom = -1;
+    let count = 0;
+    for (const key of painted) {
+      const y = Number(key.split(",")[1]);
+      if (y <= FOOTER_GEOMETRY.gridBottom) continue;
+      ++count;
+      if (y < top) top = y;
+      if (y > bottom) bottom = y;
+    }
+    expect(count).toBeGreaterThan(0);
+    expect(top).toBe(FOOTER_GEOMETRY.top);
+    expect(bottom).toBe(63);
+    expect(FOOTER_GEOMETRY.top).toBeGreaterThan(FOOTER_GEOMETRY.gridBottom);
+  });
+
+  it("draws nothing below the grid when there is no footer", () => {
+    const { ctx, painted } = recorder();
+    drawOled(ctx, { title: "", cells: [], cursor: -1, playhead: -1 });
+    for (const key of painted) {
+      expect(Number(key.split(",")[1])).toBeLessThanOrEqual(FOOTER_GEOMETRY.gridBottom);
+    }
+  });
 
   it("draws a filled disc for an active step", () => {
     const { ctx, painted } = recorder();

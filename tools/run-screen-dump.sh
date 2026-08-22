@@ -17,8 +17,11 @@
 #
 #   1. GEOMETRIE : les 24 steps sont a leur position attendue apres rotation ;
 #   2. ROTATION   : le titre, en haut du canvas logique, apparait EN BAS du
-#      panneau, et le haut du panneau est vide. C'est ce qui justifie le montage
-#      physique de l'OLED a 180 degres, donc le `"rotate": 180` de diagram.json.
+#      panneau, et le PIED DE PAGE, en bas du canvas, apparait EN HAUT. Entre les
+#      deux, la bande qui ne porte jamais rien doit rester vide. Les deux
+#      extremites etant epinglees, une rotation inversee ne peut plus passer. C'est
+#      ce qui justifie le montage physique de l'OLED a 180 degres, donc le
+#      `"rotate": 180` de diagram.json.
 #
 # Ce controle a paye des sa premiere execution : il a montre un ecran QUASI BLANC.
 # L'ecartement par bande d'ADR 0001 comparait une bande d'AFFICHAGE a des
@@ -94,6 +97,12 @@ if [ -n "${ASCII:-}" ]; then
   sed -n '/^--- /,/^   +-*+$/p' "$LOG"
 fi
 
+# La surveillance continue conditionne le code de sortie : son rapport doit donc
+# etre lisible, et non seulement present dans le journal.
+if [ -n "${WATCH:-}" ]; then
+  sed -n '/^=== SURVEILLANCE/,/^$/p' "$LOG"
+fi
+
 python3 - "$LOG" "$PROBE" <<'PY'
 import re, sys
 
@@ -114,7 +123,8 @@ steps = re.search(r"(\d+) / (\d+) steps a leur place", txt)
 skipped = "ignoree (SKIP_GEOMETRY)" in txt
 ink = re.search(r"encre totale (\d+) pixels", txt)
 title = re.search(r"bande du titre \(panneau y (\d+)\.\.(\d+)\) : (\d+) pixels", txt)
-top = re.search(r"haut du panneau \(y 0\.\.15\)\s+: (\d+) pixels", txt)
+footer = re.search(r"pied de page \(panneau y (\d+)\.\.(\d+)\)\s+: (\d+) pixels", txt)
+gap = re.search(r"entre le pied et la grille \(y (\d+)\.\.(\d+)\) : (\d+) pixels", txt)
 geom_ok = "geometrie OK" in txt
 rot_ok = "rotation OK" in txt
 
@@ -127,7 +137,12 @@ elif steps:
           f"{DIM}(apres U8G2_R2){Z}")
 print(f"  {mark(rot_ok)} Rotation 180       titre en bas ({title[3] if title else '?'} px en "
       f"y {title[1] if title else '?'}..{title[2] if title else '?'}), "
-      f"haut vide ({top[1] if top else '?'} px)")
+      f"pied en haut ({footer[3] if footer else '?'} px en "
+      f"y {footer[1] if footer else '?'}..{footer[2] if footer else '?'})")
+print(f"  {mark(gap is not None and gap[3] == '0')} Bande intermediaire "
+      f"vide entre le pied et la grille "
+      f"{DIM}(y {gap[1] if gap else '?'}..{gap[2] if gap else '?'}, "
+      f"{gap[3] if gap else '?'} px){Z}")
 print(f"{B}==========================================================={Z}")
 if ink:
     print(f"  {ink[1]} pixels d'encre au total.")

@@ -139,6 +139,22 @@ same frame could show different content.
   the tempo: two values that change rarely, which is what makes the skip pay.
   Band 7 is already cleared and sent on every frame, so only the rasterization is
   added. Cost: a second hash and a second flag.
+  **Implemented and measured 2026-08-22, and it saves TWO bands, not one.** The
+  predicate is "the band lies entirely below the lowest pixel the grid can draw",
+  and **two** of the eight bands satisfy it: the one carrying the footer (y 56–63)
+  and the one between the grid and the footer (y 48–55), which carries nothing at
+  all and never will. Both are governed by the footer string, so both are skipped
+  together. A routine frame therefore sends **5 bands instead of 7**: frame
+  **44.2 → 32.1 ms**, corrected p90 **8.44 → 8.46 ms** against a 12 ms budget,
+  median 6.82 ms. Cost **RAM +11 bytes, Flash +184 bytes**, drift deliberately
+  accepted. Stack peak re-measured at 160 bytes.
+  The always-empty band is why the predicate is named for the geometry
+  (`belowGrid`) and not for the footer: calling it a footer band would have
+  described only one of the two.
+  ⚠️ One mutation cannot be killed and it is an **equivalent mutant**: `>=` in
+  place of `>` against y 47. No band starts at y 47 — they start at 0, 8, … 56 —
+  so the two predicates are indistinguishable on the real set of bands. Recorded
+  rather than papered over: the sweep is 7 of 8, not 8 of 8.
   **Safety net:** one frame in 16 is rendered in full, whatever the comparison
   says. Not out of doubt about the display's model, which is certain, but against
   a defect in our own logic: an omission then repairs itself.
