@@ -8,7 +8,12 @@
  * `tick % mod_pulses == 0`, donc `mod_pulses` == ticksPerStep.
  *
  * NB : le pas HISTORIQUE du Trigger Sequencer Sitka est 1/16 ; ici 1/16
- * correspond a SUBDIV = -4 (96/4 = 24 ticks), qui reste le defaut par channel.
+ * correspond a SUBDIV = -4 (96/4 = 24 ticks). Ce n'est plus le defaut : le
+ * defaut par channel est /1, la noire, comme le channel Sitka d'origine.
+ *
+ * L'ORDRE de SUBDIVS est normatif : le format de persistance stocke l'INDEX
+ * (PRD 11.1), et le miroir C++ (include/flexseq/Subdiv.h) suit exactement le
+ * meme ordre, du plus rapide au plus lent.
  */
 
 /** Ticks par noire a 96 PPQN (unite SUBDIV). Egal a SequencerEngine.PPQN. */
