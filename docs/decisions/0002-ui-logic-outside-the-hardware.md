@@ -116,9 +116,14 @@ more; its internal `Button` knows about long presses but is private. A second
 `Encoder` fires its callback only on `CHANGE_RELEASED`, ours only on
 `CHANGE_RELEASED_LONG`. A short press wakes one, a long press the other.
 
-⚠️ That coexistence is **reasoned on the code, not measured**. It needs a native
-test and a check on the module. The fallback, if it fails, is to read the pin
-directly instead of going through `Button`.
+✅ **Verified on the module, 2026-08-22.** From the tab bar: a short press enters
+the tab **once**, a rotation moves the cursor, and a long press returns to the bar
+**once**. Neither gesture fires twice, so the two `Button` objects do not answer
+the same event -- exactly as reading the code predicted. The fallback of driving
+the pin directly is not needed and stays unused.
+
+The encoder direction was verified in the same session: `SetReverseDirection(true)`
+turns the module the way the original does, left and right both correct.
 
 **The audited `Button` anomaly gets no treatment** (decided by the owner
 2026-08-22, on the condition that neither the legacy behaviour nor FlexSeq is

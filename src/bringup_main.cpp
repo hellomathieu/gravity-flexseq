@@ -55,6 +55,17 @@ volatile uint32_t ticks = 0;
 uint16_t cvEdges[flexseq::cv::COUNT] = {0, 0};
 int16_t encoderPos = 0;
 uint16_t encoderPresses = 0;
+
+// Mesure du seuil d'anti-rebond de l'encodeur. libGravity n'en a aucun, et deux
+// crans rapides s'annulent (+1 puis -1). Le seuil doit se poser ENTRE le pire
+// rebond et la plus rapide des inversions volontaires : ces deux distributions
+// sont donc mesurees separement, et non supposees.
+uint32_t rotateLastMs = 0;
+int8_t rotateLastSign = 0;
+uint16_t reversals = 0;
+uint16_t reversalMinMs = 0xFFFF;
+uint16_t reversalMaxMs = 0;
+uint16_t sameDirMinMs = 0xFFFF;
 uint16_t shiftPresses = 0;
 uint16_t playPresses = 0;
 uint16_t shiftLongPresses = 0;
@@ -66,7 +77,24 @@ int16_t calHigh[flexseq::cv::COUNT];
 int16_t calOffset[flexseq::cv::COUNT];
 
 void onTick(uint32_t) { ++ticks; }
-void onEncoderRotate(int change) { encoderPos = static_cast<int16_t>(encoderPos + change); }
+void onEncoderRotate(int change) {
+    encoderPos = static_cast<int16_t>(encoderPos + change);
+    const uint32_t now = millis();
+    const int8_t sign = change < 0 ? -1 : 1;
+    if (rotateLastSign != 0) {
+        const uint32_t elapsed = now - rotateLastMs;
+        const uint16_t dt = elapsed > 0xFFFFu ? 0xFFFFu : static_cast<uint16_t>(elapsed);
+        if (sign != rotateLastSign) {
+            ++reversals;
+            if (dt < reversalMinMs) reversalMinMs = dt;
+            if (dt > reversalMaxMs) reversalMaxMs = dt;
+        } else if (dt < sameDirMinMs) {
+            sameDirMinMs = dt;
+        }
+    }
+    rotateLastMs = now;
+    rotateLastSign = sign;
+}
 void onEncoderPress() { ++encoderPresses; }
 void onShiftPress() {
     // Remet les compteurs a zero : on peut donc refaire une passe sans reflasher.
@@ -76,6 +104,11 @@ void onShiftPress() {
     cvEdges[1] = 0;
     encoderPos = 0;
     encoderPresses = 0;
+    rotateLastSign = 0;
+    reversals = 0;
+    reversalMinMs = 0xFFFF;
+    reversalMaxMs = 0;
+    sameDirMinMs = 0xFFFF;
     playPresses = 0;
     shiftLongPresses = 0;
     playLongPresses = 0;
@@ -180,11 +213,23 @@ void drawScreen() {
         *p = '\0';
         bandLine(27, line);
 
+        // R = inversions : combien, et la fourchette de leurs intervalles. Un
+        // rebond est une inversion tres rapide ; une inversion voulue par la main
+        // est bien plus lente. Le seuil se pose entre les deux.
+        // S = le plus court intervalle entre deux crans de MEME sens.
         p = line;
-        p = putStr(p, "ENC");
-        p = putInt(p, encoderPos, 4);
-        p = putStr(p, " SW:");
+        p = putStr(p, "E");
+        p = putInt(p, encoderPos, 3);
+        p = putStr(p, "/");
         p = putUint(p, encoderPresses, 0);
+        p = putStr(p, " R");
+        p = putUint(p, reversals, 0);
+        p = putStr(p, " ");
+        p = putUint(p, reversals ? reversalMinMs : 0, 0);
+        p = putStr(p, "-");
+        p = putUint(p, reversalMaxMs, 0);
+        p = putStr(p, " S");
+        p = putUint(p, sameDirMinMs == 0xFFFF ? 0 : sameDirMinMs, 0);
         *p = '\0';
         bandLine(36, line);
 
