@@ -167,9 +167,11 @@ only part of the time. Fast taps went missing and I read that as the audited
 `Button` anomaly biting at human speed. It was not: a threshold defect loses all
 or nothing, while a blind window loses more the faster you tap -- and the loss
 grew with the tapping rate, 30 % then 55 %. Deliberate presses gave 10 out of 10.
-The loss rate even measures the thing that causes it: 55 % of a 250 ms cadence
-puts the frame at about **137 ms**, where the code's own comment estimated 100.
-Before reading any input on a diagnostic, know how often it looks.
+Before reading any input on a diagnostic, know how often it looks. And do not
+turn the loss rate into a frame duration: counting taps by hand, at a speed
+nobody calibrated, gives an order of magnitude consistent with the code's ~100 ms
+estimate and nothing better. The honest number would come from
+`run-blocking-probe.sh` pointed at `env:bringup`, which has never been done.
 
 **A software header is not a measurement of the device.** PRD §2 gave the upload path as
 57600 baud, read off PlatformIO's board manifest and never off the module. The
