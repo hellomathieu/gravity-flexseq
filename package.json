@@ -1,0 +1,12 @@
+{
+  "name": "gravity-flexseq",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix sim run dev",
+    "build": "npm --prefix sim run build",
+    "preview": "npm --prefix sim run preview",
+    "test": "npm --prefix sim run test",
+    "test:watch": "npm --prefix sim run test:watch",
+    "typecheck": "npm --prefix sim run typecheck"
+  }
+}
