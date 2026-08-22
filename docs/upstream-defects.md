@@ -44,6 +44,7 @@ defaults are simply opposite. See PRD §4.1.
 
 | # | Defect | Established by |
 |---|---|---|
+| 2 | `channel::CV1Range` and `channel::CV2Range` are **dead fields**: declared in the struct, never read, never written, never displayed. The per-channel CV amplitude is hard-coded instead (`map(randMod, 0, 1023, -5, +5)`). They are nonetheless persisted, so 2 of every channel's 9 EEPROM bytes carry nothing -- 12 bytes across the six channels | read, 2026-08-22 |
 | 1 | `saveState()` rewrites the whole state — more than 300 bytes — on every recording keystroke, so an EEPROM write of ~3.4 ms lands in the middle of a musical event | read; PRD §11 records the consequence for FlexSeq's own persistence |
 
 ## Before proposing anything upstream

@@ -109,6 +109,16 @@ anyone decided to live with it.
 
 ## Method rules born from these subjects
 
+**A declared field is not a feature.** Twice on 2026-08-22, reading the original
+firmware's `channel` struct led to a wrong conclusion about its behaviour: two
+`CVxTarget` fields read as two offered routings, when the interface enforces
+mutual exclusion; and two `CVxRange` fields read as a depth setting, when they
+are never read at all. Both times the real code was **simpler** than the struct
+suggested, and both times the correction came from reading the interaction and
+generation code rather than the declaration. Read what the code *does* with a
+field before deciding what the field *means*.
+
+
 Each cost a real mistake, and each holds beyond the subject that produced it.
 
 **Measure where, not only how much.** A bimodal distribution says *how many*
