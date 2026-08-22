@@ -34,6 +34,12 @@ inline uint16_t subdivToTicks(int16_t subdiv) {
     return static_cast<uint16_t>(QUARTER_TICKS / mult);
 }
 
+constexpr uint8_t SUBDIV_CHOICE_COUNT = 25;
+constexpr uint8_t DEFAULT_SUBDIV_INDEX = 8;
+
+int16_t subdivAtIndex(uint8_t index);
+int8_t subdivIndexOf(int16_t subdiv);
+
 }  // namespace flexseq
 
 #endif // FLEXSEQ_SUBDIV_H
