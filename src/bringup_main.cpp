@@ -57,6 +57,8 @@ int16_t encoderPos = 0;
 uint16_t encoderPresses = 0;
 uint16_t shiftPresses = 0;
 uint16_t playPresses = 0;
+uint16_t shiftLongPresses = 0;
+uint16_t playLongPresses = 0;
 
 // Calibration relevee une fois, pour afficher le CV en unites du domaine.
 int16_t calLow[flexseq::cv::COUNT];
@@ -74,7 +76,13 @@ void onShiftPress() {
     cvEdges[1] = 0;
     encoderPos = 0;
     encoderPresses = 0;
+    playPresses = 0;
+    shiftLongPresses = 0;
+    playLongPresses = 0;
 }
+
+void onShiftLongPress() { ++shiftLongPresses; }
+void onPlayLongPress() { ++playLongPresses; }
 void onPlayPress() {
     ++playPresses;
     if (gravity.clock.IsPaused()) {
@@ -144,7 +152,7 @@ void bandLine(uint8_t baseline, const char* text) {
 }
 
 void drawScreen() {
-    char line[26];
+    char line[40];
     char* p;
 
     gravity.display.firstPage();
@@ -189,10 +197,14 @@ void drawScreen() {
         p = putUint(p, gravity.shift_button.On() ? 1 : 0, 0);
         p = putStr(p, "/");
         p = putUint(p, shiftPresses, 0);
-        p = putStr(p, "  PLY ");
+        p = putStr(p, "/");
+        p = putUint(p, shiftLongPresses, 0);
+        p = putStr(p, " PLY ");
         p = putUint(p, gravity.play_button.On() ? 1 : 0, 0);
         p = putStr(p, "/");
         p = putUint(p, playPresses, 0);
+        p = putStr(p, "/");
+        p = putUint(p, playLongPresses, 0);
         *p = '\0';
         bandLine(45, line);
 
@@ -239,6 +251,8 @@ void setup() {
     gravity.encoder.AttachPressHandler(onEncoderPress);
     gravity.shift_button.AttachPressHandler(onShiftPress);
     gravity.play_button.AttachPressHandler(onPlayPress);
+    gravity.shift_button.AttachLongPressHandler(onShiftLongPress);
+    gravity.play_button.AttachLongPressHandler(onPlayLongPress);
 
     gravity.clock.AttachIntHandler(onTick);
 
