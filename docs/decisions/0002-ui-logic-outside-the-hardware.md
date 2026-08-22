@@ -66,11 +66,19 @@ enough that hardware verification is the appropriate check for it.
 
 **`UiController` is mirrored in TypeScript** (decided by the owner 2026-08-22).
 The parity rule of PRD §13 applies: the two sides must not become two independent
-specifications. The mirror takes the same eight events, so the simulator can be
-driven by the module's gestures rather than by a mouse, and an interaction
-sequence becomes verifiable without plugging anything in. The cost is real —
-roughly a doubling of this component's work, and every scenario covered on both
-sides.
+specifications. The mirror takes the same eight events, so the simulator
+exercises the same state machine rather than a second one written for a mouse.
+
+⚠️ **What it does not give.** A simulator driven by keyboard and mouse cannot
+reproduce a **held modifier**, a **rotate-while-pressed**, or the **mechanical
+bounce of a detent** — which is exactly the regime where the dependency's missing
+debounce bites. So the mirror verifies the **logic**, never the gesture. It is a
+comfortable place to check intended behaviour, not a substitute for the module.
+The owner said as much on 2026-08-22, and the distinction is recorded here so
+nobody later mistakes a green simulator for a verified interaction.
+
+The cost is real: roughly a doubling of this component's work, and every scenario
+covered on both sides.
 
 **The renderer** gains a footer band, and `PagedScreen` gains a second skippable
 band. See below.

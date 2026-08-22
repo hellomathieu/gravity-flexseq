@@ -94,3 +94,6 @@ tools/simavr-test/*.hex
 # publie l'identifiant du proprietaire sur un depot public. Les fichiers restent
 # en local et VS Code continue de fonctionner.
 .vscode/
+
+# Suivi de developpement, non normatif et temporaire (voir son en-tete)
+WORKPLAN.md
