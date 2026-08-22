@@ -15,11 +15,11 @@ export const RULE_W = 120;
 export const HEADLINE_BOX_X = 2;
 export const HEADLINE_BOX_Y = 1;
 export const HEADLINE_BOX_W = OLED_W - 2 * HEADLINE_BOX_X;
-export const HEADLINE_BOX_H = 30;
-export const HEADLINE_SCALE = 5;
+export const HEADLINE_BOX_H = 10;
+export const HEADLINE_SCALE = 1;
 
-export const ROW_A_BOX_Y = 32;
-export const ROW_B_BOX_Y = 40;
+export const ROW_A_BOX_Y = 14;
+export const ROW_B_BOX_Y = 22;
 export const ROW_BOX_H = 8;
 export const COL_LEFT_X = 2;
 export const COL_RIGHT_X = 66;

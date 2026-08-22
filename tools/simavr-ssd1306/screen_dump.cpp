@@ -248,7 +248,7 @@ int main(int argc, char** argv)
         printf("  %d / %d onglets a leur place attendue\n", tabsPlaced, (int)ms::TAB_COUNT);
         printf("  barre d'onglets (panneau y %u..%u) : %d pixels\n",
                rotY(ms::TAB_BASELINE_Y), rotY(ms::TAB_BOX_Y), inkTabBar);
-        printf("  grande police (panneau y %u..%u) : %d pixels\n",
+        printf("  en-tete (panneau y %u..%u) : %d pixels\n",
                rotY((uint8_t)(ms::HEADLINE_BOX_Y + ms::HEADLINE_BOX_H - 1)),
                rotY(ms::HEADLINE_BOX_Y), inkHeadline);
         printf("  filet (panneau y %u) : %d pixels\n", rotY(ms::RULE_Y), inkRule);

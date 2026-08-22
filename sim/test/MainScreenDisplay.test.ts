@@ -145,12 +145,19 @@ describe("MainScreenDisplay — geometry", () => {
     expect(inkInRows(painted, ROW_B_BOX_Y, ROW_B_BOX_Y + ROW_BOX_H - 1)).toBeGreaterThan(0);
   });
 
-  it("draws the headline larger than the field text", () => {
-    const big = recorder();
-    drawMainScreenOled(big.ctx, channelTab());
-    const headlineInk = inkInRows(big.painted, HEADLINE_BOX_Y, HEADLINE_BOX_Y + HEADLINE_BOX_H - 1);
-    const rowInk = inkInRows(big.painted, ROW_A_BOX_Y, ROW_A_BOX_Y + ROW_BOX_H - 1);
-    expect(headlineInk).toBeGreaterThan(rowInk);
+  it("draws the headline in the same single font as everything else", () => {
+    const r = recorder();
+    drawMainScreenOled(r.ctx, channelTab());
+    expect(inkInRows(r.painted, HEADLINE_BOX_Y, HEADLINE_BOX_Y + HEADLINE_BOX_H - 1))
+      .toBeGreaterThan(0);
+  });
+
+  it("leaves room below the two rows for the CV fields of PRD 10.2", () => {
+    const r = recorder();
+    drawMainScreenOled(r.ctx, channelTab());
+    const top = ROW_B_BOX_Y + ROW_BOX_H;
+    expect(RULE_Y - top).toBeGreaterThanOrEqual(2 * ROW_BOX_H);
+    expect(inkInRows(r.painted, top, RULE_Y - 1)).toBe(0);
   });
 
   it("shows nothing in the content area of the deferred settings tab", () => {

@@ -20,13 +20,14 @@ constexpr uint8_t RULE_X = 4;
 constexpr uint8_t RULE_W = 120;
 
 constexpr uint8_t HEADLINE_BOX_Y = 1;
-constexpr uint8_t HEADLINE_BOX_H = 30;
-constexpr uint8_t HEADLINE_BASELINE_Y = 28;
+constexpr uint8_t HEADLINE_BOX_H = 10;
+constexpr uint8_t HEADLINE_BASELINE_Y = 8;
 constexpr uint8_t HEADLINE_BOX_X = 2;
 constexpr uint8_t HEADLINE_BOX_W = screen::WIDTH - 2 * HEADLINE_BOX_X;
 
-constexpr uint8_t ROW_A_BOX_Y = 32;
-constexpr uint8_t ROW_B_BOX_Y = 40;
+constexpr uint8_t ROW_A_BOX_Y = 14;
+constexpr uint8_t ROW_B_BOX_Y = 22;
+
 constexpr uint8_t ROW_BOX_H = 8;
 constexpr uint8_t ROW_A_BASELINE_Y = ROW_A_BOX_Y + 7;
 constexpr uint8_t ROW_B_BASELINE_Y = ROW_B_BOX_Y + 7;
@@ -42,6 +43,8 @@ static_assert(ROW_B_BASELINE_Y < RULE_Y, "the second field row must clear the ru
 static_assert(RULE_Y < TAB_BOX_Y, "the rule must clear the tab bar");
 static_assert(HEADLINE_BOX_Y + HEADLINE_BOX_H <= ROW_A_BOX_Y,
               "the headline must clear the first field row");
+static_assert(ROW_B_BOX_Y + ROW_BOX_H < RULE_Y,
+              "the space below the second row is reserved for the CV fields of PRD 10.2");
 static_assert(ROW_A_BOX_Y + ROW_BOX_H <= ROW_B_BOX_Y,
               "the two field rows must not overlap");
 static_assert(COL_LEFT_X + COL_W <= COL_RIGHT_X,
@@ -78,8 +81,6 @@ struct MainScreenModel {
     uint16_t tempo;
     uint8_t clockSource;
 
-    const uint8_t* smallFont;
-    const uint8_t* bigFont;
     uint8_t headlineWidth;
 };
 
@@ -201,13 +202,11 @@ void drawMainScreen(Canvas& canvas, const MainScreenModel& model,
         char headline[6];
         detail::headlineOf(model, headline);
         if (headline[0] != '\0') {
-            canvas.setFont(model.bigFont);
             const uint8_t w = model.headlineWidth != 0
                                   ? model.headlineWidth
                                   : static_cast<uint8_t>(canvas.getStrWidth(headline));
             canvas.drawStr(static_cast<uint8_t>((screen::WIDTH - w) / 2),
                            ms::HEADLINE_BASELINE_Y, headline);
-            canvas.setFont(model.smallFont);
         }
         if (cursorOnHeadline) {
             if (model.fieldOpen) {

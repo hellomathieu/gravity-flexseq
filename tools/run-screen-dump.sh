@@ -133,7 +133,7 @@ main_ok = re.search(r"ecran principal (OK|KO)", txt)
 if main_ok:
     tabs = re.search(r"(\d+) / (\d+) onglets a leur place", txt)
     bar = re.search(r"barre d'onglets \(panneau y (\d+)\.\.(\d+)\) : (\d+) pixels", txt)
-    head = re.search(r"grande police \(panneau y (\d+)\.\.(\d+)\) : (\d+) pixels", txt)
+    head = re.search(r"en-tete \(panneau y (\d+)\.\.(\d+)\) : (\d+) pixels", txt)
     rule = re.search(r"filet \(panneau y (\d+)\) : (\d+) pixels", txt)
     ok = main_ok[1] == "OK"
     print()
@@ -144,7 +144,7 @@ if main_ok:
     print(f"  {mark(bar is not None and bar[3] != '0')} Rotation 180       "
           f"barre en HAUT du panneau ({bar[3] if bar else '?'} px en "
           f"y {bar[1] if bar else '?'}..{bar[2] if bar else '?'})")
-    print(f"  {mark(head is not None and head[3] != '0')} Grande police      "
+    print(f"  {mark(head is not None and head[3] != '0')} En-tete            "
           f"en BAS du panneau ({head[3] if head else '?'} px en "
           f"y {head[1] if head else '?'}..{head[2] if head else '?'})")
     print(f"  {mark(rule is not None and rule[2] != '0')} Filet              "

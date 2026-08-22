@@ -45,18 +45,11 @@ void freezeModel() {
         : 0;
     frozen.tempo = ui.tempo();
     frozen.clockSource = ui.clockSource();
-    frozen.smallFont = u8g2_font_5x7_tf;
-    frozen.bigFont = u8g2_font_logisoso26_tr;
-
     char headline[6];
     flexseq::detail::headlineOf(frozen, headline);
-    if (headline[0] != '\0') {
-        gravity.display.setFont(frozen.bigFont);
-        frozen.headlineWidth = static_cast<uint8_t>(gravity.display.getStrWidth(headline));
-        gravity.display.setFont(frozen.smallFont);
-    } else {
-        frozen.headlineWidth = 0;
-    }
+    frozen.headlineWidth = headline[0] == '\0'
+        ? 0
+        : static_cast<uint8_t>(gravity.display.getStrWidth(headline));
 
     tiles = gravity.display.getBufferTileHeight();
     if (tiles == 0) {

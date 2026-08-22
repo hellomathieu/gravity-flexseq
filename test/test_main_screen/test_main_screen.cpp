@@ -15,14 +15,10 @@ void tearDown() {}
 
 namespace {
 
-const uint8_t SMALL_FONT = 0x11;
-const uint8_t BIG_FONT = 0x22;
-
 struct Call {
     uint8_t x;
     uint8_t y;
     char text[8];
-    bool big;
 };
 
 struct RecordingCanvas {
@@ -30,7 +26,6 @@ struct RecordingCanvas {
     uint8_t color;
     uint8_t clipY0;
     uint8_t clipY1;
-    const uint8_t* font;
     Call calls[16];
     uint8_t callCount;
 
@@ -41,12 +36,10 @@ struct RecordingCanvas {
         color = 1;
         clipY0 = 0;
         clipY1 = screen::HEIGHT - 1;
-        font = &SMALL_FONT;
         callCount = 0;
     }
 
     void setDrawColor(uint8_t c) { color = c; }
-    void setFont(const uint8_t* f) { font = f; }
 
     void drawPixel(uint8_t x, uint8_t y) {
         if (x < screen::WIDTH && y < screen::HEIGHT && y >= clipY0 && y <= clipY1) {
@@ -78,7 +71,6 @@ struct RecordingCanvas {
             Call& c = calls[callCount++];
             c.x = x;
             c.y = y;
-            c.big = (font == &BIG_FONT);
             strncpy(c.text, s, sizeof(c.text) - 1);
             c.text[sizeof(c.text) - 1] = '\0';
         }
@@ -86,8 +78,7 @@ struct RecordingCanvas {
     }
 
     uint8_t getStrWidth(const char* s) const {
-        const uint8_t per = (font == &BIG_FONT) ? 20 : 5;
-        return static_cast<uint8_t>(per * strlen(s));
+        return static_cast<uint8_t>(5 * strlen(s));
     }
 
     bool at(uint8_t x, uint8_t y) const { return px[y][x]; }
@@ -134,8 +125,6 @@ MainScreenModel channelTab(uint8_t tab = 1) {
     m.barLength = 4;
     m.tempo = 120;
     m.clockSource = 0;
-    m.smallFont = &SMALL_FONT;
-    m.bigFont = &BIG_FONT;
     m.headlineWidth = 0;
     return m;
 }
@@ -176,7 +165,6 @@ void test_the_six_channel_digits_sit_at_their_slot_centres() {
         const Call* call = canvas.findOnBaseline(expected, ms::TAB_BASELINE_Y);
         TEST_ASSERT_NOT_NULL(call);
         TEST_ASSERT_EQUAL_UINT8(ms::tabCentreX(channel) - 2, call->x);
-        TEST_ASSERT_FALSE(call->big);
     }
 }
 
@@ -214,27 +202,36 @@ void test_the_clock_and_settings_tabs_are_glyphs_not_digits() {
  * Contenu d'un onglet de channel
  */
 
-void test_the_headline_is_the_pattern_name_in_the_big_font() {
+void test_the_headline_is_the_pattern_name_centred_on_its_baseline() {
     canvas.reset();
     MainScreenModel m = channelTab();
     m.patternIndex = 9; // B2
     drawMainScreen(canvas, m);
-    const Call* call = canvas.find("B2");
+    const Call* call = canvas.findOnBaseline("B2", ms::HEADLINE_BASELINE_Y);
     TEST_ASSERT_NOT_NULL(call);
-    TEST_ASSERT_TRUE_MESSAGE(call->big, "le nom du pattern doit etre en grande police");
-    TEST_ASSERT_EQUAL_UINT8(ms::HEADLINE_BASELINE_Y, call->y);
-    // Centre sur la largeur de la GRANDE police (20 px par glyphe dans ce faux),
-    // pas sur celle qui est active apres restauration.
-    TEST_ASSERT_EQUAL_UINT8((screen::WIDTH - 2 * 20) / 2, call->x);
+    TEST_ASSERT_EQUAL_UINT8((screen::WIDTH - canvas.getStrWidth("B2")) / 2, call->x);
 }
 
-void test_the_font_is_restored_after_the_headline() {
+// Un seul jeu de glyphes : le renderer ne change JAMAIS de police, donc rien ne
+// peut rester dans le mauvais etat pour l'element suivant.
+void test_the_renderer_never_switches_font() {
     canvas.reset();
     drawMainScreen(canvas, channelTab());
     const Call* digit = canvas.findOnBaseline("1", ms::TAB_BASELINE_Y);
     TEST_ASSERT_NOT_NULL(digit);
-    TEST_ASSERT_FALSE_MESSAGE(digit->big, "la petite police n'a pas ete rendue");
-    TEST_ASSERT_EQUAL_PTR(&SMALL_FONT, canvas.font);
+    const Call* headline = canvas.findOnBaseline("A1", ms::HEADLINE_BASELINE_Y);
+    TEST_ASSERT_NOT_NULL(headline);
+}
+
+// L'espace laisse libre sous la seconde rangee est REEL : c'est la place des
+// champs de source et destination CV du PRD 10.2.
+void test_the_space_below_the_rows_is_reserved_and_empty() {
+    canvas.reset();
+    drawMainScreen(canvas, channelTab());
+    const uint8_t top = ms::ROW_B_BOX_Y + ms::ROW_BOX_H;
+    TEST_ASSERT_TRUE_MESSAGE(ms::RULE_Y - top >= 2 * ms::ROW_BOX_H,
+        "il ne reste pas la place de deux rangees pour les champs CV");
+    TEST_ASSERT_EQUAL_UINT16(0, canvas.inkInRows(top, ms::RULE_Y - 1));
 }
 
 void test_a_channel_tab_shows_length_subdiv_separation_and_the_edit_entry() {
@@ -323,9 +320,8 @@ void test_the_clock_tab_shows_the_tempo_big_and_the_source() {
     m.clockSource = 5;
     drawMainScreen(canvas, m);
 
-    const Call* headline = canvas.find("240");
+    const Call* headline = canvas.findOnBaseline("240", ms::HEADLINE_BASELINE_Y);
     TEST_ASSERT_NOT_NULL(headline);
-    TEST_ASSERT_TRUE(headline->big);
     TEST_ASSERT_NOT_NULL(canvas.find("SRC"));
     TEST_ASSERT_NOT_NULL(canvas.find("MIDI"));
     TEST_ASSERT_NULL_MESSAGE(canvas.find("LEN"), "aucun reglage de channel dans l'onglet horloge");
@@ -470,8 +466,9 @@ int main() {
     RUN_TEST(test_the_selected_tab_is_inverted);
     RUN_TEST(test_the_clock_and_settings_tabs_are_glyphs_not_digits);
 
-    RUN_TEST(test_the_headline_is_the_pattern_name_in_the_big_font);
-    RUN_TEST(test_the_font_is_restored_after_the_headline);
+    RUN_TEST(test_the_headline_is_the_pattern_name_centred_on_its_baseline);
+    RUN_TEST(test_the_renderer_never_switches_font);
+    RUN_TEST(test_the_space_below_the_rows_is_reserved_and_empty);
     RUN_TEST(test_a_channel_tab_shows_length_subdiv_separation_and_the_edit_entry);
     RUN_TEST(test_the_five_fields_of_a_channel_tab_fit_without_scrolling);
     RUN_TEST(test_subdiv_is_shown_the_gravity_way);
