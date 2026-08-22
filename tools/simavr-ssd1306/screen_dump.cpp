@@ -42,6 +42,7 @@ extern "C" {
 #include <parts/ssd1306_virt.h>
 }
 
+#include <flexseq/MainScreen.h>
 #include <flexseq/PatternScreen.h>
 
 #include "simavr_uart_quiet.h"
@@ -226,6 +227,37 @@ int main(int argc, char** argv)
         /* Un step au-dela de LENGTH n'est qu'un point : on tolere 1 pixel. */
         const int need = (i < length) ? 3 : 1;
         if (inkInBox(px, py, scr::GLYPH_HALF) >= need) ++placed; else ++missing;
+    }
+
+    /* --- ecran principal : ses propres criteres ---------------------------- */
+    if (getenv("SCREEN") && strcmp(getenv("SCREEN"), "main") == 0) {
+        namespace ms = flexseq::mainscreen;
+        int tabsPlaced = 0;
+        for (uint8_t tab = 0; tab < ms::TAB_COUNT; ++tab) {
+            const uint8_t px = rotX(ms::tabCentreX(tab));
+            const uint8_t py = rotY((uint8_t)(ms::TAB_TOP_Y + 3));
+            if (inkInBox(px, py, 4) > 0) ++tabsPlaced;
+        }
+        const int inkTabBar = inkInRows(rotY(ms::TAB_BASELINE_Y), rotY(ms::TAB_BOX_Y));
+        const int inkHeadline = inkInRows(
+            rotY((uint8_t)(ms::HEADLINE_BOX_Y + ms::HEADLINE_BOX_H - 1)),
+            rotY(ms::HEADLINE_BOX_Y));
+        const int inkRule = inkInRows(rotY(ms::RULE_Y), rotY(ms::RULE_Y));
+
+        printf("=== ECRAN PRINCIPAL (apres U8G2_R2) ===\n");
+        printf("  %d / %d onglets a leur place attendue\n", tabsPlaced, (int)ms::TAB_COUNT);
+        printf("  barre d'onglets (panneau y %u..%u) : %d pixels\n",
+               rotY(ms::TAB_BASELINE_Y), rotY(ms::TAB_BOX_Y), inkTabBar);
+        printf("  grande police (panneau y %u..%u) : %d pixels\n",
+               rotY((uint8_t)(ms::HEADLINE_BOX_Y + ms::HEADLINE_BOX_H - 1)),
+               rotY(ms::HEADLINE_BOX_Y), inkHeadline);
+        printf("  filet (panneau y %u) : %d pixels\n", rotY(ms::RULE_Y), inkRule);
+        printf("  encre totale %d pixels\n", total);
+
+        const int ok = (tabsPlaced == (int)ms::TAB_COUNT) && inkTabBar > 0
+                       && inkHeadline > 0 && inkRule > 0;
+        printf("\n  ecran principal %s\n", ok ? "OK" : "KO");
+        return ok ? 0 : 1;
     }
 
     /* --- 2. rotation : titre en BAS du panneau, pied de page en HAUT -------- */

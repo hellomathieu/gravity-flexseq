@@ -21,8 +21,8 @@ import { RATCHET_NONE, RATCHET_TRIPLET } from "../domain/Pattern.js";
 export const OLED_W = 128;
 export const OLED_H = 64;
 
-const PAPER = "#f4f4f2";
-const INK = "#111";
+export const PAPER = "#f4f4f2";
+export const INK = "#111";
 
 // --- Geometrie (sketch.ino) -------------------------------------------------
 const PER_ROW = 12;

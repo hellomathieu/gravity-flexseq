@@ -42,6 +42,16 @@ DURATION="${DURATION:-3}"
 # La LENGTH du contenu AFFICHE conditionne le controle : au-dela, un step n'est
 # qu'un point d'un pixel. env:wokwi la fixe a 20 dans son contenu de
 # demonstration ; les autres firmwares partent de SequencerEngine::DEFAULT_LENGTH.
+# L'ecran rendu decoule de l'environnement : le demander a l'appelant serait un
+# piege, les criteres n'ayant rien en commun entre les deux ecrans.
+if [ -z "${SCREEN:-}" ]; then
+  case "$ENVNAME" in
+    mainscreen) SCREEN=main ;;
+    *)          SCREEN=edit ;;
+  esac
+fi
+export SCREEN
+
 if [ -z "${LENGTH:-}" ]; then
   case "$ENVNAME" in
     wokwi) LENGTH=20 ;;
@@ -118,6 +128,29 @@ if "La memoire du panneau est VIDE" in txt:
     print("     Le bus peut porter du trafic et l'ecran rester blanc — c'est")
     print("     exactement le defaut que ce controle a trouve la premiere fois.")
     sys.exit(1)
+
+main_ok = re.search(r"ecran principal (OK|KO)", txt)
+if main_ok:
+    tabs = re.search(r"(\d+) / (\d+) onglets a leur place", txt)
+    bar = re.search(r"barre d'onglets \(panneau y (\d+)\.\.(\d+)\) : (\d+) pixels", txt)
+    head = re.search(r"grande police \(panneau y (\d+)\.\.(\d+)\) : (\d+) pixels", txt)
+    rule = re.search(r"filet \(panneau y (\d+)\) : (\d+) pixels", txt)
+    ok = main_ok[1] == "OK"
+    print()
+    print(f"{B}========== ECRAN PRINCIPAL (memoire du panneau) =========={Z}")
+    print(f"  {mark(tabs is not None and tabs[1] == tabs[2])} Barre d'onglets    "
+          f"{tabs[1] if tabs else '?'}/{tabs[2] if tabs else '?'} onglets a leur place "
+          f"{DIM}(apres U8G2_R2){Z}")
+    print(f"  {mark(bar is not None and bar[3] != '0')} Rotation 180       "
+          f"barre en HAUT du panneau ({bar[3] if bar else '?'} px en "
+          f"y {bar[1] if bar else '?'}..{bar[2] if bar else '?'})")
+    print(f"  {mark(head is not None and head[3] != '0')} Grande police      "
+          f"en BAS du panneau ({head[3] if head else '?'} px en "
+          f"y {head[1] if head else '?'}..{head[2] if head else '?'})")
+    print(f"  {mark(rule is not None and rule[2] != '0')} Filet              "
+          f"{DIM}panneau y {rule[1] if rule else '?'}, {rule[2] if rule else '?'} px{Z}")
+    print(f"{B}=========================================================={Z}")
+    sys.exit(0 if (ok and probe_status == 0) else 1)
 
 steps = re.search(r"(\d+) / (\d+) steps a leur place", txt)
 skipped = "ignoree (SKIP_GEOMETRY)" in txt

@@ -8,24 +8,20 @@ namespace flexseq {
 namespace {
 
 uint8_t barLengthAtIndex(uint8_t index) {
-    switch (index) {
-        case 0: return 0;
-        case 1: return 2;
-        case 2: return 3;
-        case 3: return 4;
-        default: return 6;
-    }
+    if (index == 0) return 0;
+    if (index == 1) return 2;
+    if (index == 2) return 3;
+    if (index == 3) return 4;
+    return 6;
 }
 
 uint8_t ratchetAtIndex(uint8_t index) {
-    switch (index) {
-        case 0: return RATCHET_NONE;
-        case 1: return RATCHET_2;
-        case 2: return RATCHET_3;
-        case 3: return RATCHET_4;
-        case 4: return RATCHET_6;
-        default: return RATCHET_TRIPLET;
-    }
+    if (index == 0) return RATCHET_NONE;
+    if (index == 1) return RATCHET_2;
+    if (index == 2) return RATCHET_3;
+    if (index == 3) return RATCHET_4;
+    if (index == 4) return RATCHET_6;
+    return RATCHET_TRIPLET;
 }
 
 uint8_t wrapIndex(uint8_t current, int16_t delta, uint8_t count) {
