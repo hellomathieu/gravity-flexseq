@@ -53,6 +53,25 @@ libGravity's controls. It attaches the callbacks, reads SHIFT's pin state, and
 turns all of it into those eight events. Every constraint listed above is handled
 here and nowhere else.
 
+It is **split in two**, and for a reason that only appeared when the tests were
+planned (decided 2026-08-22). Testing the adapter natively would need the Arduino
+stubs and libGravity's headers — the setup of `env:native_libgravity`, whose
+criterion is that **exactly** seven assertions fail by construction. Adding
+FlexSeq acceptance tests there would break that invariant, and a third
+environment is not worth creating. So the delicate logic moves into
+**`EncoderFilter`**, a pure component that takes deltas and timestamps and
+applies the debounce and the false-first-movement suppression: it is tested in
+`env:native` like everything else. What remains in `InputAdapter` is glue thin
+enough that hardware verification is the appropriate check for it.
+
+**`UiController` is mirrored in TypeScript** (decided by the owner 2026-08-22).
+The parity rule of PRD §13 applies: the two sides must not become two independent
+specifications. The mirror takes the same eight events, so the simulator can be
+driven by the module's gestures rather than by a mouse, and an interaction
+sequence becomes verifiable without plugging anything in. The cost is real —
+roughly a doubling of this component's work, and every scenario covered on both
+sides.
+
 **The renderer** gains a footer band, and `PagedScreen` gains a second skippable
 band. See below.
 
@@ -92,6 +111,22 @@ more; its internal `Button` knows about long presses but is private. A second
 ⚠️ That coexistence is **reasoned on the code, not measured**. It needs a native
 test and a check on the module. The fallback, if it fails, is to read the pin
 directly instead of going through `Button`.
+
+**The audited `Button` anomaly gets no treatment** (decided by the owner
+2026-08-22, on the condition that neither the legacy behaviour nor FlexSeq is
+affected). The analysis that satisfies the condition: the anomaly's worst effect
+is a **missed callback**, never a stuck state — after a lost release the pin reads
+as released, so the next press is seen normally. RECORDING (PRD §5.5) reads SHIFT
+as a **pin state** rather than a callback, so it is not on this path at all. And
+the original firmware reads its buttons with a direct `digitalRead`, so it does
+not share the path either. The anomaly needs a contact shorter than
+`DEBOUNCE_MS = 10`, which a finger does not reach.
+
+What would **falsify** that analysis, and therefore belongs in the acceptance
+criteria of the flash milestone: the same series of fast taps run against the
+**production** loop, which polls about 125 times a second. `env:bringup` blinds
+itself for part of every cycle, so its losses measure the diagnostic; with that
+window gone, only the real 10 ms threshold remains.
 
 **Estimated cost: about 15 bytes of RAM** — 7 for the UI state, 2 for the footer
 hash, 6 for the adapter. PRD §15 budgeted ~16 bytes for the wired UI against 264
