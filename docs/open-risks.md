@@ -28,7 +28,7 @@ below.
 | 1 | **The PRODUCTION firmware has never run on the module.** `env:bringup` has, and every line it exercises now answers, `EDGE` included | medium | flash `main.cpp` once the UI and the transport are wired (line 11b). What stays unverified is the production render and its timing on real hardware rather than under simavr |
 | 6 | **5.6 % of CPU** paid by the ADC ISR even with no channel routing CV | low | **deferred to §10.2 by decision (2026-08-21)**. In isolation the conditioning would be inapplicable: no channel routes CV, so conditioning would amount to switching CV off |
 | 11b | **No control is wired in `main.cpp`**: only `clock.AttachIntHandler()` is called — no EXT, no source, no tempo, no start/stop; buttons and encoder are `Process()`-ed with no callback attached | medium | **this is the next piece of work**: wire the UI (§12) and the transport (§8). Not a defect but the state of progress. Consequence: a flash today would validate the hardware chain, not the features |
-| 14 | **Three audited libGravity anomalies are latent and land exactly on the next task**: `Button` losing a release inside the debounce window, `Encoder`'s false first movement, `Clock::SetSource` ignoring the `SOURCE_LAST` sentinel. Reachability table in **PRD §18** | medium | absorb all three in the adapter layer **while wiring the UI (§12) and the transport (§8)**. None is reachable today -- no callback attached, no clock source selected (line 11b) |
+| 14 | **Three audited libGravity anomalies are latent and land exactly on the next task**: `Button` losing a release inside the debounce window, `Encoder`'s false first movement, `Clock::SetSource` ignoring the `SOURCE_LAST` sentinel. Reachability table in **PRD §18** | medium | absorb all three in the adapter layer **while wiring the UI (§12) and the transport (§8)**. None is reachable today -- no callback attached, no clock source selected (line 11b). **`Button` is now bounded by measurement (2026-08-22)**: the anomaly needs a contact shorter than `DEBOUNCE_MS = 10`, which a finger does not reach. Deliberate presses give 10/10; fast taps lose 30 to 55 %, but that is `env:bringup` blinding its own loop, not the anomaly. So for a button pressed by hand it is practically unreachable -- the adapter may owe nothing here, and that is a decision to take, not an assumption |
 | 15 | **`DigitalOutput::Init()` does not force the output OFF**, and the audited test proves it | low | nothing today: harmless at cold boot, for the reason established in **PRD §18** (AVR reset leaves `PORT` at 0, and `gravity` is a global in `.bss`). What is left is to handle it **if a software reboot is ever added** -- that is when the pin could stay HIGH while the firmware believes it is off |
 | 20 | **libGravity's encoder has no debounce, and the dependency says so**: `_rotate_change()` carries the literal comment `// Validation (TODO: add debounce check)`. Observed on the module: two fast detents produce **no event at all**, because a bounced detent gives +1 then -1 and the position returns to where it was | medium | absorb it in the adapter layer, together with line 14, **while wiring the UI (PRD §12)**. Not a loss of counts: the library *accelerates* fast rotation (x3 under 16 ms, x2 under 32 ms), so a real fast turn would be amplified, never erased. What is seen is cancellation |
 | 21 | **Two persisted preferences of the original firmware are hardcoded or absent in FlexSeq**: `rotateScreen` (FlexSeq fixes `U8G2_R2`) and `reverseEnc` (never set, and libGravity's default is the opposite of the original's -- clockwise decrements on the module) | low | expose both in the UI (**PRD §4.1**), and call `SetReverseDirection(true)` so the default matches the original. Not a defect of either library: encoder direction depends on the wiring of the two pins, which is why both expose the setting |
@@ -160,6 +160,16 @@ drive -- it costs nothing and it halves the search.
 hardware, prove the screen is refreshing. The bring-up firmware's own liveness
 indicators are the `OUT` digit (moves every 800 ms) and the tick counter; without
 that check, an hour goes into inputs that were never at fault.
+
+**A diagnostic that blinds itself measures its own blindness.** `env:bringup`
+redraws a whole frame in one call, which blocks its loop, so it polls the buttons
+only part of the time. Fast taps went missing and I read that as the audited
+`Button` anomaly biting at human speed. It was not: a threshold defect loses all
+or nothing, while a blind window loses more the faster you tap -- and the loss
+grew with the tapping rate, 30 % then 55 %. Deliberate presses gave 10 out of 10.
+The loss rate even measures the thing that causes it: 55 % of a 250 ms cadence
+puts the frame at about **137 ms**, where the code's own comment estimated 100.
+Before reading any input on a diagnostic, know how often it looks.
 
 **A software header is not a measurement of the device.** PRD §2 gave the upload path as
 57600 baud, read off PlatformIO's board manifest and never off the module. The
