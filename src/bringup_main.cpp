@@ -233,7 +233,7 @@ void drawScreen() {
 
 void setup() {
     gravity.Init();
-    gravity.display.setFont(u8g2_font_5x7_tf);
+    gravity.display.setFont(u8g2_font_5x7_tr);
 
     calLow[0] = gravity.cv1.GetCalibrationLow();
     calHigh[0] = gravity.cv1.GetCalibrationHigh();

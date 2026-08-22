@@ -34,6 +34,10 @@ set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DURATION="${DURATION:-20}"
 JITTER_BUDGET_PCT="${JITTER_BUDGET_PCT:-2}"
+# TEMPO change le tempo par defaut du firmware ET l'attente du harnais, de sorte
+# que « la duree de step suit le tempo » soit verifiable et pas seulement crue.
+TEMPO="${TEMPO:-120}"
+STEP_TOLERANCE_PCT="${STEP_TOLERANCE_PCT:-1}"
 
 if [ -t 1 ]; then
   C_OK=$'\033[32m'; C_ERR=$'\033[31m'; C_DIM=$'\033[2m'; C_B=$'\033[1m'; C_0=$'\033[0m'; TTY=1
@@ -59,7 +63,7 @@ trap 'rm -f "$LOG"; rm -rf "$(dirname "$BIN")"' EXIT
 
 # --- 1. Harnais --------------------------------------------------------------
 progress "compilation du harnais"
-if cc -O2 -Wall -I"$PREFIX/include/simavr" -I"$PREFIX/include" \
+if cc -O2 -Wall -DBPM="$TEMPO" -I"$PREFIX/include/simavr" -I"$PREFIX/include" \
      "$ROOT/tools/simavr-ssd1306/trigger_probe.c" -o "$BIN" \
      -L"$PREFIX/lib" -lsimavrparts -lsimavr -lelf > "$LOG" 2>&1; then
   printf '  %s✅%s harnais compile        %s%s%s\n' "$C_OK" "$C_0" "$C_DIM" "$PREFIX" "$C_0"
@@ -69,7 +73,11 @@ fi
 
 # --- 2. Firmware -------------------------------------------------------------
 progress "build env:nanoatmega328"
-if "$PIO" run -e nanoatmega328 -d "$ROOT" > "$LOG" 2>&1; then
+PIO_EXTRA=""
+if [ "$TEMPO" != "120" ]; then
+  PIO_EXTRA="-DFLEXSEQ_DEFAULT_TEMPO=$TEMPO"
+fi
+if PLATFORMIO_BUILD_FLAGS="$PIO_EXTRA" "$PIO" run -e nanoatmega328 -d "$ROOT" > "$LOG" 2>&1; then
   printf '  %s✅%s firmware               %s%s%s\n' "$C_OK" "$C_0" "$C_DIM" \
     "$(grep -E '^RAM:' "$LOG" | sed 's/.*(used /RAM /; s/ bytes from .*/ o/')" "$C_0"
 else
@@ -102,7 +110,7 @@ if [ "$PROBE" -ne 0 ]; then
 fi
 printf '  %s✅%s simulation             %s%s s simulees%s\n' "$C_OK" "$C_0" "$C_DIM" "$DURATION" "$C_0"
 
-JITTER_BUDGET_PCT="$JITTER_BUDGET_PCT" python3 - "$LOG" <<'PY'
+JITTER_BUDGET_PCT="$JITTER_BUDGET_PCT" STEP_TOLERANCE_PCT="$STEP_TOLERANCE_PCT" python3 - "$LOG" <<'PY'
 import os, re, sys
 
 txt = open(sys.argv[1], errors='replace').read()
@@ -110,6 +118,7 @@ tty = sys.stdout.isatty()
 OK, ERR, DIM, B, Z = ('\033[32m', '\033[31m', '\033[2m', '\033[1m', '\033[0m') if tty else ('',) * 5
 mark = lambda good: f"{OK}✅{Z}" if good else f"{ERR}❌{Z}"
 budget_pct = float(os.environ["JITTER_BUDGET_PCT"])
+step_tol = float(os.environ["STEP_TOLERANCE_PCT"])
 
 m = re.search(r"RESULTAT (.*)", txt)
 if not m:
@@ -130,6 +139,10 @@ all_lines = lines_on == lines_exp
 pattern_ok = gaps_total > 0 and gaps_ok == gaps_total
 jit_pct = 100.0 * jit_max / step_ms if step_ms else 0.0
 jit_ok = jit_pct <= budget_pct
+step_measured = float(kv.get("step_mesure", "0"))
+bpm = int(kv.get("bpm", "0"))
+step_err_pct = abs(step_measured - step_ms) / step_ms * 100.0 if step_ms else 100.0
+step_ok = step_measured > 0.0 and step_err_pct <= step_tol
 duty = 100.0 * width / step_ms if step_ms else 0.0
 duty_ok = duty < 50.0
 
@@ -141,6 +154,9 @@ print(f"  {mark(pattern_ok)} Motif joue         {gaps_ok}/{gaps_total} ecarts   
       f"{DIM}— rotation cyclique, phase du playhead non supposee{Z}")
 print(f"  {mark(same and coincident)} Six lignes en phase "
       f"{'meme compte, fronts < 200 us' if (same and coincident) else 'DESACCORD'}")
+print(f"  {mark(step_ok)} Tempo applique     {step_measured:.2f} ms par step   "
+      f"{DIM}— attendu {step_ms:.2f} ms a {bpm} BPM ; ecart {step_err_pct:.2f} %"
+      f" ; tolerance {step_tol:g} %{Z}")
 print(f"  {mark(jit_ok)} Gigue              {jit_max:.2f} ms   "
       f"{DIM}— {jit_pct:.2f} % d'un step de {step_ms:.0f} ms ; budget {budget_pct:g} %"
       f" ; mediane {jit_med:.2f} ms{Z}")
@@ -161,7 +177,7 @@ if pulse_line == 0:
     print(f"  {DIM}PULSE reste muet : main.cpp ne pilote pas gravity.pulse. Observation,")
     print(f"  non defaut — l'expandeur MIDI n'est pas encore dans le chemin.{Z}")
 
-ok = all_lines and pattern_ok and same and coincident and jit_ok and duty_ok
+ok = all_lines and pattern_ok and same and coincident and jit_ok and duty_ok and step_ok
 if ok:
     print(f"\n  Le sequenceur joue le motif ecrit, sur les six sorties, en phase.")
 else:

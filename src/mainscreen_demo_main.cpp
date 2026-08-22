@@ -83,7 +83,7 @@ void renderBand() {
 
 void setup() {
     gravity.Init();
-    gravity.display.setFont(u8g2_font_5x7_tf);
+    gravity.display.setFont(u8g2_font_5x7_tr);
 
     engine.setPatternBank(&patternBank);
     engine.setSelectedPattern(DEMO_TAB - 1, 9);

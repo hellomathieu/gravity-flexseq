@@ -10,6 +10,7 @@
 #include <flexseq/PatternScreen.h>
 #include <flexseq/SequencerEngine.h>
 #include <flexseq/Transport.h>
+#include <flexseq/TransportAdapter.h>
 #include <flexseq/TriggerSequencer.h>
 #include <flexseq/UiController.h>
 
@@ -96,7 +97,7 @@ void setup() {
 
     // libGravity ne definit aucune police : police integree U8g2 (evite aussi
     // d'embarquer les donnees de police GPLv3 du firmware d'origine).
-    gravity.display.setFont(u8g2_font_5x7_tf);
+    gravity.display.setFont(u8g2_font_5x7_tr);
 
     // The engine reads the bank to shorten triplet steps (3 in one step's time).
     engine.setPatternBank(&patternBank);
@@ -123,6 +124,11 @@ void setup() {
     // and external sources both surface here).
     gravity.clock.AttachIntHandler(onOutputTick);
 
+    // L'horloge externe : libGravity attache l'ISR mais n'appelle jamais
+    // uClock.clockMe() — c'est notre callback qui doit le faire. Le tempo et la
+    // source chargés depuis l'EEPROM sont appliqués ici.
+    flexseq::transport::begin(ui);
+
     transport.start();  // global reset + run
 }
 
@@ -133,6 +139,7 @@ void loop() {
     // explicitement plus bas, de sorte que FlexSeq ne depend plus du tout de
     // cette fonction — ni de son index de boucle non initialise.
     flexseq::input::process(millis());
+    flexseq::transport::apply(ui);
 
     // Atomically drain the ticks accumulated by the ISR, then advance once.
     uint16_t ticks;

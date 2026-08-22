@@ -77,7 +77,9 @@ static const struct { char port; uint8_t bit; const char *name; } LINES[LINE_COU
 static const uint8_t ACTIVE_STEPS[ACTIVE_COUNT] = {0, 3, 4, 9, 15};
 #define PATTERN_LENGTH 16            /* SequencerEngine::DEFAULT_LENGTH */
 #define TICKS_PER_STEP 96            /* SUBDIV = /1 a 96 PPQN */
-#define BPM 120                      /* Clock::DEFAULT_TEMPO */
+#ifndef BPM
+#define BPM 120                      /* UiController::DEFAULT_TEMPO */
+#endif
 
 #define MAX_EDGES 4096
 
@@ -282,6 +284,7 @@ int main(int argc, char **argv)
     for (int i = 0; i < ACTIVE_COUNT; ++i) printf(" %d", expect_gap[i]);
     printf("   [rotation libre]\n");
 
+    double step_measured = 0.0;
     int gap_ok = 0, gap_total = 0, phase = -1;
     if (ref->nrise >= 3) {
         static int obs[MAX_EDGES];
@@ -302,6 +305,26 @@ int main(int argc, char **argv)
         phase = best;
         gap_ok = best_hits;
         gap_total = nobs;
+
+        /* Duree de step MESUREE, deduite des ecarts ATTENDUS du motif et non
+         * d'un arrondi sur step_ms : diviser la duree totale par un nombre de
+         * steps lui-meme arrondi sur step_ms serait auto-confirmant, et une
+         * erreur de tempo d'un facteur exact passerait. Les ecarts du motif sont
+         * irreguliers (3-1-5-6-1), donc ils ne se replient pas. */
+        {
+            static double per_step[MAX_EDGES];
+            int np = 0;
+            for (int i = 0; i < nobs; ++i) {
+                const int e = expect_gap[(best + i) % ACTIVE_COUNT];
+                if (e > 0) {
+                    per_step[np++] = ms(ref->rise[i + 1] - ref->rise[i]) / (double)e;
+                }
+            }
+            if (np > 0) {
+                qsort(per_step, np, sizeof(double), cmp_d);
+                step_measured = per_step[np / 2];
+            }
+        }
 
         printf("  ecarts observes (steps) :");
         for (int i = 0; i < nobs; ++i) printf(" %d", obs[i]);
@@ -337,9 +360,15 @@ int main(int argc, char **argv)
                nj, jit_med, jit[(nj * 9) / 10], jit_max);
         printf("  soit %.1f %% d'un step de %.0f ms au pire\n",
                100.0 * jit_max / step_ms, step_ms);
+
     } else {
         printf("  trop peu d'impulsions pour mesurer une gigue\n");
     }
+
+    printf("\n=== TEMPO APPLIQUE ===\n");
+    printf("  duree de step mesuree %.2f ms   attendue %.2f ms a %d BPM   ecart %.2f %%\n",
+           step_measured, step_ms, BPM,
+           step_ms > 0.0 ? 100.0 * (step_measured - step_ms) / step_ms : 0.0);
 
     /* --- Concordance entre channels --------------------------------------- */
     printf("\n=== CONCORDANCE DES SIX CHANNELS ===\n");
@@ -360,9 +389,11 @@ int main(int argc, char **argv)
     /* --- Recapitulatif lisible par le script ----------------------------- */
     printf("\nRESULTAT lignes_actives=%d attendu=%d ecarts_ok=%d/%d "
            "largeur_med=%.2f gigue_med=%.2f gigue_max=%.2f step_ms=%.1f "
-           "meme_compte=%d coincident=%d impulsions_ch1=%d pulse=%d\n",
+           "meme_compte=%d coincident=%d impulsions_ch1=%d pulse=%d "
+           "step_mesure=%.2f bpm=%d\n",
            active_lines, OUT_COUNT, gap_ok, gap_total,
            width_med[0], jit_med, jit_max, step_ms,
-           same_count, coincident, ref->nrise, g_lines[6].nrise);
+           same_count, coincident, ref->nrise, g_lines[6].nrise,
+           step_measured, BPM);
     return 0;
 }

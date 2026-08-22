@@ -51,7 +51,10 @@ public:
     static constexpr uint8_t CLOCK_SOURCE_COUNT = 6;
     static constexpr uint16_t MIN_TEMPO = 30;
     static constexpr uint16_t MAX_TEMPO = 300;
-    static constexpr uint16_t DEFAULT_TEMPO = 120;
+#ifndef FLEXSEQ_DEFAULT_TEMPO
+#define FLEXSEQ_DEFAULT_TEMPO 120
+#endif
+    static constexpr uint16_t DEFAULT_TEMPO = FLEXSEQ_DEFAULT_TEMPO;
 
     static constexpr uint8_t STEP_COUNT = Pattern::DEFAULT_TOTAL_STEPS;
     static constexpr uint8_t BAR_LENGTH_CHOICE_COUNT = 5;

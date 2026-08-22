@@ -68,7 +68,7 @@ void setup() {
     gravity.Init();
 
     // libGravity ne definit aucune police.
-    gravity.display.setFont(u8g2_font_5x7_tf);
+    gravity.display.setFont(u8g2_font_5x7_tr);
 
     // Contenu de demonstration : couvre toute la legende du PRD.
     flexseq::Pattern* pattern = patternBank.getPattern(0);
