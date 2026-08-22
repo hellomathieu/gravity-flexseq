@@ -130,6 +130,15 @@ same frame could show different content.
   **geometric** — a band entirely above the header rule can contain only the
   title — hence bound to the layout: were the layout to change, the condition
   would simply stop applying and we would fall back on the full render.
+  **The skip becomes two-sided with the wired UI (2026-08-22, ADR 0002).** The
+  same geometric argument holds at the bottom of the screen: a band entirely
+  below the lowest ratchet digit can only contain the footer. Measured geometry —
+  the second row's lowest drawn pixel is its ratchet digit at y 47, and band 7
+  spans y 56 to 63, so that band is empty today. A footer whose baseline sits at
+  63 lands exactly there, with 8 pixels of clearance, and carries the channel and
+  the tempo: two values that change rarely, which is what makes the skip pay.
+  Band 7 is already cleared and sent on every frame, so only the rasterization is
+  added. Cost: a second hash and a second flag.
   **Safety net:** one frame in 16 is rendered in full, whatever the comparison
   says. Not out of doubt about the display's model, which is certain, but against
   a defect in our own logic: an omission then repairs itself.
