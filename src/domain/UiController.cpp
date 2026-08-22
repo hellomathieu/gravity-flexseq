@@ -232,6 +232,22 @@ void UiController::handleEdit(Event event, int8_t delta) {
     }
 }
 
+bool UiController::setTempo(uint16_t bpm) {
+    if (bpm < MIN_TEMPO || bpm > MAX_TEMPO) {
+        return false;
+    }
+    tempo_ = bpm;
+    return true;
+}
+
+bool UiController::setClockSource(uint8_t source) {
+    if (source >= CLOCK_SOURCE_COUNT) {
+        return false;
+    }
+    clockSource_ = source;
+    return true;
+}
+
 void UiController::adjustField(int8_t delta) {
     const int8_t channel = selectedChannel();
     switch (field()) {

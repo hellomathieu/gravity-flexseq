@@ -39,6 +39,7 @@
 #include <avr_twi.h>
 #include <avr_uart.h>
 #include <avr_ioport.h>
+#include <avr_eeprom.h>
 #include <parts/ssd1306_virt.h>
 
 #include "simavr_uart_quiet.h"
@@ -179,6 +180,23 @@ int main(int argc, char** argv)
         printf("  %-24s %10u\n", WATCHED[i].name, isr_count[i]);
     if (!quiet)
         printf("  (injecte : %u transitions d'encodeur, %u octets MIDI)\n", enc_edges, midi_bytes);
+
+    /* La persistance ecrit dans l'EEPROM SIMULEE apres son delai de calme. On le
+     * constate plutot que de le supposer : sans cette lecture, la mesure de pile
+     * pourrait ne jamais avoir emprunte ce chemin. */
+    uint8_t image[286];
+    avr_eeprom_desc_t ee = { .ee = image, .offset = 384, .size = sizeof(image) };
+    int ee_ok = avr_ioctl(avr, AVR_IOCTL_EEPROM_GET, &ee) == 0;
+    printf("\n=== PERSISTANCE ===\n");
+    if (ee_ok) {
+        int written = 0;
+        for (size_t i = 0; i < sizeof(image); ++i)
+            if (image[i] != 0xFF) ++written;
+        printf("  octet de version a 384 : %u   (%d octets non vierges sur %zu lus)\n",
+               image[0], written, sizeof(image));
+    } else {
+        printf("  EEPROM simulee illisible\n");
+    }
 
     printf("\n=== PILE ===\n");
     printf("  pic %u o sur %u libres, marge %u o\n", used, free_ram,

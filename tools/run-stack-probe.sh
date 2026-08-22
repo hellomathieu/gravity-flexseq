@@ -100,6 +100,8 @@ reserve = int(os.environ["RAM_RESERVE"])
 quiet = bool(os.environ.get("QUIET"))
 
 m = re.search(r"pic (\d+) o sur (\d+) libres, marge (\d+)", txt)
+version = re.search(r"octet de version a 384 : (\d+)", txt)
+written = re.search(r"\((\d+) octets non vierges sur (\d+) lus\)", txt)
 if not m:
     print(f"  {mark(False)} sortie du harnais illisible"); print(txt); sys.exit(1)
 peak, free, margin = int(m[1]), int(m[2]), int(m[3])
@@ -125,6 +127,10 @@ print(f"  {mark(fits_reserve)} Pic de pile        {peak:4d} o   "
       f"{DIM}— reserve exigee {reserve} o ({peak * 100 // reserve} % utilises){Z}")
 print(f"  {mark(fits_ram)} Marge              {margin:4d} o   "
       f"{DIM}— RAM libre {free} o apres .data + .bss{Z}")
+print(f"  {mark(version is not None and version[1] == '1')} Persistance         "
+      f"octet de version {version[1] if version else 'ABSENT'} a 384, "
+      f"{written[1] if written else '?'}/{written[2] if written else '?'} octets ecrits"
+      f"{DIM}  (constate, pas suppose){Z}")
 print(f"{B}==================================================================={Z}")
 
 if not fits_ram:
@@ -140,9 +146,10 @@ else:
     print(f"  La reserve couvre le pic mesure ({reserve / peak:.1f}x).")
     print(f"{DIM}  Couvert : la pile d'avant setup() (constructeurs globaux, init()"
           f" d'Arduino){Z}")
-    print(f"{DIM}  et les six familles d'ISR, injection comprise. Restent hors mesure les{Z}")
-    print(f"{DIM}  chemins que le firmware n'emprunte pas encore — l'ecriture EEPROM de la{Z}")
-    print(f"{DIM}  persistance, notamment, qui n'existe pas.{Z}")
+    print(f"{DIM}  et les six familles d'ISR, injection comprise, ainsi que l'ecriture{Z}")
+    print(f"{DIM}  EEPROM de la persistance, constatee ci-dessus et non supposee. Restent{Z}")
+    print(f"{DIM}  hors mesure les chemins que le firmware n'emprunte pas encore.{Z}")
 
-sys.exit(0 if (fits_reserve and fits_ram and (quiet or all_entered)) else 1)
+persisted = version is not None and version[1] == '1'
+sys.exit(0 if (fits_reserve and fits_ram and persisted and (quiet or all_entered)) else 1)
 PY

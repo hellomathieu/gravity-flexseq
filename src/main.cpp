@@ -2,12 +2,15 @@
 #include <libGravity.h>
 
 #include <flexseq/CvSampler.h>
+#include <flexseq/EepromStorage.h>
+#include <flexseq/Persistence.h>
 #include <flexseq/PagedScreen.h>
 #include <flexseq/PatternBank.h>
 #include <flexseq/PatternScreen.h>
 #include <flexseq/SequencerEngine.h>
 #include <flexseq/Transport.h>
 #include <flexseq/TriggerSequencer.h>
+#include <flexseq/UiController.h>
 
 namespace {
 
@@ -15,6 +18,11 @@ flexseq::PatternBank patternBank;
 flexseq::SequencerEngine engine;
 flexseq::Transport transport(engine);
 flexseq::TriggerSequencer triggers(patternBank, engine);
+flexseq::UiController ui(engine, patternBank, transport);
+flexseq::Preferences preferences;
+flexseq::PersistentImage persistentImage(patternBank, engine, ui, preferences);
+flexseq::PersistenceScheduler persistence;
+flexseq::EepromStorage eeprom;
 char uiFooter[] = "CH1";
 constexpr uint8_t UI_FOOTER_CHANNEL = 2;
 
@@ -101,6 +109,13 @@ void setup() {
                            gravity.cv2.GetCalibrationHigh(), gravity.cv2.GetOffset());
     flexseq::cv::start();
 
+    // Persistance : on relit l'image, et si l'octet de version ne repond pas on
+    // repart des defauts EN LES ECRIVANT — le format est ainsi materialise des
+    // le premier demarrage, pas a la premiere edition. Voir PRD 11.1.
+    if (!persistence.load(eeprom, persistentImage)) {
+        persistence.markDirty(millis());
+    }
+
     // Drive the master phase from the unified 96-PPQN output clock (internal
     // and external sources both surface here).
     gravity.clock.AttachIntHandler(onOutputTick);
@@ -137,6 +152,13 @@ void loop() {
                 gravity.outputs[ch].Trigger();
             }
         }
+    }
+
+    // L'ecriture EEPROM prend ~3,4 ms pendant lesquelles la boucle attend : elle
+    // n'a donc lieu QUE sur un passage sans onset, un octet a la fois, apres le
+    // delai de calme. PRD 11.1.
+    if (ticks == 0) {
+        persistence.advance(eeprom, persistentImage, millis());
     }
 
     // Rendu de l'ecran : UNE bande par passage (ADR 0001). Une image en cours

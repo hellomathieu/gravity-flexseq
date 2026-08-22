@@ -7,12 +7,20 @@ it is what lets the acceptance suite stay a reliable signal.
 -------------------------------------------------------------------------------
 1. FlexSeq acceptance / regression  ->  env `native`
 -------------------------------------------------------------------------------
-    test_cv_gate, test_paged_screen, test_pattern, test_pattern_bank,
-    test_pattern_screen, test_sequencer_engine, test_subdiv, test_transport,
-    test_trigger_sequencer
+    test_cv_gate, test_main_screen, test_paged_screen, test_pattern,
+    test_pattern_bank, test_pattern_screen, test_persistence,
+    test_sequencer_engine, test_subdiv, test_transport, test_trigger_sequencer,
+    test_ui_controller
 
 Pure C++ domain, no Arduino and no libGravity. MUST be green: a phase is not
-finished while one of these fails. 124 assertions as of 2026-08-21.
+finished while one of these fails. 209 assertions as of 2026-08-22.
+
+Each of the four added since 2026-08-22 was verified by MUTATION, not merely by
+being green: test_ui_controller 22/22 mutations killed, test_main_screen 20/20,
+test_persistence 17/17, and the footer additions to test_paged_screen and
+test_pattern_screen 7/8 -- the survivor there being an equivalent mutant, which
+ADR 0001 records rather than counts as a pass. Their TypeScript mirrors were
+swept the same way (15/15, 15/15, 22/22).
 
     ./tools/run-cpp-tests.sh [test_name]
 

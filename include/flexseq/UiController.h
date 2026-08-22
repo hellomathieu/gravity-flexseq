@@ -77,6 +77,9 @@ public:
     uint16_t tempo() const { return tempo_; }
     uint8_t clockSource() const { return clockSource_; }
 
+    bool setTempo(uint16_t bpm);
+    bool setClockSource(uint8_t source);
+
 private:
     void handleTabBar(Event event, int8_t delta);
     void handleTab(Event event, int8_t delta);

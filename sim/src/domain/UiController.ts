@@ -151,6 +151,18 @@ export class UiController {
     return this.source;
   }
 
+  setTempo(bpm: number): boolean {
+    if (bpm < MIN_TEMPO || bpm > MAX_TEMPO) return false;
+    this.currentTempo = bpm;
+    return true;
+  }
+
+  setClockSource(source: number): boolean {
+    if (source < 0 || source >= CLOCK_SOURCE_COUNT) return false;
+    this.source = source;
+    return true;
+  }
+
   handle(event: UiEvent, delta = 0): void {
     if (event === UiEvent.PlayPress) {
       this.togglePlay();
