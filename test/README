@@ -13,7 +13,8 @@ it is what lets the acceptance suite stay a reliable signal.
     test_trigger_sequencer, test_ui_controller
 
 Pure C++ domain, no Arduino and no libGravity. MUST be green: a phase is not
-finished while one of these fails. 291 assertions as of 2026-08-23.
+finished while one of these fails. 297 assertions as of 2026-08-23, counted
+from the `RUN_TEST` calls and confirmed by the runner's own total.
 
 ⚠️ **`onsetCount()` is not what the outputs see.** The engine counts step and
 sub-step crossings, so it reports the onsets of an **inactive** step too, ratchets
@@ -39,6 +40,13 @@ additions to test_paged_screen and test_pattern_screen 7/8 -- the undetected
 mutation there being an equivalent mutant, which ADR 0001 records rather than
 counts as a pass. Their TypeScript mirrors were swept the same way (15/15,
 15/15, 22/22).
+
+
+⚠️ **`Rig::gotoTab()` is bounded, and it must stay bounded.** It used to be a
+`while` loop over `EVENT_ROTATE`. A mutant that made that rotation inert turned
+the loop into an infinite one, and the mutation probe then reported the mutation
+detected by its deadline instead of by the assertion that covers it. The method
+rule this produced lives in `docs/open-risks.md`, under the method rules.
 
     ./tools/run-cpp-tests.sh [test_name]
 

@@ -35,9 +35,13 @@ struct Rig {
     void enterTab() { ui.handle(UiController::EVENT_PRESS); }
 
     void gotoTab(uint8_t tab) {
-        while (ui.currentTab() != tab) {
+        for (uint8_t guard = 0; guard < UiController::TAB_COUNT; ++guard) {
+            if (ui.currentTab() == tab) {
+                return;
+            }
             ui.handle(UiController::EVENT_ROTATE, 1);
         }
+        TEST_FAIL_MESSAGE("tab never reached");
     }
 
     void gotoField(UiController::Field field) {

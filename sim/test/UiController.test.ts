@@ -42,7 +42,11 @@ function rig() {
   const ui = new UiController(engine, bank, transport);
 
   const gotoTab = (tab: number) => {
-    while (ui.currentTab !== tab) ui.handle(UiEvent.Rotate, 1);
+    for (let guard = 0; guard < TAB_COUNT; guard += 1) {
+      if (ui.currentTab === tab) return;
+      ui.handle(UiEvent.Rotate, 1);
+    }
+    throw new Error("tab never reached");
   };
   const gotoField = (field: UiField) => {
     for (let guard = 0; guard <= CHANNEL_TAB_FIELDS; guard += 1) {
