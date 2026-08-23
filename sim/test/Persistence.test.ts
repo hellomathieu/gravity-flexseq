@@ -23,7 +23,6 @@ import {
   ChannelMode,
   DEFAULT_CHANNEL_MODE,
   DEFAULT_LENGTH,
-  MAX_OFFSET,
   SequencerEngine,
 } from "../src/domain/SequencerEngine.js";
 import { Transport } from "../src/domain/Transport.js";
@@ -401,13 +400,13 @@ describe("Persistence — format v2, nine bytes per channel", () => {
     const saved = rig();
     saved.engine.setSubdiv(0, 128);
     saved.engine.setOffset(0, 300);
-    expect(saved.engine.getOffset(0)).toBe(MAX_OFFSET);
+    expect(saved.engine.getOffset(0)).toBe(255);
     saved.scheduler.markDirty(0);
     finishWrite(saved, eeprom, QUIET_MS);
 
     const loaded = rig();
     loaded.scheduler.load(eeprom, loaded.image);
-    expect(loaded.engine.getOffset(0)).toBe(MAX_OFFSET);
+    expect(loaded.engine.getOffset(0)).toBe(255);
   });
 
   it("reserves the two CV target bytes and reads them as zero", () => {
