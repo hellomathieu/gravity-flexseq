@@ -65,7 +65,7 @@ seam for wiring avr8js in later) → `src/domain/*` → `src/sim/PatternView.ts`
 (pure rendering, tested).
 
 On the C++ side, the hardware-free test loop is `./tools/run-cpp-tests.sh`
-(`pio test -e native`). Measured parity as of 2026-08-21: **TS 116 tests across
-10 files**, **C++ native 124 assertions across 15 modules**. The counts are not
+(`pio test -e native`). Measured parity as of 2026-08-23: **TS 235 tests across
+14 files**, **C++ native 278 assertions across 13 modules**. The counts are not
 expected to match: the C++ suite also covers the paged screen and the CV gate,
 which have no TS mirror.

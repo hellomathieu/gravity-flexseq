@@ -1,6 +1,6 @@
 # Open risks and watch items
 
-**Last review: 2026-08-22.** Eight open lines, twenty-one closed or accepted.
+**Last review: 2026-08-23.** Eight open lines, twenty-two closed or accepted.
 
 ## What this document is, and is not
 
@@ -19,7 +19,7 @@ either closed without anyone noting it, or accepted without anyone saying so.
 
 ## What is still open
 
-Twelve lines, and each one states **what it is waiting for and from whom**. A line
+Eight lines, and each one states **what it is waiting for and from whom**. A line
 that waits for nothing from nobody no longer belongs here: it is in the table
 below.
 
@@ -32,8 +32,7 @@ below.
 | 15 | **`DigitalOutput::Init()` does not force the output OFF**, and the audited test proves it | low | nothing today: harmless at cold boot, for the reason established in **PRD §18** (AVR reset leaves `PORT` at 0, and `gravity` is a global in `.bss`). What is left is to handle it **if a software reboot is ever added** -- that is when the pin could stay HIGH while the firmware believes it is off |
 | 22 | **The re-arm threshold assumes the source falls back below +0.5 V.** A source that idles higher latches the gate for good: one reset, never another. Measured on the module: a Gravity output, switched off, presents about **+1.5 V** to a CV input (+153 in `Read()` units, against -27 with the cable out), so seen from the jack it is high-or-floating rather than high-or-low | low | **no decision taken.** Raising the threshold is an arbitration, and it needs measurements of several sources, not this one case. Decide it while implementing the CV destinations (PRD §10.2). The resting noise is measured at **-26 ± 3** on both channels, so the +1 V arm threshold keeps 128 counts of margin -- the arm side is not in question |
 | 24 | **1536 bytes of Flash may be available beyond what PlatformIO assumes, and the question is no longer academic — the wired firmware measures 91.9 % against a 90 % guard (2026-08-22).** PlatformIO declares 30720 (32768 − 2048) while the bootloader measures 512 bytes | low, and it is an opportunity rather than a risk | read the `BOOTSZ` fuse, which needs an ISP programmer -- the bootloader returns `0x0` for fuses. What is measured is the *content* of the top 512 bytes, not the space `BOOTSZ` reserves, so the figure stays an inference. **30720 remains the safe assumption and is not touched.** Would matter if the Flash budget tightens at PRD §12.1 |
-| 25 | **The path `pattern content -> output` is no longer exercised by any tool**, and this is a dated suspension rather than a loss. Since the factory default became CLOCK (PRD §4.2), `run-trigger-probe.sh` measures the CLOCK train — six outputs, one gap per step, tempo, phase, jitter — and the pattern it injects is deliberately ignored, which is itself the faithful behaviour. But SEQ is reachable from nowhere outside the firmware: no UI sets it before lot 11, and poking a private struct offset would make the tool depend on what it measures | medium | **restore it at lot 10**, where EEPROM format v2 carries the mode: the probe will preload an EEPROM with `mode = SEQ` and the pattern content, going through a documented format. Until then the pattern engine is covered by 269 native assertions and 226 TypeScript ones, and by nothing on the wire |
-| 12 | **The trigger pulse no longer measures what this line said, and the explanation no longer fits either.** It was 8.8 ms against a configured 5, blamed on the auto-off sitting at the end of `loop()` -- 5 ms rounded up to the next pass. Measured again on 2026-08-23, with the loop far shorter since the main screen stopped redrawing: **4.70 ms**, which is *below* the 5 ms configured. A round-up cannot go below the value it rounds, so the account is wrong somewhere | low | **nothing today** -- 0.9 % of a step at 120 BPM in `/1`, and no musical consequence. What is owed is the explanation, not a fix: read how libGravity's `DigitalOutput::Process()` compares against `millis()` before trusting either number. To revisit anyway once fast SUBDIV exists |
+| 12 | **The trigger pulse no longer measures what this line said, and the explanation no longer fits either.** It was 8.8 ms against a configured 5, blamed on the auto-off sitting at the end of `loop()` -- 5 ms rounded up to the next pass. Measured again on 2026-08-23, with the loop far shorter since the main screen stopped redrawing: **4.70 ms**, which is *below* the 5 ms configured. A round-up cannot go below the value it rounds, so the account is wrong somewhere | low | **nothing today** -- 0.9 % of a step at 120 BPM in `/1`, and no musical consequence. What is owed is the explanation, not a fix: read how libGravity's `DigitalOutput::Process()` compares against `millis()` before trusting either number. To revisit anyway once fast SUBDIV exists. **Two more figures, 2026-08-23**, from the two courses of the same run: **4.78 ms in CLOCK** and **5.01 ms in SEQ**. The width therefore straddles the 5 ms configured, and it moves with the mode, which no round-up to the next pass explains either |
 
 ## What is closed or accepted
 
@@ -42,6 +41,7 @@ reopens them without knowing what has already been established or costed.
 
 | # | Subject | State | By what |
 |---|---|---|---|
+| 25 | **The path `pattern content -> output`, exercised again** | **closed 2026-08-23** | `run-trigger-probe.sh` now makes **two courses** on the same firmware, one per channel mode. The mode and the pattern arrive through a **preloaded EEPROM image**, built by `tools/eeprom-image.cpp` with the domain code itself: the harness holds no copy of the format and pokes no private struct. Measured over 20 s of simulation with the SSD1306 slave attached: CLOCK gives **38/38 regular gaps**, SEQ gives **11/11 gaps** that form a cyclic rotation of the pattern's own gaps, both at **499.96 to 499.97 ms** per step against 500.00 expected. The jitter moves from run to run, 1.01 to 1.29 ms over four runs, so it is a bound and not a value: 0.26 % of a step at worst, against a 2 % budget. The phase is never assumed. `MUTATE=7` adds a step to the image and not to the expectation: SEQ reddens (6/14) while CLOCK stays green (38/38), and that **asymmetry is itself the proof** that CLOCK ignores the bank. `DROP=3` reddens both. Both paths exit 1 |
 | 23 | **Restoring the original firmware, the project's escape hatch** | **closed 2026-08-22, on the module** | run end to end. Four blocking criteria green, the decisive one being the readback: 27648 bytes identical to the backup over `0x0000`-`0x6BFF`, and the bootloader's 512 bytes untouched. Then the part no tool covers, confirmed by the owner with his eyes: the original **boots**, the **eight patterns are there**, the **tempo reads 120**, and the **channel settings are intact**. The tempo is what proves the EEPROM survived -- `-D` means no chip erase, so nothing below address 384 was ever at risk. The trim to `0x0000`-`0x6BFF` did its job: optiboot was never sent its own pages. `tools/run-original-restore.sh`, and PRD §2 for the geometry it relies on |
 | 21 | **Encoder direction: libGravity's default is the opposite of the original's** | **closed 2026-08-22, on the module** | `InputAdapter` calls `SetReverseDirection(true)`, and the module turns the way the original does -- left and right both correct. The other half of the old line 21, exposing `rotateScreen` and `reverseEncoder` as settings, moves to the settings page (lot 14 of `WORKPLAN.md`) and is tracked there |
 | 20 | **The encoder's missing debounce, and what it actually costs** | **measured 2026-08-22, and the old claim is REFUTED** | the dependency has no debounce and says so (`_rotate_change()` carries `// Validation (TODO: add debounce check)`). What this line used to assert -- that two fast detents produce **no event at all**, the position returning to where it started -- **does not reproduce**. Measured with `env:bringup`: two detents give exactly **−2**, zero reversals; fifteen seconds of fast one-way rotation give **−917 with zero reversals**. Nothing cancels. What is real: bounces occur **only at a fast turning point**, the fastest measured reversal being **2 ms**, while ten deliberate reversals at a comfortable pace produced **nine** recorded reversals -- no spurious ones -- spread over **509 to 1003 ms**. `EncoderFilter`'s 12 ms window is therefore validated on facts, six times above the bounce and forty times below the gesture. **The felt symptom has another cause**: the dependency's ACCELERATION (x3 under 16 ms), which turns one detent into three moves, with events arriving in the same millisecond (`S0`). Absorbed in `UiController`, not in the filter |
@@ -126,6 +126,17 @@ Each cost a real mistake, and each holds beyond the subject that produced it.
 passes are slow, never *which ones*. I inferred from "one pass in seven is long"
 that it was the row of 12 steps; it was the title. The cost-by-position
 measurement established it in a single run (PRD §14).
+
+**An assertion must not compare against the constant it tests.** On 2026-08-23 a
+mutant survived a complete round: the TypeScript test compared the clamped offset
+to `MAX_OFFSET`, so moving the constant moved the expectation with it. The test
+was self-confirming. The C++ test wrote `255` in plain sight and killed the same
+mutant. Write the literal value when the value itself is the claim.
+
+**One measurement cannot separate two behaviours.** The probe that watches the six
+outputs now makes **two courses** on one firmware, one per channel mode. CLOCK
+green while SEQ reddens on the same mutated pattern is what proves that CLOCK
+ignores the bank; either course alone proves only its own half.
 
 **A green test proves nothing until it has been red.** Every important assertion
 in this repository has been verified by mutation — removing the model freeze,

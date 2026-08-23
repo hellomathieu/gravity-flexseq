@@ -13,11 +13,12 @@ it is what lets the acceptance suite stay a reliable signal.
     test_ui_controller
 
 Pure C++ domain, no Arduino and no libGravity. MUST be green: a phase is not
-finished while one of these fails. 209 assertions as of 2026-08-22.
+finished while one of these fails. 278 assertions as of 2026-08-23.
 
 Each of the four added since 2026-08-22 was verified by MUTATION, not merely by
 being green: test_ui_controller 22/22 mutations killed, test_main_screen 20/20,
-test_persistence 17/17, and the footer additions to test_paged_screen and
+test_persistence 17/17 then 16/16 for the version 2 format, and the footer
+additions to test_paged_screen and
 test_pattern_screen 7/8 -- the survivor there being an equivalent mutant, which
 ADR 0001 records rather than counts as a pass. Their TypeScript mirrors were
 swept the same way (15/15, 15/15, 22/22).
