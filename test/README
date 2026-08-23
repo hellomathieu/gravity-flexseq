@@ -15,6 +15,14 @@ it is what lets the acceptance suite stay a reliable signal.
 Pure C++ domain, no Arduino and no libGravity. MUST be green: a phase is not
 finished while one of these fails. 291 assertions as of 2026-08-23.
 
+⚠️ **`onsetCount()` is not what the outputs see.** The engine counts step and
+sub-step crossings, so it reports the onsets of an **inactive** step too, ratchets
+included. `TriggerSequencer::triggerCount()` is what filters on the step being
+active, and it is what `main.cpp` drives the pins with. An assertion about "an
+inactive step emits nothing" therefore belongs on the sequencer, never on the
+engine. Found by measurement on 2026-08-23; the header comment on `onsetCount()`
+still says "used to drive the outputs" and is stale.
+
 `test_ratchet_matrix` characterizes the ratchet-by-SUBDIV matrix: the step
 duration for all 25 rates, the trigger count for the 125 rate-by-code pairs, the
 tick gaps of the trigger train, and the four rules the owner fixed on 2026-08-23

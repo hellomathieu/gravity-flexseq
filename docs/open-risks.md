@@ -1,6 +1,6 @@
 # Open risks and watch items
 
-**Last review: 2026-08-23.** Fifteen open lines, twenty-six closed or accepted.
+**Last review: 2026-08-23.** Fourteen open lines, twenty-seven closed or accepted.
 
 ## What this document is, and is not
 
@@ -19,15 +19,14 @@ either closed without anyone noting it, or accepted without anyone saying so.
 
 ## What is still open
 
-Fifteen lines, and each one states **what it is waiting for and from whom**. A line
+Fourteen lines, and each one states **what it is waiting for and from whom**. A line
 that waits for nothing from nobody no longer belongs here: it is in the table
 below.
 
 | # | Subject | Severity | What is left, and from whom |
 |---|---|---|---|
-| 1 | **The PRODUCTION firmware has never run on the module.** `env:bringup` has, and every line it exercises now answers, `EDGE` included | medium | flash `main.cpp` once the UI and the transport are wired (line 11b). What stays unverified is the production render and its timing on real hardware rather than under simavr |
+| 1 | **The production firmware HAS run on the module since 2026-08-23**, so this line is no longer about the flash. Two things stay unverified on real hardware: the **timing** of the production render, still measured only under simavr, and the **fast presses in EDIT** that would refute the analysis of the audited `Button` anomaly (ADR 0002) | medium | run `run-blocking-probe.sh` against hardware behaviour rather than simulation, which no tool does today, and try fast presses **inside EDIT** -- on the main screen the loop is far faster and the test would refute nothing |
 | 6 | **5.6 % of CPU** paid by the ADC ISR even with no channel routing CV | low | **deferred to §10.2 by decision (2026-08-21)**. In isolation the conditioning would be inapplicable: no channel routes CV, so conditioning would amount to switching CV off |
-| 11b | **Wired since 2026-08-22, and no longer the same risk.** `main.cpp` now goes through `InputAdapter` and `TransportAdapter`: both buttons, the encoder and its switch, the eight gestures, the clock source, the tempo and start/stop. What is left is that **none of it has been exercised on the module** | medium | flash and try the eight gestures (line 1). Until then the wiring is proven by native tests and by simulation only |
 | 14 | **Three audited libGravity anomalies are latent and land exactly on the next task**: `Button` losing a release inside the debounce window, `Encoder`'s false first movement, `Clock::SetSource` ignoring the `SOURCE_LAST` sentinel. Reachability table in **PRD §18** | medium | absorb all three in `InputAdapter` (**ADR 0002**) **while wiring the UI (§12.1) and the transport (§8.1)**. None is reachable today -- no callback attached, no clock source selected (line 11b). **`Button` is now bounded by measurement (2026-08-22)**: the anomaly needs a contact shorter than `DEBOUNCE_MS = 10`, which a finger does not reach. Deliberate presses give 10/10; fast taps lose 30 to 55 %, but that is `env:bringup` blinding its own loop, not the anomaly. So for a button pressed by hand it is practically unreachable, and the owner **decided on 2026-08-22 that the adapter does nothing about it**, conditional on there being no impact -- the analysis satisfying that condition, and the test that would falsify it, are in ADR 0002 |
 | 15 | **`DigitalOutput::Init()` does not force the output OFF**, and the audited test proves it | low | nothing today: harmless at cold boot, for the reason established in **PRD §18** (AVR reset leaves `PORT` at 0, and `gravity` is a global in `.bss`). What is left is to handle it **if a software reboot is ever added** -- that is when the pin could stay HIGH while the firmware believes it is off |
 | 22 | **The re-arm threshold assumes the source falls back below +0.5 V.** A source that idles higher latches the gate for good: one reset, never another. Measured on the module: a Gravity output, switched off, presents about **+1.5 V** to a CV input (+153 in `Read()` units, against -27 with the cable out), so seen from the jack it is high-or-floating rather than high-or-low | low | **no decision taken.** Raising the threshold is an arbitration, and it needs measurements of several sources, not this one case. Decide it while implementing the CV destinations (PRD §10.2). The resting noise is measured at **-26 ± 3** on both channels, so the +1 V arm threshold keeps 128 counts of margin -- the arm side is not in question |
@@ -48,6 +47,7 @@ reopens them without knowing what has already been established or costed.
 
 | # | Subject | State | By what |
 |---|---|---|---|
+| 11b | **Nothing wired had been exercised on the module** | **closed 2026-08-23, on the module** | FlexSeq was flashed -- 28774 bytes written and verified in 9 seconds -- and the owner then drove it. Both rotation directions, the eight gestures, PLAY starting and stopping the clock with the six LEDs following, the encoder switch, the step cursor, the ratchet and triplet editing, and the playhead advancing in EDIT. The wiring is no longer proven by tests alone. What that run produced is not silence but **six new lines**, 26 to 31 |
 | 33 | **The ratchet-by-SUBDIV behaviour was thinly covered** | **closed 2026-08-23** | lot 20. 13 C++ tests and 13 TypeScript ones now pin the step duration for all 25 rates, the trigger count for the 125 rate-by-code pairs, and the tick gaps of the trigger train. Every figure was measured on the firmware first, then written as a literal. 16 mutants make them load-bearing |
 | 34 | **A sub-onset landed on a truncated slot, and the error multiplied with the rank** | **closed 2026-08-23** | lot 21. The position is now `(stepTicks * k) / triggers`, and the worst error over the whole matrix is **0.667 tick**, measured. The exact-division guard became a **two-tick floor**, so 6 pairs are refused instead of 13, all at the three fastest rates. R6 at `x24` stays impossible: 4 ticks cannot carry 6 distinct instants. Measured at `x3`: a ratchet 3 now uses 10 + 11 + 11 ticks, the whole step, where it used to leave the last third empty |
 | 36 | **The C++ and the TypeScript placed a sub-onset with different arithmetic** | **closed 2026-08-23** | lot 21, and the obligation was met before the guard was removed. Both sides call a `subOnsetTick` that divides integers explicitly -- `Math.floor` on the TypeScript side, which the float division did not do. Proof: the two suites produce the same gap train at `x3`, `11 11 32 32 32 10`, where the two arithmetics would differ |
@@ -153,6 +153,13 @@ Each cost a real mistake, and each holds beyond the subject that produced it.
 passes are slow, never *which ones*. I inferred from "one pass in seven is long"
 that it was the row of 12 steps; it was the title. The cost-by-position
 measurement established it in a single run (PRD §14).
+
+**A write to an external document must be verified by re-reading it.** On
+2026-08-23 the Notion update tool returned success **twice** for an edit whose
+anchor text no longer matched, so the change was simply not applied. The symptom
+is the worst kind: a success report and an unchanged document. One of the two
+would have left the PRD saying 307 bytes in one section and 306 in another. Read
+the section back and compare the strings; a returned success is not evidence.
 
 **An assertion must not compare against the constant it tests.** On 2026-08-23
 the test suite did not detect one mutation in a complete round. The mutation score
