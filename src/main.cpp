@@ -201,6 +201,7 @@ void loop() {
 
     if (ticks > 0) {
         transport.tick(ticks);
+        triggers.update();
 
         // Emit a pulse on every channel that owes one. A ratchet step owes
         // several onsets; the output can only be re-armed once per drain, so a

@@ -4,6 +4,8 @@ import {
   PPQN,
   DEFAULT_LENGTH,
   CHANNEL_COUNT,
+  ChannelMode,
+  MAX_SKIP_CHANCE,
 } from "../src/domain/SequencerEngine.js";
 import { PatternBank } from "../src/domain/PatternBank.js";
 import { RATCHET_3, RATCHET_4, RATCHET_6, RATCHET_TRIPLET } from "../src/domain/Pattern.js";
@@ -280,6 +282,7 @@ describe("SequencerEngine — ratchets", () => {
   function rig() {
     const bank = new PatternBank();
     const e = new SequencerEngine();
+    for (let ch = 0; ch < e.channelCount(); ++ch) e.setChannelMode(ch, ChannelMode.SEQ);
     e.setPatternBank(bank);
     e.setSelectedPattern(0, 0);
     return { bank, e };
@@ -353,6 +356,10 @@ describe("SequencerEngine — ratchets", () => {
 
     const plain = new SequencerEngine();
     const stretched = new SequencerEngine();
+    for (let ch = 0; ch < CHANNEL_COUNT; ++ch) {
+      plain.setChannelMode(ch, ChannelMode.SEQ);
+      stretched.setChannelMode(ch, ChannelMode.SEQ);
+    }
     plain.setPatternBank(plainBank);
     stretched.setPatternBank(tripletBank);
     plain.start();
@@ -415,5 +422,146 @@ describe("SequencerEngine — separation de mesure (graphique)", () => {
     b.advance(96 * 5);
     expect(b.effectiveStep(0)).toBe(a.effectiveStep(0));
     expect(b.masterPhase).toBe(a.masterPhase);
+  });
+});
+
+describe("SequencerEngine — modes de channel (PRD 4.2)", () => {
+  it("demarre avec les six channels en CLOCK, sans offset ni chance de saut", () => {
+    const e = new SequencerEngine();
+    for (let ch = 0; ch < CHANNEL_COUNT; ++ch) {
+      expect(e.getChannelMode(ch)).toBe(ChannelMode.CLOCK);
+      expect(e.getOffset(ch)).toBe(0);
+      expect(e.getSkipChance(ch)).toBe(0);
+    }
+  });
+
+  it("refuse un mode inconnu et un channel inconnu", () => {
+    const e = new SequencerEngine();
+    expect(e.setChannelMode(0, 3 as ChannelMode)).toBe(false);
+    expect(e.setChannelMode(CHANNEL_COUNT, ChannelMode.SEQ)).toBe(false);
+    expect(e.getChannelMode(0)).toBe(ChannelMode.CLOCK);
+  });
+
+  it("CLOCK emet un declenchement par step a offset 0", () => {
+    const e = new SequencerEngine();
+    e.start();
+    e.advance(95);
+    expect(e.onsetCount(0)).toBe(0);
+    e.advance(1);
+    expect(e.onsetCount(0)).toBe(1);
+    e.advance(STEP);
+    expect(e.onsetCount(0)).toBe(1);
+  });
+
+  it("CLOCK declenche au pulse offset, pas a la frontiere", () => {
+    const e = new SequencerEngine();
+    expect(e.setOffset(0, 10)).toBe(true);
+    e.start();
+    e.advance(9);
+    expect(e.onsetCount(0)).toBe(0);
+    e.advance(1);
+    expect(e.onsetCount(0)).toBe(1);
+    e.advance(86);
+    expect(e.onsetCount(0)).toBe(0);
+    e.advance(10);
+    expect(e.onsetCount(0)).toBe(1);
+  });
+
+  it("CLOCK garde un declenchement par step quel que soit l'offset", () => {
+    for (let offset = 0; offset < STEP; offset += 7) {
+      const e = new SequencerEngine();
+      e.setOffset(0, offset);
+      e.start();
+      let total = 0;
+      for (let tick = 0; tick < STEP * 10; ++tick) {
+        e.advance(1);
+        total += e.onsetCount(0);
+      }
+      expect(total).toBe(10);
+    }
+  });
+
+  it("CLOCK compte chaque franchissement dans un advance groupe", () => {
+    const e = new SequencerEngine();
+    e.setOffset(0, 10);
+    e.start();
+    e.advance(200);
+    expect(e.onsetCount(0)).toBe(2);
+  });
+
+  it("CLOCK et RANDOM ignorent les ratchets", () => {
+    const bank = new PatternBank();
+    bank.getPattern(0)!.setRatchet(0, RATCHET_4);
+    bank.getPattern(0)!.setRatchet(1, RATCHET_TRIPLET);
+
+    const e = new SequencerEngine();
+    e.setPatternBank(bank);
+    e.setChannelMode(1, ChannelMode.RANDOM);
+    e.start();
+
+    expect(e.currentStepTriggers(0)).toBe(1);
+    expect(e.currentStepTriggers(1)).toBe(1);
+    e.advance(STEP);
+    expect(e.onsetCount(0)).toBe(1);
+    expect(e.onsetCount(1)).toBe(1);
+    expect(e.currentStepTicks(0)).toBe(STEP);
+  });
+
+  it("RANDOM declenche sur la frontiere de step, offset ignore", () => {
+    const e = new SequencerEngine();
+    e.setChannelMode(0, ChannelMode.RANDOM);
+    e.setOffset(0, 10);
+    e.start();
+    e.advance(10);
+    expect(e.onsetCount(0)).toBe(0);
+    e.advance(86);
+    expect(e.onsetCount(0)).toBe(1);
+  });
+
+  it("l'offset est ecrete au step et suit la cadence", () => {
+    const e = new SequencerEngine();
+    expect(e.setOffset(0, 500)).toBe(true);
+    expect(e.getOffset(0)).toBe(95);
+    e.setSubdiv(0, 2);
+    expect(e.getOffset(0)).toBe(95);
+    e.setOffset(0, 150);
+    e.setSubdiv(0, -4);
+    expect(e.getOffset(0)).toBe(23);
+    e.setTicksPerStep(0, 8);
+    expect(e.getOffset(0)).toBe(7);
+  });
+
+  it("un offset egal au step est ramene dedans", () => {
+    const e = new SequencerEngine();
+    e.setOffset(0, STEP);
+    expect(e.getOffset(0)).toBe(STEP - 1);
+    e.start();
+    let total = 0;
+    for (let tick = 0; tick < STEP * 4; ++tick) {
+      e.advance(1);
+      total += e.onsetCount(0);
+    }
+    expect(total).toBe(4);
+  });
+
+  it("la chance de saut est bornee a dix dixiemes", () => {
+    const e = new SequencerEngine();
+    expect(e.setSkipChance(0, MAX_SKIP_CHANCE)).toBe(true);
+    expect(e.getSkipChance(0)).toBe(MAX_SKIP_CHANCE);
+    expect(e.setSkipChance(0, MAX_SKIP_CHANCE + 1)).toBe(false);
+    expect(e.getSkipChance(0)).toBe(MAX_SKIP_CHANCE);
+    expect(e.setSkipChance(CHANNEL_COUNT, 3)).toBe(false);
+  });
+
+  it("repasser en SEQ relit le pattern", () => {
+    const bank = new PatternBank();
+    bank.getPattern(0)!.setRatchet(0, RATCHET_4);
+    const e = new SequencerEngine();
+    e.setPatternBank(bank);
+    expect(e.currentStepTriggers(0)).toBe(1);
+    e.setChannelMode(0, ChannelMode.SEQ);
+    expect(e.currentStepTriggers(0)).toBe(4);
+    e.setChannelMode(0, ChannelMode.CLOCK);
+    expect(e.currentStepTriggers(0)).toBe(1);
   });
 });

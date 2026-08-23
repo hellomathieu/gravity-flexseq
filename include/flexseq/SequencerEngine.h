@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+#include <flexseq/ChannelMode.h>
 #include <flexseq/Subdiv.h>
 
 namespace flexseq {
@@ -70,6 +71,15 @@ public:
     int16_t getSubdiv(uint8_t channel) const;
     bool setSubdiv(uint8_t channel, int16_t subdiv);
 
+    ChannelMode getChannelMode(uint8_t channel) const;
+    bool setChannelMode(uint8_t channel, ChannelMode mode);
+
+    uint16_t getOffset(uint8_t channel) const;
+    bool setOffset(uint8_t channel, uint16_t offset);
+
+    uint8_t getSkipChance(uint8_t channel) const;
+    bool setSkipChance(uint8_t channel, uint8_t tenths);
+
     // Per-channel measure separation: a bar every N steps, N in {0, 2, 3, 4, 6}
     // (0 = none). GRAPHICAL ONLY — never affects timing. -1 if channel invalid.
     int8_t getBarLength(uint8_t channel) const;
@@ -105,6 +115,9 @@ private:
         int16_t subdiv;
         uint16_t ticksPerStep;
         uint8_t barLength;  // graphical measure separation, in steps
+        uint8_t mode;
+        uint16_t offset;
+        uint8_t skipChance;
         uint8_t localStep;  // in [0, effectiveLength)
         uint16_t acc;       // ticks into the current step, in [0, stepTicks)
         // Cached timing of the CURRENT step, refreshed on every step boundary
@@ -119,6 +132,8 @@ private:
 
     // Recompute stepTicks/slotTicks/triggers from the current step's ratchet.
     void refreshStepTiming(uint8_t channel, bool resetSubOnset = true);
+
+    void clampOffset(uint8_t channel);
 
     const PatternBank* bank_; // optional; drives ratchet timing
     uint32_t phase_;

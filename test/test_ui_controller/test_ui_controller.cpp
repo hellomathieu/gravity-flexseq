@@ -26,6 +26,9 @@ struct Rig {
     UiController ui;
 
     Rig() : engine(), transport(engine), ui(engine, bank, transport) {
+        for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+            engine.setChannelMode(ch, flexseq::MODE_SEQ);
+        }
         engine.setPatternBank(&bank);
     }
 

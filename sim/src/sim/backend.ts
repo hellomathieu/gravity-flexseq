@@ -11,7 +11,7 @@
  * channels qui le referencent voient le meme contenu.
  */
 import { PatternBank, PATTERN_COUNT } from "../domain/PatternBank.js";
-import { SequencerEngine, CHANNEL_COUNT } from "../domain/SequencerEngine.js";
+import { SequencerEngine, CHANNEL_COUNT, ChannelMode } from "../domain/SequencerEngine.js";
 import { TriggerSequencer } from "../domain/TriggerSequencer.js";
 import { viewPattern, type CellView } from "./PatternView.js";
 
@@ -61,6 +61,11 @@ export class TsReferenceBackend implements SimBackend {
   constructor() {
     // Le moteur consulte la banque pour la duree des steps ternaires.
     this.engine.setPatternBank(this.bank);
+    // Le simulateur est l'editeur de patterns : ses six channels sont en SEQ.
+    // Le defaut du domaine reste CLOCK, comme l'original (PRD 4.2).
+    for (let ch = 0; ch < CHANNEL_COUNT; ++ch) {
+      this.engine.setChannelMode(ch, ChannelMode.SEQ);
+    }
   }
 
   private patternOf(channel: number) {
@@ -145,6 +150,7 @@ export class TsReferenceBackend implements SimBackend {
 
   advanceTicks(ticks: number): void {
     this.engine.advance(ticks);
+    this.triggers.update();
   }
 
   masterPhase(): number {

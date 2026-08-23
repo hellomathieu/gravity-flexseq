@@ -1,33 +1,63 @@
 /**
  * TriggerSequencer — couche de decision pure (miroir de flexseq/TriggerSequencer.h).
  *
- * Donne, pour chaque channel, s'il doit emettre un trigger MAINTENANT : il vient
- * de franchir l'onset d'un step ACTIF de son pattern selectionne. Appeler
- * `triggered()` juste apres `SequencerEngine.advance()` (moment ou `onsetCount()`
- * est valide). Aucune dependance materielle : cote firmware C++ un `true` devient
- * une impulsion DigitalOutput ; cote simulateur, un flash visuel.
+ * Le comportement depend du mode du channel (PRD 4.2). Appeler `update()` juste
+ * apres `SequencerEngine.advance()` : c'est le seul moment ou `onsetCount()` est
+ * valide, et c'est la que le tirage de RANDOM est consomme, une fois par step.
  */
 import type { PatternBank } from "./PatternBank.js";
-import type { SequencerEngine } from "./SequencerEngine.js";
+import { ChannelMode, type SequencerEngine } from "./SequencerEngine.js";
+import { Prng } from "./Prng.js";
+
+export const SKIP_DRAW_BOUND = 10;
 
 export class TriggerSequencer {
   private readonly bank: PatternBank;
   private readonly engine: SequencerEngine;
+  private readonly prng = new Prng();
+  private counts: number[] = [];
 
   constructor(bank: PatternBank, engine: SequencerEngine) {
     this.bank = bank;
     this.engine = engine;
   }
 
-  /** Nombre d'impulsions dues pour le dernier advance() (ratchets inclus). */
+  seed(value: number): void {
+    this.prng.seed(value);
+  }
+
+  update(): void {
+    const next: number[] = [];
+    for (let ch = 0; ch < this.engine.channelCount(); ++ch) {
+      next[ch] = this.decide(ch);
+    }
+    this.counts = next;
+  }
+
   triggerCount(channel: number): number {
-    const onsets = this.engine.onsetCount(channel);
-    if (!onsets) return 0;
-    return this.activeStep(channel) ? onsets : 0;
+    return this.counts[channel] ?? 0;
   }
 
   triggered(channel: number): boolean {
     return this.triggerCount(channel) > 0;
+  }
+
+  private decide(channel: number): number {
+    const onsets = this.engine.onsetCount(channel);
+    if (!onsets) return 0;
+    switch (this.engine.getChannelMode(channel)) {
+      case ChannelMode.CLOCK:
+        return onsets;
+      case ChannelMode.RANDOM:
+        return this.keptByChance(channel) ? onsets : 0;
+      default:
+        return this.activeStep(channel) ? onsets : 0;
+    }
+  }
+
+  private keptByChance(channel: number): boolean {
+    const draw = this.prng.below(SKIP_DRAW_BOUND) + 1;
+    return draw > this.engine.getSkipChance(channel);
   }
 
   private activeStep(channel: number): boolean {

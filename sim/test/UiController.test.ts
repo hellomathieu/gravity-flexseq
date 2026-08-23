@@ -26,6 +26,7 @@ import {
   MIN_LENGTH,
   PPQN,
   SequencerEngine,
+  ChannelMode,
 } from "../src/domain/SequencerEngine.js";
 import { RATCHET_CODES, RATCHET_NONE, RATCHET_2, RATCHET_3, RATCHET_TRIPLET } from "../src/domain/Pattern.js";
 import { DEFAULT_SUBDIV, SUBDIVS } from "../src/domain/subdiv.js";
@@ -33,6 +34,9 @@ import { DEFAULT_SUBDIV, SUBDIVS } from "../src/domain/subdiv.js";
 function rig() {
   const bank = new PatternBank();
   const engine = new SequencerEngine();
+  for (let ch = 0; ch < engine.channelCount(); ++ch) {
+    engine.setChannelMode(ch, ChannelMode.SEQ);
+  }
   engine.setPatternBank(bank);
   const transport = new Transport(engine);
   const ui = new UiController(engine, bank, transport);

@@ -56,12 +56,30 @@ export const CHANNEL_COUNT = 6;
 /** Nombre de patterns partages selectionnables par channel (voir PatternBank). */
 export const PATTERN_COUNT = 16;
 
+/** Modes de channel du firmware d'origine (PRD 4.2). */
+export enum ChannelMode {
+  CLOCK = 0,
+  RANDOM = 1,
+  SEQ = 2,
+}
+
+export const CHANNEL_MODE_COUNT = 3;
+
+/** Defaut d'usine de l'original : les six channels sont en CLOCK. */
+export const DEFAULT_CHANNEL_MODE = ChannelMode.CLOCK;
+
+/** Chance de SAUT d'un step en dixiemes : 0 jamais, 10 toujours. */
+export const MAX_SKIP_CHANCE = 10;
+
 interface ChannelState {
   selectedPattern: number; // index 0..15 dans la banque partagee
   effectiveLength: number;
   subdiv: number; // valeur SUBDIV (libGravity) ; determine ticksPerStep
   ticksPerStep: number;
   barLength: number; // separation de mesure (graphique), en steps
+  mode: ChannelMode;
+  offset: number;
+  skipChance: number;
   /** Timing du step COURANT, recalcule a chaque frontiere (pas de division en boucle). */
   stepTicks: number; // ticksPerStep x span
   slotTicks: number; // stepTicks / triggers
@@ -86,6 +104,9 @@ export class SequencerEngine {
       subdiv: DEFAULT_SUBDIV,
       ticksPerStep: subdivToTicks(DEFAULT_SUBDIV),
       barLength: DEFAULT_BAR_LENGTH,
+      mode: DEFAULT_CHANNEL_MODE,
+      offset: 0,
+      skipChance: 0,
       stepTicks: subdivToTicks(DEFAULT_SUBDIV),
       slotTicks: subdivToTicks(DEFAULT_SUBDIV),
       triggers: 1,
@@ -108,7 +129,7 @@ export class SequencerEngine {
     if (!c) return;
 
     let code = RATCHET_NONE;
-    if (this.bank) {
+    if (this.bank && c.mode === ChannelMode.SEQ) {
       const pattern = this.bank.getPattern(c.selectedPattern);
       if (pattern) code = pattern.getRatchet(c.localStep);
     }
@@ -236,8 +257,13 @@ export class SequencerEngine {
       c.acc += ticks;
 
       for (;;) {
-        // Sous-declenchements a l'interieur du step courant (ratchet).
-        if (c.subOnset + 1 < c.triggers && c.acc >= c.slotTicks * (c.subOnset + 1)) {
+        if (c.mode === ChannelMode.CLOCK) {
+          if (c.subOnset === 0 && c.offset > 0 && c.acc >= c.offset) {
+            c.subOnset = 1;
+            this.onsets[ch] = (this.onsets[ch] ?? 0) + 1;
+            continue;
+          }
+        } else if (c.subOnset + 1 < c.triggers && c.acc >= c.slotTicks * (c.subOnset + 1)) {
           c.subOnset += 1;
           this.onsets[ch] = (this.onsets[ch] ?? 0) + 1;
           continue;
@@ -247,7 +273,9 @@ export class SequencerEngine {
           c.localStep = (c.localStep + 1) % c.effectiveLength;
           c.stepped = true;
           this.refreshStepTiming(ch); // nouveau step -> nouvelle duree
-          this.onsets[ch] = (this.onsets[ch] ?? 0) + 1;
+          if (c.mode !== ChannelMode.CLOCK || c.offset === 0) {
+            this.onsets[ch] = (this.onsets[ch] ?? 0) + 1;
+          }
           continue;
         }
         break;
@@ -256,6 +284,10 @@ export class SequencerEngine {
   }
 
   // --- Etat par channel --------------------------------------------------
+
+  channelCount(): number {
+    return this.channels.length;
+  }
 
   private channel(index: number): ChannelState | undefined {
     return Number.isInteger(index) ? this.channels[index] : undefined;
@@ -310,7 +342,54 @@ export class SequencerEngine {
     if (!Number.isInteger(ticks) || ticks < 1) return false;
     c.ticksPerStep = ticks;
     this.refreshStepTiming(channel);
+    this.clampOffset(c);
     if (c.acc >= c.stepTicks) c.acc %= c.stepTicks;
+    return true;
+  }
+
+  // --- Modes, offset, chance de saut (PRD 4.2) ---------------------------
+
+  private clampOffset(c: ChannelState): void {
+    if (c.offset >= c.ticksPerStep) c.offset = c.ticksPerStep - 1;
+  }
+
+  getChannelMode(channel: number): ChannelMode {
+    return this.channel(channel)?.mode ?? DEFAULT_CHANNEL_MODE;
+  }
+
+  setChannelMode(channel: number, mode: ChannelMode): boolean {
+    const c = this.channel(channel);
+    if (!c) return false;
+    if (!Number.isInteger(mode) || mode < 0 || mode >= CHANNEL_MODE_COUNT) return false;
+    if (c.mode === mode) return true;
+    c.mode = mode;
+    this.refreshStepTiming(channel);
+    if (c.acc >= c.stepTicks) c.acc %= c.stepTicks;
+    return true;
+  }
+
+  getOffset(channel: number): number {
+    return this.channel(channel)?.offset ?? 0;
+  }
+
+  setOffset(channel: number, offset: number): boolean {
+    const c = this.channel(channel);
+    if (!c) return false;
+    if (!Number.isInteger(offset) || offset < 0) return false;
+    c.offset = offset;
+    this.clampOffset(c);
+    return true;
+  }
+
+  getSkipChance(channel: number): number {
+    return this.channel(channel)?.skipChance ?? 0;
+  }
+
+  setSkipChance(channel: number, tenths: number): boolean {
+    const c = this.channel(channel);
+    if (!c) return false;
+    if (!Number.isInteger(tenths) || tenths < 0 || tenths > MAX_SKIP_CHANCE) return false;
+    c.skipChance = tenths;
     return true;
   }
 
@@ -333,6 +412,7 @@ export class SequencerEngine {
     c.subdiv = subdiv;
     c.ticksPerStep = ticks;
     this.refreshStepTiming(channel);
+    this.clampOffset(c);
     if (c.acc >= c.stepTicks) c.acc %= c.stepTicks;
     return true;
   }

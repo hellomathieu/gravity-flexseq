@@ -17,6 +17,9 @@ SequencerEngine::SequencerEngine()
         channels_[ch].subdiv = DEFAULT_SUBDIV;
         channels_[ch].ticksPerStep = subdivToTicks(DEFAULT_SUBDIV);
         channels_[ch].barLength = DEFAULT_BAR_LENGTH;
+        channels_[ch].mode = DEFAULT_CHANNEL_MODE;
+        channels_[ch].offset = 0;
+        channels_[ch].skipChance = 0;
         channels_[ch].localStep = 0;
         channels_[ch].acc = 0;
         refreshStepTiming(ch);
@@ -34,7 +37,7 @@ void SequencerEngine::refreshStepTiming(uint8_t channel, bool resetSubOnset) {
     ChannelState& c = channels_[channel];
 
     uint8_t code = RATCHET_NONE;
-    if (bank_ != nullptr) {
+    if (bank_ != nullptr && c.mode == MODE_SEQ) {
         const Pattern* pattern = bank_->getPattern(c.selectedPattern);
         if (pattern != nullptr) {
             code = pattern->getRatchet(c.localStep);
@@ -118,9 +121,13 @@ void SequencerEngine::advance(uint16_t ticks) {
         c.acc = static_cast<uint16_t>(c.acc + ticks);
 
         while (true) {
-            // Sub-onsets inside the current step (ratchet). Multiplication only:
-            // no division in the hot path.
-            if (c.subOnset + 1 < c.triggers) {
+            if (c.mode == MODE_CLOCK) {
+                if (c.subOnset == 0 && c.offset > 0 && c.acc >= c.offset) {
+                    c.subOnset = 1;
+                    ++onsets_[ch];
+                    continue;
+                }
+            } else if (c.subOnset + 1 < c.triggers) {
                 const uint16_t nextAt =
                     static_cast<uint16_t>(c.slotTicks * (c.subOnset + 1));
                 if (c.acc >= nextAt) {
@@ -135,7 +142,9 @@ void SequencerEngine::advance(uint16_t ticks) {
                 c.localStep = static_cast<uint8_t>((c.localStep + 1) % c.effectiveLength);
                 stepped_ = static_cast<uint8_t>(stepped_ | (1u << ch));
                 refreshStepTiming(ch); // new step -> new duration / trigger count
-                ++onsets_[ch];         // the step's own onset
+                if (c.mode != MODE_CLOCK || c.offset == 0) {
+                    ++onsets_[ch];     // the step's own onset
+                }
                 continue;
             }
 
@@ -195,6 +204,7 @@ bool SequencerEngine::setTicksPerStep(uint8_t channel, uint16_t ticks) {
     ChannelState& c = channels_[channel];
     c.ticksPerStep = ticks;
     refreshStepTiming(channel);
+    clampOffset(channel);
     if (c.acc >= c.stepTicks) {
         c.acc = static_cast<uint16_t>(c.acc % c.stepTicks);
     }
@@ -220,9 +230,72 @@ bool SequencerEngine::setSubdiv(uint8_t channel, int16_t subdiv) {
     c.subdiv = subdiv;
     c.ticksPerStep = ticks;
     refreshStepTiming(channel);
+    clampOffset(channel);
     if (c.acc >= c.stepTicks) {
         c.acc = static_cast<uint16_t>(c.acc % c.stepTicks);
     }
+    return true;
+}
+
+void SequencerEngine::clampOffset(uint8_t channel) {
+    ChannelState& c = channels_[channel];
+    if (c.offset >= c.ticksPerStep) {
+        c.offset = static_cast<uint16_t>(c.ticksPerStep - 1);
+    }
+}
+
+ChannelMode SequencerEngine::getChannelMode(uint8_t channel) const {
+    if (!validChannel(channel)) {
+        return DEFAULT_CHANNEL_MODE;
+    }
+    return static_cast<ChannelMode>(channels_[channel].mode);
+}
+
+bool SequencerEngine::setChannelMode(uint8_t channel, ChannelMode mode) {
+    if (!validChannel(channel) || static_cast<uint8_t>(mode) >= CHANNEL_MODE_COUNT) {
+        return false;
+    }
+    ChannelState& c = channels_[channel];
+    if (c.mode == static_cast<uint8_t>(mode)) {
+        return true;
+    }
+    c.mode = static_cast<uint8_t>(mode);
+    refreshStepTiming(channel);
+    if (c.acc >= c.stepTicks) {
+        c.acc = static_cast<uint16_t>(c.acc % c.stepTicks);
+    }
+    return true;
+}
+
+uint16_t SequencerEngine::getOffset(uint8_t channel) const {
+    if (!validChannel(channel)) {
+        return 0;
+    }
+    return channels_[channel].offset;
+}
+
+bool SequencerEngine::setOffset(uint8_t channel, uint16_t offset) {
+    if (!validChannel(channel)) {
+        return false;
+    }
+    ChannelState& c = channels_[channel];
+    c.offset = offset;
+    clampOffset(channel);
+    return true;
+}
+
+uint8_t SequencerEngine::getSkipChance(uint8_t channel) const {
+    if (!validChannel(channel)) {
+        return 0;
+    }
+    return channels_[channel].skipChance;
+}
+
+bool SequencerEngine::setSkipChance(uint8_t channel, uint8_t tenths) {
+    if (!validChannel(channel) || tenths > MAX_SKIP_CHANCE) {
+        return false;
+    }
+    channels_[channel].skipChance = tenths;
     return true;
 }
 
