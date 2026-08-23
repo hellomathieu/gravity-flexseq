@@ -58,10 +58,6 @@ uint8_t clampIndex(uint8_t current, int16_t delta, uint8_t count) {
     return static_cast<uint8_t>(value);
 }
 
-// L'acceleration de libGravity (x3 sous 16 ms) ne sert que les plages trop
-// grandes pour se parcourir cran par cran. Le tempo est la seule. Partout
-// ailleurs un cran vaut un pas, sans quoi la navigation saute des selections —
-// constate sur le module le 2026-08-22.
 int8_t oneStep(int8_t delta) {
     if (delta > 0) {
         return 1;

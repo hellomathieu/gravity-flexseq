@@ -66,8 +66,6 @@ function clampRange(value: number, low: number, high: number): number {
   return value;
 }
 
-// L'acceleration de libGravity (x3 sous 16 ms) ne sert que les plages trop
-// grandes pour se parcourir cran par cran. Le tempo est la seule.
 function oneStep(delta: number): number {
   if (delta > 0) return 1;
   if (delta < 0) return -1;
