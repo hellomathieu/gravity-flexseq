@@ -171,8 +171,9 @@ clamp lives in `UiController` even though `SequencerEngine` already rejects
 out-of-range values: the two are not redundant, because libGravity multiplies a
 fast detent by 2 or 3, and an unclamped delta of +3 from LENGTH 23 is *refused*
 by the engine where a clamp lands on 24. A mutation sweep is what surfaced this
-— two mutations survived the first pass for exactly that reason, and the test
-they exposed now exists on both sides. 22 of 22 mutations killed, each side.
+— the first pass did not detect two mutations, for exactly that reason. The test
+they exposed now exists on both sides. The mutation score is 22 of 22 on each
+side.
 
 ## Alternatives set aside
 

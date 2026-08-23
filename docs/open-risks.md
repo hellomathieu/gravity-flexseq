@@ -127,11 +127,12 @@ passes are slow, never *which ones*. I inferred from "one pass in seven is long"
 that it was the row of 12 steps; it was the title. The cost-by-position
 measurement established it in a single run (PRD §14).
 
-**An assertion must not compare against the constant it tests.** On 2026-08-23 a
-mutant survived a complete round: the TypeScript test compared the clamped offset
-to `MAX_OFFSET`, so moving the constant moved the expectation with it. The test
-was self-confirming. The C++ test wrote `255` in plain sight and killed the same
-mutant. Write the literal value when the value itself is the claim.
+**An assertion must not compare against the constant it tests.** On 2026-08-23
+the test suite did not detect one mutation in a complete round. The mutation score
+was 31/32. The TypeScript test compared the clamped offset to `MAX_OFFSET`, so
+moving the constant moved the expectation with it. The test was self-confirming.
+The C++ test wrote `255` in plain sight and detected the same mutation. Write the
+literal value when the value itself is the claim.
 
 **One measurement cannot separate two behaviours.** The probe that watches the six
 outputs now makes **two courses** on one firmware, one per channel mode. CLOCK
@@ -147,9 +148,9 @@ wrong reason before that check.
 edited.** Two failures in one run on 2026-08-23, both mine. A mutant that removed
 a loop guard turned `while (true)` into an infinite loop: with no per-run timeout
 the harness waited twenty minutes on a program that was never going to answer, so
-**every long-running step now carries an explicit deadline**, and a hang counts as
-a mutant *killed* rather than as a blockage. Then interrupting it left the mutant
-**in the source file** — twice, because the harness edited the real file and
+**every long-running step now carries an explicit deadline**, and a hang counts
+as a mutation *detected* rather than as a blockage. Then interrupting it left the
+mutant **in the source file** — twice, because the harness edited the real file and
 restored it only on the happy path. It now snapshots every target in memory before
 the first mutant and restores in a `finally` and on signal. The general shape is
 the one above: a tool must not depend on the good behaviour of the thing it

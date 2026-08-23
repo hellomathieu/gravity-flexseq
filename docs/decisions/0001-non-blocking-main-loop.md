@@ -151,7 +151,7 @@ same frame could show different content.
   The always-empty band is why the predicate is named for the geometry
   (`belowGrid`) and not for the footer: calling it a footer band would have
   described only one of the two.
-  ⚠️ One mutation cannot be killed and it is an **equivalent mutant**: `>=` in
+  ⚠️ One mutation cannot be detected and it is an **equivalent mutant**: `>=` in
   place of `>` against y 47. No band starts at y 47 — they start at 0, 8, … 56 —
   so the two predicates are indistinguishable on the real set of bands. Recorded
   rather than papered over: the sweep is 7 of 8, not 8 of 8.
