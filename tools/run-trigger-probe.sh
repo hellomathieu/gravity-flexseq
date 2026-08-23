@@ -17,14 +17,26 @@
 # VERDICT — quatre criteres, et deux mesures rapportees :
 #   1. les SIX sorties emettent (elles selectionnent toutes le pattern 0 par
 #      defaut, donc un silence sur l'une est un defaut de cablage logique) ;
-#   2. le motif joue EST le motif ecrit — verifie comme une rotation cyclique des
-#      ecarts, sans supposer la phase du playhead (voir l'en-tete du harnais) ;
+#   2. le train est REGULIER — un ecart par step, a 5 % de la mediane. Depuis que
+#      le defaut d'usine est CLOCK (PRD 4.2), c'est ce que le firmware emet, et
+#      le motif injecte reste dans la banque sans etre joue : le critere verifie
+#      donc aussi que CLOCK IGNORE le contenu du pattern, comme l'original ;
 #   3. les six lignes battent ensemble, fronts a moins de 200 us ;
 #   4. la gigue reste sous JITTER_BUDGET_PCT d'un step.
 # Rapportees : la largeur d'impulsion reelle, et PULSE de l'expandeur MIDI.
 #
-# `MUTATE=<step>` ajoute un step a l'injection sans l'ajouter a l'attente : le
-# critere 2 doit passer au rouge. C'est ainsi que ce chemin a ete exerce.
+# ⚠️ LE CHEMIN « CONTENU DU PATTERN -> SORTIE » N'EST PLUS EXERCE ICI, et c'est
+# une suspension datee, pas un abandon. Le mode SEQ n'est atteignable par aucun
+# moyen exterieur au firmware : la seule UI qui le reglera arrive au lot 11. Le
+# critere revient au LOT 10, ou le format EEPROM v2 portera le mode : la sonde
+# prechargera une EEPROM avec mode=SEQ et le contenu du pattern, ce qui passe par
+# un format documente au lieu d'un decalage dans une structure privee.
+#
+# `MUTATE=<step>` ajoute un step a l'injection. Tant que le critere porte sur le
+# train CLOCK, il ne le rougit plus — il rougira de nouveau au lot 10.
+#
+# `DROP=<n>` ignore un front sur n : le train n'est plus regulier et le critere 2
+# passe au rouge. C'est ainsi que ce chemin a ete exerce.
 #
 # Reglages : DURATION (defaut 20 s de simulation), JITTER_BUDGET_PCT (defaut 2).
 # Sortie 0 si les quatre passent, 1 sinon, 127 si un outil manque.
@@ -150,8 +162,8 @@ print()
 print(f"{B}=========== FONCTION MUSICALE (firmware de production) ==========={Z}")
 print(f"  {mark(all_lines)} Sorties actives    {lines_on}/{lines_exp}   "
       f"{DIM}— les 6 channels selectionnent le pattern 0 par defaut{Z}")
-print(f"  {mark(pattern_ok)} Motif joue         {gaps_ok}/{gaps_total} ecarts   "
-      f"{DIM}— rotation cyclique, phase du playhead non supposee{Z}")
+print(f"  {mark(pattern_ok)} Train regulier     {gaps_ok}/{gaps_total} ecarts   "
+      f"{DIM}— un par step, a 5 % de la mediane ; le motif injecte est ignore{Z}")
 print(f"  {mark(same and coincident)} Six lignes en phase "
       f"{'meme compte, fronts < 200 us' if (same and coincident) else 'DESACCORD'}")
 print(f"  {mark(step_ok)} Tempo applique     {step_measured:.2f} ms par step   "
@@ -179,7 +191,8 @@ if pulse_line == 0:
 
 ok = all_lines and pattern_ok and same and coincident and jit_ok and duty_ok and step_ok
 if ok:
-    print(f"\n  Le sequenceur joue le motif ecrit, sur les six sorties, en phase.")
+    print(f"\n  Les six sorties emettent le train CLOCK, en phase, au bon tempo.")
+    print(f"  {DIM}Le chemin pattern -> sortie revient au lot 10 (EEPROM v2).{Z}")
 else:
     print(f"\n  {ERR}Au moins un critere echoue — ne pas flasher sur cette base.{Z}")
 sys.exit(0 if ok else 1)

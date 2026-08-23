@@ -38,6 +38,7 @@
  */
 
 #include <stdio.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
@@ -269,72 +270,53 @@ int main(int argc, char **argv)
      * L'affirmation est exactement celle qui a un sens musical — le sequenceur
      * joue le motif ecrit, quelle que soit la position de depart.
      */
-    printf("\n=== MOTIF JOUE (channel 1) ===\n");
+    printf("\n=== TRAIN CLOCK (channel 1) ===\n");
     line_t *ref = &g_lines[0];
 
-    /* Ecarts attendus, en steps, cycliques sur LENGTH. */
-    int expect_gap[ACTIVE_COUNT];
-    for (int i = 0; i < ACTIVE_COUNT; ++i) {
-        const int a = ACTIVE_STEPS[i];
-        const int b = (i + 1 < ACTIVE_COUNT) ? ACTIVE_STEPS[i + 1]
-                                             : ACTIVE_STEPS[0] + PATTERN_LENGTH;
-        expect_gap[i] = b - a;
-    }
-    printf("  ecarts attendus (steps) :");
-    for (int i = 0; i < ACTIVE_COUNT; ++i) printf(" %d", expect_gap[i]);
-    printf("   [rotation libre]\n");
+    printf("  ecart attendu (steps) : 1, a chaque step, malgre le motif injecte\n");
 
     double step_measured = 0.0;
-    int gap_ok = 0, gap_total = 0, phase = -1;
+    int gap_ok = 0, gap_total = 0;
     if (ref->nrise >= 3) {
-        static int obs[MAX_EDGES];
+        /* En CLOCK, tout ecart vaut UN step : la duree de step est directement
+         * la mediane des intervalles, sans arrondi ni phase supposee. C'est ce
+         * qui rend cette mesure independante du tempo attendu — une erreur d'un
+         * facteur exact se voit, alors qu'un compte de steps arrondi sur le
+         * tempo attendu serait auto-confirmant. */
+        /* DROP=<n> ignore un front sur n : deux steps se fondent en un seul
+         * ecart, le train cesse d'etre regulier et le critere doit rougir. Sans
+         * ce chemin, le vert ne prouverait rien. */
+        const char *drop_env = getenv("DROP");
+        const int drop = drop_env ? atoi(drop_env) : 0;
+
+        static uint64_t kept[MAX_EDGES];
+        int nkept = 0;
+        for (int r = 0; r < ref->nrise; ++r) {
+            if (drop > 1 && r > 0 && r % drop == 0) continue;
+            kept[nkept++] = ref->rise[r];
+        }
+
+        static double gaps[MAX_EDGES];
         int nobs = 0;
-        for (int r = 1; r < ref->nrise; ++r) {
-            const double d = ms(ref->rise[r] - ref->rise[r - 1]);
-            obs[nobs++] = (int)((d + step_ms / 2.0) / step_ms);
+        for (int r = 1; r < nkept; ++r) {
+            gaps[nobs++] = ms(kept[r] - kept[r - 1]);
         }
-        /* La phase est DEDUITE, en cherchant la rotation qui explique le plus
-         * d'ecarts. Une phase qui n'explique pas tout est un vrai desaccord. */
-        int best = -1, best_hits = -1;
-        for (int k = 0; k < ACTIVE_COUNT; ++k) {
-            int hits = 0;
-            for (int i = 0; i < nobs; ++i)
-                if (obs[i] == expect_gap[(k + i) % ACTIVE_COUNT]) ++hits;
-            if (hits > best_hits) { best_hits = hits; best = k; }
-        }
-        phase = best;
-        gap_ok = best_hits;
+        static double sorted[MAX_EDGES];
+        for (int i = 0; i < nobs; ++i) sorted[i] = gaps[i];
+        qsort(sorted, nobs, sizeof(double), cmp_d);
+        step_measured = sorted[nobs / 2];
+
+        /* Un ecart est conforme s'il vaut la mediane a 5 % pres : c'est la
+         * regularite du train qui est verifiee, pas sa valeur absolue, dont le
+         * critere « tempo applique » se charge separement. */
         gap_total = nobs;
-
-        /* Duree de step MESUREE, deduite des ecarts ATTENDUS du motif et non
-         * d'un arrondi sur step_ms : diviser la duree totale par un nombre de
-         * steps lui-meme arrondi sur step_ms serait auto-confirmant, et une
-         * erreur de tempo d'un facteur exact passerait. Les ecarts du motif sont
-         * irreguliers (3-1-5-6-1), donc ils ne se replient pas. */
-        {
-            static double per_step[MAX_EDGES];
-            int np = 0;
-            for (int i = 0; i < nobs; ++i) {
-                const int e = expect_gap[(best + i) % ACTIVE_COUNT];
-                if (e > 0) {
-                    per_step[np++] = ms(ref->rise[i + 1] - ref->rise[i]) / (double)e;
-                }
-            }
-            if (np > 0) {
-                qsort(per_step, np, sizeof(double), cmp_d);
-                step_measured = per_step[np / 2];
-            }
-        }
-
-        printf("  ecarts observes (steps) :");
-        for (int i = 0; i < nobs; ++i) printf(" %d", obs[i]);
-        printf("\n  rotation deduite : depart sur le %de ecart du motif\n", phase + 1);
         for (int i = 0; i < nobs; ++i) {
-            const int e = expect_gap[(phase + i) % ACTIVE_COUNT];
-            if (obs[i] != e)
-                printf("    ecart %d : %d step(s) au lieu de %d   <-- DESACCORD\n",
-                       i + 1, obs[i], e);
+            const double err = fabs(gaps[i] - step_measured) / step_measured;
+            if (err <= 0.05) ++gap_ok;
+            else printf("    ecart %d : %.2f ms au lieu de %.2f   <-- IRREGULIER\n",
+                        i + 1, gaps[i], step_measured);
         }
+        printf("  %d ecarts observes, mediane %.2f ms\n", nobs, step_measured);
     } else {
         printf("  moins de trois impulsions : rien a comparer\n");
     }
