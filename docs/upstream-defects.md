@@ -32,6 +32,7 @@ pinned one.
 | 6 | `Gravity::Process()` has an uninitialised loop index — `for (int i; i < OUTPUT_COUNT; i++)` — which is undefined behaviour | read; `test_gravity` pins the function's composition | one initialisation |
 | 7 | `Clock::SetSource()` does not handle the `SOURCE_LAST` sentinel, which surfaces as a compiler warning rather than wrong behaviour | read | one guard |
 | 8 | Packaging: a consumer must declare `NeoHWSerial @ 1.6.9` explicitly; the library does not pull it | build | manifest |
+| 9 | `Encoder` accelerates, hides the factor, and the acceleration is **unreachable by hand**. `_rotate_change()` returns the movement accumulated since the last poll, multiplied by 3 below 16 ms and by 2 below 32 ms, and `Process()` passes it to `on_rotate()` in **one** call. The factor comes from `encoder_.getMillisBetweenRotations()`, and `encoder_` is **private**, so a consumer cannot recover the true detent count from the value it receives. Measured on the module 2026-08-23: the factor never fired -- 24 callbacks, all of magnitude 1. A factor of 3 needs more than 62 detents per second | `env:encoderprobe` on the module; `docs/open-risks.md` line 30; ADR 0003 | an accessor, or a switch that turns the acceleration off |
 
 Six of the eight are one to three lines.
 
