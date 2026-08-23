@@ -1,0 +1,264 @@
+#!/usr/bin/env python3
+#
+# Verifie que les assertions du domaine TUENT les defauts qu'elles pretendent
+# attraper. Une assertion verte ne prouve rien tant qu'elle n'a pas ete rouge :
+# ce harnais introduit un defaut connu dans le code de production, lance la suite
+# concernee, et exige un echec.
+#
+# POURQUOI IL EST VERSIONNE. Les series precedentes vivaient dans un repertoire
+# temporaire et ont disparu avec leur session : le lot 9 a mesure 20/20 sans que
+# rien ne permette de le rejouer. La liste des mutants est donc du code du depot,
+# et elle grandit lot par lot.
+#
+# TROIS GARDES, chacun ne du meme genre d'erreur :
+#   1. un motif ABSENT du code est une ERREUR (sortie 2), jamais un survivant.
+#     Sans cela, un mutant qui ne s'applique plus se lit comme un mutant tue ;
+#   2. chaque course porte un DELAI MAXIMUM. Un mutant qui retire un garde de
+#      boucle transforme `while` en boucle infinie, et le harnais attendrait
+#      indefiniment. Un depassement compte le mutant comme TUE ;
+#   3. le fichier est restaure dans un `finally` ET sur signal. Une interruption
+#      a deja laisse un mutant dans le code source, deux fois de suite.
+#
+# UNE ASSERTION NE DOIT PAS SE COMPARER A LA CONSTANTE QU'ELLE TESTE. Un mutant
+# a survecu le 2026-08-23 parce que le test comparait a `MAX_OFFSET` : muter la
+# constante mutait aussi l'attente. Ecrire la valeur en clair.
+#
+# Usage :
+#   ./tools/run-mutation-probe.py            toute la serie
+#   ./tools/run-mutation-probe.py --list     la liste, sans rien executer
+#   ./tools/run-mutation-probe.py --only cpp   ou --only ts
+#   TIMEOUT=600 ./tools/run-mutation-probe.py
+#
+# Sortie 0 si tous les mutants sont tues, 1 s'il en survit un, 2 si un motif est
+# absent du code, 127 si un outil manque.
+
+import os
+import signal
+import subprocess
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TIMEOUT = int(os.environ.get("TIMEOUT", "240"))
+
+TTY = sys.stdout.isatty()
+OK, ERR, DIM, B, Z = ("\033[32m", "\033[31m", "\033[2m", "\033[1m", "\033[0m") if TTY else ("",) * 5
+
+# (etiquette, chemin relatif, motif, remplacement, suite)
+MUTANTS = [
+    ("cpp: channel byte 4 stops reporting the mode",
+     "src/domain/Persistence.cpp",
+     "        case 4:\n            return static_cast<uint8_t>(engine_.getChannelMode(channel));",
+     "        case 4:\n            return 0;", "cpp"),
+    ("cpp: channel byte 5 stops reporting the offset",
+     "src/domain/Persistence.cpp",
+     "        case 5:\n            return static_cast<uint8_t>(engine_.getOffset(channel) & 0xFF);",
+     "        case 5:\n            return 0;", "cpp"),
+    ("cpp: channel byte 6 stops reporting the skip chance",
+     "src/domain/Persistence.cpp",
+     "        case 6:\n            return engine_.getSkipChance(channel);",
+     "        case 6:\n            return 0;", "cpp"),
+    ("cpp: a reserved CV byte reports something",
+     "src/domain/Persistence.cpp",
+     "        case 6:\n            return engine_.getSkipChance(channel);\n        default:\n            return 0;",
+     "        case 6:\n            return engine_.getSkipChance(channel);\n        default:\n            return 1;", "cpp"),
+    ("cpp: loading the mode byte becomes a no-op",
+     "src/domain/Persistence.cpp",
+     "        case 4:\n            engine_.setChannelMode(channel, static_cast<ChannelMode>(value));\n            break;",
+     "        case 4:\n            break;", "cpp"),
+    ("cpp: loading the offset byte becomes a no-op",
+     "src/domain/Persistence.cpp",
+     "        case 5:\n            engine_.setOffset(channel, value);\n            break;",
+     "        case 5:\n            break;", "cpp"),
+    ("cpp: loading the skip chance byte becomes a no-op",
+     "src/domain/Persistence.cpp",
+     "        case 6:\n            engine_.setSkipChance(channel, value);\n            break;",
+     "        case 6:\n            break;", "cpp"),
+    ("cpp: a stored CV target reaches the mode instead of being ignored",
+     "src/domain/Persistence.cpp",
+     "        case 6:\n            engine_.setSkipChance(channel, value);\n            break;\n        default:\n            break;",
+     "        case 6:\n            engine_.setSkipChance(channel, value);\n            break;\n        default:\n"
+     "            engine_.setChannelMode(channel, static_cast<ChannelMode>(value & 1));\n            break;", "cpp"),
+    ("cpp: the defaults stop resetting the mode",
+     "src/domain/Persistence.cpp",
+     "        engine_.setChannelMode(channel, DEFAULT_CHANNEL_MODE);\n", "", "cpp"),
+    ("cpp: the defaults stop resetting the offset",
+     "src/domain/Persistence.cpp",
+     "        engine_.setOffset(channel, 0);\n", "", "cpp"),
+    ("cpp: the defaults stop resetting the skip chance",
+     "src/domain/Persistence.cpp",
+     "        engine_.setSkipChance(channel, 0);\n", "", "cpp"),
+    ("cpp: the version byte stays at 1",
+     "include/flexseq/Persistence.h",
+     "constexpr uint8_t FORMAT_VERSION = 2;", "constexpr uint8_t FORMAT_VERSION = 1;", "cpp"),
+    ("cpp: the channel record is 10 bytes instead of 9",
+     "include/flexseq/Persistence.h",
+     "constexpr uint8_t CHANNEL_RECORD = 9;", "constexpr uint8_t CHANNEL_RECORD = 10;", "cpp"),
+    ("cpp: the offset cap moves one byte too far",
+     "include/flexseq/SequencerEngine.h",
+     "static constexpr uint8_t MAX_OFFSET = 255;", "static constexpr uint8_t MAX_OFFSET = 254;", "cpp-all"),
+    ("cpp: the offset cap disappears from setOffset",
+     "src/domain/SequencerEngine.cpp",
+     "    c.offset = offset > MAX_OFFSET ? MAX_OFFSET : static_cast<uint8_t>(offset);",
+     "    c.offset = static_cast<uint8_t>(offset);", "cpp-all"),
+    ("cpp: the step limit stops clamping the offset",
+     "src/domain/SequencerEngine.cpp",
+     "    if (c.offset > limit) {\n        c.offset = static_cast<uint8_t>(limit);\n    }\n", "", "cpp-all"),
+
+    ("ts: channel byte 4 stops reporting the mode",
+     "sim/src/domain/Persistence.ts",
+     "      case 4:\n        return this.engine.getChannelMode(channel);",
+     "      case 4:\n        return 0;", "ts"),
+    ("ts: channel byte 5 stops reporting the offset",
+     "sim/src/domain/Persistence.ts",
+     "      case 5:\n        return this.engine.getOffset(channel) & 0xff;",
+     "      case 5:\n        return 0;", "ts"),
+    ("ts: channel byte 6 stops reporting the skip chance",
+     "sim/src/domain/Persistence.ts",
+     "      case 6:\n        return this.engine.getSkipChance(channel);",
+     "      case 6:\n        return 0;", "ts"),
+    ("ts: a reserved CV byte reports something",
+     "sim/src/domain/Persistence.ts",
+     "      case 6:\n        return this.engine.getSkipChance(channel);\n      default:\n        return 0;",
+     "      case 6:\n        return this.engine.getSkipChance(channel);\n      default:\n        return 1;", "ts"),
+    ("ts: loading the mode byte becomes a no-op",
+     "sim/src/domain/Persistence.ts",
+     "      case 4:\n        this.engine.setChannelMode(channel, value as ChannelMode);\n        break;",
+     "      case 4:\n        break;", "ts"),
+    ("ts: loading the offset byte becomes a no-op",
+     "sim/src/domain/Persistence.ts",
+     "      case 5:\n        this.engine.setOffset(channel, value);\n        break;",
+     "      case 5:\n        break;", "ts"),
+    ("ts: loading the skip chance byte becomes a no-op",
+     "sim/src/domain/Persistence.ts",
+     "      case 6:\n        this.engine.setSkipChance(channel, value);\n        break;",
+     "      case 6:\n        break;", "ts"),
+    ("ts: a stored CV target reaches the mode instead of being ignored",
+     "sim/src/domain/Persistence.ts",
+     "      case 6:\n        this.engine.setSkipChance(channel, value);\n        break;\n      default:\n        break;",
+     "      case 6:\n        this.engine.setSkipChance(channel, value);\n        break;\n      default:\n"
+     "        this.engine.setChannelMode(channel, (value & 1) as ChannelMode);\n        break;", "ts"),
+    ("ts: the defaults stop resetting the mode",
+     "sim/src/domain/Persistence.ts",
+     "      this.engine.setChannelMode(channel, DEFAULT_CHANNEL_MODE);\n", "", "ts"),
+    ("ts: the defaults stop resetting the offset",
+     "sim/src/domain/Persistence.ts",
+     "      this.engine.setOffset(channel, 0);\n", "", "ts"),
+    ("ts: the defaults stop resetting the skip chance",
+     "sim/src/domain/Persistence.ts",
+     "      this.engine.setSkipChance(channel, 0);\n", "", "ts"),
+    ("ts: the version byte stays at 1",
+     "sim/src/domain/Persistence.ts",
+     "export const FORMAT_VERSION = 2;", "export const FORMAT_VERSION = 1;", "ts"),
+    ("ts: the channel record is 10 bytes instead of 9",
+     "sim/src/domain/Persistence.ts",
+     "export const CHANNEL_RECORD = 9;", "export const CHANNEL_RECORD = 10;", "ts"),
+    ("ts: the offset cap moves one byte too far",
+     "sim/src/domain/SequencerEngine.ts",
+     "export const MAX_OFFSET = 255;", "export const MAX_OFFSET = 254;", "ts"),
+    ("ts: the offset cap disappears from setOffset",
+     "sim/src/domain/SequencerEngine.ts",
+     "    c.offset = Math.min(offset, MAX_OFFSET);", "    c.offset = offset;", "ts"),
+    ("ts: the step limit stops clamping the offset",
+     "sim/src/domain/SequencerEngine.ts",
+     "    const limit = c.ticksPerStep - 1;\n    if (c.offset > limit) c.offset = limit;",
+     "    const limit = c.ticksPerStep - 1;\n    void limit;", "ts"),
+]
+
+SUITES = {
+    "cpp": (["./tools/run-cpp-tests.sh", "test_persistence"], ROOT),
+    "cpp-all": (["./tools/run-cpp-tests.sh"], ROOT),
+    "ts": (["npx", "vitest", "run", "test/Persistence.test.ts", "test/SequencerEngine.test.ts"],
+           os.path.join(ROOT, "sim")),
+}
+
+_restore = {}
+
+
+def restore_all(*_):
+    for path, text in _restore.items():
+        with open(path, "w") as handle:
+            handle.write(text)
+    _restore.clear()
+
+
+def on_signal(signum, _frame):
+    restore_all()
+    print(f"\n  {ERR}interrompu — le code source est restaure{Z}")
+    sys.exit(130)
+
+
+def selected(argv):
+    if "--only" in argv:
+        want = argv[argv.index("--only") + 1]
+        return [m for m in MUTANTS if m[0].startswith(want + ":")]
+    return list(MUTANTS)
+
+
+def main():
+    argv = sys.argv[1:]
+    mutants = selected(argv)
+
+    if "--list" in argv:
+        for label, rel, _, _, suite in mutants:
+            print(f"  {label}   {DIM}{rel} [{suite}]{Z}")
+        print(f"\n  {len(mutants)} mutants")
+        return 0
+
+    for name in ("cpp", "ts"):
+        if any(m[4].startswith(name) for m in mutants):
+            command, cwd = SUITES["cpp" if name == "cpp" else "ts"]
+            if not os.path.exists(os.path.join(cwd, command[0])) and command[0] != "npx":
+                print(f"  {ERR}suite introuvable : {command[0]}{Z}")
+                return 127
+
+    signal.signal(signal.SIGINT, on_signal)
+    signal.signal(signal.SIGTERM, on_signal)
+
+    print(f"{B}=================== MUTATIONS DU DOMAINE ==================={Z}")
+    killed = survived = 0
+    for label, rel, old, new, suite in mutants:
+        path = os.path.join(ROOT, rel)
+        original = open(path).read()
+        if old not in original:
+            print(f"  {ERR}❌ MOTIF ABSENT{Z}  {label}")
+            print(f"     {DIM}{rel} a change : ce mutant ne s'applique plus, il ne prouve rien.{Z}")
+            print(f"     {DIM}Corriger la liste, jamais l'ignorer.{Z}")
+            return 2
+
+        command, cwd = SUITES[suite]
+        _restore[path] = original
+        try:
+            with open(path, "w") as handle:
+                handle.write(original.replace(old, new, 1))
+            try:
+                done = subprocess.run(command, cwd=cwd, capture_output=True,
+                                      text=True, timeout=TIMEOUT)
+                code = done.returncode
+            except subprocess.TimeoutExpired:
+                code = "timeout"
+        finally:
+            restore_all()
+
+        if code == "timeout":
+            print(f"  {OK}✅ tue{Z} {DIM}(boucle infinie, delai {TIMEOUT} s){Z}  {label}")
+            killed += 1
+        elif code != 0:
+            print(f"  {OK}✅ tue{Z}      {label}")
+            killed += 1
+        else:
+            print(f"  {ERR}❌ SURVIVANT{Z} {label}")
+            survived += 1
+
+    total = killed + survived
+    print(f"{B}============================================================{Z}")
+    if survived:
+        print(f"  {ERR}{killed}/{total} tues — {survived} survivant(s).{Z}")
+        print(f"  {DIM}Un survivant designe une assertion manquante, ou une assertion qui se{Z}")
+        print(f"  {DIM}compare a la constante qu'elle teste.{Z}")
+        return 1
+    print(f"  {OK}{killed}/{total} tues.{Z}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
