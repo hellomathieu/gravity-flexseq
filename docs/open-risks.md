@@ -32,8 +32,8 @@ below.
 | 15 | **`DigitalOutput::Init()` does not force the output OFF**, and the audited test proves it | low | nothing today: harmless at cold boot, for the reason established in **PRD §18** (AVR reset leaves `PORT` at 0, and `gravity` is a global in `.bss`). What is left is to handle it **if a software reboot is ever added** -- that is when the pin could stay HIGH while the firmware believes it is off |
 | 22 | **The re-arm threshold assumes the source falls back below +0.5 V.** A source that idles higher latches the gate for good: one reset, never another. Measured on the module: a Gravity output, switched off, presents about **+1.5 V** to a CV input (+153 in `Read()` units, against -27 with the cable out), so seen from the jack it is high-or-floating rather than high-or-low | low | **no decision taken.** Raising the threshold is an arbitration, and it needs measurements of several sources, not this one case. Decide it while implementing the CV destinations (PRD §10.2). The resting noise is measured at **-26 ± 3** on both channels, so the +1 V arm threshold keeps 128 counts of margin -- the arm side is not in question |
 | 24 | **1536 bytes of Flash may be available beyond what PlatformIO assumes, and the question is no longer academic — the wired firmware measures 91.9 % against a 90 % guard (2026-08-22).** PlatformIO declares 30720 (32768 − 2048) while the bootloader measures 512 bytes | low, and it is an opportunity rather than a risk | read the `BOOTSZ` fuse, which needs an ISP programmer -- the bootloader returns `0x0` for fuses. What is measured is the *content* of the top 512 bytes, not the space `BOOTSZ` reserves, so the figure stays an inference. **30720 remains the safe assumption and is not touched.** Would matter if the Flash budget tightens at PRD §12.1 |
-| 25 | **The path `pattern content -> output` is no longer exercised by any tool**, and this is a dated suspension rather than a loss. Since the factory default became CLOCK (PRD §4.2), `run-trigger-probe.sh` measures the CLOCK train — six outputs, one gap per step, tempo, phase, jitter — and the pattern it injects is deliberately ignored, which is itself the faithful behaviour. But SEQ is reachable from nowhere outside the firmware: no UI sets it before lot 11, and poking a private struct offset would make the tool depend on what it measures | medium | **restore it at lot 10**, where EEPROM format v2 carries the mode: the probe will preload an EEPROM with `mode = SEQ` and the pattern content, going through a documented format. Until then the pattern engine is covered by 268 native assertions and 226 TypeScript ones, and by nothing on the wire |
-| 12 | **The trigger pulse measures 8.8 ms** instead of the 5 ms configured: the auto-off sits at the end of `loop()`, so 5 ms rounded up to the next pass | low | **nothing today** — 1.8 % of a step at 120 BPM in `/1`. To revisit once fast SUBDIV exists: at `x4` (125 ms/step) it is 7 % of the step, and 12 % on the worst pass. The threshold is written down; it no longer has to be rediscovered |
+| 25 | **The path `pattern content -> output` is no longer exercised by any tool**, and this is a dated suspension rather than a loss. Since the factory default became CLOCK (PRD §4.2), `run-trigger-probe.sh` measures the CLOCK train — six outputs, one gap per step, tempo, phase, jitter — and the pattern it injects is deliberately ignored, which is itself the faithful behaviour. But SEQ is reachable from nowhere outside the firmware: no UI sets it before lot 11, and poking a private struct offset would make the tool depend on what it measures | medium | **restore it at lot 10**, where EEPROM format v2 carries the mode: the probe will preload an EEPROM with `mode = SEQ` and the pattern content, going through a documented format. Until then the pattern engine is covered by 269 native assertions and 226 TypeScript ones, and by nothing on the wire |
+| 12 | **The trigger pulse no longer measures what this line said, and the explanation no longer fits either.** It was 8.8 ms against a configured 5, blamed on the auto-off sitting at the end of `loop()` -- 5 ms rounded up to the next pass. Measured again on 2026-08-23, with the loop far shorter since the main screen stopped redrawing: **4.70 ms**, which is *below* the 5 ms configured. A round-up cannot go below the value it rounds, so the account is wrong somewhere | low | **nothing today** -- 0.9 % of a step at 120 BPM in `/1`, and no musical consequence. What is owed is the explanation, not a fix: read how libGravity's `DigitalOutput::Process()` compares against `millis()` before trusting either number. To revisit anyway once fast SUBDIV exists |
 
 ## What is closed or accepted
 
@@ -131,6 +131,18 @@ measurement established it in a single run (PRD §14).
 in this repository has been verified by mutation — removing the model freeze,
 inverting the band conversion, lowering the reserve. Two of them passed for the
 wrong reason before that check.
+
+**A mutation harness must survive its own mutants, and must restore what it
+edited.** Two failures in one run on 2026-08-23, both mine. A mutant that removed
+a loop guard turned `while (true)` into an infinite loop: with no per-run timeout
+the harness waited twenty minutes on a program that was never going to answer, so
+**every long-running step now carries an explicit deadline**, and a hang counts as
+a mutant *killed* rather than as a blockage. Then interrupting it left the mutant
+**in the source file** — twice, because the harness edited the real file and
+restored it only on the happy path. It now snapshots every target in memory before
+the first mutant and restores in a `finally` and on signal. The general shape is
+the one above: a tool must not depend on the good behaviour of the thing it
+measures.
 
 **A tool must not assume what it measures.** Four occurrences, all on the same
 probe. It grouped bands by eight and announced 504 ms frames the day there were
