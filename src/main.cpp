@@ -3,6 +3,9 @@
 
 #include <flexseq/CvSampler.h>
 #include <flexseq/EepromStorage.h>
+#if FLEXSEQ_ENCODER_PROBE
+#include <flexseq/EncoderProbe.h>
+#endif
 #include <flexseq/InputAdapter.h>
 #include <flexseq/Persistence.h>
 #include <flexseq/PagedScreen.h>
@@ -82,6 +85,10 @@ void beginEditFrame(uint8_t channel) {
     uiFooter[UI_FOOTER_TEMPO + written + 1] = 'P';
     uiFooter[UI_FOOTER_TEMPO + written + 2] = 'M';
     uiFooter[UI_FOOTER_TEMPO + written + 3] = '\0';
+
+#if FLEXSEQ_ENCODER_PROBE
+    flexseq::probe::writeReport(uiTitle, uiFooter);
+#endif
 
     flexseq::PatternScreenModel model;
     model.title = uiTitle;
@@ -176,6 +183,10 @@ void setup() {
 }
 
 void loop() {
+#if FLEXSEQ_ENCODER_PROBE
+    const uint32_t probeStart = micros();
+    flexseq::probe::advancePage(millis());
+#endif
     // PAS gravity.Process() : il appelle cv1/cv2.Process(), donc un analogRead
     // bloquant qui entrerait en collision avec les conversions de l'ISR
     // (CvSampler.h). On appelle ses morceaux ; les sorties etaient deja pilotees
@@ -238,7 +249,11 @@ void loop() {
             ? engine.effectiveStep(static_cast<uint8_t>(channel))
             : -1;
         const uint8_t revision = ui.revision();
-        if (step != uiLastStep || revision != uiLastRevision) {
+        bool due = (step != uiLastStep || revision != uiLastRevision);
+#if FLEXSEQ_ENCODER_PROBE
+        due = due || flexseq::probe::pageChanged();
+#endif
+        if (due) {
             const uint32_t now = millis();
             if (now - uiLastDrawMs >= UI_MIN_INTERVAL_MS) {
                 uiLastDrawMs = now;
@@ -254,4 +269,7 @@ void loop() {
     for (uint8_t ch = 0; ch < flexseq::SequencerEngine::CHANNEL_COUNT; ++ch) {
         gravity.outputs[ch].Process();
     }
+#if FLEXSEQ_ENCODER_PROBE
+    flexseq::probe::recordPass(micros() - probeStart);
+#endif
 }

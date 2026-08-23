@@ -3,6 +3,10 @@
 #include <Arduino.h>
 #include <libGravity.h>
 
+#if FLEXSEQ_ENCODER_PROBE
+#include <flexseq/EncoderProbe.h>
+#endif
+
 namespace flexseq {
 namespace input {
 
@@ -20,6 +24,9 @@ int8_t filtered(int value) {
 }
 
 void onRotate(int value) {
+#if FLEXSEQ_ENCODER_PROBE
+    probe::recordChange(static_cast<int16_t>(value));
+#endif
     if (controller == nullptr) {
         return;
     }
