@@ -14,29 +14,32 @@
 # simulee a l'adresse du symbole `patternBank`, lue par `avr-nm`. Le binaire
 # mesure est celui qui sera flashe. Voir tools/simavr-ssd1306/trigger_probe.c.
 #
-# VERDICT — quatre criteres, et deux mesures rapportees :
-#   1. les SIX sorties emettent (elles selectionnent toutes le pattern 0 par
-#      defaut, donc un silence sur l'une est un defaut de cablage logique) ;
-#   2. le train est REGULIER — un ecart par step, a 5 % de la mediane. Depuis que
-#      le defaut d'usine est CLOCK (PRD 4.2), c'est ce que le firmware emet, et
-#      le motif injecte reste dans la banque sans etre joue : le critere verifie
-#      donc aussi que CLOCK IGNORE le contenu du pattern, comme l'original ;
-#   3. les six lignes battent ensemble, fronts a moins de 200 us ;
-#   4. la gigue reste sous JITTER_BUDGET_PCT d'un step.
-# Rapportees : la largeur d'impulsion reelle, et PULSE de l'expandeur MIDI.
+# VERDICT — DEUX COURSES sur le meme firmware, l'une par mode de channel. Le
+# mode et le contenu du pattern arrivent par une image EEPROM prechargee dans la
+# machine simulee, fabriquee par tools/eeprom-image.cpp avec le code du domaine
+# lui-meme : aucun decalage de structure privee, aucune constante du format
+# recopiee dans le harnais.
 #
-# ⚠️ LE CHEMIN « CONTENU DU PATTERN -> SORTIE » N'EST PLUS EXERCE ICI, et c'est
-# une suspension datee, pas un abandon. Le mode SEQ n'est atteignable par aucun
-# moyen exterieur au firmware : la seule UI qui le reglera arrive au lot 11. Le
-# critere revient au LOT 10, ou le format EEPROM v2 portera le mode : la sonde
-# prechargera une EEPROM avec mode=SEQ et le contenu du pattern, ce qui passe par
-# un format documente au lieu d'un decalage dans une structure privee.
+#   COURSE CLOCK — le defaut d'usine (PRD 4.2). Le train est REGULIER, un ecart
+#   par step a 5 % de la mediane. Le motif est dans la banque et n'est PAS joue :
+#   ce critere verifie donc aussi que CLOCK ignore le contenu, comme l'original.
 #
-# `MUTATE=<step>` ajoute un step a l'injection. Tant que le critere porte sur le
-# train CLOCK, il ne le rougit plus — il rougira de nouveau au lot 10.
+#   COURSE SEQ — le sequenceur joue le motif. Chaque ecart est converti en
+#   nombre de steps, et la suite doit etre une ROTATION CYCLIQUE de celle du
+#   motif : la phase de depart reste inconnue, ce qui est exactement
+#   l'affirmation qui a un sens musical.
 #
-# `DROP=<n>` ignore un front sur n : le train n'est plus regulier et le critere 2
-# passe au rouge. C'est ainsi que ce chemin a ete exerce.
+# Les deux courses partagent quatre criteres : les six sorties emettent, les six
+# lignes battent ensemble a moins de 200 us, le tempo applique, et la gigue sous
+# JITTER_BUDGET_PCT d'un step. Rapportees : la largeur d'impulsion reelle et
+# PULSE de l'expandeur MIDI.
+#
+# `MUTATE=<step>` ajoute un step a l'IMAGE sans l'ajouter a l'ATTENTE. La course
+# SEQ passe alors au rouge, la course CLOCK reste verte — et cette asymetrie est
+# elle-meme la preuve que CLOCK ignore la banque.
+#
+# `DROP=<n>` ignore un front sur n : le train CLOCK cesse d'etre regulier et son
+# critere passe au rouge.
 #
 # Reglages : DURATION (defaut 20 s de simulation), JITTER_BUDGET_PCT (defaut 2).
 # Sortie 0 si les quatre passent, 1 sinon, 127 si un outil manque.
@@ -96,33 +99,56 @@ else
   printf '\n'; tail -30 "$LOG"; die "build du firmware en echec"
 fi
 
-# --- 3. Adresse de la banque -------------------------------------------------
-# Sans elle la banque reste vide et aucun trigger ne peut sortir : le harnais
-# refuse de mesurer plutot que de rapporter un silence comme un resultat.
-AVR_NM="$(command -v avr-nm || echo "$HOME/.platformio/packages/toolchain-atmelavr/bin/avr-nm")"
-BANK=""
-if [ -x "$AVR_NM" ]; then
-  SYM="$("$AVR_NM" --radix=x "$ROOT/.pio/build/nanoatmega328/firmware.elf" \
-         | grep -E 'N_111patternBankE$' | head -1 | cut -d' ' -f1)"
-  [ -n "$SYM" ] && BANK="$(printf '0x%x' $(( 0x$SYM - 0x800000 )))"
+# --- 3. Images EEPROM -------------------------------------------------------
+# Fabriquees par le code du domaine, donc le format n'est decrit qu'une fois.
+progress "generateur d'image EEPROM"
+GEN="$(dirname "$BIN")/eeprom-image"
+if c++ -std=gnu++11 -I"$ROOT/include" -o "$GEN" "$ROOT/tools/eeprom-image.cpp" \
+     "$ROOT"/src/domain/*.cpp > "$LOG" 2>&1; then
+  printf '  %s✅%s generateur compile     %stools/eeprom-image.cpp%s\n' \
+    "$C_OK" "$C_0" "$C_DIM" "$C_0"
+else
+  printf '\n'; cat "$LOG"; die "compilation du generateur d'image en echec"
 fi
-[ -n "$BANK" ] || die "symbole \`patternBank\` introuvable : avr-nm absent ou binaire inattendu."
-printf '  %s✅%s symbole                %spatternBank %s%s\n' \
-  "$C_OK" "$C_0" "$C_DIM" "$BANK" "$C_0"
 
-# --- 4. Simulation -----------------------------------------------------------
-progress "simulation ($DURATION s)"
-set +e
-"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$DURATION" "$BANK" > "$LOG" 2>&1
-PROBE=$?
-set -e
-if [ "$PROBE" -ne 0 ]; then
-  printf '  %s⚠%s  la sonde s'"'"'est terminee anormalement (code %d)\n' \
-    "$C_DIM" "$C_0" "$PROBE"
+STEPS="0,3,4,9,15"
+IMAGE_STEPS="$STEPS"
+if [ -n "${MUTATE:-}" ]; then
+  IMAGE_STEPS="$STEPS,$MUTATE"
 fi
-printf '  %s✅%s simulation             %s%s s simulees%s\n' "$C_OK" "$C_0" "$C_DIM" "$DURATION" "$C_0"
+for MODE in clock seq; do
+  if ! "$GEN" --mode "$MODE" --steps "$IMAGE_STEPS" --tempo "$TEMPO" \
+       > "$(dirname "$BIN")/ee-$MODE.bin" 2>"$LOG"; then
+    cat "$LOG"; die "generation de l'image $MODE en echec"
+  fi
+done
+IMAGE_BYTES="$(wc -c < "$(dirname "$BIN")/ee-clock.bin" | tr -d ' ')"
+printf '  %s✅%s images generees        %s%s octets, steps %s%s\n' \
+  "$C_OK" "$C_0" "$C_DIM" "$IMAGE_BYTES" "$IMAGE_STEPS" "$C_0"
+if [ -n "${MUTATE:-}" ]; then
+  printf '  %s⚠%s  MUTATION               %sstep %s dans l'"'"'image, pas dans l'"'"'attente%s\n' \
+    "$C_DIM" "$C_0" "$C_DIM" "$MUTATE" "$C_0"
+fi
 
-JITTER_BUDGET_PCT="$JITTER_BUDGET_PCT" STEP_TOLERANCE_PCT="$STEP_TOLERANCE_PCT" python3 - "$LOG" <<'PY'
+# --- 4. Simulations : une course par mode -----------------------------------
+FAILED=0
+for MODE in clock seq; do
+  progress "simulation $MODE ($DURATION s)"
+  set +e
+  "$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$DURATION" \
+    "$(dirname "$BIN")/ee-$MODE.bin" 384 "$MODE" "$STEPS" > "$LOG" 2>&1
+  PROBE=$?
+  set -e
+  if [ "$PROBE" -ne 0 ]; then
+    printf '  %s⚠%s  la sonde s'"'"'est terminee anormalement (code %d)\n' \
+      "$C_DIM" "$C_0" "$PROBE"
+  fi
+  printf '  %s✅%s simulation %-11s %s%s s simulees%s\n' \
+    "$C_OK" "$C_0" "$MODE" "$C_DIM" "$DURATION" "$C_0"
+
+  set +e
+  JITTER_BUDGET_PCT="$JITTER_BUDGET_PCT" STEP_TOLERANCE_PCT="$STEP_TOLERANCE_PCT" \
+    MODE="$MODE" python3 - "$LOG" <<'PY'
 import os, re, sys
 
 txt = open(sys.argv[1], errors='replace').read()
@@ -130,6 +156,8 @@ tty = sys.stdout.isatty()
 OK, ERR, DIM, B, Z = ('\033[32m', '\033[31m', '\033[2m', '\033[1m', '\033[0m') if tty else ('',) * 5
 mark = lambda good: f"{OK}✅{Z}" if good else f"{ERR}❌{Z}"
 budget_pct = float(os.environ["JITTER_BUDGET_PCT"])
+mode = os.environ["MODE"]
+seq = mode == "seq"
 step_tol = float(os.environ["STEP_TOLERANCE_PCT"])
 
 m = re.search(r"RESULTAT (.*)", txt)
@@ -159,11 +187,16 @@ duty = 100.0 * width / step_ms if step_ms else 0.0
 duty_ok = duty < 50.0
 
 print()
-print(f"{B}=========== FONCTION MUSICALE (firmware de production) ==========={Z}")
+title = "SEQ — le motif est joue" if seq else "CLOCK — le motif est ignore"
+print(f"{B}====== FONCTION MUSICALE : {title} ======{Z}")
 print(f"  {mark(all_lines)} Sorties actives    {lines_on}/{lines_exp}   "
       f"{DIM}— les 6 channels selectionnent le pattern 0 par defaut{Z}")
-print(f"  {mark(pattern_ok)} Train regulier     {gaps_ok}/{gaps_total} ecarts   "
-      f"{DIM}— un par step, a 5 % de la mediane ; le motif injecte est ignore{Z}")
+if seq:
+    print(f"  {mark(pattern_ok)} Motif joue         {gaps_ok}/{gaps_total} ecarts   "
+          f"{DIM}— la suite est une rotation cyclique de celle du motif{Z}")
+else:
+    print(f"  {mark(pattern_ok)} Train regulier     {gaps_ok}/{gaps_total} ecarts   "
+          f"{DIM}— un par step, a 5 % de la mediane ; le motif charge est ignore{Z}")
 print(f"  {mark(same and coincident)} Six lignes en phase "
       f"{'meme compte, fronts < 200 us' if (same and coincident) else 'DESACCORD'}")
 print(f"  {mark(step_ok)} Tempo applique     {step_measured:.2f} ms par step   "
@@ -191,9 +224,25 @@ if pulse_line == 0:
 
 ok = all_lines and pattern_ok and same and coincident and jit_ok and duty_ok and step_ok
 if ok:
-    print(f"\n  Les six sorties emettent le train CLOCK, en phase, au bon tempo.")
-    print(f"  {DIM}Le chemin pattern -> sortie revient au lot 10 (EEPROM v2).{Z}")
+    if seq:
+        print(f"\n  Les six sorties jouent le motif ecrit, en phase, au bon tempo.")
+        print(f"  {DIM}Le chemin contenu du pattern -> sortie est exerce de bout en bout.{Z}")
+    else:
+        print(f"\n  Les six sorties emettent le train CLOCK, en phase, au bon tempo.")
+        print(f"  {DIM}Le motif est dans la banque et n'est pas joue : c'est le{Z}")
+        print(f"  {DIM}comportement de l'original.{Z}")
 else:
     print(f"\n  {ERR}Au moins un critere echoue — ne pas flasher sur cette base.{Z}")
 sys.exit(0 if ok else 1)
 PY
+  [ $? -ne 0 ] && FAILED=1
+  set -e
+done
+
+if [ "$FAILED" -ne 0 ]; then
+  printf '\n  %s❌%s Au moins une des deux courses echoue.\n' "$C_ERR" "$C_0"
+  exit 1
+fi
+printf '\n  %s✅%s Les deux courses passent : CLOCK ignore le motif, SEQ le joue.\n' \
+  "$C_OK" "$C_0"
+exit 0

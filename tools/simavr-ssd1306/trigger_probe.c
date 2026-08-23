@@ -49,6 +49,7 @@
 #include <sim_irq.h>
 #include <avr_twi.h>
 #include <avr_ioport.h>
+#include <avr_eeprom.h>
 #include <parts/ssd1306_virt.h>
 
 #include "simavr_uart_quiet.h"
@@ -71,11 +72,13 @@ static const struct { char port; uint8_t bit; const char *name; } LINES[LINE_COU
     {'D', 3, "PULSE (D3)"},
 };
 
-/* Contenu injecte. Positions VOLONTAIREMENT IRREGULIERES : un motif regulier
- * (0,4,8,12) serait indistinguable d'un compteur qui derive, alors que les
- * ecarts 3-1-5-6-1 ne sortent d'aucune erreur d'un pas. */
-#define ACTIVE_COUNT 5
-static const uint8_t ACTIVE_STEPS[ACTIVE_COUNT] = {0, 3, 4, 9, 15};
+/* Le motif ATTENDU. Il arrive par la ligne de commande, la meme liste servant a
+ * fabriquer l'image EEPROM : le harnais ne porte plus de copie du contenu.
+ * Positions VOLONTAIREMENT IRREGULIERES cote appelant : un motif regulier
+ * (0,4,8,12) serait indistinguable d'un compteur qui derive. */
+#define MAX_ACTIVE 24
+static uint8_t g_expected[MAX_ACTIVE];
+static int g_expected_count;
 #define PATTERN_LENGTH 16            /* SequencerEngine::DEFAULT_LENGTH */
 #define TICKS_PER_STEP 96            /* SUBDIV = /1 a 96 PPQN */
 #ifndef BPM
@@ -119,47 +122,70 @@ static int cmp_d(const void *a, const void *b)
     return (x > y) - (x < y);
 }
 
-/* Ecrit le contenu de demonstration dans la banque, en RAM simulee.
- * Disposition de Pattern : packedSteps[3] puis packedRatchets[12], le step i
- * occupant le bit (i % 8) de packedSteps[i / 8]. Les ratchets restent a zero,
- * RATCHET_NONE valant 0 : un onset par step actif. */
-static void inject_pattern(avr_t *avr, uint16_t bank_addr)
+/* Ecarts attendus, en steps, deduits du motif : entre deux steps actifs
+ * consecutifs, puis le retour au debut du cycle. */
+static int expected_gaps(int *gaps)
 {
-    for (uint8_t i = 0; i < 3; ++i) {
-        avr->data[bank_addr + i] = 0;
+    for (int i = 0; i < g_expected_count - 1; ++i) {
+        gaps[i] = g_expected[i + 1] - g_expected[i];
     }
-    for (uint8_t i = 0; i < ACTIVE_COUNT; ++i) {
-        const uint8_t s = ACTIVE_STEPS[i];
-        avr->data[bank_addr + (s / 8)] |= (uint8_t)(1u << (s % 8));
+    gaps[g_expected_count - 1] =
+        PATTERN_LENGTH - g_expected[g_expected_count - 1] + g_expected[0];
+    return g_expected_count;
+}
+
+static int parse_steps(const char *list)
+{
+    g_expected_count = 0;
+    const char *p = list;
+    while (*p && g_expected_count < MAX_ACTIVE) {
+        char *end = NULL;
+        const long v = strtol(p, &end, 10);
+        if (end == p || v < 0 || v >= 24) return 0;
+        g_expected[g_expected_count++] = (uint8_t)v;
+        p = end;
+        if (*p == ',') ++p;
     }
-    /* MUTATE=<step> ajoute un step actif a l'INJECTION sans l'ajouter a
-     * l'ATTENTE : le verdict doit alors passer au rouge. C'est ainsi que le
-     * chemin d'echec de cette sonde a ete exerce — un test vert ne prouve rien
-     * tant qu'il n'a pas ete rouge. */
-    const char *mut = getenv("MUTATE");
-    if (mut) {
-        const int extra = atoi(mut);
-        if (extra >= 0 && extra < 24) {
-            avr->data[bank_addr + (extra / 8)] |= (uint8_t)(1u << (extra % 8));
-            printf("MUTATION : step %d ajoute a l'injection, pas a l'attente\n", extra);
-        }
-    }
-    for (uint8_t i = 0; i < 12; ++i) {
-        avr->data[bank_addr + 3 + i] = 0;
-    }
+    return g_expected_count > 0;
+}
+
+/* Precharge l'image de persistance dans l'EEPROM SIMULEE, avant le premier
+ * cycle. Le firmware la lit dans son setup() : le mode et le contenu du pattern
+ * arrivent donc par le format documente, jamais par un decalage dans une
+ * structure privee. */
+static int load_eeprom(avr_t *avr, const char *path, uint16_t base)
+{
+    FILE *f = fopen(path, "rb");
+    if (!f) return 0;
+    static uint8_t image[1024];
+    const size_t n = fread(image, 1, sizeof(image), f);
+    fclose(f);
+    if (n == 0) return 0;
+    avr_eeprom_desc_t ee = { .ee = image, .offset = base, .size = (uint32_t)n };
+    if (avr_ioctl(avr, AVR_IOCTL_EEPROM_SET, &ee) != 0) return 0;
+    printf("EEPROM prechargee : %zu octets a %u, version %u\n", n, base, image[0]);
+    return 1;
 }
 
 int main(int argc, char **argv)
 {
     const char *fw = (argc > 1) ? argv[1] : ".pio/build/nanoatmega328/firmware.hex";
     const double seconds = (argc > 2) ? atof(argv[2]) : 20.0;
-    const uint16_t bank_addr = (argc > 3) ? (uint16_t)strtol(argv[3], NULL, 0) : 0;
+    const char *ee_path = (argc > 3) ? argv[3] : NULL;
+    const uint16_t ee_base = (argc > 4) ? (uint16_t)strtol(argv[4], NULL, 0) : 384;
+    const char *mode = (argc > 5) ? argv[5] : "clock";
+    const char *steps = (argc > 6) ? argv[6] : "0,3,4,9,15";
+    const int seq = strcmp(mode, "seq") == 0;
 
     setvbuf(stdout, NULL, _IONBF, 0);
 
-    if (!bank_addr) {
-        fprintf(stderr, "adresse de `patternBank` requise : sans elle la banque "
-                        "reste vide et aucun trigger ne peut sortir.\n");
+    if (!ee_path) {
+        fprintf(stderr, "image EEPROM requise : sans elle le mode et le contenu du "
+                        "pattern ne peuvent pas atteindre le firmware.\n");
+        return 2;
+    }
+    if (!parse_steps(steps)) {
+        fprintf(stderr, "liste de steps refusee : %s\n", steps);
         return 2;
     }
 
@@ -182,6 +208,11 @@ int main(int argc, char **argv)
      * chemin de simavr lit un octet hors bornes. Voir simavr_uart_quiet.h. */
     uart_quiet(avr, '0');
 
+    if (!load_eeprom(avr, ee_path, ee_base)) {
+        fprintf(stderr, "image EEPROM illisible ou refusee : %s\n", ee_path);
+        return 2;
+    }
+
     /* L'esclave SSD1306, dans les deux sens : la charge de rendu fait partie de
      * ce qu'on mesure. Sans lui les transferts avortent sur NACK et la gigue
      * mesuree serait celle d'une boucle qui ne dessine pas. */
@@ -201,14 +232,10 @@ int main(int argc, char **argv)
     }
 
     const uint64_t target = (uint64_t)(seconds * (double)F_CPU_HZ);
-    /* Injection apres l'initialisation : constructeurs globaux, Gravity::Init()
-     * et l'init de l'afficheur. Une seconde couvre largement. */
-    const uint64_t inject_cycle = F_CPU_HZ;
-    int injected = 0;
 
     printf("firmware   %s\n", fw);
-    printf("simulation %.1f s ; banque a 0x%x ; steps actifs", seconds, bank_addr);
-    for (int i = 0; i < ACTIVE_COUNT; ++i) printf(" %u", ACTIVE_STEPS[i]);
+    printf("simulation %.1f s ; mode %s ; steps attendus", seconds, mode);
+    for (int i = 0; i < g_expected_count; ++i) printf(" %u", g_expected[i]);
     printf(" sur %d\n\n", PATTERN_LENGTH);
 
     while (avr->cycle < target) {
@@ -216,11 +243,6 @@ int main(int argc, char **argv)
         if (state == cpu_Done || state == cpu_Crashed) {
             printf("!! CPU arrete (state=%d) a %" PRIu64 " cycles\n", state, avr->cycle);
             break;
-        }
-        if (!injected && avr->cycle >= inject_cycle) {
-            inject_pattern(avr, bank_addr);
-            injected = 1;
-            printf("injection a %.3f s\n\n", ms(avr->cycle) / 1000.0);
         }
     }
 
@@ -270,21 +292,24 @@ int main(int argc, char **argv)
      * L'affirmation est exactement celle qui a un sens musical — le sequenceur
      * joue le motif ecrit, quelle que soit la position de depart.
      */
-    printf("\n=== TRAIN CLOCK (channel 1) ===\n");
+    printf("\n=== TRAIN (channel 1, mode %s) ===\n", mode);
     line_t *ref = &g_lines[0];
 
-    printf("  ecart attendu (steps) : 1, a chaque step, malgre le motif injecte\n");
+    int exp_gaps[MAX_ACTIVE];
+    const int nexp = expected_gaps(exp_gaps);
+    if (seq) {
+        printf("  ecarts attendus (steps) :");
+        for (int i = 0; i < nexp; ++i) printf(" %d", exp_gaps[i]);
+        printf("   (a une rotation pres)\n");
+    } else {
+        printf("  ecart attendu (steps) : 1, a chaque step, malgre le motif charge\n");
+    }
 
     double step_measured = 0.0;
     int gap_ok = 0, gap_total = 0;
     if (ref->nrise >= 3) {
-        /* En CLOCK, tout ecart vaut UN step : la duree de step est directement
-         * la mediane des intervalles, sans arrondi ni phase supposee. C'est ce
-         * qui rend cette mesure independante du tempo attendu — une erreur d'un
-         * facteur exact se voit, alors qu'un compte de steps arrondi sur le
-         * tempo attendu serait auto-confirmant. */
         /* DROP=<n> ignore un front sur n : deux steps se fondent en un seul
-         * ecart, le train cesse d'etre regulier et le critere doit rougir. Sans
+         * ecart, le train cesse d'etre conforme et le critere doit rougir. Sans
          * ce chemin, le vert ne prouverait rien. */
         const char *drop_env = getenv("DROP");
         const int drop = drop_env ? atoi(drop_env) : 0;
@@ -301,22 +326,73 @@ int main(int argc, char **argv)
         for (int r = 1; r < nkept; ++r) {
             gaps[nobs++] = ms(kept[r] - kept[r - 1]);
         }
-        static double sorted[MAX_EDGES];
-        for (int i = 0; i < nobs; ++i) sorted[i] = gaps[i];
-        qsort(sorted, nobs, sizeof(double), cmp_d);
-        step_measured = sorted[nobs / 2];
-
-        /* Un ecart est conforme s'il vaut la mediane a 5 % pres : c'est la
-         * regularite du train qui est verifiee, pas sa valeur absolue, dont le
-         * critere « tempo applique » se charge separement. */
         gap_total = nobs;
-        for (int i = 0; i < nobs; ++i) {
-            const double err = fabs(gaps[i] - step_measured) / step_measured;
-            if (err <= 0.05) ++gap_ok;
-            else printf("    ecart %d : %.2f ms au lieu de %.2f   <-- IRREGULIER\n",
-                        i + 1, gaps[i], step_measured);
+
+        if (!seq) {
+            /* En CLOCK, tout ecart vaut UN step : la duree de step est
+             * directement la mediane des intervalles, sans arrondi ni phase
+             * supposee. C'est ce qui rend cette mesure independante du tempo
+             * attendu — une erreur d'un facteur exact se voit, alors qu'un
+             * compte de steps arrondi sur le tempo attendu serait
+             * auto-confirmant. */
+            static double sorted[MAX_EDGES];
+            for (int i = 0; i < nobs; ++i) sorted[i] = gaps[i];
+            qsort(sorted, nobs, sizeof(double), cmp_d);
+            step_measured = sorted[nobs / 2];
+            for (int i = 0; i < nobs; ++i) {
+                const double err = fabs(gaps[i] - step_measured) / step_measured;
+                if (err <= 0.05) ++gap_ok;
+                else printf("    ecart %d : %.2f ms au lieu de %.2f   <-- IRREGULIER\n",
+                            i + 1, gaps[i], step_measured);
+            }
+            printf("  %d ecarts observes, mediane %.2f ms\n", nobs, step_measured);
+        } else {
+            /* En SEQ un ecart vaut PLUSIEURS steps, donc chacun est converti en
+             * nombre de steps avant d'etre compare. La conversion part de la
+             * duree de step attendue, mais elle ne peut pas se confirmer
+             * elle-meme : le resultat doit tomber sur un ENTIER a 5 % pres, et la
+             * duree de step rapportee est ensuite recalculee sur la somme
+             * observee divisee par la somme des steps — une mesure, et non
+             * l'hypothese de depart. La PHASE reste inconnue : l'affirmation est
+             * que la suite des ecarts est une rotation cyclique de celle du
+             * motif, ce qui est exactement l'affirmation qui a un sens musical. */
+            static int k[MAX_EDGES];
+            double sum_gap = 0.0;
+            long sum_k = 0;
+            for (int i = 0; i < nobs; ++i) {
+                const int rounded = (int)(gaps[i] / step_ms + 0.5);
+                const double ideal = (double)rounded * step_ms;
+                if (rounded < 1 || fabs(gaps[i] - ideal) > 0.05 * step_ms) {
+                    k[i] = 0;
+                    printf("    ecart %d : %.2f ms ne tombe pas sur un step\n",
+                           i + 1, gaps[i]);
+                } else {
+                    k[i] = rounded;
+                    sum_gap += gaps[i];
+                    sum_k += rounded;
+                }
+            }
+            int best = -1, best_phase = 0;
+            for (int ph = 0; ph < nexp; ++ph) {
+                int hits = 0;
+                for (int i = 0; i < nobs; ++i) {
+                    if (k[i] == exp_gaps[(i + ph) % nexp]) ++hits;
+                }
+                if (hits > best) { best = hits; best_phase = ph; }
+            }
+            gap_ok = best < 0 ? 0 : best;
+            if (sum_k > 0) step_measured = sum_gap / (double)sum_k;
+            printf("  %d ecarts observes, %d conformes, phase %d\n",
+                   nobs, gap_ok, best_phase);
+            if (gap_ok != nobs) {
+                printf("    suite observee (steps) :");
+                for (int i = 0; i < nobs && i < 32; ++i) printf(" %d", k[i]);
+                printf("\n    suite attendue         :");
+                for (int i = 0; i < nobs && i < 32; ++i)
+                    printf(" %d", exp_gaps[(i + best_phase) % nexp]);
+                printf("\n");
+            }
         }
-        printf("  %d ecarts observes, mediane %.2f ms\n", nobs, step_measured);
     } else {
         printf("  moins de trois impulsions : rien a comparer\n");
     }
@@ -372,10 +448,10 @@ int main(int argc, char **argv)
     printf("\nRESULTAT lignes_actives=%d attendu=%d ecarts_ok=%d/%d "
            "largeur_med=%.2f gigue_med=%.2f gigue_max=%.2f step_ms=%.1f "
            "meme_compte=%d coincident=%d impulsions_ch1=%d pulse=%d "
-           "step_mesure=%.2f bpm=%d\n",
+           "step_mesure=%.2f bpm=%d mode=%s\n",
            active_lines, OUT_COUNT, gap_ok, gap_total,
            width_med[0], jit_med, jit_max, step_ms,
            same_count, coincident, ref->nrise, g_lines[6].nrise,
-           step_measured, BPM);
+           step_measured, BPM, mode);
     return 0;
 }
