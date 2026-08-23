@@ -53,7 +53,7 @@ class Pattern {
 public:
     static constexpr uint8_t DEFAULT_TOTAL_STEPS = 24;
 
-    Pattern();
+    constexpr Pattern() : packedSteps{}, packedRatchets{} {}
 
     bool readStep(uint8_t index, bool& active) const;
     bool writeStep(uint8_t index, bool active);

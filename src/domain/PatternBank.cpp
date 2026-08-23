@@ -2,10 +2,6 @@
 
 namespace flexseq {
 
-PatternBank::PatternBank()
-    : patterns{} {
-}
-
 Pattern* PatternBank::getPattern(uint8_t index) {
     if (index >= PATTERN_COUNT) {
         return nullptr;

@@ -18,7 +18,7 @@ constexpr uint8_t PATTERN_COUNT = 16;
 
 class PatternBank {
 public:
-    PatternBank();
+    constexpr PatternBank() : patterns{} {}
 
     Pattern* getPattern(uint8_t index);
     const Pattern* getPattern(uint8_t index) const;

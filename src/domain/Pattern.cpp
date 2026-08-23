@@ -32,11 +32,6 @@ bool ratchetFitsStep(uint8_t code, uint16_t ticksPerStep) {
     return stepTicks / triggers >= MIN_SLOT_TICKS;
 }
 
-Pattern::Pattern()
-    : packedSteps{0, 0, 0},
-      packedRatchets{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0} {
-}
-
 bool Pattern::readStep(uint8_t index, bool& active) const {
     if (index >= DEFAULT_TOTAL_STEPS) {
         return false;
