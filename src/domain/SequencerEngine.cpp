@@ -242,6 +242,9 @@ void SequencerEngine::clampOffset(uint8_t channel) {
     if (c.offset >= c.ticksPerStep) {
         c.offset = static_cast<uint16_t>(c.ticksPerStep - 1);
     }
+    if (c.offset > MAX_OFFSET) {
+        c.offset = MAX_OFFSET;
+    }
 }
 
 ChannelMode SequencerEngine::getChannelMode(uint8_t channel) const {

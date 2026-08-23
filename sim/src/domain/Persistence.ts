@@ -1,11 +1,18 @@
 import { PATTERN_COUNT, type PatternBank } from "./PatternBank.js";
 import { isValidRatchet, RATCHET_NONE, type Pattern } from "./Pattern.js";
-import { CHANNEL_COUNT, DEFAULT_BAR_LENGTH, DEFAULT_LENGTH, type SequencerEngine } from "./SequencerEngine.js";
+import {
+  CHANNEL_COUNT,
+  ChannelMode,
+  DEFAULT_BAR_LENGTH,
+  DEFAULT_CHANNEL_MODE,
+  DEFAULT_LENGTH,
+  type SequencerEngine,
+} from "./SequencerEngine.js";
 import { DEFAULT_SUBDIV, SUBDIVS } from "./subdiv.js";
 import { DEFAULT_TEMPO, type UiController } from "./UiController.js";
 
 export const BASE_ADDRESS = 384;
-export const FORMAT_VERSION = 1;
+export const FORMAT_VERSION = 2;
 export const EEPROM_SIZE = 1024;
 export const ORIGINAL_FIRMWARE_LAST = 320;
 export const QUIET_MS = 3000;
@@ -17,7 +24,7 @@ export const PATTERN_RATCHET_BYTES = 12;
 export const PATTERN_RECORD = PATTERN_STEP_BYTES + PATTERN_RATCHET_BYTES;
 export const PATTERNS_OFFSET = HEADER_OFFSET + HEADER_SIZE;
 export const PATTERNS_SIZE = PATTERN_COUNT * PATTERN_RECORD;
-export const CHANNEL_RECORD = 6;
+export const CHANNEL_RECORD = 9;
 export const CHANNELS_OFFSET = PATTERNS_OFFSET + PATTERNS_SIZE;
 export const CHANNELS_SIZE = CHANNEL_COUNT * CHANNEL_RECORD;
 export const GLOBAL_OFFSET = CHANNELS_OFFSET + CHANNELS_SIZE;
@@ -129,6 +136,9 @@ export class PersistentImage {
       this.engine.setEffectiveLength(channel, DEFAULT_LENGTH);
       this.engine.setSubdiv(channel, DEFAULT_SUBDIV);
       this.engine.setBarLength(channel, DEFAULT_BAR_LENGTH);
+      this.engine.setChannelMode(channel, DEFAULT_CHANNEL_MODE);
+      this.engine.setOffset(channel, 0);
+      this.engine.setSkipChance(channel, 0);
     }
     this.ui.setTempo(DEFAULT_TEMPO);
     this.ui.setClockSource(0);
@@ -192,6 +202,12 @@ export class PersistentImage {
         const bar = this.engine.getBarLength(channel);
         return bar < 0 ? 0 : bar;
       }
+      case 4:
+        return this.engine.getChannelMode(channel);
+      case 5:
+        return this.engine.getOffset(channel) & 0xff;
+      case 6:
+        return this.engine.getSkipChance(channel);
       default:
         return 0;
     }
@@ -210,6 +226,15 @@ export class PersistentImage {
         break;
       case 3:
         this.engine.setBarLength(channel, value);
+        break;
+      case 4:
+        this.engine.setChannelMode(channel, value as ChannelMode);
+        break;
+      case 5:
+        this.engine.setOffset(channel, value);
+        break;
+      case 6:
+        this.engine.setSkipChance(channel, value);
         break;
       default:
         break;

@@ -68,6 +68,8 @@ export const CHANNEL_MODE_COUNT = 3;
 /** Defaut d'usine de l'original : les six channels sont en CLOCK. */
 export const DEFAULT_CHANNEL_MODE = ChannelMode.CLOCK;
 
+export const MAX_OFFSET = 255;
+
 /** Chance de SAUT d'un step en dixiemes : 0 jamais, 10 toujours. */
 export const MAX_SKIP_CHANCE = 10;
 
@@ -351,6 +353,7 @@ export class SequencerEngine {
 
   private clampOffset(c: ChannelState): void {
     if (c.offset >= c.ticksPerStep) c.offset = c.ticksPerStep - 1;
+    if (c.offset > MAX_OFFSET) c.offset = MAX_OFFSET;
   }
 
   getChannelMode(channel: number): ChannelMode {

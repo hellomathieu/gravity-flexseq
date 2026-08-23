@@ -83,6 +83,9 @@ void fillDistinctState(Rig& r) {
         r.engine.setEffectiveLength(ch, static_cast<uint8_t>(24 - ch * 3));
         r.engine.setSubdiv(ch, flexseq::subdivAtIndex(static_cast<uint8_t>(ch * 3)));
         r.engine.setBarLength(ch, ch % 2 == 0 ? 3 : 6);
+        r.engine.setChannelMode(ch, static_cast<flexseq::ChannelMode>(ch % 3));
+        r.engine.setOffset(ch, static_cast<uint16_t>(ch * 2 + 1));
+        r.engine.setSkipChance(ch, static_cast<uint8_t>(ch + 2));
     }
     r.ui.setTempo(287);
     r.ui.setClockSource(4);
@@ -111,16 +114,21 @@ FakeEeprom eeprom;
 
 void test_the_layout_is_the_one_the_prd_fixed() {
     TEST_ASSERT_EQUAL_UINT16(384, persist::BASE_ADDRESS);
-    TEST_ASSERT_EQUAL_UINT16(286, persist::TOTAL_SIZE);
+    TEST_ASSERT_EQUAL_UINT16(304, persist::TOTAL_SIZE);
     TEST_ASSERT_EQUAL_UINT16(1, persist::HEADER_SIZE);
     TEST_ASSERT_EQUAL_UINT16(240, persist::PATTERNS_SIZE);
-    TEST_ASSERT_EQUAL_UINT16(36, persist::CHANNELS_SIZE);
+    TEST_ASSERT_EQUAL_UINT16(54, persist::CHANNELS_SIZE);
+    TEST_ASSERT_EQUAL_UINT16(9, persist::CHANNEL_RECORD);
     TEST_ASSERT_EQUAL_UINT16(3, persist::GLOBAL_SIZE);
     TEST_ASSERT_EQUAL_UINT16(6, persist::PREFS_SIZE);
     TEST_ASSERT_EQUAL_UINT16(1, persist::PATTERNS_OFFSET);
     TEST_ASSERT_EQUAL_UINT16(241, persist::CHANNELS_OFFSET);
-    TEST_ASSERT_EQUAL_UINT16(277, persist::GLOBAL_OFFSET);
-    TEST_ASSERT_EQUAL_UINT16(280, persist::PREFS_OFFSET);
+    TEST_ASSERT_EQUAL_UINT16(295, persist::GLOBAL_OFFSET);
+    TEST_ASSERT_EQUAL_UINT16(298, persist::PREFS_OFFSET);
+}
+
+void test_the_format_version_is_two() {
+    TEST_ASSERT_EQUAL_UINT8(2, persist::FORMAT_VERSION);
 }
 
 void test_the_image_ends_below_the_original_memcode() {
@@ -223,7 +231,7 @@ void test_the_version_byte_is_written_first_and_kept() {
  * L'ecriture ne sort JAMAIS de sa zone
  */
 
-void test_no_byte_below_384_or_above_669_is_ever_touched() {
+void test_no_byte_below_384_or_above_687_is_ever_touched() {
     eeprom.reset();
     Rig r;
     fillDistinctState(r);
@@ -424,6 +432,130 @@ void test_a_stored_subdiv_index_survives_as_its_value() {
     TEST_ASSERT_EQUAL_INT16(128, loaded.engine.getSubdiv(1));
 }
 
+/*
+ * Format v2 — l'enregistrement par channel passe de 6 a 9 octets
+ */
+
+void test_the_channel_record_carries_the_mode_the_offset_and_the_skip_chance() {
+    eeprom.reset();
+    Rig saved;
+    saved.engine.setChannelMode(2, flexseq::MODE_SEQ);
+    saved.engine.setOffset(2, 7);
+    saved.engine.setSkipChance(2, 9);
+    saved.scheduler.markDirty(0);
+    finishWrite(saved, eeprom, persist::QUIET_MS);
+
+    Rig loaded;
+    TEST_ASSERT_TRUE(loaded.scheduler.load(eeprom, loaded.image));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::MODE_SEQ, loaded.engine.getChannelMode(2));
+    TEST_ASSERT_EQUAL_UINT16(7, loaded.engine.getOffset(2));
+    TEST_ASSERT_EQUAL_UINT8(9, loaded.engine.getSkipChance(2));
+}
+
+void test_the_three_new_fields_sit_at_their_fixed_place_in_the_record() {
+    eeprom.reset();
+    Rig r;
+    r.engine.setChannelMode(0, flexseq::MODE_RANDOM);
+    r.engine.setOffset(0, 13);
+    r.engine.setSkipChance(0, 4);
+    const uint16_t base = persist::CHANNELS_OFFSET;
+    TEST_ASSERT_EQUAL_UINT8(flexseq::MODE_RANDOM, r.image.byteAt(base + 4));
+    TEST_ASSERT_EQUAL_UINT8(13, r.image.byteAt(base + 5));
+    TEST_ASSERT_EQUAL_UINT8(4, r.image.byteAt(base + 6));
+}
+
+void test_a_version_one_image_returns_the_defaults() {
+    eeprom.reset();
+    Rig saved;
+    fillDistinctState(saved);
+    saved.scheduler.markDirty(0);
+    finishWrite(saved, eeprom, persist::QUIET_MS);
+    eeprom.cell[persist::BASE_ADDRESS] = 1;
+
+    Rig loaded;
+    fillDistinctState(loaded);
+    TEST_ASSERT_FALSE_MESSAGE(loaded.scheduler.load(eeprom, loaded.image),
+        "une image en version 1 doit etre refusee");
+    Rig fresh;
+    TEST_ASSERT_TRUE(sameState(fresh, loaded));
+}
+
+void test_a_bad_mode_byte_is_refused_while_the_next_record_still_loads() {
+    eeprom.reset();
+    Rig saved;
+    saved.engine.setChannelMode(1, flexseq::MODE_SEQ);
+    saved.scheduler.markDirty(0);
+    finishWrite(saved, eeprom, persist::QUIET_MS);
+    eeprom.cell[persist::BASE_ADDRESS + persist::CHANNELS_OFFSET + 4] = 3;
+
+    Rig loaded;
+    loaded.scheduler.load(eeprom, loaded.image);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(flexseq::MODE_SEQ, loaded.engine.getChannelMode(1),
+        "l'enregistrement suivant n'a pas ete lu");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(flexseq::DEFAULT_CHANNEL_MODE,
+        loaded.engine.getChannelMode(0), "un mode hors plage a ete applique");
+}
+
+void test_a_bad_skip_chance_byte_is_refused_while_the_next_record_still_loads() {
+    eeprom.reset();
+    Rig saved;
+    saved.engine.setSkipChance(1, 7);
+    saved.scheduler.markDirty(0);
+    finishWrite(saved, eeprom, persist::QUIET_MS);
+    eeprom.cell[persist::BASE_ADDRESS + persist::CHANNELS_OFFSET + 6] = 99;
+
+    Rig loaded;
+    loaded.scheduler.load(eeprom, loaded.image);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(7, loaded.engine.getSkipChance(1),
+        "l'enregistrement suivant n'a pas ete lu");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, loaded.engine.getSkipChance(0),
+        "une chance de saut hors plage a ete appliquee");
+}
+
+void test_the_offset_never_exceeds_the_single_byte_the_format_gives_it() {
+    eeprom.reset();
+    Rig saved;
+    saved.engine.setSubdiv(0, 128);
+    saved.engine.setOffset(0, 300);
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(255, saved.engine.getOffset(0),
+        "l'offset doit tenir dans l'octet que le format lui donne");
+    saved.scheduler.markDirty(0);
+    finishWrite(saved, eeprom, persist::QUIET_MS);
+
+    Rig loaded;
+    loaded.scheduler.load(eeprom, loaded.image);
+    TEST_ASSERT_EQUAL_UINT16(255, loaded.engine.getOffset(0));
+}
+
+void test_the_two_cv_target_bytes_are_reserved_and_read_as_zero() {
+    Rig r;
+    fillDistinctState(r);
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        const uint16_t base =
+            static_cast<uint16_t>(persist::CHANNELS_OFFSET + ch * persist::CHANNEL_RECORD);
+        TEST_ASSERT_EQUAL_UINT8(0, r.image.byteAt(base + 7));
+        TEST_ASSERT_EQUAL_UINT8(0, r.image.byteAt(base + 8));
+    }
+}
+
+void test_a_stored_cv_target_is_ignored_without_disturbing_the_record() {
+    eeprom.reset();
+    Rig saved;
+    fillDistinctState(saved);
+    saved.scheduler.markDirty(0);
+    finishWrite(saved, eeprom, persist::QUIET_MS);
+    eeprom.cell[persist::BASE_ADDRESS + persist::CHANNELS_OFFSET + 7] = 0xFF;
+    eeprom.cell[persist::BASE_ADDRESS + persist::CHANNELS_OFFSET + 8] = 0xFF;
+
+    Rig loaded;
+    TEST_ASSERT_TRUE(loaded.scheduler.load(eeprom, loaded.image));
+    TEST_ASSERT_EQUAL_INT8(saved.engine.getSelectedPattern(0), loaded.engine.getSelectedPattern(0));
+    TEST_ASSERT_EQUAL_UINT8(saved.engine.getEffectiveLength(0),
+                            loaded.engine.getEffectiveLength(0));
+    TEST_ASSERT_EQUAL_UINT8(saved.engine.getSkipChance(0), loaded.engine.getSkipChance(0));
+    TEST_ASSERT_EQUAL_UINT8(0, loaded.image.byteAt(persist::CHANNELS_OFFSET + 7));
+}
+
 int main() {
     UNITY_BEGIN();
 
@@ -437,7 +569,7 @@ int main() {
     RUN_TEST(test_a_blank_eeprom_returns_the_defaults);
     RUN_TEST(test_the_version_byte_is_written_first_and_kept);
 
-    RUN_TEST(test_no_byte_below_384_or_above_669_is_ever_touched);
+    RUN_TEST(test_no_byte_below_384_or_above_687_is_ever_touched);
 
     RUN_TEST(test_nothing_is_written_before_the_quiet_delay);
     RUN_TEST(test_a_change_during_the_delay_restarts_the_countdown);
@@ -452,6 +584,16 @@ int main() {
     RUN_TEST(test_an_invalid_nibble_replaces_a_previous_ratchet_instead_of_keeping_it);
     RUN_TEST(test_an_out_of_range_stored_value_is_refused_not_applied);
     RUN_TEST(test_a_stored_subdiv_index_survives_as_its_value);
+
+    RUN_TEST(test_the_format_version_is_two);
+    RUN_TEST(test_the_channel_record_carries_the_mode_the_offset_and_the_skip_chance);
+    RUN_TEST(test_the_three_new_fields_sit_at_their_fixed_place_in_the_record);
+    RUN_TEST(test_a_version_one_image_returns_the_defaults);
+    RUN_TEST(test_a_bad_mode_byte_is_refused_while_the_next_record_still_loads);
+    RUN_TEST(test_a_bad_skip_chance_byte_is_refused_while_the_next_record_still_loads);
+    RUN_TEST(test_the_offset_never_exceeds_the_single_byte_the_format_gives_it);
+    RUN_TEST(test_the_two_cv_target_bytes_are_reserved_and_read_as_zero);
+    RUN_TEST(test_a_stored_cv_target_is_ignored_without_disturbing_the_record);
 
     return UNITY_END();
 }

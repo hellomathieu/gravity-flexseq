@@ -74,6 +74,8 @@ public:
     ChannelMode getChannelMode(uint8_t channel) const;
     bool setChannelMode(uint8_t channel, ChannelMode mode);
 
+    static constexpr uint16_t MAX_OFFSET = 255;
+
     uint16_t getOffset(uint8_t channel) const;
     bool setOffset(uint8_t channel, uint16_t offset);
 

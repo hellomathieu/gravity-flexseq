@@ -18,7 +18,14 @@ import {
   type Storage,
 } from "../src/domain/Persistence.js";
 import { PatternBank } from "../src/domain/PatternBank.js";
-import { CHANNEL_COUNT, DEFAULT_LENGTH, SequencerEngine } from "../src/domain/SequencerEngine.js";
+import {
+  CHANNEL_COUNT,
+  ChannelMode,
+  DEFAULT_CHANNEL_MODE,
+  DEFAULT_LENGTH,
+  MAX_OFFSET,
+  SequencerEngine,
+} from "../src/domain/SequencerEngine.js";
 import { Transport } from "../src/domain/Transport.js";
 import { DEFAULT_TEMPO, UiController } from "../src/domain/UiController.js";
 import { RATCHET_3, RATCHET_6, RATCHET_NONE, RATCHET_TRIPLET } from "../src/domain/Pattern.js";
@@ -78,6 +85,11 @@ function fillDistinctState(r: Rig): void {
     r.engine.setSubdiv(ch, subdivAt(ch * 3));
     r.engine.setBarLength(ch, ch % 2 === 0 ? 3 : 6);
   }
+  for (let ch = 0; ch < CHANNEL_COUNT; ++ch) {
+    r.engine.setChannelMode(ch, (ch % 3) as ChannelMode);
+    r.engine.setOffset(ch, ch * 2 + 1);
+    r.engine.setSkipChance(ch, ch + 2);
+  }
   r.ui.setTempo(287);
   r.ui.setClockSource(4);
   r.prefs.rotateScreen = 0;
@@ -94,13 +106,17 @@ function sameState(a: Rig, b: Rig): boolean {
 }
 
 describe("Persistence — the layout fixed by PRD 11.1", () => {
-  it("places the image at 384 and keeps it 286 bytes", () => {
+  it("places the image at 384 and keeps it 304 bytes", () => {
     expect(BASE_ADDRESS).toBe(384);
-    expect(TOTAL_SIZE).toBe(286);
+    expect(TOTAL_SIZE).toBe(304);
     expect(PATTERNS_OFFSET).toBe(1);
     expect(CHANNELS_OFFSET).toBe(241);
-    expect(GLOBAL_OFFSET).toBe(277);
-    expect(PREFS_OFFSET).toBe(280);
+    expect(GLOBAL_OFFSET).toBe(295);
+    expect(PREFS_OFFSET).toBe(298);
+  });
+
+  it("is version 2", () => {
+    expect(FORMAT_VERSION).toBe(2);
   });
 
   it("ends below the original firmware's memCode at 1023", () => {
@@ -307,6 +323,117 @@ describe("Persistence — what a corrupted image may not do", () => {
   });
 
   it("keeps one channel record per channel", () => {
-    expect(CHANNEL_RECORD * CHANNEL_COUNT).toBe(36);
+    expect(CHANNEL_RECORD * CHANNEL_COUNT).toBe(54);
+  });
+});
+
+describe("Persistence — format v2, nine bytes per channel", () => {
+  it("carries the mode, the offset and the skip chance", () => {
+    const eeprom = new FakeEeprom();
+    const saved = rig();
+    saved.engine.setChannelMode(2, ChannelMode.SEQ);
+    saved.engine.setOffset(2, 7);
+    saved.engine.setSkipChance(2, 9);
+    saved.scheduler.markDirty(0);
+    finishWrite(saved, eeprom, QUIET_MS);
+
+    const loaded = rig();
+    expect(loaded.scheduler.load(eeprom, loaded.image)).toBe(true);
+    expect(loaded.engine.getChannelMode(2)).toBe(ChannelMode.SEQ);
+    expect(loaded.engine.getOffset(2)).toBe(7);
+    expect(loaded.engine.getSkipChance(2)).toBe(9);
+  });
+
+  it("puts the three new fields at their fixed place in the record", () => {
+    const r = rig();
+    r.engine.setChannelMode(0, ChannelMode.RANDOM);
+    r.engine.setOffset(0, 13);
+    r.engine.setSkipChance(0, 4);
+    expect(r.image.byteAt(CHANNELS_OFFSET + 4)).toBe(ChannelMode.RANDOM);
+    expect(r.image.byteAt(CHANNELS_OFFSET + 5)).toBe(13);
+    expect(r.image.byteAt(CHANNELS_OFFSET + 6)).toBe(4);
+  });
+
+  it("refuses a version 1 image and returns the defaults", () => {
+    const eeprom = new FakeEeprom();
+    const saved = rig();
+    fillDistinctState(saved);
+    saved.scheduler.markDirty(0);
+    finishWrite(saved, eeprom, QUIET_MS);
+    eeprom.cell[BASE_ADDRESS] = 1;
+
+    const loaded = rig();
+    fillDistinctState(loaded);
+    expect(loaded.scheduler.load(eeprom, loaded.image)).toBe(false);
+    expect(sameState(rig(), loaded)).toBe(true);
+  });
+
+  it("refuses a bad mode byte while the next record still loads", () => {
+    const eeprom = new FakeEeprom();
+    const saved = rig();
+    saved.engine.setChannelMode(1, ChannelMode.SEQ);
+    saved.scheduler.markDirty(0);
+    finishWrite(saved, eeprom, QUIET_MS);
+    eeprom.cell[BASE_ADDRESS + CHANNELS_OFFSET + 4] = 3;
+
+    const loaded = rig();
+    loaded.scheduler.load(eeprom, loaded.image);
+    expect(loaded.engine.getChannelMode(1)).toBe(ChannelMode.SEQ);
+    expect(loaded.engine.getChannelMode(0)).toBe(DEFAULT_CHANNEL_MODE);
+  });
+
+  it("refuses a bad skip chance byte while the next record still loads", () => {
+    const eeprom = new FakeEeprom();
+    const saved = rig();
+    saved.engine.setSkipChance(1, 7);
+    saved.scheduler.markDirty(0);
+    finishWrite(saved, eeprom, QUIET_MS);
+    eeprom.cell[BASE_ADDRESS + CHANNELS_OFFSET + 6] = 99;
+
+    const loaded = rig();
+    loaded.scheduler.load(eeprom, loaded.image);
+    expect(loaded.engine.getSkipChance(1)).toBe(7);
+    expect(loaded.engine.getSkipChance(0)).toBe(0);
+  });
+
+  it("never lets the offset exceed the single byte the format gives it", () => {
+    const eeprom = new FakeEeprom();
+    const saved = rig();
+    saved.engine.setSubdiv(0, 128);
+    saved.engine.setOffset(0, 300);
+    expect(saved.engine.getOffset(0)).toBe(MAX_OFFSET);
+    saved.scheduler.markDirty(0);
+    finishWrite(saved, eeprom, QUIET_MS);
+
+    const loaded = rig();
+    loaded.scheduler.load(eeprom, loaded.image);
+    expect(loaded.engine.getOffset(0)).toBe(MAX_OFFSET);
+  });
+
+  it("reserves the two CV target bytes and reads them as zero", () => {
+    const r = rig();
+    fillDistinctState(r);
+    for (let ch = 0; ch < CHANNEL_COUNT; ++ch) {
+      const base = CHANNELS_OFFSET + ch * CHANNEL_RECORD;
+      expect(r.image.byteAt(base + 7)).toBe(0);
+      expect(r.image.byteAt(base + 8)).toBe(0);
+    }
+  });
+
+  it("ignores a stored CV target without disturbing the record", () => {
+    const eeprom = new FakeEeprom();
+    const saved = rig();
+    fillDistinctState(saved);
+    saved.scheduler.markDirty(0);
+    finishWrite(saved, eeprom, QUIET_MS);
+    eeprom.cell[BASE_ADDRESS + CHANNELS_OFFSET + 7] = 0xff;
+    eeprom.cell[BASE_ADDRESS + CHANNELS_OFFSET + 8] = 0xff;
+
+    const loaded = rig();
+    expect(loaded.scheduler.load(eeprom, loaded.image)).toBe(true);
+    expect(loaded.engine.getSelectedPattern(0)).toBe(saved.engine.getSelectedPattern(0));
+    expect(loaded.engine.getEffectiveLength(0)).toBe(saved.engine.getEffectiveLength(0));
+    expect(loaded.engine.getSkipChance(0)).toBe(saved.engine.getSkipChance(0));
+    expect(loaded.image.byteAt(CHANNELS_OFFSET + 7)).toBe(0);
   });
 });

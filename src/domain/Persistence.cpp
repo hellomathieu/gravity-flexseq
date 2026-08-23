@@ -70,6 +70,12 @@ uint8_t PersistentImage::channelByte(uint8_t channel, uint8_t offset) const {
             const int8_t bar = engine_.getBarLength(channel);
             return bar < 0 ? 0 : static_cast<uint8_t>(bar);
         }
+        case 4:
+            return static_cast<uint8_t>(engine_.getChannelMode(channel));
+        case 5:
+            return static_cast<uint8_t>(engine_.getOffset(channel) & 0xFF);
+        case 6:
+            return engine_.getSkipChance(channel);
         default:
             return 0;
     }
@@ -88,6 +94,15 @@ void PersistentImage::applyChannelByte(uint8_t channel, uint8_t offset, uint8_t 
             break;
         case 3:
             engine_.setBarLength(channel, value);
+            break;
+        case 4:
+            engine_.setChannelMode(channel, static_cast<ChannelMode>(value));
+            break;
+        case 5:
+            engine_.setOffset(channel, value);
+            break;
+        case 6:
+            engine_.setSkipChance(channel, value);
             break;
         default:
             break;
@@ -192,6 +207,9 @@ void PersistentImage::resetToDefaults() {
         engine_.setEffectiveLength(channel, SequencerEngine::DEFAULT_LENGTH);
         engine_.setSubdiv(channel, DEFAULT_SUBDIV);
         engine_.setBarLength(channel, SequencerEngine::DEFAULT_BAR_LENGTH);
+        engine_.setChannelMode(channel, DEFAULT_CHANNEL_MODE);
+        engine_.setOffset(channel, 0);
+        engine_.setSkipChance(channel, 0);
     }
     ui_.setTempo(UiController::DEFAULT_TEMPO);
     ui_.setClockSource(0);

@@ -15,7 +15,7 @@ namespace flexseq {
 namespace persist {
 
 constexpr uint16_t BASE_ADDRESS = 384;
-constexpr uint8_t FORMAT_VERSION = 1;
+constexpr uint8_t FORMAT_VERSION = 2;
 
 constexpr uint16_t HEADER_OFFSET = 0;
 constexpr uint16_t HEADER_SIZE = 1;
@@ -26,7 +26,7 @@ constexpr uint8_t PATTERN_RECORD = PATTERN_STEP_BYTES + PATTERN_RATCHET_BYTES;
 constexpr uint16_t PATTERNS_OFFSET = HEADER_OFFSET + HEADER_SIZE;
 constexpr uint16_t PATTERNS_SIZE = PATTERN_COUNT * PATTERN_RECORD;
 
-constexpr uint8_t CHANNEL_RECORD = 6;
+constexpr uint8_t CHANNEL_RECORD = 9;
 constexpr uint16_t CHANNELS_OFFSET = PATTERNS_OFFSET + PATTERNS_SIZE;
 constexpr uint16_t CHANNELS_SIZE = SequencerEngine::CHANNEL_COUNT * CHANNEL_RECORD;
 
@@ -43,7 +43,7 @@ constexpr uint16_t QUIET_MS = 3000;
 constexpr uint16_t ORIGINAL_FIRMWARE_LAST = 320;
 constexpr uint16_t EEPROM_SIZE = 1024;
 
-static_assert(TOTAL_SIZE == 286, "PRD 11.1 fixes the image at 286 bytes");
+static_assert(TOTAL_SIZE == 304, "PRD 11.1 fixes the version 2 image at 304 bytes");
 static_assert(BASE_ADDRESS > ORIGINAL_FIRMWARE_LAST,
               "FlexSeq must never write over the original firmware's settings");
 static_assert(BASE_ADDRESS + TOTAL_SIZE <= EEPROM_SIZE - 1,
