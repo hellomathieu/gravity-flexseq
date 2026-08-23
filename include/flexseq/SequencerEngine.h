@@ -122,6 +122,7 @@ private:
         uint8_t skipChance;
         uint8_t localStep;  // in [0, effectiveLength)
         uint16_t acc;       // ticks into the current step, in [0, stepTicks)
+        uint16_t pendingTicks; // rate chosen, not played yet. 0 = none.
         // Cached timing of the CURRENT step, refreshed on every step boundary
         // (and on rate changes) so the hot path needs no division.
         uint16_t stepTicks; // ticksPerStep x span
@@ -139,8 +140,14 @@ private:
 
     void clampOffset(uint8_t channel);
 
+    bool onBeat() const { return beatTick_ == 0; }
+    void scheduleTicks(uint8_t channel, uint16_t ticks);
+    void applyTicks(uint8_t channel, uint16_t ticks);
+    uint16_t alignedAcc(uint16_t stepTicks, uint16_t ticks) const;
+
     const PatternBank* bank_; // optional; drives ratchet timing
     uint32_t phase_;
+    uint8_t beatTick_; // ticks since the last quarter-note beat, in [0, PPQN)
     bool running_;
     uint8_t stepped_; // bitmask: channels that crossed a step in the last advance()
     uint8_t onsets_[CHANNEL_COUNT];

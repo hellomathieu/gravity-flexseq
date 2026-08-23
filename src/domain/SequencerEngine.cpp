@@ -8,6 +8,7 @@ namespace flexseq {
 SequencerEngine::SequencerEngine()
     : bank_(nullptr),
       phase_(0),
+      beatTick_(0),
       running_(false),
       stepped_(0) {
     for (uint8_t ch = 0; ch < CHANNEL_COUNT; ++ch) {
@@ -22,6 +23,7 @@ SequencerEngine::SequencerEngine()
         channels_[ch].skipChance = 0;
         channels_[ch].localStep = 0;
         channels_[ch].acc = 0;
+        channels_[ch].pendingTicks = 0;
         refreshStepTiming(ch);
     }
 }
@@ -103,9 +105,15 @@ void SequencerEngine::stop() {
 
 void SequencerEngine::reset() {
     phase_ = 0;
+    beatTick_ = 0;
     for (uint8_t ch = 0; ch < CHANNEL_COUNT; ++ch) {
         channels_[ch].localStep = 0;
         channels_[ch].acc = 0;
+        if (channels_[ch].pendingTicks > 0) {
+            const uint16_t ticksPerStep = channels_[ch].pendingTicks;
+            channels_[ch].pendingTicks = 0;
+            applyTicks(ch, ticksPerStep);
+        }
         refreshStepTiming(ch);
     }
 }
@@ -121,9 +129,21 @@ void SequencerEngine::advance(uint16_t ticks) {
 
     // uint32_t wraps naturally at 2^32.
     phase_ += ticks;
+    uint16_t beat = static_cast<uint16_t>(beatTick_ + ticks);
+    const bool beatCrossed = beat >= PPQN;
+    while (beat >= PPQN) {
+        beat = static_cast<uint16_t>(beat - PPQN);
+    }
+    beatTick_ = static_cast<uint8_t>(beat);
 
     for (uint8_t ch = 0; ch < CHANNEL_COUNT; ++ch) {
         ChannelState& c = channels_[ch];
+        if (beatCrossed && c.pendingTicks > 0) {
+            const uint16_t ticksPerStep = c.pendingTicks;
+            c.pendingTicks = 0;
+            applyTicks(ch, ticksPerStep);
+            c.acc = alignedAcc(c.stepTicks, ticks);
+        }
         c.acc = static_cast<uint16_t>(c.acc + ticks);
 
         while (true) {
@@ -207,6 +227,21 @@ bool SequencerEngine::setTicksPerStep(uint8_t channel, uint16_t ticks) {
     if (!validChannel(channel) || ticks < 1) {
         return false;
     }
+    scheduleTicks(channel, ticks);
+    return true;
+}
+
+void SequencerEngine::scheduleTicks(uint8_t channel, uint16_t ticks) {
+    ChannelState& c = channels_[channel];
+    if (!running_ || onBeat()) {
+        c.pendingTicks = 0;
+        applyTicks(channel, ticks);
+        return;
+    }
+    c.pendingTicks = ticks;
+}
+
+void SequencerEngine::applyTicks(uint8_t channel, uint16_t ticks) {
     ChannelState& c = channels_[channel];
     c.ticksPerStep = ticks;
     refreshStepTiming(channel);
@@ -214,7 +249,12 @@ bool SequencerEngine::setTicksPerStep(uint8_t channel, uint16_t ticks) {
     if (c.acc >= c.stepTicks) {
         c.acc = static_cast<uint16_t>(c.acc % c.stepTicks);
     }
-    return true;
+}
+
+uint16_t SequencerEngine::alignedAcc(uint16_t stepTicks, uint16_t ticks) const {
+    const uint16_t target = static_cast<uint16_t>(beatTick_ % stepTicks);
+    const uint16_t back = static_cast<uint16_t>(ticks % stepTicks);
+    return static_cast<uint16_t>((target + stepTicks - back) % stepTicks);
 }
 
 int16_t SequencerEngine::getSubdiv(uint8_t channel) const {
@@ -234,12 +274,7 @@ bool SequencerEngine::setSubdiv(uint8_t channel, int16_t subdiv) {
     }
     ChannelState& c = channels_[channel];
     c.subdiv = subdiv;
-    c.ticksPerStep = ticks;
-    refreshStepTiming(channel);
-    clampOffset(channel);
-    if (c.acc >= c.stepTicks) {
-        c.acc = static_cast<uint16_t>(c.acc % c.stepTicks);
-    }
+    scheduleTicks(channel, ticks);
     return true;
 }
 

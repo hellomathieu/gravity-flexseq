@@ -103,11 +103,14 @@ interface ChannelState {
   subOnset: number; // sous-declenchements deja emis
   localStep: number; // position locale, dans [0, effectiveLength)
   acc: number; // ticks accumules dans le step courant, dans [0, ticksPerStep)
+  /** Cadence choisie mais pas encore jouee, en ticksPerStep. 0 = aucune. */
+  pendingTicks: number;
   stepped: boolean; // a franchi une frontiere de step lors du dernier advance()
 }
 
 export class SequencerEngine {
   private phase = 0; // masterPhase, en ticks (uint32)
+  private beatTick = 0; // ticks depuis la derniere noire, dans [0, PPQN)
   private running = false;
   private bank: PatternBank | null = null;
   private readonly onsets: number[];
@@ -128,6 +131,7 @@ export class SequencerEngine {
       subOnset: 0,
       localStep: 0,
       acc: 0,
+      pendingTicks: 0,
       stepped: false,
     }));
     this.onsets = new Array<number>(this.channels.length).fill(0);
@@ -241,13 +245,29 @@ export class SequencerEngine {
     this.running = false;
   }
 
+  /**
+   * Valeur de `acc` a poser AVANT que `advance()` n'y ajoute `ticks`, pour que
+   * le channel retombe sur la grille du maitre a l'issue de ce passage.
+   */
+  private alignedAcc(stepTicks: number, ticks: number): number {
+    const target = this.beatTick % stepTicks;
+    const back = ticks % stepTicks;
+    return (target + stepTicks - back) % stepTicks;
+  }
+
   /** Reset global : masterPhase a 0 et realignement de tous les channels. */
   reset(): void {
     this.phase = 0;
+    this.beatTick = 0;
     for (let ch = 0; ch < this.channels.length; ++ch) {
       const c = this.channels[ch]!;
       c.localStep = 0;
       c.acc = 0;
+      if (c.pendingTicks > 0) {
+        const ticksPerStep = c.pendingTicks;
+        c.pendingTicks = 0;
+        this.applyTicks(ch, c, ticksPerStep);
+      }
       this.refreshStepTiming(ch);
     }
   }
@@ -263,9 +283,19 @@ export class SequencerEngine {
     if (!Number.isInteger(ticks) || ticks < 0) return;
 
     this.phase = (this.phase + ticks) % PHASE_MODULO;
+    let beat = this.beatTick + ticks;
+    const beatCrossed = beat >= PPQN;
+    while (beat >= PPQN) beat -= PPQN;
+    this.beatTick = beat;
 
     for (let ch = 0; ch < this.channels.length; ++ch) {
       const c = this.channels[ch]!;
+      if (beatCrossed && c.pendingTicks > 0) {
+        const ticksPerStep = c.pendingTicks;
+        c.pendingTicks = 0;
+        this.applyTicks(ch, c, ticksPerStep);
+        c.acc = this.alignedAcc(c.stepTicks, ticks);
+      }
       c.acc += ticks;
 
       for (;;) {
@@ -355,11 +385,28 @@ export class SequencerEngine {
     const c = this.channel(channel);
     if (!c) return false;
     if (!Number.isInteger(ticks) || ticks < 1) return false;
+    this.scheduleTicks(channel, c, ticks);
+    return true;
+  }
+
+  private onBeat(): boolean {
+    return this.beatTick === 0;
+  }
+
+  private scheduleTicks(channel: number, c: ChannelState, ticks: number): void {
+    if (!this.running || this.onBeat()) {
+      c.pendingTicks = 0;
+      this.applyTicks(channel, c, ticks);
+      return;
+    }
+    c.pendingTicks = ticks;
+  }
+
+  private applyTicks(channel: number, c: ChannelState, ticks: number): void {
     c.ticksPerStep = ticks;
     this.refreshStepTiming(channel);
     this.clampOffset(c);
     if (c.acc >= c.stepTicks) c.acc %= c.stepTicks;
-    return true;
   }
 
   // --- Modes, offset, chance de saut (PRD 4.2) ---------------------------
@@ -426,10 +473,7 @@ export class SequencerEngine {
     const ticks = subdivToTicks(subdiv);
     if (ticks < 1) return false;
     c.subdiv = subdiv;
-    c.ticksPerStep = ticks;
-    this.refreshStepTiming(channel);
-    this.clampOffset(c);
-    if (c.acc >= c.stepTicks) c.acc %= c.stepTicks;
+    this.scheduleTicks(channel, c, ticks);
     return true;
   }
 
