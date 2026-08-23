@@ -13,7 +13,7 @@ it is what lets the acceptance suite stay a reliable signal.
     test_trigger_sequencer, test_ui_controller
 
 Pure C++ domain, no Arduino and no libGravity. MUST be green: a phase is not
-finished while one of these fails. 297 assertions as of 2026-08-23, counted
+finished while one of these fails. 311 assertions as of 2026-08-23, counted
 from the `RUN_TEST` calls and confirmed by the runner's own total.
 
 ⚠️ **`onsetCount()` is not what the outputs see.** The engine counts step and
@@ -41,6 +41,13 @@ mutation there being an equivalent mutant, which ADR 0001 records rather than
 counts as a pass. Their TypeScript mirrors were swept the same way (15/15,
 15/15, 22/22).
 
+
+⚠️ **A new test module must be added to `test_filter`, or it stays silent.**
+`env:native` carries an allow-list, and `test_subdiv` has no wildcard, so
+`test_subdiv_phase` ran when it was named and was **not collected by the full
+suite**. This is the same trap that commit `f0d6134` set for four months. The
+list cannot become `test_*`: the libGravity characterization tests live in the
+same directory and belong to another environment.
 
 ⚠️ **`Rig::gotoTab()` is bounded, and it must stay bounded.** It used to be a
 `while` loop over `EVENT_ROTATE`. A mutant that made that rotation inert turned
