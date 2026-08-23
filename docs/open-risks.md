@@ -1,6 +1,6 @@
 # Open risks and watch items
 
-**Last review: 2026-08-23.** Eight open lines, twenty-two closed or accepted.
+**Last review: 2026-08-23.** Fifteen open lines, twenty-two closed or accepted.
 
 ## What this document is, and is not
 
@@ -19,7 +19,7 @@ either closed without anyone noting it, or accepted without anyone saying so.
 
 ## What is still open
 
-Eight lines, and each one states **what it is waiting for and from whom**. A line
+Fifteen lines, and each one states **what it is waiting for and from whom**. A line
 that waits for nothing from nobody no longer belongs here: it is in the table
 below.
 
@@ -32,6 +32,13 @@ below.
 | 15 | **`DigitalOutput::Init()` does not force the output OFF**, and the audited test proves it | low | nothing today: harmless at cold boot, for the reason established in **PRD §18** (AVR reset leaves `PORT` at 0, and `gravity` is a global in `.bss`). What is left is to handle it **if a software reboot is ever added** -- that is when the pin could stay HIGH while the firmware believes it is off |
 | 22 | **The re-arm threshold assumes the source falls back below +0.5 V.** A source that idles higher latches the gate for good: one reset, never another. Measured on the module: a Gravity output, switched off, presents about **+1.5 V** to a CV input (+153 in `Read()` units, against -27 with the cable out), so seen from the jack it is high-or-floating rather than high-or-low | low | **no decision taken.** Raising the threshold is an arbitration, and it needs measurements of several sources, not this one case. Decide it while implementing the CV destinations (PRD §10.2). The resting noise is measured at **-26 ± 3** on both channels, so the +1 V arm threshold keeps 128 counts of margin -- the arm side is not in question |
 | 24 | **1536 bytes of Flash may be available beyond what PlatformIO assumes, and the question is no longer academic — the wired firmware measures 91.9 % against a 90 % guard (2026-08-22).** PlatformIO declares 30720 (32768 − 2048) while the bootloader measures 512 bytes | low, and it is an opportunity rather than a risk | read the `BOOTSZ` fuse, which needs an ISP programmer -- the bootloader returns `0x0` for fuses. What is measured is the *content* of the top 512 bytes, not the space `BOOTSZ` reserves, so the figure stays an inference. **30720 remains the safe assumption and is not touched.** Would matter if the Flash budget tightens at PRD §12.1 |
+| 26 | **FlexSeq drops features and pages of the original firmware, and no rule caught it.** The owner restated the project rule on 2026-08-23: **keep every original feature and every original page; only the SEQ mode evolves.** Three omissions are already measured -- the three channel modes (found 2026-08-22, PRD §4.2), the fields of the BPM tab (line 27), and the navigation (line 28). The class of defect is the same each time: a page was rebuilt from a design instead of from the original | **high** | **an inventory, original screen by original screen and field by field**, is the only thing that closes this. Lot 15 of `WORKPLAN.md`. Each gap then goes to a lot or becomes an explicit decision. Until the inventory exists, no one can say how many omissions are left |
+| 27 | **The BPM tab exposes ONE field where the original has four.** The original draws `MODE` (INT / EXT / MIDI), `MOD` (CV1 / CV2), `RANGE` and `PPQN`, and the number of fields changes with the mode (`UI.ino`, `displayTab == 0`). FlexSeq draws `SRC` alone, with five values that fuse the source and the PPQN. `RANGE` -- the tempo modulation depth, 1 to 5, shown x10 -- is in PRD §10.1 but has no field | **high** | lot 16 of `WORKPLAN.md`. The fusion of source and PPQN is a divergence that was never decided: the inventory of line 26 must state whether FlexSeq keeps it or restores the original split |
+| 28 | **The navigation lacks two elements of the original, and one glyph is misleading.** The original tab bar carries 7 tabs plus a **separate status glyph** at x=121: `t` when stopped, `r` when playing, drawn only when the clock is internal. FlexSeq has 8 NAVIGABLE tabs, and the eighth draws `drawBox(cx - 2, cy - 2, 5, 5)` -- a filled 5x5 square. The owner read it as a Play/Stop indicator on the module, which is what a filled square looks like | **high** | lot 16. Target agreed 2026-08-23: BPM, channels 1 to 6, **global config with a gear icon**, then the **Play/Stop indicator at the far right, not navigable**. That is 8 tabs plus one indicator |
+| 29 | **One font for everything, so no parameter reads as the main one.** The original uses its `velvetscreen` font and draws the main parameter large. FlexSeq calls `setFont(u8g2_font_5x7_tr)` once in `main.cpp` and never changes it, so the pattern name and the tempo have the size of a label. `logisoso26` was removed to save 808 B of Flash, and the ten custom glyphs meant to replace it are **designed, not implemented** (PRD §12.1, ~500 B estimated against 2646) | medium | **the arbitration is decided (2026-08-23, owner): FlexSeq keeps the design of the original pages, with the glyphs and the fonts already there; a font too heavy for the Flash is REDRAWN by us, never dropped.** So what is left is work, not a decision: draw the glyphs. The Flash budget frames it -- 410 B stay under the guard, and the ten glyphs are estimated at ~500 B against 2646 for `logisoso26` |
+| 30 | **The encoder loses detents on a fast turn**, measured on the module 2026-08-23. libGravity reports the movement ACCUMULATED since the last poll, multiplied by 3 below 16 ms and by 2 below 32 ms, in ONE callback. `oneStep()` then collapses any magnitude to 1, so every detent after the first in the same loop pass is lost. The loop pass measures 7.61 ms at p90 while EDIT renders, and 14.4 ms on a full refresh | medium | **fix validated by the owner on 2026-08-23**, as lot 18 of `WORKPLAN.md`; only the place of the lot is left to confirm. The information needed is available: the dependency multiplied by a factor that `getMillisBetweenRotations()` also gives, so undoing a known factor is not the same as guessing |
+| 31 | **SHIFT plus a rotation does nothing on the tab bar, where the original changes the tab's MAIN parameter.** The owner's gesture card for the original reads: hold shift and rotate to change the selected parameter, *or the main parameter if you are in the tabs menu*. `handleTabBar()` handles `EVENT_ROTATE` and `EVENT_PRESS` only. This is what made SHIFT look dead on the module: on the tab bar it is | medium | **lot 19**, with lot 15 for the inventory. The owner also **moved the ratchet gesture onto an original one on 2026-08-23**: SHIFT plus rotation in EDIT, on a step that is selected **and active**, sets the step's ratchet. `Press plus rotation` is **abandoned**, so `EVENT_ROTATE_HELD` loses its only client. Two decisions belong to the audit: where the **channel change in EDIT** goes, since SHIFT plus rotation is now taken, and whether SHIFT plus a long press in EDIT (which **clears the pattern**) is on the original's card at all |
+| 32 | **A ratchet can sit on a step that is not active, and nothing says what that means.** `adjustRatchet()` does not read the step's state, and `toggleStep()` does not clear the ratchet when it turns a step off. So a ratchet survives on an inactive step, silently, and the persistence keeps it. The gesture decided on 2026-08-23 requires the step to be **active**, which makes the state reachable only by turning a step off after setting its ratchet -- and that path stays open | medium | **a product decision the audit must state**: the ratchet is cleared when the step goes off, or it is kept and returns with the step. Lot 15 poses it, lot 19 implements it, and the test must say which one in plain terms |
 | 12 | **The trigger pulse no longer measures what this line said, and the explanation no longer fits either.** It was 8.8 ms against a configured 5, blamed on the auto-off sitting at the end of `loop()` -- 5 ms rounded up to the next pass. Measured again on 2026-08-23, with the loop far shorter since the main screen stopped redrawing: **4.70 ms**, which is *below* the 5 ms configured. A round-up cannot go below the value it rounds, so the account is wrong somewhere | low | **nothing today** -- 0.9 % of a step at 120 BPM in `/1`, and no musical consequence. What is owed is the explanation, not a fix: read how libGravity's `DigitalOutput::Process()` compares against `millis()` before trusting either number. To revisit anyway once fast SUBDIV exists. **Two more figures, 2026-08-23**, from the two courses of the same run: **4.78 ms in CLOCK** and **5.01 ms in SEQ**. The width therefore straddles the 5 ms configured, and it moves with the mode, which no round-up to the next pass explains either |
 
 ## What is closed or accepted
@@ -109,6 +116,22 @@ arithmetic impossibility. The line is closed for that reason, and not because
 anyone decided to live with it.
 
 ## Method rules born from these subjects
+
+**A page rebuilt from a design loses features; a page rebuilt from the original
+does not.** Three times now, FlexSeq shipped a screen that was assembled from a
+description of what the screen should hold, and each time it held less than the
+original: the three channel modes were absent from the domain (2026-08-22), the
+BPM tab kept one field out of four, and the tab bar lost the Play/Stop indicator
+(both found on the module, 2026-08-23). The design was not wrong -- it was
+incomplete, and nothing compared it to the source. **Read the original's own
+drawing code for the screen, field by field, before declaring the screen done.**
+The project rule this serves is the owner's, restated on 2026-08-23: keep every
+original feature and every original page; only the SEQ mode evolves.
+
+**A glyph must not look like another function.** The eighth tab draws a filled
+5x5 square, which the owner read as a Play/Stop indicator on the module -- a fair
+reading, since that is what a stop indicator looks like. The name in the code
+(`drawSettingsGlyph`) carried the intent that the pixels did not.
 
 **A declared field is not a feature.** Twice on 2026-08-22, reading the original
 firmware's `channel` struct led to a wrong conclusion about its behaviour: two
