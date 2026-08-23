@@ -26,6 +26,10 @@
  * L'esclave SSD1306 est attache : sans lui la boucle ne rend pas vraiment, et le
  * chemin de dessin — le plus profond — ne serait pas parcouru.
  */
+#ifndef IMAGE_SIZE
+#error "IMAGE_SIZE must come from include/flexseq/Persistence.h"
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -191,7 +195,7 @@ int main(int argc, char** argv)
     /* La persistance ecrit dans l'EEPROM SIMULEE apres son delai de calme. On le
      * constate plutot que de le supposer : sans cette lecture, la mesure de pile
      * pourrait ne jamais avoir emprunte ce chemin. */
-    uint8_t image[286];
+    uint8_t image[IMAGE_SIZE];
     avr_eeprom_desc_t ee = { .ee = image, .offset = 384, .size = sizeof(image) };
     int ee_ok = avr_ioctl(avr, AVR_IOCTL_EEPROM_GET, &ee) == 0;
     printf("\n=== PERSISTANCE ===\n");

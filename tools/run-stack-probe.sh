@@ -74,8 +74,17 @@ END_HEX="$("$AVR_NM" --radix=x "$ELF" | grep -E " _end$" | head -1 | cut -d' ' -
 END="$(printf '0x%x' $(( 0x$END_HEX - 0x800000 )))"
 printf '  %s✅%s symbole                %s_end %s%s\n' "$C_OK" "$C_0" "$C_DIM" "$END" "$C_0"
 
+IMAGE_SIZE="$(grep -oE 'static_assert\(TOTAL_SIZE == [0-9]+' "$ROOT/include/flexseq/Persistence.h" \
+  | grep -oE '[0-9]+$')"
+FORMAT_VERSION="$(grep -oE 'FORMAT_VERSION = [0-9]+' "$ROOT/include/flexseq/Persistence.h" \
+  | grep -oE '[0-9]+$')"
+[ -n "$IMAGE_SIZE" ] && [ -n "$FORMAT_VERSION" ] \
+  || die "taille d'image ou octet de version introuvables dans include/flexseq/Persistence.h"
+printf '  %s✅%s format lu              %sversion %s, %s o%s\n' "$C_OK" "$C_0" "$C_DIM" \
+  "$FORMAT_VERSION" "$IMAGE_SIZE" "$C_0"
+
 progress "compilation du harnais"
-if cc -O2 -Wall -I"$PREFIX/include/simavr" -I"$PREFIX/include" \
+if cc -O2 -Wall -DIMAGE_SIZE="$IMAGE_SIZE" -I"$PREFIX/include/simavr" -I"$PREFIX/include" \
      "$ROOT/tools/simavr-ssd1306/stack_probe.c" -o "$BIN" \
      -L"$PREFIX/lib" -lsimavrparts -lsimavr -lelf > "$LOG" 2>&1; then
   printf '  %s✅%s harnais compile        %s%s%s\n' "$C_OK" "$C_0" "$C_DIM" "$PREFIX" "$C_0"
@@ -89,7 +98,8 @@ progress "simulation ($DURATION s)"
 printf '  %s✅%s simulation             %s%s s%s%s\n' "$C_OK" "$C_0" "$C_DIM" "$DURATION" \
   "${QUIET:+, sans injection}" "$C_0"
 
-RAM_RESERVE="$RAM_RESERVE" QUIET="${QUIET:-}" python3 - "$LOG" <<'PY'
+RAM_RESERVE="$RAM_RESERVE" QUIET="${QUIET:-}" FORMAT_VERSION="$FORMAT_VERSION" \
+  IMAGE_SIZE="$IMAGE_SIZE" python3 - "$LOG" <<'PY'
 import os, re, sys
 
 txt = open(sys.argv[1], errors='replace').read()
@@ -127,7 +137,11 @@ print(f"  {mark(fits_reserve)} Pic de pile        {peak:4d} o   "
       f"{DIM}— reserve exigee {reserve} o ({peak * 100 // reserve} % utilises){Z}")
 print(f"  {mark(fits_ram)} Marge              {margin:4d} o   "
       f"{DIM}— RAM libre {free} o apres .data + .bss{Z}")
-print(f"  {mark(version is not None and version[1] == '1')} Persistance         "
+expected_version = os.environ["FORMAT_VERSION"]
+expected_size = os.environ["IMAGE_SIZE"]
+persisted = (version is not None and version[1] == expected_version
+             and written is not None and written[2] == expected_size)
+print(f"  {mark(persisted)} Persistance         "
       f"octet de version {version[1] if version else 'ABSENT'} a 384, "
       f"{written[1] if written else '?'}/{written[2] if written else '?'} octets ecrits"
       f"{DIM}  (constate, pas suppose){Z}")
