@@ -97,3 +97,6 @@ tools/simavr-test/*.hex
 
 # Suivi de developpement, non normatif et temporaire (voir son en-tete)
 WORKPLAN.md
+
+# Claude Graphify
+.gitattributes

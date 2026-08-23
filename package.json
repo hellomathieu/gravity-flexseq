@@ -7,6 +7,7 @@
     "preview": "npm --prefix sim run preview",
     "test": "npm --prefix sim run test",
     "test:watch": "npm --prefix sim run test:watch",
-    "typecheck": "npm --prefix sim run typecheck"
+    "typecheck": "npm --prefix sim run typecheck",
+    "graphify-update": "graphify update ."
   }
 }
