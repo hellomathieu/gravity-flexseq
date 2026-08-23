@@ -352,8 +352,8 @@ export class SequencerEngine {
   // --- Modes, offset, chance de saut (PRD 4.2) ---------------------------
 
   private clampOffset(c: ChannelState): void {
-    if (c.offset >= c.ticksPerStep) c.offset = c.ticksPerStep - 1;
-    if (c.offset > MAX_OFFSET) c.offset = MAX_OFFSET;
+    const limit = c.ticksPerStep - 1;
+    if (c.offset > limit) c.offset = limit;
   }
 
   getChannelMode(channel: number): ChannelMode {
@@ -379,7 +379,7 @@ export class SequencerEngine {
     const c = this.channel(channel);
     if (!c) return false;
     if (!Number.isInteger(offset) || offset < 0) return false;
-    c.offset = offset;
+    c.offset = Math.min(offset, MAX_OFFSET);
     this.clampOffset(c);
     return true;
   }

@@ -74,9 +74,9 @@ public:
     ChannelMode getChannelMode(uint8_t channel) const;
     bool setChannelMode(uint8_t channel, ChannelMode mode);
 
-    static constexpr uint16_t MAX_OFFSET = 255;
+    static constexpr uint8_t MAX_OFFSET = 255;
 
-    uint16_t getOffset(uint8_t channel) const;
+    uint8_t getOffset(uint8_t channel) const;
     bool setOffset(uint8_t channel, uint16_t offset);
 
     uint8_t getSkipChance(uint8_t channel) const;
@@ -118,7 +118,7 @@ private:
         uint16_t ticksPerStep;
         uint8_t barLength;  // graphical measure separation, in steps
         uint8_t mode;
-        uint16_t offset;
+        uint8_t offset;
         uint8_t skipChance;
         uint8_t localStep;  // in [0, effectiveLength)
         uint16_t acc;       // ticks into the current step, in [0, stepTicks)

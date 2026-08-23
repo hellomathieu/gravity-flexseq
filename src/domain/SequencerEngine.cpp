@@ -239,11 +239,9 @@ bool SequencerEngine::setSubdiv(uint8_t channel, int16_t subdiv) {
 
 void SequencerEngine::clampOffset(uint8_t channel) {
     ChannelState& c = channels_[channel];
-    if (c.offset >= c.ticksPerStep) {
-        c.offset = static_cast<uint16_t>(c.ticksPerStep - 1);
-    }
-    if (c.offset > MAX_OFFSET) {
-        c.offset = MAX_OFFSET;
+    const uint16_t limit = static_cast<uint16_t>(c.ticksPerStep - 1);
+    if (c.offset > limit) {
+        c.offset = static_cast<uint8_t>(limit);
     }
 }
 
@@ -270,7 +268,7 @@ bool SequencerEngine::setChannelMode(uint8_t channel, ChannelMode mode) {
     return true;
 }
 
-uint16_t SequencerEngine::getOffset(uint8_t channel) const {
+uint8_t SequencerEngine::getOffset(uint8_t channel) const {
     if (!validChannel(channel)) {
         return 0;
     }
@@ -282,7 +280,7 @@ bool SequencerEngine::setOffset(uint8_t channel, uint16_t offset) {
         return false;
     }
     ChannelState& c = channels_[channel];
-    c.offset = offset;
+    c.offset = offset > MAX_OFFSET ? MAX_OFFSET : static_cast<uint8_t>(offset);
     clampOffset(channel);
     return true;
 }
