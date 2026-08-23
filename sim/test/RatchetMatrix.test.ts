@@ -3,9 +3,18 @@ import { PatternBank } from "../src/domain/PatternBank.js";
 import {
   ChannelMode,
   SequencerEngine,
+  subOnsetTick,
 } from "../src/domain/SequencerEngine.js";
 import { TriggerSequencer } from "../src/domain/TriggerSequencer.js";
+import { Transport } from "../src/domain/Transport.js";
 import {
+  UiController,
+  UiEvent,
+  UiField,
+  UiLevel,
+} from "../src/domain/UiController.js";
+import {
+  ratchetFitsStep,
   RATCHET_2,
   RATCHET_3,
   RATCHET_4,
@@ -32,17 +41,17 @@ const STEP_TICKS = [
 
 const CODES = [RATCHET_2, RATCHET_3, RATCHET_4, RATCHET_6, RATCHET_TRIPLET];
 
-// Nombre de declenchements RELEVE le 2026-08-23. Caracterisation : 13 cases sur
-// 125 valent 1 au lieu de N, la duree du step n'etant pas divisible par le
-// nombre de declenchements. Le lot 21 remplace cette regle.
+// Nombre de declenchements RELEVE apres le lot 21. Le plancher de MIN_SLOT_TICKS
+// remplace l'ancienne condition de divisibilite : SIX couples sur 125 valent 1 au
+// lieu de N, contre treize avant, et tous aux trois cadences les plus rapides.
 const TRIGGERS: number[][] = [
-  [2, 1, 4, 1, 1], // x24
-  [2, 3, 1, 6, 3], // x16
-  [2, 1, 4, 1, 1], // x12
+  [2, 1, 1, 1, 3], // x24 : 4 ticks, seuls R2 et le triolet tiennent
+  [2, 3, 1, 1, 3], // x16 : 6 ticks
+  [2, 3, 4, 1, 3], // x12 : 8 ticks
   [2, 3, 4, 6, 3], // x8
-  [2, 1, 4, 1, 1], // x6
+  [2, 3, 4, 6, 3], // x6
   [2, 3, 4, 6, 3], // x4
-  [2, 1, 4, 1, 1], // x3
+  [2, 3, 4, 6, 3], // x3
   [2, 3, 4, 6, 3], // x2
   [2, 3, 4, 6, 3], // /1
   [2, 3, 4, 6, 3], [2, 3, 4, 6, 3], [2, 3, 4, 6, 3], [2, 3, 4, 6, 3],
@@ -110,9 +119,52 @@ describe("La matrice ratchet x cadence", () => {
     }
   });
 
-  it("replie exactement treize couples sur un seul declenchement", () => {
-    const folded = TRIGGERS.flat().filter((n) => n === 1).length;
-    expect(folded).toBe(13);
+  // Compte les couples replies EN INTERROGEANT LE MOTEUR, jamais la table
+  // ci-dessus : un compte tire de la table se confirmerait lui-meme.
+  it("refuse exactement six couples", () => {
+    let folded = 0;
+    for (const subdiv of SUBDIVS) {
+      for (const code of CODES) {
+        const r = rig(subdiv, code, [0]);
+        if (r.engine.currentStepTriggers(0) === 1) ++folded;
+      }
+    }
+    expect(folded).toBe(6);
+  });
+
+  it("nomme les six couples refuses, et le predicat les refuse aussi", () => {
+    const pairs: Array<[number, number]> = [
+      [-24, RATCHET_3], [-24, RATCHET_4], [-24, RATCHET_6],
+      [-16, RATCHET_4], [-16, RATCHET_6], [-12, RATCHET_6],
+    ];
+    for (const [subdiv, code] of pairs) {
+      const r = rig(subdiv, code, [0]);
+      expect(r.engine.currentStepTriggers(0)).toBe(1);
+      expect(ratchetFitsStep(code, r.engine.getTicksPerStep(0))).toBe(false);
+    }
+  });
+
+  it("laisse passer le triolet a toutes les cadences", () => {
+    for (const subdiv of SUBDIVS) {
+      const r = rig(subdiv, RATCHET_TRIPLET, [0]);
+      expect(r.engine.currentStepTriggers(0)).toBe(3);
+    }
+  });
+
+  it("ne laisse jamais un sous-declenchement deriver d'un tick entier", () => {
+    for (const subdiv of SUBDIVS) {
+      for (const code of CODES) {
+        const r = rig(subdiv, code, [0]);
+        const step = r.engine.currentStepTicks(0);
+        const triggers = r.engine.currentStepTriggers(0);
+        if (triggers <= 1) continue;
+        for (let k = 1; k < triggers; ++k) {
+          const got = subOnsetTick(step, triggers, k);
+          expect(got * triggers).toBeLessThanOrEqual(step * k);
+          expect(step * k - got * triggers).toBeLessThan(triggers);
+        }
+      }
+    }
   });
 });
 
@@ -132,15 +184,61 @@ describe("Le train de declenchements", () => {
     expect(gaps(r, 96 * 6, 6)).toEqual([64, 64, 96, 96, 96, 64]);
   });
 
-  it("rend un train regulier quand le ratchet est replie", () => {
+  // A x3 un step vaut 32 ticks, un tiers 10,67. Les tranches font 10, 11 et 11 :
+  // somme exacte de 32, aucun tick perdu.
+  it("utilise tout le step quand la tranche est inegale", () => {
     const r = rig(-3, RATCHET_3, [0, 1, 2, 3]);
-    expect(gaps(r, 32 * 6, 6)).toEqual([32, 32, 32, 32, 32]);
+    const observed = gaps(r, 32 * 6, 9);
+    expect(observed).toEqual([11, 11, 32, 32, 32, 10, 11, 11, 32]);
+    expect(observed[5]! + observed[6]! + observed[7]!).toBe(32);
   });
 
-  it("garde les deux unites d'un triolet replie", () => {
+  it("joue les trois notes d'un triolet a x3", () => {
     const r = rig(-3, RATCHET_TRIPLET, [0]);
     expect(r.engine.currentStepTicks(0)).toBe(64);
-    expect(r.engine.currentStepTriggers(0)).toBe(1);
+    expect(r.engine.currentStepTriggers(0)).toBe(3);
+  });
+});
+
+describe("Le refus a la saisie", () => {
+  function editRig(subdiv: number) {
+    const bank = new PatternBank();
+    const engine = new SequencerEngine();
+    engine.setPatternBank(bank);
+    const transport = new Transport(engine);
+    const ui = new UiController(engine, bank, transport);
+    for (let ch = 0; ch < 6; ++ch) engine.setChannelMode(ch, ChannelMode.SEQ);
+    engine.setSubdiv(0, subdiv);
+    engine.refreshTiming();
+    const pattern = bank.getPattern(0)!;
+    pattern.writeStep(0, true);
+
+    ui.handle(UiEvent.Press);
+    for (let guard = 0; guard < 8; ++guard) {
+      if (ui.field === UiField.EditEntry) break;
+      ui.handle(UiEvent.Rotate, 1);
+    }
+    expect(ui.field).toBe(UiField.EditEntry);
+    ui.handle(UiEvent.Press);
+    expect(ui.level).toBe(UiLevel.Edit);
+    return { ui, pattern };
+  }
+
+  // A x24 seuls RATCHET_2 et le triolet tiennent : tourner saute R3, R4 et R6.
+  it("saute les codes que la cadence refuse", () => {
+    const r = editRig(-24);
+    r.ui.handle(UiEvent.RotateHeld, 1);
+    expect(r.pattern.getRatchet(0)).toBe(RATCHET_2);
+    r.ui.handle(UiEvent.RotateHeld, 1);
+    expect(r.pattern.getRatchet(0)).toBe(RATCHET_TRIPLET);
+  });
+
+  it("n'en saute aucun a l'unite", () => {
+    const r = editRig(1);
+    for (const code of [RATCHET_2, RATCHET_3, RATCHET_4, RATCHET_6, RATCHET_TRIPLET]) {
+      r.ui.handle(UiEvent.RotateHeld, 1);
+      expect(r.pattern.getRatchet(0)).toBe(code);
+    }
   });
 });
 

@@ -354,16 +354,36 @@ void UiController::adjustRatchet(int8_t delta) {
     if (pattern == nullptr) {
         return;
     }
+    const int8_t channel = selectedChannel();
+    if (channel < 0) {
+        return;
+    }
+    const int8_t step = oneStep(delta);
+    if (step == 0) {
+        return;
+    }
+    const uint16_t ticks = engine_.getTicksPerStep(static_cast<uint8_t>(channel));
+
     int8_t index = indexOfChoice(
         ratchetAtIndex, RATCHET_CHOICE_COUNT, pattern->getRatchet(stepCursor_)
     );
     if (index < 0) {
         index = 0;
     }
-    const uint8_t next =
-        clampIndex(static_cast<uint8_t>(index), oneStep(delta), RATCHET_CHOICE_COUNT);
-    pattern->setRatchet(stepCursor_, ratchetAtIndex(next));
-    engine_.refreshTiming(static_cast<uint8_t>(selectedChannel()));
+
+    uint8_t cursor = static_cast<uint8_t>(index);
+    for (uint8_t tried = 0; tried < RATCHET_CHOICE_COUNT; ++tried) {
+        const uint8_t candidate = clampIndex(cursor, step, RATCHET_CHOICE_COUNT);
+        if (candidate == cursor) {
+            return;
+        }
+        cursor = candidate;
+        if (ratchetFitsStep(ratchetAtIndex(cursor), ticks)) {
+            pattern->setRatchet(stepCursor_, ratchetAtIndex(cursor));
+            engine_.refreshTiming(static_cast<uint8_t>(channel));
+            return;
+        }
+    }
 }
 
 void UiController::togglePlay() {

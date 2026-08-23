@@ -33,6 +33,15 @@ void SequencerEngine::setPatternBank(const PatternBank* bank) {
     }
 }
 
+uint16_t SequencerEngine::subOnsetTick(uint16_t stepTicks, uint8_t triggers,
+                                      uint8_t k) {
+    if (triggers <= 1) {
+        return stepTicks;
+    }
+    return static_cast<uint16_t>(
+        (static_cast<uint32_t>(stepTicks) * k) / triggers);
+}
+
 void SequencerEngine::refreshStepTiming(uint8_t channel, bool resetSubOnset) {
     ChannelState& c = channels_[channel];
 
@@ -49,14 +58,11 @@ void SequencerEngine::refreshStepTiming(uint8_t channel, bool resetSubOnset) {
 
     c.stepTicks = static_cast<uint16_t>(c.ticksPerStep * span);
 
-    // A sub-slot must be a whole number of ticks; otherwise the ratchet is
-    // silently ignored for this combination (documented fallback, no drift).
-    if (triggers > 1 && c.stepTicks % triggers != 0) {
+    if (!ratchetFitsStep(code, c.ticksPerStep)) {
         triggers = 1;
     }
 
     c.triggers = triggers;
-    c.slotTicks = static_cast<uint16_t>(c.stepTicks / triggers);
     if (resetSubOnset) {
         c.subOnset = 0;
     } else if (c.subOnset >= c.triggers) {
@@ -128,8 +134,8 @@ void SequencerEngine::advance(uint16_t ticks) {
                     continue;
                 }
             } else if (c.subOnset + 1 < c.triggers) {
-                const uint16_t nextAt =
-                    static_cast<uint16_t>(c.slotTicks * (c.subOnset + 1));
+                const uint16_t nextAt = subOnsetTick(
+                    c.stepTicks, c.triggers, static_cast<uint8_t>(c.subOnset + 1));
                 if (c.acc >= nextAt) {
                     ++c.subOnset;
                     ++onsets_[ch];

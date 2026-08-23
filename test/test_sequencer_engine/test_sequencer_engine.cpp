@@ -394,16 +394,31 @@ void test_triplet_pushes_the_rest_of_the_pattern_later() {
     TEST_ASSERT_EQUAL_INT8(2, withTriplet.effectiveStep(0));
 }
 
-void test_ratchet_ignored_when_the_slot_is_not_a_whole_tick() {
+// PRD 6.3.1 : un sous-slot n'a plus a tomber sur un tick entier, il doit valoir
+// au moins MIN_SLOT_TICKS. A x3 un tiers de step vaut 10,67 ticks : le ratchet
+// joue, et ses positions sont arrondies a moins d'un tick.
+void test_a_ratchet_plays_when_its_slot_is_not_a_whole_tick() {
     PatternBank bank;
     SequencerEngine e;
     allSeq(e);
     e.setPatternBank(&bank);
     e.setSelectedPattern(0, 0);
     bank.getPattern(0)->setRatchet(0, RATCHET_3);
-    // x3 -> 32 ticks per step: a third would be 10.67 ticks.
     TEST_ASSERT_TRUE(e.setSubdiv(0, -3));
-    TEST_ASSERT_EQUAL_UINT8(1, e.currentStepTriggers(0)); // documented fallback
+    TEST_ASSERT_EQUAL_UINT8(3, e.currentStepTriggers(0));
+}
+
+// Le plancher, lui, refuse : a x12 un step vaut 8 ticks, donc un sixieme
+// vaudrait 1 tick.
+void test_a_ratchet_is_refused_when_its_slot_falls_under_two_ticks() {
+    PatternBank bank;
+    SequencerEngine e;
+    allSeq(e);
+    e.setPatternBank(&bank);
+    e.setSelectedPattern(0, 0);
+    bank.getPattern(0)->setRatchet(0, RATCHET_6);
+    TEST_ASSERT_TRUE(e.setSubdiv(0, -12));
+    TEST_ASSERT_EQUAL_UINT8(1, e.currentStepTriggers(0));
 }
 
 void test_without_bank_every_step_is_plain() {
@@ -651,7 +666,8 @@ int main() {
     RUN_TEST(test_ratchet_counts_all_onsets_in_a_batched_advance);
     RUN_TEST(test_triplet_stretches_the_step_to_two_units);
     RUN_TEST(test_triplet_pushes_the_rest_of_the_pattern_later);
-    RUN_TEST(test_ratchet_ignored_when_the_slot_is_not_a_whole_tick);
+    RUN_TEST(test_a_ratchet_plays_when_its_slot_is_not_a_whole_tick);
+    RUN_TEST(test_a_ratchet_is_refused_when_its_slot_falls_under_two_ticks);
     RUN_TEST(test_without_bank_every_step_is_plain);
     RUN_TEST(test_ratchets_do_not_shift_masterphase);
 

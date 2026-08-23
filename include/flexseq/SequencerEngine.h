@@ -125,14 +125,16 @@ private:
         // Cached timing of the CURRENT step, refreshed on every step boundary
         // (and on rate changes) so the hot path needs no division.
         uint16_t stepTicks; // ticksPerStep x span
-        uint16_t slotTicks; // stepTicks / triggers
         uint8_t triggers;   // onsets inside this step
         uint8_t subOnset;   // sub-onsets already fired in this step
     };
 
     bool validChannel(uint8_t channel) const { return channel < CHANNEL_COUNT; }
 
-    // Recompute stepTicks/slotTicks/triggers from the current step's ratchet.
+    // Tick, inside the step, at which sub-onset k fires (k in 1..triggers-1).
+    static uint16_t subOnsetTick(uint16_t stepTicks, uint8_t triggers, uint8_t k);
+
+    // Recompute stepTicks/triggers from the current step's ratchet.
     void refreshStepTiming(uint8_t channel, bool resetSubOnset = true);
 
     void clampOffset(uint8_t channel);

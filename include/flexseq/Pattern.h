@@ -36,6 +36,12 @@ uint8_t ratchetTriggers(uint8_t code);
 // How many step durations the step occupies (1, or 2 for the triplet).
 uint8_t ratchetSpan(uint8_t code);
 
+constexpr uint8_t MIN_SLOT_TICKS = 2;
+
+// True when the code's triggers fit the step at this rate: every slot must hold
+// at least MIN_SLOT_TICKS ticks.
+bool ratchetFitsStep(uint8_t code, uint16_t ticksPerStep);
+
 // Pattern holds only shared musical content: 24 binary steps + a per-step
 // ratchet code. It carries NO length: LENGTH is a per-channel execution state,
 // so a single Pattern can be referenced by several channels (shared bank model,

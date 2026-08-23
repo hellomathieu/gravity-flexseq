@@ -370,11 +370,20 @@ describe("SequencerEngine — ratchets", () => {
     expect(stretched.effectiveStep(0)).toBe(2); // un step de retard
   });
 
-  it("ignore le ratchet quand le sous-slot n'est pas un tick entier", () => {
+  // PRD 6.3.1 : un sous-slot n'a plus a tomber sur un tick entier, il doit valoir
+  // au moins MIN_SLOT_TICKS.
+  it("joue le ratchet meme quand le sous-slot n'est pas un tick entier", () => {
     const { bank, e } = rig();
     bank.getPattern(0)!.setRatchet(0, RATCHET_3);
     expect(e.setSubdiv(0, -3)).toBe(true); // 32 ticks : un tiers = 10,67
-    expect(e.currentStepTriggers(0)).toBe(1); // repli documente
+    expect(e.currentStepTriggers(0)).toBe(3);
+  });
+
+  it("refuse le ratchet quand la tranche tomberait sous deux ticks", () => {
+    const { bank, e } = rig();
+    bank.getPattern(0)!.setRatchet(0, RATCHET_6);
+    expect(e.setSubdiv(0, -12)).toBe(true); // 8 ticks : un sixieme = 1,33
+    expect(e.currentStepTriggers(0)).toBe(1);
   });
 
   it("sans banque, tous les steps sont simples", () => {

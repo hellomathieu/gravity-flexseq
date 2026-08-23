@@ -44,19 +44,18 @@ const uint8_t CODES[CODE_COUNT] = {
     flexseq::RATCHET_6, flexseq::RATCHET_TRIPLET,
 };
 
-// Nombre de declenchements RELEVE sur le firmware du 2026-08-23, cadence par
-// cadence. C'est une CARACTERISATION : 13 cases sur 125 valent 1 au lieu de N,
-// parce que la duree du step n'est pas divisible par le nombre de
-// declenchements. Le lot 21 remplace cette regle ; ces valeurs disent ce qu'elle
-// etait, pour que le changement se voie.
+// Nombre de declenchements RELEVE apres le lot 21, cadence par cadence. Le
+// plancher de MIN_SLOT_TICKS remplace l'ancienne condition de divisibilite : SIX
+// couples sur 125 valent 1 au lieu de N, contre treize avant. Les six sont aux
+// trois cadences les plus rapides, la ou une tranche tomberait sous deux ticks.
 const uint8_t TRIGGERS[SUBDIV_COUNT][CODE_COUNT] = {
-    {2, 1, 4, 1, 1},  // x24
-    {2, 3, 1, 6, 3},  // x16
-    {2, 1, 4, 1, 1},  // x12
+    {2, 1, 1, 1, 3},  // x24 : 4 ticks, seuls R2 et le triolet tiennent
+    {2, 3, 1, 1, 3},  // x16 : 6 ticks
+    {2, 3, 4, 1, 3},  // x12 : 8 ticks
     {2, 3, 4, 6, 3},  // x8
-    {2, 1, 4, 1, 1},  // x6
+    {2, 3, 4, 6, 3},  // x6
     {2, 3, 4, 6, 3},  // x4
-    {2, 1, 4, 1, 1},  // x3
+    {2, 3, 4, 6, 3},  // x3
     {2, 3, 4, 6, 3},  // x2
     {2, 3, 4, 6, 3},  // /1
     {2, 3, 4, 6, 3}, {2, 3, 4, 6, 3}, {2, 3, 4, 6, 3}, {2, 3, 4, 6, 3},
@@ -83,6 +82,23 @@ struct Rig {
     void useSubdiv(int16_t subdiv) {
         engine.setSubdiv(0, subdiv);
         engine.refreshTiming();
+    }
+
+    // Depuis la barre d'onglets : entrer dans l'onglet, aller au champ d'entree
+    // en edition, puis y entrer.
+    void enterEdit() {
+        ui.handle(UiController::EVENT_PRESS);
+        for (uint8_t guard = 0; guard < UiController::CHANNEL_TAB_FIELDS; ++guard) {
+            if (ui.field() == UiController::FIELD_EDIT_ENTRY) {
+                break;
+            }
+            ui.handle(UiController::EVENT_ROTATE, 1);
+        }
+        TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_EDIT_ENTRY, ui.field(),
+                                  "le champ d'entree en edition n'a pas ete atteint");
+        ui.handle(UiController::EVENT_PRESS);
+        TEST_ASSERT_EQUAL_MESSAGE(UiController::LEVEL_EDIT, ui.level(),
+                                  "l'edition n'a pas ete atteinte");
     }
 };
 
@@ -154,17 +170,86 @@ void test_the_trigger_count_matrix_is_the_audited_one() {
     }
 }
 
-void test_thirteen_pairs_of_the_matrix_fold_to_a_single_trigger() {
+// Compte les couples replies EN INTERROGEANT LE MOTEUR, jamais la table
+// ci-dessus : un compte tire de la table se confirmerait lui-meme et ne
+// rougirait sur aucun changement de code.
+void test_exactly_six_pairs_of_the_matrix_fold_to_a_single_trigger() {
     uint8_t folded = 0;
     for (uint8_t i = 0; i < SUBDIV_COUNT; ++i) {
         for (uint8_t c = 0; c < CODE_COUNT; ++c) {
-            if (TRIGGERS[i][c] == 1) {
+            Rig r;
+            r.pattern()->writeStep(0, true);
+            r.pattern()->setRatchet(0, CODES[c]);
+            r.useSubdiv(SUBDIVS[i]);
+            if (r.engine.currentStepTriggers(0) == 1) {
                 ++folded;
             }
         }
     }
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(13, folded,
-        "le nombre de couples replies a change : le lot 21 doit le faire, pas un accident");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(6, folded,
+        "le nombre de couples refuses par le plancher a change");
+}
+
+// Les six, nommes. Le plancher les refuse parce qu'une tranche y tomberait sous
+// deux ticks ; R6 a x24 est en outre impossible, 4 ticks ne portant pas 6
+// instants distincts.
+void test_the_six_refused_pairs_are_the_expected_ones() {
+    const int16_t subs[6] = {-24, -24, -24, -16, -16, -12};
+    const uint8_t codes[6] = {flexseq::RATCHET_3, flexseq::RATCHET_4,
+                              flexseq::RATCHET_6, flexseq::RATCHET_4,
+                              flexseq::RATCHET_6, flexseq::RATCHET_6};
+    for (uint8_t i = 0; i < 6; ++i) {
+        Rig r;
+        r.pattern()->writeStep(0, true);
+        r.pattern()->setRatchet(0, codes[i]);
+        r.useSubdiv(subs[i]);
+        TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, r.engine.currentStepTriggers(0),
+            "ce couple doit etre refuse par le plancher");
+        TEST_ASSERT_FALSE_MESSAGE(
+            flexseq::ratchetFitsStep(codes[i], r.engine.getTicksPerStep(0)),
+            "le predicat doit refuser ce que le moteur refuse");
+    }
+}
+
+// Le triolet passe partout : sa tranche la plus courte vaut 2 ticks a x24.
+void test_the_triplet_fits_every_rate() {
+    for (uint8_t i = 0; i < SUBDIV_COUNT; ++i) {
+        Rig r;
+        r.pattern()->writeStep(0, true);
+        r.pattern()->setRatchet(0, flexseq::RATCHET_TRIPLET);
+        r.useSubdiv(SUBDIVS[i]);
+        TEST_ASSERT_EQUAL_UINT8_MESSAGE(3, r.engine.currentStepTriggers(0),
+            "un triolet doit jouer ses trois notes a toutes les cadences");
+    }
+}
+
+// La position d'un sous-declenchement s'ecarte de moins d'un tick de l'ideal, et
+// la somme des tranches vaut exactement le step : aucune derive, aucun tick
+// perdu.
+void test_a_sub_onset_never_drifts_by_a_whole_tick() {
+    for (uint8_t i = 0; i < SUBDIV_COUNT; ++i) {
+        for (uint8_t c = 0; c < CODE_COUNT; ++c) {
+            Rig r;
+            r.pattern()->writeStep(0, true);
+            r.pattern()->setRatchet(0, CODES[c]);
+            r.useSubdiv(SUBDIVS[i]);
+            const uint16_t step = r.engine.currentStepTicks(0);
+            const uint8_t triggers = r.engine.currentStepTriggers(0);
+            if (triggers <= 1) {
+                continue;
+            }
+            for (uint8_t k = 1; k < triggers; ++k) {
+                // Ideal x triggers == step x k, a l'entier pres : on compare en
+                // multipliant, pour rester en arithmetique exacte.
+                const uint32_t got = (static_cast<uint32_t>(step) * k) / triggers;
+                const uint32_t idealTimesTriggers = static_cast<uint32_t>(step) * k;
+                TEST_ASSERT_TRUE_MESSAGE(
+                    got * triggers <= idealTimesTriggers &&
+                        idealTimesTriggers - got * triggers < triggers,
+                    "un sous-declenchement s'ecarte d'un tick ou plus");
+            }
+        }
+    }
 }
 
 /*
@@ -225,10 +310,9 @@ void test_a_triplet_at_unity_fires_three_times_over_two_steps() {
     }
 }
 
-// CARACTERISATION du repli actuel : a x3 un step vaut 32 ticks, non divisible
-// par 3, donc le ratchet est desactive et le train redevient regulier. Le lot 21
-// remplace ce comportement.
-void test_a_folded_ratchet_leaves_a_regular_train() {
+// A x3 un step vaut 32 ticks : un tiers vaut 10,67. Le ratchet joue, et les
+// tranches font 11, 11 et 10 ticks — somme exacte de 32, aucun tick perdu.
+void test_a_ratchet_with_an_uneven_slot_still_uses_the_whole_step() {
     Rig r;
     for (uint8_t i = 0; i < 4; ++i) {
         r.pattern()->writeStep(i, true);
@@ -237,24 +321,28 @@ void test_a_folded_ratchet_leaves_a_regular_train() {
     r.engine.setEffectiveLength(0, 4);
     r.useSubdiv(-3);
 
-    uint16_t gaps[6];
-    const uint8_t n = collectGaps(r, 32 * 6, gaps, 6);
-    TEST_ASSERT_EQUAL_UINT8(5, n);
+    const uint16_t expected[9] = {11, 11, 32, 32, 32, 10, 11, 11, 32};
+    uint16_t gaps[9];
+    const uint8_t n = collectGaps(r, 32 * 6, gaps, 9);
+    TEST_ASSERT_EQUAL_UINT8(9, n);
     for (uint8_t i = 0; i < n; ++i) {
-        TEST_ASSERT_EQUAL_UINT16_MESSAGE(32, gaps[i],
-            "un ratchet replie doit rendre un train regulier");
+        TEST_ASSERT_EQUAL_UINT16_MESSAGE(expected[i], gaps[i],
+            "le train d'un ratchet a tranche inegale a change");
     }
+    // Les ecarts 5, 6 et 7 sont les trois tranches d'un meme step : 10 + 11 + 11.
+    const uint16_t sum = static_cast<uint16_t>(gaps[5] + gaps[6] + gaps[7]);
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(32, sum,
+        "les trois tranches doivent couvrir le step exactement");
 }
 
-// CARACTERISATION : le triolet garde ses deux unites meme replie, donc le step
-// dure 64 ticks a x3 et n'emet qu'une note.
-void test_a_folded_triplet_keeps_its_two_units() {
+// A x3 le triolet dure 64 ticks et joue ses trois notes : 21, 22 et 21 ticks.
+void test_a_triplet_at_x3_plays_its_three_notes() {
     Rig r;
     r.pattern()->writeStep(0, true);
     r.pattern()->setRatchet(0, flexseq::RATCHET_TRIPLET);
     r.useSubdiv(-3);
     TEST_ASSERT_EQUAL_UINT16(64, r.engine.currentStepTicks(0));
-    TEST_ASSERT_EQUAL_UINT8(1, r.engine.currentStepTriggers(0));
+    TEST_ASSERT_EQUAL_UINT8(3, r.engine.currentStepTriggers(0));
 }
 
 /*
@@ -304,7 +392,6 @@ void test_an_inactive_triplet_is_a_triplet_rest() {
 
 void test_a_ratchet_survives_the_step_being_switched_off() {
     Rig r;
-    r.ui.handle(UiController::EVENT_ROTATE, 1);   // barre -> onglet du channel 1
     r.pattern()->writeStep(5, true);
     r.pattern()->setRatchet(5, flexseq::RATCHET_6);
 
@@ -336,6 +423,46 @@ void test_clearing_the_pattern_wipes_steps_and_ratchets_together() {
     TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, r.pattern()->getRatchet(7));
 }
 
+/*
+ * Le refus a la saisie
+ */
+
+// A x24 seuls RATCHET_2 et le triolet tiennent. Tourner depuis « aucun » saute
+// donc R3, R4 et R6, et ne s'arrete que sur ce qui est jouable.
+void test_the_choice_list_skips_a_ratchet_the_rate_refuses() {
+    Rig r;
+    r.useSubdiv(-24);
+    r.pattern()->writeStep(0, true);
+    r.enterEdit();
+
+    // Depuis RATCHET_NONE, un cran vers le haut donne RATCHET_2 : il tient.
+    r.ui.handle(UiController::EVENT_ROTATE_HELD, 1);
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_2, r.pattern()->getRatchet(0));
+
+    // Le cran suivant sauterait sur R3, refuse ; le premier code jouable
+    // au-dessus est le triolet.
+    r.ui.handle(UiController::EVENT_ROTATE_HELD, 1);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(flexseq::RATCHET_TRIPLET,
+        r.pattern()->getRatchet(0),
+        "la saisie doit sauter les codes que la cadence refuse");
+}
+
+void test_the_choice_list_offers_everything_at_unity() {
+    Rig r;
+    r.useSubdiv(1);
+    r.pattern()->writeStep(0, true);
+    r.enterEdit();
+
+    const uint8_t expected[5] = {flexseq::RATCHET_2, flexseq::RATCHET_3,
+                                flexseq::RATCHET_4, flexseq::RATCHET_6,
+                                flexseq::RATCHET_TRIPLET};
+    for (uint8_t i = 0; i < 5; ++i) {
+        r.ui.handle(UiController::EVENT_ROTATE_HELD, 1);
+        TEST_ASSERT_EQUAL_UINT8_MESSAGE(expected[i], r.pattern()->getRatchet(0),
+            "a l'unite, aucun code ne doit etre saute");
+    }
+}
+
 int main() {
     UNITY_BEGIN();
 
@@ -343,16 +470,21 @@ int main() {
     RUN_TEST(test_the_triplet_spans_two_steps_at_every_subdiv);
 
     RUN_TEST(test_the_trigger_count_matrix_is_the_audited_one);
-    RUN_TEST(test_thirteen_pairs_of_the_matrix_fold_to_a_single_trigger);
+    RUN_TEST(test_exactly_six_pairs_of_the_matrix_fold_to_a_single_trigger);
+    RUN_TEST(test_the_six_refused_pairs_are_the_expected_ones);
+    RUN_TEST(test_the_triplet_fits_every_rate);
+    RUN_TEST(test_a_sub_onset_never_drifts_by_a_whole_tick);
 
     RUN_TEST(test_the_train_is_regular_without_a_ratchet);
     RUN_TEST(test_a_ratchet_3_at_unity_splits_its_step_in_three);
     RUN_TEST(test_a_triplet_at_unity_fires_three_times_over_two_steps);
-    RUN_TEST(test_a_folded_ratchet_leaves_a_regular_train);
-    RUN_TEST(test_a_folded_triplet_keeps_its_two_units);
+    RUN_TEST(test_a_ratchet_with_an_uneven_slot_still_uses_the_whole_step);
+    RUN_TEST(test_a_triplet_at_x3_plays_its_three_notes);
 
     RUN_TEST(test_an_inactive_step_emits_nothing_whatever_its_ratchet);
     RUN_TEST(test_an_inactive_triplet_is_a_triplet_rest);
+    RUN_TEST(test_the_choice_list_skips_a_ratchet_the_rate_refuses);
+    RUN_TEST(test_the_choice_list_offers_everything_at_unity);
     RUN_TEST(test_a_ratchet_survives_the_step_being_switched_off);
     RUN_TEST(test_clearing_the_pattern_wipes_steps_and_ratchets_together);
 

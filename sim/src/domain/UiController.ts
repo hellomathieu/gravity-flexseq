@@ -1,4 +1,4 @@
-import { Pattern, RATCHET_CODES } from "./Pattern.js";
+import { Pattern, ratchetFitsStep, RATCHET_CODES } from "./Pattern.js";
 import type { PatternBank } from "./PatternBank.js";
 import {
   BAR_LENGTHS,
@@ -332,11 +332,26 @@ export class UiController {
   private adjustRatchet(delta: number): void {
     const pattern = this.currentPattern();
     if (pattern === null) return;
+    const channel = this.selectedChannel;
+    if (channel < 0) return;
+    const step = oneStep(delta);
+    if (step === 0) return;
+    const ticks = this.engine.getTicksPerStep(channel);
+
     let index = RATCHET_CODES.indexOf(pattern.getRatchet(this.step));
     if (index < 0) index = 0;
-    const next = clampIndex(index, oneStep(delta), RATCHET_CODES.length);
-    pattern.setRatchet(this.step, RATCHET_CODES[next]!);
-    this.engine.refreshTiming(this.selectedChannel);
+
+    let cursor = index;
+    for (let tried = 0; tried < RATCHET_CODES.length; ++tried) {
+      const candidate = clampIndex(cursor, step, RATCHET_CODES.length);
+      if (candidate === cursor) return;
+      cursor = candidate;
+      if (ratchetFitsStep(RATCHET_CODES[cursor]!, ticks)) {
+        pattern.setRatchet(this.step, RATCHET_CODES[cursor]!);
+        this.engine.refreshTiming(channel);
+        return;
+      }
+    }
   }
 
   private togglePlay(): void {

@@ -22,6 +22,16 @@ uint8_t ratchetSpan(uint8_t code) {
     return (code == RATCHET_TRIPLET) ? 2 : 1;
 }
 
+bool ratchetFitsStep(uint8_t code, uint16_t ticksPerStep) {
+    const uint8_t triggers = ratchetTriggers(code);
+    if (triggers <= 1) {
+        return true;
+    }
+    const uint32_t stepTicks =
+        static_cast<uint32_t>(ticksPerStep) * ratchetSpan(code);
+    return stepTicks / triggers >= MIN_SLOT_TICKS;
+}
+
 Pattern::Pattern()
     : packedSteps{0, 0, 0},
       packedRatchets{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0} {

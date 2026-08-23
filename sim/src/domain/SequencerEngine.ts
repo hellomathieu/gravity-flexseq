@@ -29,7 +29,12 @@
 
 import { subdivToTicks, DEFAULT_SUBDIV } from "./subdiv.js";
 import type { PatternBank } from "./PatternBank.js";
-import { ratchetSpan, ratchetTriggers, RATCHET_NONE } from "./Pattern.js";
+import {
+  ratchetFitsStep,
+  ratchetSpan,
+  ratchetTriggers,
+  RATCHET_NONE,
+} from "./Pattern.js";
 
 /** Separation de mesure : une barre tous les N steps. GRAPHIQUE uniquement. */
 export const BAR_NONE = 0;
@@ -70,6 +75,16 @@ export const DEFAULT_CHANNEL_MODE = ChannelMode.CLOCK;
 
 export const MAX_OFFSET = 255;
 
+/**
+ * Tick, dans le step, ou part le sous-declenchement k (k dans 1..triggers-1).
+ * La division est ENTIERE et explicite : le C++ la fait sur des entiers, et un
+ * flottant ici placerait les declenchements ailleurs.
+ */
+export function subOnsetTick(stepTicks: number, triggers: number, k: number): number {
+  if (triggers <= 1) return stepTicks;
+  return Math.floor((stepTicks * k) / triggers);
+}
+
 /** Chance de SAUT d'un step en dixiemes : 0 jamais, 10 toujours. */
 export const MAX_SKIP_CHANCE = 10;
 
@@ -84,7 +99,6 @@ interface ChannelState {
   skipChance: number;
   /** Timing du step COURANT, recalcule a chaque frontiere (pas de division en boucle). */
   stepTicks: number; // ticksPerStep x span
-  slotTicks: number; // stepTicks / triggers
   triggers: number; // declenchements dans ce step
   subOnset: number; // sous-declenchements deja emis
   localStep: number; // position locale, dans [0, effectiveLength)
@@ -110,7 +124,6 @@ export class SequencerEngine {
       offset: 0,
       skipChance: 0,
       stepTicks: subdivToTicks(DEFAULT_SUBDIV),
-      slotTicks: subdivToTicks(DEFAULT_SUBDIV),
       triggers: 1,
       subOnset: 0,
       localStep: 0,
@@ -140,12 +153,9 @@ export class SequencerEngine {
     let triggers = ratchetTriggers(code);
     c.stepTicks = c.ticksPerStep * span;
 
-    // Un sous-slot doit tomber sur un tick entier ; sinon le ratchet est ignore
-    // pour cette combinaison (repli documente, aucune derive).
-    if (triggers > 1 && c.stepTicks % triggers !== 0) triggers = 1;
+    if (!ratchetFitsStep(code, c.ticksPerStep)) triggers = 1;
 
     c.triggers = triggers;
-    c.slotTicks = c.stepTicks / triggers;
     if (resetSubOnset) {
       c.subOnset = 0;
     } else if (c.subOnset >= c.triggers) {
@@ -265,7 +275,10 @@ export class SequencerEngine {
             this.onsets[ch] = (this.onsets[ch] ?? 0) + 1;
             continue;
           }
-        } else if (c.subOnset + 1 < c.triggers && c.acc >= c.slotTicks * (c.subOnset + 1)) {
+        } else if (
+          c.subOnset + 1 < c.triggers &&
+          c.acc >= subOnsetTick(c.stepTicks, c.triggers, c.subOnset + 1)
+        ) {
           c.subOnset += 1;
           this.onsets[ch] = (this.onsets[ch] ?? 0) + 1;
           continue;

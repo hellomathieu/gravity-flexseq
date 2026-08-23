@@ -42,6 +42,19 @@ export function isValidRatchet(code: number): boolean {
   return RATCHET_CODES.includes(code);
 }
 
+export const MIN_SLOT_TICKS = 2;
+
+/**
+ * Vrai quand les declenchements du code tiennent dans le step a cette cadence :
+ * chaque tranche doit valoir au moins MIN_SLOT_TICKS ticks.
+ */
+export function ratchetFitsStep(code: number, ticksPerStep: number): boolean {
+  const triggers = ratchetTriggers(code);
+  if (triggers <= 1) return true;
+  const stepTicks = ticksPerStep * ratchetSpan(code);
+  return Math.floor(stepTicks / triggers) >= MIN_SLOT_TICKS;
+}
+
 /** Nombre de declenchements emis par un step portant ce code (>= 1). */
 export function ratchetTriggers(code: number): number {
   if (code === RATCHET_TRIPLET) return 3;
