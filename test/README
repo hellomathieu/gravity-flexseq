@@ -9,11 +9,20 @@ it is what lets the acceptance suite stay a reliable signal.
 -------------------------------------------------------------------------------
     test_cv_gate, test_main_screen, test_paged_screen, test_pattern,
     test_pattern_bank, test_pattern_screen, test_persistence,
-    test_sequencer_engine, test_subdiv, test_transport, test_trigger_sequencer,
-    test_ui_controller
+    test_ratchet_matrix, test_sequencer_engine, test_subdiv, test_transport,
+    test_trigger_sequencer, test_ui_controller
 
 Pure C++ domain, no Arduino and no libGravity. MUST be green: a phase is not
-finished while one of these fails. 278 assertions as of 2026-08-23.
+finished while one of these fails. 291 assertions as of 2026-08-23.
+
+`test_ratchet_matrix` characterizes the ratchet-by-SUBDIV matrix: the step
+duration for all 25 rates, the trigger count for the 125 rate-by-code pairs, the
+tick gaps of the trigger train, and the four rules the owner fixed on 2026-08-23
+-- an inactive step emits nothing, an inactive triplet is a triplet rest, a
+ratchet survives its step being switched off, and clearing a pattern wipes steps
+and ratchets together. It records the CURRENT behaviour, including the 13 pairs
+that fold to one trigger: lot 21 replaces that rule, and these assertions make
+the change visible instead of silent.
 
 Each of the four added since 2026-08-22 was verified by MUTATION, not merely by
 being green: test_ui_controller 22/22 mutations detected, test_main_screen 20/20,

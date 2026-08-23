@@ -1,6 +1,6 @@
 # Open risks and watch items
 
-**Last review: 2026-08-23.** Eighteen open lines, twenty-two closed or accepted.
+**Last review: 2026-08-23.** Nineteen open lines, twenty-two closed or accepted.
 
 ## What this document is, and is not
 
@@ -19,7 +19,7 @@ either closed without anyone noting it, or accepted without anyone saying so.
 
 ## What is still open
 
-Eighteen lines, and each one states **what it is waiting for and from whom**. A line
+Nineteen lines, and each one states **what it is waiting for and from whom**. A line
 that waits for nothing from nobody no longer belongs here: it is in the table
 below.
 
@@ -42,6 +42,7 @@ below.
 | 33 | **The ratchet-by-SUBDIV behaviour is thinly covered, and lot 21 is about to change it.** Measured 2026-08-23: four of the 25 SUBDIV values appear in the tests (`x4`, `x3`, `/1`, `/2`), and the ratchet-by-rate matrix has only a few cells. The silent fallback **is** asserted, at `test_sequencer_engine.cpp:405`, with the comment "documented fallback" -- and that assertion pins the very rule lot 21 replaces | **high** | **lot 20, first and before the audit**: assert the step duration for all 25 values, and the trigger count **and tick positions** for every ratchet-by-rate pair. It produces no production code. Changing the core without that net would mean writing the tests of a behaviour just changed, so writing them to pass |
 | 34 | **A sub-onset lands on a truncated slot, and the error multiplies with the rank.** The code computes `nextAt = slotTicks * k` with `slotTicks = stepTicks / triggers` already truncated. Measured: R6 at `x6`, a 16-tick step, places the six notes at 0-2-4-6-8-10 and **leaves ticks 11 to 15 empty**. A guard hides this by disabling any ratchet whose division is not exact, so 13 of 125 ratchet-by-rate pairs emit ONE trigger instead of N -- and a triplet keeps its two units while emitting one note | **high** | **lot 21**, decided 2026-08-23: the position becomes `(stepTicks * k) / triggers`, which keeps the error under one tick, and the exact-division guard becomes a **two-tick floor**. Six pairs stay refused, all at the three fastest rates; the triplet then works everywhere |
 | 35 | **The step render promises what the channel cannot play.** The ratchet digit is drawn on an inactive step, and on a step whose ratchet the channel's rate makes impossible. `PatternScreenModel` does not carry the rate, so the renderer cannot know | medium | **lot 22**, on the table the owner validated 2026-08-23: a hollow triangle for an inactive triplet, and no digit in either case. One more field in the model |
+| 36 | **The C++ and the TypeScript place a sub-onset with different arithmetic, and the guard hides it.** C++ writes `c.slotTicks = stepTicks / triggers` on `uint16_t`, so it **truncates**; TypeScript writes the same line on a float, so it **keeps the fraction**. Today the two agree, because the divisibility guard removes every case where the division is not exact -- the only cases where they would differ. Found on 2026-08-23 by the mutation harness, whose stale-pattern guard refused a mutant written against a `Math.floor` that TypeScript does not have | **high** | **lot 21 must unify the formula before removing the guard.** Removing it first would make the reference model and the firmware place sub-onsets differently, which PRD §13's parity rule forbids. The chosen form, `(stepTicks * k) / triggers`, must therefore be written with an explicit integer division on both sides |
 | 12 | **The trigger pulse no longer measures what this line said, and the explanation no longer fits either.** It was 8.8 ms against a configured 5, blamed on the auto-off sitting at the end of `loop()` -- 5 ms rounded up to the next pass. Measured again on 2026-08-23, with the loop far shorter since the main screen stopped redrawing: **4.70 ms**, which is *below* the 5 ms configured. A round-up cannot go below the value it rounds, so the account is wrong somewhere | low | **nothing today** -- 0.9 % of a step at 120 BPM in `/1`, and no musical consequence. What is owed is the explanation, not a fix: read how libGravity's `DigitalOutput::Process()` compares against `millis()` before trusting either number. To revisit anyway once fast SUBDIV exists. **Two more figures, 2026-08-23**, from the two courses of the same run: **4.78 ms in CLOCK** and **5.01 ms in SEQ**. The width therefore straddles the 5 ms configured, and it moves with the mode, which no round-up to the next pass explains either |
 
 ## What is closed or accepted
