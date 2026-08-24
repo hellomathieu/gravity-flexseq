@@ -15,6 +15,8 @@ void process(uint32_t nowMs);
 EncoderFilter& filter();
 bool shiftHeld();
 
+uint16_t suppressedLongPresses();
+
 }  // namespace input
 }  // namespace flexseq
 
