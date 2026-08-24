@@ -158,6 +158,24 @@ void test_pattern_ratchets_survive_step_edits() {
     TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_3, pattern.getRatchet(5));
 }
 
+void test_set_low_step_mask_writes_sixteen_and_spares_the_rest() {
+    Pattern pattern;
+    TEST_ASSERT_TRUE(pattern.writeStep(20, true));
+    pattern.setLowStepMask(0x9111);
+    const uint8_t expected[6] = {0, 4, 8, 12, 15, 20};
+    uint8_t seen = 0;
+    for (uint8_t i = 0; i < Pattern::DEFAULT_TOTAL_STEPS; ++i) {
+        bool active = false;
+        TEST_ASSERT_TRUE(pattern.readStep(i, active));
+        if (active) {
+            TEST_ASSERT_LESS_THAN_UINT8(6, seen);
+            TEST_ASSERT_EQUAL_UINT8(expected[seen], i);
+            ++seen;
+        }
+    }
+    TEST_ASSERT_EQUAL_UINT8(6, seen);
+}
+
 int main() {
     UNITY_BEGIN();
 
@@ -175,6 +193,7 @@ int main() {
     RUN_TEST(test_ratchet_trigger_counts_and_spans);
     RUN_TEST(test_pattern_clear_resets_steps_and_ratchets);
     RUN_TEST(test_pattern_ratchets_survive_step_edits);
+    RUN_TEST(test_set_low_step_mask_writes_sixteen_and_spares_the_rest);
 
     return UNITY_END();
 }

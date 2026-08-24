@@ -206,6 +206,23 @@ MUTANTS = [
      "        if (ratchetFitsStep(ratchetAtIndex(cursor), ticks)) {",
      "        if (true) {", "cpp-ratchet"),
 
+    ("cpp: a factory pattern loses a step",
+     "src/domain/FactoryPatterns.cpp", "    0x9111,", "    0x9110,", "cpp-factory"),
+    ("cpp: a reload of the factory patterns no longer erases",
+     "src/domain/FactoryPatterns.cpp", "        pattern->clear();\n", "", "cpp-factory"),
+    ("cpp: the factory content spills into the B bank",
+     "src/domain/FactoryPatterns.cpp",
+     "    for (uint8_t index = 0; index < FACTORY_PATTERN_COUNT; ++index) {",
+     "    for (uint8_t index = 0; index < PATTERN_COUNT; ++index) {", "cpp-factory"),
+    ("cpp: the step mask writes only its low byte",
+     "src/domain/Pattern.cpp",
+     "    packedSteps[1] = static_cast<uint8_t>((bits >> 8) & 0xFF);\n", "", "cpp-pattern"),
+
+    ("ts: a factory pattern loses a step",
+     "sim/src/domain/FactoryPatterns.ts", "0x9111,", "0x9110,", "ts-factory"),
+    ("ts: a reload of the factory patterns no longer erases",
+     "sim/src/domain/FactoryPatterns.ts", "    pattern.clear();\n", "", "ts-factory"),
+
     ("cpp: the debt is overwritten instead of accumulated",
      "include/flexseq/TriggerSequencer.h",
      "            const uint16_t total =\n                static_cast<uint16_t>(owed_[ch]) + counts_[ch];",
@@ -367,6 +384,10 @@ MUTANTS = [
 ]
 
 SUITES = {
+    "cpp-factory": (["./tools/run-cpp-tests.sh", "test_factory_patterns"], ROOT),
+    "cpp-pattern": (["./tools/run-cpp-tests.sh", "test_pattern"], ROOT),
+    "ts-factory": (["npx", "vitest", "run", "test/FactoryPatterns.test.ts"],
+                   os.path.join(ROOT, "sim")),
     "cpp-debt": (["./tools/run-cpp-tests.sh", "test_trigger_sequencer"], ROOT),
     "ts-debt": (["npx", "vitest", "run", "test/TriggerSequencer.test.ts"],
                 os.path.join(ROOT, "sim")),

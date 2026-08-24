@@ -45,6 +45,11 @@ bool Pattern::readStep(uint8_t index, bool& active) const {
     return true;
 }
 
+void Pattern::setLowStepMask(uint16_t bits) {
+    packedSteps[0] = static_cast<uint8_t>(bits & 0xFF);
+    packedSteps[1] = static_cast<uint8_t>((bits >> 8) & 0xFF);
+}
+
 bool Pattern::writeStep(uint8_t index, bool active) {
     if (index >= DEFAULT_TOTAL_STEPS) {
         return false;

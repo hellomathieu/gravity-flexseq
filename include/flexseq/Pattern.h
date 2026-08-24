@@ -60,6 +60,10 @@ public:
 
     void clear();
 
+    // Ecrit les 16 premiers steps d'un coup. Pattern possede son propre
+    // empaquetage, donc la conversion masque -> octets lui appartient.
+    void setLowStepMask(uint16_t bits);
+
     // Per-step ratchet. setRatchet rejects an out-of-range index or an unknown
     // code. getRatchet returns RATCHET_NONE for an invalid index.
     bool setRatchet(uint8_t index, uint8_t code);

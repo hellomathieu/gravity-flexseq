@@ -129,3 +129,16 @@ describe("Pattern — ratchets (un code par step)", () => {
     expect(p.getRatchet(5)).toBe(RATCHET_3);
   });
 });
+
+describe("setLowStepMask", () => {
+  it("ecrit les seize premiers steps et laisse les autres", () => {
+    const pattern = new Pattern();
+    pattern.writeStep(20, true);
+    pattern.setLowStepMask(0x9111);
+    const on: number[] = [];
+    for (let i = 0; i < Pattern.DEFAULT_TOTAL_STEPS; ++i) {
+      if (pattern.readStep(i) === true) on.push(i);
+    }
+    expect(on).toEqual([0, 4, 8, 12, 15, 20]);
+  });
+});

@@ -104,6 +104,17 @@ export class Pattern {
   }
 
   /** Efface tous les steps ET les triolets. */
+  /**
+   * Ecrit les 16 premiers steps d'un coup. Existe pour le budget Flash cote
+   * AVR — 16 appels a writeStep par pattern coutaient 104 o de plus — et le
+   * miroir la porte pour que les deux surfaces restent les memes.
+   */
+  setLowStepMask(bits: number): void {
+    for (let step = 0; step < 16; ++step) {
+      this.steps[step] = ((bits >> step) & 1) === 1;
+    }
+  }
+
   clear(): void {
     this.steps.fill(false);
     this.clearRatchets();

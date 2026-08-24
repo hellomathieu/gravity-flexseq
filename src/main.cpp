@@ -3,6 +3,7 @@
 
 #include <flexseq/CvSampler.h>
 #include <flexseq/EepromStorage.h>
+#include <flexseq/FactoryPatterns.h>
 #if FLEXSEQ_ENCODER_PROBE
 #include <flexseq/EncoderProbe.h>
 #endif
@@ -167,6 +168,10 @@ void setup() {
     // repart des defauts EN LES ECRIVANT — le format est ainsi materialise des
     // le premier demarrage, pas a la premiere edition. Voir PRD 11.1.
     if (!persistence.load(eeprom, persistentImage)) {
+        // Premier demarrage, ou format inconnu. L'original livre A1..A8 avec du
+        // contenu et B1..B8 vides (Gravity.ino:83-98) : sans cela la regle qui
+        // gele A1..A8 gelerait huit emplacements vides.
+        flexseq::loadFactoryPatterns(patternBank);
         persistence.markDirty(millis());
     }
 
