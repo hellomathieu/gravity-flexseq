@@ -93,7 +93,7 @@ fi
 
 if [ "$RUN_LIB" = "1" ]; then
   echo "=========================================="
-  echo "  Caracterisation libGravity @ 9be88be1f4"
+  echo "  Caracterisation libGravity"
   echo "=========================================="
   if "$REPO_ROOT/tools/run-libgravity-tests.sh"; then
     lib_status="OK"

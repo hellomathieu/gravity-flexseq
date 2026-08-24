@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# Tests de CARACTERISATION de la dependance libGravity, figee au commit
-# 9be88be1f4 (env PlatformIO `native_libgravity`).
+# Tests de CARACTERISATION de la dependance libGravity, figee au commit que
+# porte platformio.ini (env PlatformIO `native_libgravity`).
 #
 # Ce ne sont PAS des tests d'acceptation FlexSeq. Ils decrivent le comportement
 # REEL de la dependance, anomalies incluses. Certains echouent donc par
@@ -31,6 +31,13 @@ set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
+
+PIN="$(sed -n 's|^[[:space:]]*https://[^[:space:]]*libGravity\.git#\([0-9a-fA-F]\{7,40\}\)[[:space:]]*$|\1|p' platformio.ini | head -1)"
+if [ -z "$PIN" ]; then
+  echo "epingle libGravity introuvable dans platformio.ini" >&2
+  exit 2
+fi
+PIN_SHORT="${PIN:0:11}"
 
 # Localise pio : PATH d'abord, sinon l'installation PlatformIO par defaut.
 if command -v pio >/dev/null 2>&1; then
@@ -128,7 +135,7 @@ n_fail=$(printf '%s\n' "$ASSERTIONS" | awk '$3=="FAILED"' | grep -c .)
 n_pass=$(( n_total - n_fail ))
 
 echo
-echo "${C_B}========== CARACTERISATION libGravity @ 9be88be1f4 ==========${C_0}"
+echo "${C_B}========== CARACTERISATION libGravity @ ${PIN_SHORT} ==========${C_0}"
 echo
 
 # Recap par module, dans l'ordre d'execution. Le critere n'est PAS « tout
