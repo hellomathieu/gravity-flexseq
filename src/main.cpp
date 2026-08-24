@@ -198,6 +198,12 @@ void setup() {
         ui.handle(flexseq::UiController::EVENT_ROTATE, 1);
     }
     ui.handle(flexseq::UiController::EVENT_PRESS);
+    // Et le transport DEMARRE. Depuis que le module boote a l'arret, un ecran
+    // EDIT sans playhead qui avance ne se redessine presque jamais : un harnais
+    // de rendu y mesurerait quelques echantillons et les presenterait comme les
+    // autres. Le drapeau met le firmware dans l'etat qu'on veut observer, et
+    // l'etat observable inclut le mouvement.
+    ui.handle(flexseq::UiController::EVENT_PLAY_PRESS);
 #endif
 
     // Le module demarre A L'ARRET, comme l'original : `isPlaying` y est un

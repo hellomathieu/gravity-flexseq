@@ -174,16 +174,42 @@ frame_med = grab(r"Image courante, estimee materiel\s+: ([\d.]+) ms")
 frame_full = grab(r"Image de rafraichissement complet\s+: ([\d.]+) ms")
 
 if None in (bands, conform, hw_max, hw_p90, max_b, med_a, med_b):
-    print(f"  {mark(False)} sortie de la sonde illisible")
-    print("".join(c for c in txt if 32 <= ord(c) < 127 or c == "\n"))
+    # Deux causes tres differentes, et les confondre envoie chercher le defaut
+    # au mauvais endroit. Le harnais n'emet sa ligne RESULTAT que s'il a des
+    # echantillons : un binaire qui ne redessine pas produit une sortie
+    # parfaitement lisible et parfaitement vide.
+    if "=== LECTURE ===" in txt:
+        print(f"  {mark(False)} aucun echantillon : ce binaire ne redessine pas assez")
+        print(f"  {DIM}La sonde mesure le blocage PENDANT LE RENDU. Un firmware pose sur")
+        print(f"  un ecran sans element variant dans le temps n'ouvre presque aucune")
+        print(f"  image. Viser env:wokwi, ou la production avec")
+        print(f"  PLATFORMIO_BUILD_FLAGS=-DFLEXSEQ_START_IN_EDIT=1{Z}")
+    else:
+        print(f"  {mark(False)} sortie de la sonde illisible")
+        print("".join(c for c in txt if 32 <= ord(c) < 127 or c == "\n"))
     sys.exit(1)
 
-sane = (conform == bands) and bands >= 8 and "IMAGE TROP LONGUE" not in txt
+# Le plancher etait `bands >= 8`, soit UNE image. Il ne protegeait que contre
+# l'absence totale de mesure, jamais contre un echantillon trop maigre pour
+# conclure : les 14 bandes de la production sur l'ecran principal le passaient,
+# alors que c'est le cas qui avait fait basculer la sonde sur env:wokwi.
+#
+# Le plancher porte donc sur les IMAGES. Un rafraichissement complet arrive une
+# fois sur seize, et le pire passage n'appartient qu'a celui-la : sous seize
+# images, la sonde ne peut pas separer les deux populations et le dit.
+MIN_FRAMES = 16
+enough = frames >= MIN_FRAMES
+sane = (conform == bands) and bands >= 8 and enough and "IMAGE TROP LONGUE" not in txt
 corrected = f_hw is not None
 fits = hw_p90 is not None and hw_p90 <= budget
 
 print()
 print(f"{B}============ BLOCAGE DE LA BOUCLE (esclave SSD1306 reel) ============{Z}")
+if not enough:
+    print(f"  {ERR}Echantillon trop maigre : {frames} images, il en faut {MIN_FRAMES}.{Z}")
+    print(f"  {DIM}Un rafraichissement complet arrive 1 fois sur 16, et le pire passage")
+    print(f"  n'appartient qu'a lui. Sous ce seuil la sonde ne mesure pas ce qu'elle")
+    print(f"  annonce. Rallonger DURATION, ou viser un binaire qui redessine.{Z}")
 print(f"  {mark(sane)} Mesure coherente   {bands} bandes de 128 o en {frames} images "
       f"{DIM}({per_frame[1].strip() if per_frame else '?'}){Z}")
 if corrected:
