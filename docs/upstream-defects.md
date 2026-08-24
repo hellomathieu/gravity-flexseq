@@ -90,6 +90,28 @@ of the list; this line saves them the search. The only lever would be rewriting
 uClock's tempo arithmetic in integers, inside an ISR, where musical accuracy is
 what is at stake. That needs an explicit decision, not an optimisation pass.
 
+## libGravity's own reference firmware (`firmware/Gravity/`)
+
+**A third source, read on 2026-08-25.** libGravity ships reference applications
+next to the library, under **MIT** rather than GPLv3. They implement swing, a
+duty cycle, a mute, CV destinations and a multi-slot state manager, so FlexSeq
+reads them before writing lots G, I, J, 13 and E. The catalogue of what is worth
+reusing is in `WORKPLAN.md`; what follows is what must not be.
+
+Nothing here is compiled into FlexSeq. These files are examples, and the build
+tree confirms it: only `libGravity.cpp` and `src/uClock/uClock.cpp` are linked.
+
+| # | Defect | Established by | Fix looks like |
+|---|---|---|---|
+| A | **`applyCvMod()` assigns the wrong field four times.** `channel.h:215-218` writes `base_clock_mod_index` into the cv-modulated probability, duty cycle, offset and swing. The four destinations therefore receive a clock division index. It only shows when no CV destination is active, which is the branch that resets the cached values | read, 2026-08-25 | four lines |
+| B | **`solidTick()` and `hollowTick()` are identical**, both `drawBox(56, 4, 4, 4)` (`display.h:227-228`). The hollow marker does not exist, so the swing indicator cannot tell a triplet division from a straight one — which is the whole point of having two | read, 2026-08-25 | one line, `drawFrame` instead of `drawBox` |
+| C | **`displaySaveSlot()` returns nothing** when the slot is above `MAX_SAVE_SLOTS` (`display.h:248-255`). A non-void function that falls off its end is undefined behaviour | read, 2026-08-25 | one line |
+
+**These are not on the fork's repair list.** The charter of ADR 0008 covers what
+FlexSeq compiles, and it compiles none of this. They are recorded so that nobody
+copies them, and so that an upstream contribution can name them if one is ever
+made.
+
 ## Original firmware (`GravityFW`)
 
 | # | Defect | Established by |
