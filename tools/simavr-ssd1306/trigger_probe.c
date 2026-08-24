@@ -176,6 +176,11 @@ int main(int argc, char **argv)
     const char *mode = (argc > 5) ? argv[5] : "clock";
     const char *steps = (argc > 6) ? argv[6] : "0,3,4,9,15";
     const int seq = strcmp(mode, "seq") == 0;
+    /* Course RATCHET : les onsets ne sont plus sur la grille des steps, donc
+     * ni l ecart entre impulsions ni la gigue par rapport a cette grille ne
+     * veulent dire quoi que ce soit. Le critere est le NOMBRE d impulsions,
+     * et il est evalue par le script contre la course SEQ. */
+    const int ratchet = strcmp(mode, "ratchet") == 0;
 
     setvbuf(stdout, NULL, _IONBF, 0);
 
@@ -297,7 +302,10 @@ int main(int argc, char **argv)
 
     int exp_gaps[MAX_ACTIVE];
     const int nexp = expected_gaps(exp_gaps);
-    if (seq) {
+    if (ratchet) {
+        printf("  aucun ecart attendu : le ratchet place les onsets HORS de la\n"
+               "  grille des steps. Le critere est le nombre d impulsions.\n");
+    } else if (seq) {
         printf("  ecarts attendus (steps) :");
         for (int i = 0; i < nexp; ++i) printf(" %d", exp_gaps[i]);
         printf("   (a une rotation pres)\n");
@@ -307,7 +315,9 @@ int main(int argc, char **argv)
 
     double step_measured = 0.0;
     int gap_ok = 0, gap_total = 0;
-    if (ref->nrise >= 3) {
+    if (ratchet) {
+        printf("  %d impulsions observees sur le channel 1\n", ref->nrise);
+    } else if (ref->nrise >= 3) {
         /* DROP=<n> ignore un front sur n : deux steps se fondent en un seul
          * ecart, le train cesse d'etre conforme et le critere doit rougir. Sans
          * ce chemin, le vert ne prouverait rien. */
@@ -400,7 +410,9 @@ int main(int argc, char **argv)
     /* --- Gigue ------------------------------------------------------------ */
     printf("\n=== GIGUE (ecart a la grille ideale) ===\n");
     double jit_max = 0.0, jit_med = 0.0;
-    if (ref->nrise >= 3) {
+    if (ratchet) {
+        printf("  sans objet : les onsets d un ratchet ne sont pas sur la grille\n");
+    } else if (ref->nrise >= 3) {
         static double jit[MAX_EDGES];
         int nj = 0;
         const uint64_t origin = ref->rise[0];
