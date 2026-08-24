@@ -36,6 +36,7 @@ esac
 
 cpp_status="skip"
 ts_status="skip"
+tc_status="skip"
 lib_status="skip"
 
 if [ "$RUN_CPP" = "1" ]; then
@@ -64,6 +65,17 @@ if [ "$RUN_TS" = "1" ]; then
     ts_status="ECHEC"
   fi
   echo
+  echo "=========================================="
+  echo "  Typage TypeScript (tsc --noEmit)"
+  echo "=========================================="
+  # vitest ne type pas : voir test/README.
+  if ( cd "$REPO_ROOT/sim" && npm run --silent typecheck ); then
+    tc_status="OK"
+    echo "  aucune erreur de typage"
+  else
+    tc_status="ECHEC"
+  fi
+  echo
 fi
 
 if [ "$RUN_LIB" = "1" ]; then
@@ -81,11 +93,13 @@ fi
 echo "=================== RECAP ==================="
 printf "  C++ acceptation (native)   : %s\n" "$cpp_status"
 printf "  TypeScript (sim/)          : %s\n" "$ts_status"
+printf "  Typage TypeScript          : %s\n" "$tc_status"
 printf "  libGravity caracterisation : %s\n" "$lib_status"
 echo "============================================"
 
 # Code de sortie : erreur si l'une des suites lancees a echoue.
-if [ "$cpp_status" = "ECHEC" ] || [ "$ts_status" = "ECHEC" ] || [ "$lib_status" = "ECHEC" ]; then
+if [ "$cpp_status" = "ECHEC" ] || [ "$ts_status" = "ECHEC" ] \
+   || [ "$tc_status" = "ECHEC" ] || [ "$lib_status" = "ECHEC" ]; then
   exit 1
 fi
 exit 0
