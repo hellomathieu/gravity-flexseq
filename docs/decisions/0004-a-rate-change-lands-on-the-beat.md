@@ -37,11 +37,12 @@ other:
   transport is stopped**: `if (!isPlaying) { calculateCycles(); }`;
 - `Gravity.ino:454` carries the author's own comment, "switching modes on the beat
   and resetting channel clock", and calls `calculateCycles()` under
-  `if (pulseCount == 0)`. `pulseCount` counts 0 to 95 per quarter note, so that
-  test **is** the beat.
+  `if (pulseCount == 0)`. The original defines `PPQN 24` (`Gravity.ino:13`), so
+  `pulseCount` counts 0 to 23 per quarter note and that test **is** the beat.
+  FlexSeq runs at 96 PPQN, so its own beat is `masterPhase % 96 == 0`.
 
-Every rate divides or multiplies 96, so a channel counter is 0, or a multiple of
-96, at every beat. The change therefore lands on an aligned value.
+Every rate divides or multiplies the quarter note, so a channel counter is 0, or
+a whole number of beats, at every beat. The change therefore lands on an aligned value.
 
 The original is aligned to **1 tick**, not exactly: when it leaves a division
 mid-cycle, `Gravity.ino:491` resets the counter on the pulse *after* the beat.

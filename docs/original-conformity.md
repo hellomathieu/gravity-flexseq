@@ -95,15 +95,18 @@ Each row below carries the original's line, so the reading can be checked.
 | Rotate, a field open | changes the value | changes the value | conform |
 | Press, short | enters the tab, or opens the field (`Interactions.ino:13,51`) | same | conform |
 | Press, long | goes back one level, threshold **300 ms** (`Interactions.ino:73-82`) | goes back, threshold **750 ms** | **divergence to decide** — question 3 |
-| SHIFT + rotate, tab bar | changes the tab's **main parameter** (`Interactions.ino:117-171`) | **nothing** | **omission** — line 31, lot 19 |
+| SHIFT + rotate, tab bar | changes the tab's **main parameter** (`Interactions.ino:117-171`) | changes the tab's main parameter: SUBDIV in CLOCK, the skip chance in RAND, the pattern in SEQ, the tempo on the clock tab | **conform** — closed by lot 19, 2026-08-23. The value is edited before it is **displayed** for CLOCK and RAND: the display is lot 11 |
 | SHIFT + rotate, in a tab | changes the selected value | changes the value | conform |
 | SHIFT + press, editor | **toggles the step** under the cursor (`Interactions.ino:397-399`) | encoder press toggles it | **divergence to decide** — question 2 |
 | SHIFT held long, editor | **clears the pattern**, threshold **500 ms** (`Interactions.ino:411-415`) | clears it, threshold 750 ms | conform in substance |
 | SHIFT + encoder over 2 s | opens SETTINGS (`Interactions.ino:83-84`, `416-419`) | absent | **omission**, kept by decision 2026-08-23 — lot 16 |
 | Press, editor | starts and stops **RECORDING** (`Interactions.ino:53-57`) | toggles the step | **conflict** — question 2 |
 | PLAY | starts and stops the clock (`Interactions.ino:369+`) | same | conform |
-| Encoder acceleration | **none** — the code is commented out (`Interactions.ino:100-104`) | libGravity accelerates x3; `oneStep()` cancels it, except for the tempo | **divergence to decide** — question 4 |
+| Encoder acceleration | **none** — the code is commented out (`Interactions.ino:100-104`) | libGravity accelerates x3; `oneStep()` cancels it **everywhere**, the tempo included since lot 19 | **conform** — and the acceleration never fires by hand anyway, measured on the module: ADR 0003 |
 | Reversal filter | ignores a reversal under **200 ms** (`Interactions.ino:104`) | `EncoderFilter`, **12 ms** | **divergence to decide** — question 4 |
+| Press plus rotate | **does not exist** | **removed** by lot 19; `EVENT_ROTATE_HELD` and `AttachPressRotateHandler` are gone, verified by compilation | **conform** |
+| SHIFT + rotate, editor | sets the **ratchet** of the step, on a step that is selected **and active** | same; on an inactive step the gesture does nothing | **conform** — the ratchet is a FlexSeq addition, PRD §6.3, and the gesture is the original's |
+| SHIFT + PLAY | reserved for RECORDING | recognised as a ninth gesture, with no client; PLAY alone still drives the transport | **conform in the gesture**, the function is part of RECORDING |
 | Live trigger | SHIFT fires the channel's output, **only while recording** (`Interactions.ino:394-396`) | absent | **omission**, part of RECORDING |
 
 ## Behaviour, not layout
@@ -199,6 +202,14 @@ reaches 100 %. FlexSeq lets the user set 100 % directly. **Owner's decision.**
 **6. `RANGE` returns, and the format follows.** The original has it, rule §1 keeps
 it, and the version 2 image has no byte for it. The image would go to 305 bytes
 and the version byte to 3. **Owner's decision** on the bump, not on the field.
+
+## The modes, parameters and values of the original
+
+The inventory of the three channel modes -- which parameter each carries, which
+values it takes, and where its CV goes -- lives in `docs/original-modes.md`. It
+was supplied by the owner on 2026-08-23 and checked line by line against the
+pinned original. It also carries the two corrections that check produced: the
+original runs at **24 PPQN**, and the skip chance has two ceilings.
 
 ## What the audit did NOT cover
 

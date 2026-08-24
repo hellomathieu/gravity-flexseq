@@ -13,7 +13,7 @@ it is what lets the acceptance suite stay a reliable signal.
     test_trigger_sequencer, test_ui_controller
 
 Pure C++ domain, no Arduino and no libGravity. MUST be green: a phase is not
-finished while one of these fails. 311 assertions as of 2026-08-23, counted
+finished while one of these fails. 317 assertions as of 2026-08-23, counted
 from the `RUN_TEST` calls and confirmed by the runner's own total.
 
 ⚠️ **`onsetCount()` is not what the outputs see.** The engine counts step and
@@ -41,6 +41,14 @@ mutation there being an equivalent mutant, which ADR 0001 records rather than
 counts as a pass. Their TypeScript mirrors were swept the same way (15/15,
 15/15, 22/22).
 
+
+⚠️ **`npm run typecheck` catches what the TypeScript suite cannot.** vitest does
+not typecheck: when lot 19 removed `UiEvent.RotateHeld`, the tests still using it
+kept **passing**, because the member evaluated to `undefined`, `handle(undefined,
+1)` did nothing, and the next assertion measured that absence of effect. `tsc
+--noEmit` named it at once. The same mistake is a compilation error on the C++
+side. The typecheck is **not** part of `run-all-tests.sh`: run it after any change
+to a shared type.
 
 ⚠️ **A new test module must be added to `test_filter`, or it stays silent.**
 `env:native` carries an allow-list, and `test_subdiv` has no wildcard, so
