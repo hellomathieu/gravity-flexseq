@@ -3,6 +3,9 @@ import { PatternBank } from "../src/domain/PatternBank.js";
 import { SequencerEngine, PPQN, ChannelMode, CHANNEL_COUNT } from "../src/domain/SequencerEngine.js";
 import { Prng } from "../src/domain/Prng.js";
 import { TriggerSequencer } from "../src/domain/TriggerSequencer.js";
+import { RATCHET_6, Pattern } from "../src/domain/Pattern.js";
+
+const TOTAL_STEPS = Pattern.DEFAULT_TOTAL_STEPS;
 
 const STEP = PPQN; // 96 = default ticksPerStep (/1)
 
@@ -231,5 +234,62 @@ describe("Prng", () => {
     const prng = new Prng();
     const golden = [54031, 61861, 5940, 65394, 5969];
     expect(golden.map(() => prng.next())).toEqual(golden);
+  });
+});
+
+describe("la dette d onsets", () => {
+  it("garde l onset que la sortie n a pas pu emettre", () => {
+    const bank = new PatternBank();
+    const engine = new SequencerEngine();
+    const trig = new TriggerSequencer(bank, engine);
+    for (let ch = 0; ch < CHANNEL_COUNT; ++ch) {
+      engine.setChannelMode(ch, ChannelMode.SEQ);
+    }
+    engine.setPatternBank(bank);
+    engine.setSelectedPattern(0, 0);
+    bank.getPattern(0)!.writeStep(0, true);
+    bank.getPattern(0)!.setRatchet(0, RATCHET_6);
+    engine.setSubdiv(0, -8);
+    engine.start();
+
+    // Les sous-declenchements tombent aux ticks 2, 4, 6, 8, 10.
+    engine.advance(4);
+    trig.update();
+    expect(trig.triggerCount(0)).toBe(2);
+    expect(trig.owedTriggers(0)).toBe(2);
+
+    expect(trig.takeTrigger(0)).toBe(true);
+
+    // Un tick de plus ne franchit RIEN : le suivant est au tick 6.
+    engine.advance(1);
+    trig.update();
+    expect(trig.triggerCount(0)).toBe(0);
+    expect(trig.owedTriggers(0)).toBe(1);
+  });
+
+  it("plafonne la dette a un pas entier", () => {
+    const bank = new PatternBank();
+    const engine = new SequencerEngine();
+    const trig = new TriggerSequencer(bank, engine);
+    for (let ch = 0; ch < CHANNEL_COUNT; ++ch) {
+      engine.setChannelMode(ch, ChannelMode.SEQ);
+    }
+    engine.setPatternBank(bank);
+    engine.setSelectedPattern(0, 0);
+    // TOUS les pas actifs : l onset de frontiere appartient au pas SUIVANT,
+    // donc un motif a un seul pas actif tarit apres le premier pas.
+    for (let i = 0; i < TOTAL_STEPS; ++i) {
+      bank.getPattern(0)!.writeStep(i, true);
+      bank.getPattern(0)!.setRatchet(i, RATCHET_6);
+    }
+    engine.setSubdiv(0, -8);
+    engine.start();
+
+    // Personne ne consomme : la dette monte puis s arrete a 6.
+    for (let i = 0; i < 40; ++i) {
+      engine.advance(1);
+      trig.update();
+    }
+    expect(trig.owedTriggers(0)).toBe(6);
   });
 });

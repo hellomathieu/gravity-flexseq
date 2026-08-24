@@ -256,6 +256,64 @@ void test_counts_hold_still_until_the_next_update() {
     TEST_ASSERT_EQUAL_UINT8(1, trig.triggerCount(0)); // reading twice changes nothing
 }
 
+// A ratchet 6 at SUBDIV x8 gives 12 ticks per step and a sub-onset every 2
+// ticks. A drain wider than one slot therefore carries several onsets, and the
+// output can only be re-armed once per pass: the surplus must WAIT, not vanish.
+void test_an_onset_the_output_could_not_emit_is_not_lost() {
+    PatternBank bank;
+    SequencerEngine engine;
+    TriggerSequencer trig(bank, engine);
+    seqMode(engine);
+    engine.setPatternBank(&bank);
+
+    engine.setSelectedPattern(0, 0);
+    bank.getPattern(0)->writeStep(0, true);
+    bank.getPattern(0)->setRatchet(0, flexseq::RATCHET_6);
+    engine.setSubdiv(0, -8);
+    engine.start();
+
+    // Sub-onsets land at ticks 2, 4, 6, 8, 10. Four ticks cross two of them.
+    engine.advance(4);
+    trig.update();
+    TEST_ASSERT_EQUAL_UINT8(2, trig.triggerCount(0));
+    TEST_ASSERT_EQUAL_UINT8(2, trig.owedTriggers(0));
+
+    TEST_ASSERT_TRUE(trig.takeTrigger(0));
+
+    // One more tick crosses NOTHING: the next sub-onset is at 6. So this drain
+    // owes nothing, and a debt of one can only be the onset never emitted.
+    engine.advance(1);
+    trig.update();
+    TEST_ASSERT_EQUAL_UINT8(0, trig.triggerCount(0));
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, trig.owedTriggers(0),
+        "l onset non emis doit survivre au drainage suivant");
+}
+
+// The debt stops at one whole step's worth. Every step must be active: the
+// boundary onset belongs to the NEXT step, so a pattern with one active step
+// dries up after the first one.
+void test_the_debt_stops_at_one_whole_step() {
+    PatternBank bank;
+    SequencerEngine engine;
+    TriggerSequencer trig(bank, engine);
+    seqMode(engine);
+    engine.setPatternBank(&bank);
+
+    engine.setSelectedPattern(0, 0);
+    for (uint8_t i = 0; i < Pattern::DEFAULT_TOTAL_STEPS; ++i) {
+        bank.getPattern(0)->writeStep(i, true);
+        bank.getPattern(0)->setRatchet(i, flexseq::RATCHET_6);
+    }
+    engine.setSubdiv(0, -8);
+    engine.start();
+
+    for (uint8_t i = 0; i < 40; ++i) {
+        engine.advance(1);
+        trig.update();
+    }
+    TEST_ASSERT_EQUAL_UINT8(6, trig.owedTriggers(0));
+}
+
 void test_an_out_of_range_channel_never_triggers() {
     PatternBank bank;
     SequencerEngine engine;
@@ -316,6 +374,8 @@ int main() {
     RUN_TEST(test_a_different_seed_gives_a_different_run);
     RUN_TEST(test_the_draw_is_spent_only_when_a_step_actually_lands);
     RUN_TEST(test_counts_hold_still_until_the_next_update);
+    RUN_TEST(test_an_onset_the_output_could_not_emit_is_not_lost);
+    RUN_TEST(test_the_debt_stops_at_one_whole_step);
     RUN_TEST(test_an_out_of_range_channel_never_triggers);
     RUN_TEST(test_the_generator_never_settles_and_never_yields_zero);
     RUN_TEST(test_the_generator_matches_the_typescript_reference);

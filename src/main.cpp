@@ -213,15 +213,16 @@ void loop() {
     if (ticks > 0) {
         transport.tick(ticks);
         triggers.update();
+    }
 
-        // Emit a pulse on every channel that owes one. A ratchet step owes
-        // several onsets; the output can only be re-armed once per drain, so a
-        // pulse is emitted here and the remaining onsets land on the following
-        // drains (ticks arrive far more often than steps).
-        for (uint8_t ch = 0; ch < flexseq::SequencerEngine::CHANNEL_COUNT; ++ch) {
-            if (triggers.triggerCount(ch) > 0) {
-                gravity.outputs[ch].Trigger();
-            }
+    // Paiement de la dette d'onsets. Un pas a ratchet en doit plusieurs, et une
+    // sortie ne se rearme qu'une fois par impulsion : declencher une sortie
+    // deja haute prolongerait l'impulsion au lieu d'en creer une seconde. On
+    // paie donc UN onset par passage et seulement sur une sortie basse, sur
+    // TOUT passage — y compris ceux sans tick, sinon le surplus serait perdu.
+    for (uint8_t ch = 0; ch < flexseq::SequencerEngine::CHANNEL_COUNT; ++ch) {
+        if (!gravity.outputs[ch].On() && triggers.takeTrigger(ch)) {
+            gravity.outputs[ch].Trigger();
         }
     }
 

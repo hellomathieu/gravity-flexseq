@@ -14,10 +14,16 @@ class TriggerSequencer {
 public:
     static constexpr uint8_t SKIP_DRAW_BOUND = 10;
 
+    // A step carries at most six onsets: RATCHET_6 gives five sub-onsets plus
+    // the step's own. A debt above that means the loop is more than one whole
+    // step behind, and the older onsets have lost their musical meaning.
+    static constexpr uint8_t MAX_OWED = 6;
+
     TriggerSequencer(const PatternBank& bank, const SequencerEngine& engine)
         : bank_(bank), engine_(engine), prng_() {
         for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
             counts_[ch] = 0;
+            owed_[ch] = 0;
         }
     }
 
@@ -26,6 +32,9 @@ public:
     void update() {
         for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
             counts_[ch] = decide(ch);
+            const uint16_t total =
+                static_cast<uint16_t>(owed_[ch]) + counts_[ch];
+            owed_[ch] = total > MAX_OWED ? MAX_OWED : static_cast<uint8_t>(total);
         }
     }
 
@@ -37,6 +46,23 @@ public:
     }
 
     bool triggered(uint8_t channel) const { return triggerCount(channel) > 0; }
+
+    // What is still owed to the output. An output can only be re-armed once per
+    // main-loop pass, so a drain that carries several onsets leaves a debt.
+    uint8_t owedTriggers(uint8_t channel) const {
+        if (channel >= SequencerEngine::CHANNEL_COUNT) {
+            return 0;
+        }
+        return owed_[channel];
+    }
+
+    bool takeTrigger(uint8_t channel) {
+        if (channel >= SequencerEngine::CHANNEL_COUNT || owed_[channel] == 0) {
+            return false;
+        }
+        --owed_[channel];
+        return true;
+    }
 
 private:
     uint8_t decide(uint8_t channel) {
@@ -83,6 +109,7 @@ private:
     const SequencerEngine& engine_;
     Prng prng_;
     uint8_t counts_[SequencerEngine::CHANNEL_COUNT];
+    uint8_t owed_[SequencerEngine::CHANNEL_COUNT];
 };
 
 }  // namespace flexseq

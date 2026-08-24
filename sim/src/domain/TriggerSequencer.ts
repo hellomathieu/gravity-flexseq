@@ -11,11 +11,19 @@ import { Prng } from "./Prng.js";
 
 export const SKIP_DRAW_BOUND = 10;
 
+/**
+ * Un pas porte au plus six onsets : RATCHET_6 donne cinq sous-declenchements
+ * plus celui du pas. Une dette au-dela veut dire que la boucle a plus d'un pas
+ * entier de retard, et les onsets anciens ont perdu leur sens musical.
+ */
+export const MAX_OWED = 6;
+
 export class TriggerSequencer {
   private readonly bank: PatternBank;
   private readonly engine: SequencerEngine;
   private readonly prng = new Prng();
   private counts: number[] = [];
+  private owed: number[] = [];
 
   constructor(bank: PatternBank, engine: SequencerEngine) {
     this.bank = bank;
@@ -29,7 +37,10 @@ export class TriggerSequencer {
   update(): void {
     const next: number[] = [];
     for (let ch = 0; ch < this.engine.channelCount(); ++ch) {
-      next[ch] = this.decide(ch);
+      const decided = this.decide(ch);
+      next[ch] = decided;
+      const total = (this.owed[ch] ?? 0) + decided;
+      this.owed[ch] = total > MAX_OWED ? MAX_OWED : total;
     }
     this.counts = next;
   }
@@ -40,6 +51,23 @@ export class TriggerSequencer {
 
   triggered(channel: number): boolean {
     return this.triggerCount(channel) > 0;
+  }
+
+  /**
+   * Ce qui reste du a la sortie. Une sortie ne se rearme qu'une fois par
+   * impulsion, donc un drainage qui porte plusieurs onsets laisse une dette.
+   */
+  owedTriggers(channel: number): number {
+    if (channel < 0 || channel >= this.engine.channelCount()) return 0;
+    return this.owed[channel] ?? 0;
+  }
+
+  takeTrigger(channel: number): boolean {
+    if (channel < 0 || channel >= this.engine.channelCount()) return false;
+    const owed = this.owed[channel] ?? 0;
+    if (owed === 0) return false;
+    this.owed[channel] = owed - 1;
+    return true;
   }
 
   private decide(channel: number): number {
