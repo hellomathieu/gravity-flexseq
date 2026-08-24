@@ -14,6 +14,17 @@ instead of from the original's own drawing code.
 The owner's rule, restated on 2026-08-23 and now PRD §1: **keep every original
 feature and every original page; only the SEQ mode evolves.**
 
+## Which version, and why it matters
+
+⚠️ Everything below compares FlexSeq to **`main` @ `40d4aac`** (2026-03-10), the
+public release. The owner made it the **behavioural reference** on 2026-08-23.
+
+`1.2-dev` @ `f7b2150acf` is a second, **older** branch that was never merged. It
+carries features `main` does not have, and it is catalogued separately in
+`docs/original-1.2-dev-features.md`. A verdict here that says "does not exist" or
+"addition" means **it does not exist in `main`**; several of those do exist in
+`1.2-dev`, and the catalogue says which.
+
 ## Method
 
 Read the original's **drawing and input code**, screen by screen and field by
@@ -202,6 +213,19 @@ reaches 100 %. FlexSeq lets the user set 100 % directly. **Owner's decision.**
 **6. `RANGE` returns, and the format follows.** The original has it, rule §1 keeps
 it, and the version 2 image has no byte for it. The image would go to 305 bytes
 and the version byte to 3. **Owner's decision** on the bump, not on the field.
+
+## Two constants where FlexSeq diverges
+
+Both were read in **`main`** (`Gravity.ino:14-16`), and `1.2-dev` has the same
+values, so these are FlexSeq's own choices, not a branch difference.
+
+| Constant | Original | FlexSeq | Verdict |
+|---|---|---|---|
+| Tempo range | `MINBPM 20` to `MAXBPM 200` | 30 to 300 | **divergence to decide** |
+| Trigger width | `PULSE_LENGTH 120`, so 12 ms | 5 ms | **divergence to decide**, and `docs/open-risks.md` line 12 already measures FlexSeq's real width at 4.7 to 5.0 ms |
+
+The tempo range matters twice over: PRD §16 removed the encoder acceleration, so
+the range is crossed detent by detent. 20 to 200 is 180 detents; 30 to 300 is 270.
 
 ## The modes, parameters and values of the original
 

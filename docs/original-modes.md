@@ -11,6 +11,16 @@ The owner supplied this inventory on 2026-08-23. **Every claim below was then
 checked against the pinned copy of the original firmware**, and the file and line
 are given. Two claims needed a correction, and both are recorded at the end.
 
+⚠️ **Which version this describes.** `main` @ `40d4aac` (2026-03-10, "clean up and
+going public"), the public release and the **behavioural reference**, decided by
+the owner on 2026-08-23. Its files are `src/Gravity/`, and every line reference
+below is in that tree.
+
+A second branch exists, `1.2-dev`, older and never merged. It carries five channel
+modes, mute, a seventh channel, and patterns of up to 32 steps that own their
+length. It is a **source of candidate features, not the reference**:
+`docs/original-1.2-dev-features.md`.
+
 This document is **tracking, never normative**. The normative sources are the
 Notion PRD for product decisions and `docs/decisions/` for architecture. It
 describes the **original**, not FlexSeq.
