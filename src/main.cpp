@@ -179,6 +179,22 @@ void setup() {
     // source chargés depuis l'EEPROM sont appliqués ici.
     flexseq::transport::begin(ui);
 
+#if FLEXSEQ_START_IN_EDIT
+    // Un harnais a besoin d'une boucle LENTE qui emet des triggers, et aucun
+    // binaire ne reunissait les deux : l'ecran principal ne redessine presque
+    // jamais, et env:wokwi qui rend EDIT n'instancie pas de TriggerSequencer.
+    // On entre donc dans EDIT par les GESTES publics, sans rien exposer de plus
+    // dans le domaine. L'onglet par defaut est deja un channel.
+    ui.handle(flexseq::UiController::EVENT_PRESS);
+    for (uint8_t i = 0; i < ui.fieldCount(); ++i) {
+        if (ui.field() == flexseq::UiController::FIELD_EDIT_ENTRY) {
+            break;
+        }
+        ui.handle(flexseq::UiController::EVENT_ROTATE, 1);
+    }
+    ui.handle(flexseq::UiController::EVENT_PRESS);
+#endif
+
     transport.start();  // global reset + run
 }
 
