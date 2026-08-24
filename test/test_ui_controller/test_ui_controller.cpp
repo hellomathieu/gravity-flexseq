@@ -525,6 +525,26 @@ void test_play_toggles_the_transport_at_every_level() {
     TEST_ASSERT_EQUAL(UiController::LEVEL_EDIT, r.ui.level());
 }
 
+// L'original ne demarre et n'arrete que l'horloge INTERNE : `if (masterClockMode
+// == 0)` (Interactions.ino:372). En source externe ou MIDI, PLAY ne fait rien —
+// c'est la source qui commande. Decide par le proprietaire le 2026-08-24.
+void test_play_does_nothing_when_the_clock_is_not_internal() {
+    Rig r;
+    TEST_ASSERT_TRUE(r.ui.setClockSource(1));  // externe, 24 PPQN
+    r.ui.handle(UiController::EVENT_PLAY_PRESS);
+    TEST_ASSERT_FALSE_MESSAGE(r.engine.isRunning(),
+        "PLAY ne demarre pas en source externe");
+
+    r.engine.start();
+    r.ui.handle(UiController::EVENT_PLAY_PRESS);
+    TEST_ASSERT_TRUE_MESSAGE(r.engine.isRunning(),
+        "PLAY n arrete pas non plus en source externe");
+
+    TEST_ASSERT_TRUE(r.ui.setClockSource(0));  // retour a l'interne
+    r.ui.handle(UiController::EVENT_PLAY_PRESS);
+    TEST_ASSERT_FALSE(r.engine.isRunning());
+}
+
 void test_play_realigns_the_channels_when_it_starts() {
     Rig r;
     r.engine.start();
@@ -713,6 +733,7 @@ int main(int, char**) {
     RUN_TEST(test_long_press_returns_from_the_grid_to_the_tab);
 
     RUN_TEST(test_play_toggles_the_transport_at_every_level);
+    RUN_TEST(test_play_does_nothing_when_the_clock_is_not_internal);
     RUN_TEST(test_play_realigns_the_channels_when_it_starts);
     RUN_TEST(test_every_handled_gesture_moves_the_revision);
     RUN_TEST(test_setting_the_tempo_or_the_source_moves_the_revision);

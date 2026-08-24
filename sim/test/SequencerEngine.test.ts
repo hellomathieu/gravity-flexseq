@@ -1,3 +1,4 @@
+import { Transport } from "../src/domain/Transport.js";
 import { describe, expect, it } from "vitest";
 import {
   SequencerEngine,
@@ -572,5 +573,19 @@ describe("SequencerEngine — modes de channel (PRD 4.2)", () => {
     expect(e.currentStepTriggers(0)).toBe(4);
     e.setChannelMode(0, ChannelMode.CLOCK);
     expect(e.currentStepTriggers(0)).toBe(1);
+  });
+});
+
+describe("Transport", () => {
+  it("rapporte l etat de marche", () => {
+    const engine = new SequencerEngine();
+    const transport = new Transport(engine);
+    expect(transport.isRunning()).toBe(false);
+    transport.start();
+    expect(transport.isRunning()).toBe(true);
+    transport.stop();
+    expect(transport.isRunning()).toBe(false);
+    transport.resume();
+    expect(transport.isRunning()).toBe(true);
   });
 });

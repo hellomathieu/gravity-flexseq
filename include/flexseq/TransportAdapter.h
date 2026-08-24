@@ -3,12 +3,13 @@
 
 #include <stdint.h>
 
+#include <flexseq/Transport.h>
 #include <flexseq/UiController.h>
 
 namespace flexseq {
 namespace transport {
 
-void begin(UiController& controller);
+void begin(UiController& controller, Transport& transport);
 void apply(UiController& controller);
 
 uint16_t externalTicks();

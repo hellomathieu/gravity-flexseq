@@ -14,6 +14,9 @@ namespace {
 volatile uint16_t extTicks = 0;
 uint16_t lastTempo = 0;
 uint8_t lastSource = 0xFF;
+Transport* transportRef = nullptr;
+uint16_t lastExtTicks = 0;
+bool clockRunning = true;  // Clock::Init() demarre uClock
 
 void onExternalEdge() {
     ++extTicks;
@@ -29,10 +32,12 @@ Clock::Source sourceFor(uint8_t index) {
 
 }  // namespace
 
-void begin(UiController& controller) {
+void begin(UiController& controller, Transport& transport) {
+    transportRef = &transport;
     gravity.clock.AttachExtHandler(onExternalEdge);
     lastTempo = 0;
     lastSource = 0xFF;
+    lastExtTicks = externalTicks();
     apply(controller);
 }
 
@@ -46,6 +51,34 @@ void apply(UiController& controller) {
     if (source != lastSource) {
         lastSource = source;
         gravity.clock.SetSource(sourceFor(source));
+    }
+    if (transportRef == nullptr) {
+        return;
+    }
+
+    // L'original demarre tout seul a la premiere impulsion externe
+    // (Gravity.ino:321-322). PLAY etant inerte hors horloge interne, c'est le
+    // SEUL demarrage possible dans ce mode : sans lui, la source externe serait
+    // injouable. Le compteur d'impulsions suffit — rien n'est mute depuis l'ISR.
+    const uint16_t ticks = externalTicks();
+    if (ticks != lastExtTicks) {
+        lastExtTicks = ticks;
+        if (source != UiController::CLOCK_SOURCE_INTERNAL && !transportRef->isRunning()) {
+            transportRef->start();
+        }
+    }
+
+    // PLAY arrete le MOTEUR ; l'horloge doit suivre, sinon uClock continue
+    // d'emettre sa MIDI Clock et aucun MIDI Start/Stop ne part. libGravity les
+    // envoie pour nous des que Start/Stop sont appeles (clock.h:63-64).
+    const bool running = transportRef->isRunning();
+    if (running != clockRunning) {
+        clockRunning = running;
+        if (running) {
+            gravity.clock.Start();
+        } else {
+            gravity.clock.Stop();
+        }
     }
 }
 

@@ -589,3 +589,20 @@ describe("UiController — le parametre principal, edite depuis la barre avec SH
     expect(engine.isRunning).toBe(true);
   });
 });
+
+describe("PLAY et la source d horloge", () => {
+  it("ne fait rien quand l horloge n est pas interne", () => {
+    const r = rig();
+    expect(r.ui.setClockSource(1)).toBe(true);
+    r.ui.handle(UiEvent.PlayPress);
+    expect(r.engine.isRunning).toBe(false);
+
+    r.engine.start();
+    r.ui.handle(UiEvent.PlayPress);
+    expect(r.engine.isRunning).toBe(true);
+
+    expect(r.ui.setClockSource(0)).toBe(true);
+    r.ui.handle(UiEvent.PlayPress);
+    expect(r.engine.isRunning).toBe(false);
+  });
+});

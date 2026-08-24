@@ -391,6 +391,12 @@ void UiController::adjustRatchet(int8_t delta) {
 }
 
 void UiController::togglePlay() {
+    // L'original ne demarre et n'arrete que l'horloge INTERNE : en source
+    // externe ou MIDI, c'est la source qui commande le transport, et PLAY reste
+    // inerte (Interactions.ino:372).
+    if (clockSource_ != CLOCK_SOURCE_INTERNAL) {
+        return;
+    }
     if (engine_.isRunning()) {
         transport_.stop();
     } else {

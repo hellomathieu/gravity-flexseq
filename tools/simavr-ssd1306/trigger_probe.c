@@ -95,6 +95,7 @@ typedef struct {
 } line_t;
 
 static line_t g_lines[LINE_COUNT];
+static double g_play_ms = 0.0;
 static avr_t *g_avr;
 
 static double us(uint64_t cycles) { return (double)cycles * 1e6 / (double)F_CPU_HZ; }
@@ -243,7 +244,25 @@ int main(int argc, char **argv)
     for (int i = 0; i < g_expected_count; ++i) printf(" %u", g_expected[i]);
     printf(" sur %d\n\n", PATTERN_LENGTH);
 
+    /* Le firmware demarre A L'ARRET depuis le 2026-08-25, comme l'original. La
+     * sonde doit donc APPUYER SUR PLAY, sinon elle mesurerait le silence et le
+     * prendrait pour un defaut. Le bouton est actif a l'etat bas (INPUT_PULLUP)
+     * et libGravity ne declenche que sur le RELACHEMENT, sous 750 ms : une
+     * impulsion basse de 60 ms passe le debounce de 10 ms sans atteindre le
+     * seuil d'appui long. */
+    const uint64_t play_down = (uint64_t)(0.60 * (double)F_CPU_HZ);
+    g_play_ms = 0.66 * 1000.0;  /* le relachement, pas l appui */
+    const uint64_t play_up   = (uint64_t)(0.66 * (double)F_CPU_HZ);
+    avr_irq_t *play = avr_io_getirq(avr, AVR_IOCTL_IOPORT_GETIRQ('D'), 5);
+    if (!play) { fprintf(stderr, "broche PLAY introuvable\n"); return 1; }
+    int play_state = 2;  /* ni 0 ni 1 : force la premiere ecriture */
+
     while (avr->cycle < target) {
+        const int want = (avr->cycle >= play_down && avr->cycle < play_up) ? 0 : 1;
+        if (want != play_state) {
+            play_state = want;
+            avr_raise_irq(play, want);
+        }
         int state = avr_run(avr);
         if (state == cpu_Done || state == cpu_Crashed) {
             printf("!! CPU arrete (state=%d) a %" PRIu64 " cycles\n", state, avr->cycle);
@@ -460,10 +479,11 @@ int main(int argc, char **argv)
     printf("\nRESULTAT lignes_actives=%d attendu=%d ecarts_ok=%d/%d "
            "largeur_med=%.2f gigue_med=%.2f gigue_max=%.2f step_ms=%.1f "
            "meme_compte=%d coincident=%d impulsions_ch1=%d pulse=%d "
-           "step_mesure=%.2f bpm=%d mode=%s\n",
+           "step_mesure=%.2f bpm=%d mode=%s premier_front_ms=%.1f play_ms=%.1f\n",
            active_lines, OUT_COUNT, gap_ok, gap_total,
            width_med[0], jit_med, jit_max, step_ms,
            same_count, coincident, ref->nrise, g_lines[6].nrise,
-           step_measured, BPM, mode);
+           step_measured, BPM, mode,
+           ref->nrise > 0 ? ms(ref->rise[0]) : -1.0, g_play_ms);
     return 0;
 }

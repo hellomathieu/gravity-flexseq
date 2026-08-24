@@ -227,6 +227,13 @@ step_ms = float(kv["step_ms"])
 same, coincident = kv["meme_compte"] == "1", kv["coincident"] == "1"
 pulses, pulse_line = int(kv["impulsions_ch1"]), int(kv["pulse"])
 
+# Le firmware demarre A L'ARRET. Aucune impulsion ne doit donc preceder l'appui
+# sur PLAY : sans ce critere, la sonde prouverait que PLAY marche et pas que le
+# module se tait avant.
+first_ms = float(kv.get("premier_front_ms", "-1"))
+play_ms = float(kv.get("play_ms", "0"))
+silent_before_play = first_ms > play_ms
+
 all_lines = lines_on == lines_exp
 pattern_ok = gaps_total > 0 and gaps_ok == gaps_total
 
@@ -280,6 +287,8 @@ elif seq:
 else:
     print(f"  {mark(pattern_ok)} Train regulier     {gaps_ok}/{gaps_total} ecarts   "
           f"{DIM}— un par step, a 5 % de la mediane ; le motif charge est ignore{Z}")
+print(f"  {mark(silent_before_play)} Silence au demarrage  premier front a {first_ms:.0f} ms   "
+      f"{DIM}— PLAY relache a {play_ms:.0f} ms ; le module demarre a l arret{Z}")
 print(f"  {mark(same and coincident)} Six lignes en phase "
       f"{'meme compte, fronts < 200 us' if (same and coincident) else 'DESACCORD'}")
 if not ratchet:
@@ -306,7 +315,8 @@ if pulse_line == 0:
     print(f"  {DIM}PULSE reste muet : main.cpp ne pilote pas gravity.pulse. Observation,")
     print(f"  non defaut — l'expandeur MIDI n'est pas encore dans le chemin.{Z}")
 
-ok = all_lines and pattern_ok and same and coincident and jit_ok and duty_ok and step_ok
+ok = (all_lines and pattern_ok and same and coincident and jit_ok and duty_ok
+      and step_ok and silent_before_play)
 if ok:
     if ratchet:
         print(f"\n  Un ratchet {os.environ['RATCHET_CODE']} sur un step actif ajoute "

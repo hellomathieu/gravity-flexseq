@@ -206,6 +206,14 @@ MUTANTS = [
      "        if (ratchetFitsStep(ratchetAtIndex(cursor), ticks)) {",
      "        if (true) {", "cpp-ratchet"),
 
+    ("cpp: PLAY drives the transport outside the internal clock",
+     "src/domain/UiController.cpp",
+     "    if (clockSource_ != CLOCK_SOURCE_INTERNAL) {\n        return;\n    }\n",
+     "", "cpp-ui"),
+    ("ts: PLAY drives the transport outside the internal clock",
+     "sim/src/domain/UiController.ts",
+     "    if (this.source !== CLOCK_SOURCE_INTERNAL) return;\n", "", "ts-ui"),
+
     ("cpp: a factory pattern loses a step",
      "src/domain/FactoryPatterns.cpp", "    0x9111,", "    0x9110,", "cpp-factory"),
     ("cpp: a reload of the factory patterns no longer erases",

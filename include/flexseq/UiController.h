@@ -50,6 +50,7 @@ public:
     static constexpr uint8_t CHANNEL_TAB_FIELDS = 5;
 
     static constexpr uint8_t CLOCK_SOURCE_COUNT = 6;
+    static constexpr uint8_t CLOCK_SOURCE_INTERNAL = 0;
     static constexpr uint16_t MIN_TEMPO = 30;
     static constexpr uint16_t MAX_TEMPO = 300;
 #ifndef FLEXSEQ_DEFAULT_TEMPO

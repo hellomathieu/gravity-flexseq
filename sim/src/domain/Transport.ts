@@ -12,6 +12,10 @@ export class Transport {
     this.engine.start();
   }
 
+  isRunning(): boolean {
+    return this.engine.isRunning;
+  }
+
   stop(): void {
     this.engine.stop();
   }

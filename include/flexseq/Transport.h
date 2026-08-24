@@ -30,6 +30,8 @@ public:
 
     void resume() { engine_.start(); }
 
+    bool isRunning() const { return engine_.isRunning(); }
+
     void stop() { engine_.stop(); }
 
     void reset() { engine_.reset(); }

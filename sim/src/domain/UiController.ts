@@ -51,6 +51,7 @@ export const CLOCK_TAB_FIELDS = 2;
 export const CHANNEL_TAB_FIELDS = 5;
 
 export const CLOCK_SOURCE_COUNT = 6;
+export const CLOCK_SOURCE_INTERNAL = 0;
 export const MIN_TEMPO = 30;
 export const MAX_TEMPO = 300;
 export const DEFAULT_TEMPO = 120;
@@ -378,6 +379,10 @@ export class UiController {
   }
 
   private togglePlay(): void {
+    // L'original ne demarre et n'arrete que l'horloge INTERNE : en source
+    // externe ou MIDI, c'est la source qui commande le transport, et PLAY
+    // reste inerte (Interactions.ino:372).
+    if (this.source !== CLOCK_SOURCE_INTERNAL) return;
     if (this.engine.isRunning) {
       this.transport.stop();
     } else {

@@ -182,7 +182,7 @@ void setup() {
     // L'horloge externe : libGravity attache l'ISR mais n'appelle jamais
     // uClock.clockMe() — c'est notre callback qui doit le faire. Le tempo et la
     // source chargés depuis l'EEPROM sont appliqués ici.
-    flexseq::transport::begin(ui);
+    flexseq::transport::begin(ui, transport);
 
 #if FLEXSEQ_START_IN_EDIT
     // Un harnais a besoin d'une boucle LENTE qui emet des triggers, et aucun
@@ -200,7 +200,10 @@ void setup() {
     ui.handle(flexseq::UiController::EVENT_PRESS);
 #endif
 
-    transport.start();  // global reset + run
+    // Le module demarre A L'ARRET, comme l'original : `isPlaying` y est un
+    // global a zero (Gravity.ino:110). PLAY le lance en horloge interne, et une
+    // impulsion externe le lance dans les autres sources.
+    transport.reset();
 }
 
 void loop() {

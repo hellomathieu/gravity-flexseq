@@ -200,6 +200,20 @@ void test_external_ticks_drained_in_a_batch_land_where_single_ticks_would() {
     }
 }
 
+// Transport rapporte l'etat de marche pour que l'ADAPTATEUR puisse le refleter
+// sur l'horloge de libGravity sans que le domaine connaisse le materiel.
+void test_transport_reports_the_running_state() {
+    SequencerEngine engine;
+    Transport transport(engine);
+    TEST_ASSERT_FALSE(transport.isRunning());
+    transport.start();
+    TEST_ASSERT_TRUE(transport.isRunning());
+    transport.stop();
+    TEST_ASSERT_FALSE(transport.isRunning());
+    transport.resume();
+    TEST_ASSERT_TRUE(transport.isRunning());
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_tick_advances_only_while_running);
@@ -214,5 +228,6 @@ int main() {
     RUN_TEST(test_the_source_field_never_leaves_the_six_valid_values);
     RUN_TEST(test_the_tempo_bounds_are_refused_not_clamped_by_the_setter);
     RUN_TEST(test_external_ticks_drained_in_a_batch_land_where_single_ticks_would);
+    RUN_TEST(test_transport_reports_the_running_state);
     return UNITY_END();
 }
