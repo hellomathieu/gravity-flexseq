@@ -64,8 +64,17 @@ The fork licence stays **MIT**, with Adam Wonak's copyright intact.
 - **the seven audited anomalies.** They are the reason `InputAdapter` exists
   (ADR 0002), and 68 assertions describe them. A repair would invalidate the
   adapter layer and `docs/upstream-defects.md` at the same time;
-- an API. FlexSeq must keep compiling against upstream without a change;
+- a change that stops FlexSeq compiling against upstream, or that changes the
+  behaviour of another consumer **without that consumer asking for it**;
 - a musical behaviour. uClock stays as it is.
+
+⚠️ **The second line said "an API" until 2026-08-25, and that was too broad.**
+The owner asked why an improvement offered upstream should be forbidden, and the
+answer is that it should not. What the rule protects is that FlexSeq is never
+locked into the fork, and an ADDITIVE change does not threaten that: a default
+that keeps the previous behaviour leaves every existing consumer untouched, and
+FlexSeq's own sources do not depend on it either way. The rule now states the
+criterion instead of the word.
 
 ### Per commit
 
@@ -93,6 +102,19 @@ find it.
 
 **The fork must disappear.** Every correction accepted upstream brings that
 closer. The fork is a working tool, not a divergence to maintain.
+
+**The fork carries one repair, and it is additive.** `LIBGRAVITY_DISPLAY_TYPE`
+makes the display transport selectable, with the previous class as the default.
+The reason is measured: the SSD1306 is write only, libGravity never reads from
+the bus, and the Arduino Wire transport it forces brings a bidirectional,
+interrupt driven, slave capable driver. Removing it returned **1678 bytes of
+Flash and 216 bytes of RAM**, and the main loop got **faster** — the p90 pass
+from 8.80 ms to 6.50 ms, a display band from 4.88 ms to 3.35 ms — because a
+polled transfer avoids one interrupt entry and exit per byte.
+
+The choice stays opt-in on purpose. Two drivers cannot share the TWI
+peripheral, so a lighter transport enabled by default would break a consumer
+that also reads an I2C sensor through Wire.
 
 **The audited base moved on 2026-08-24**, from `9be88be1f4` to `5c0c34f`, the
 fork head. The whole compiled surface of the move is seven added lines in
