@@ -275,91 +275,73 @@ UiController::Field UiController::mainField() const {
 }
 
 void UiController::adjustFieldValue(Field target, int8_t raw) {
-    const int8_t channel = selectedChannel();
     const int8_t delta = oneStep(raw);
+
+    if (target == FIELD_TEMPO) {
+        tempo_ = static_cast<uint16_t>(clampRange(
+            static_cast<int16_t>(static_cast<int16_t>(tempo_) + delta),
+            static_cast<int16_t>(MIN_TEMPO),
+            static_cast<int16_t>(MAX_TEMPO)
+        ));
+        return;
+    }
+    if (target == FIELD_CLOCK_SOURCE) {
+        clockSource_ = clampIndex(clockSource_, delta, CLOCK_SOURCE_COUNT);
+        return;
+    }
+
+    // Tous les autres champs appartiennent a un channel. Le garde etait repete
+    // dans cinq cas, et l'index reconverti a chaque usage.
+    const int8_t selected = selectedChannel();
+    if (selected < 0) {
+        return;
+    }
+    const uint8_t ch = static_cast<uint8_t>(selected);
+
     switch (target) {
-        case FIELD_TEMPO:
-            tempo_ = static_cast<uint16_t>(clampRange(
-                static_cast<int16_t>(static_cast<int16_t>(tempo_) + delta),
-                static_cast<int16_t>(MIN_TEMPO),
-                static_cast<int16_t>(MAX_TEMPO)
-            ));
-            break;
-        case FIELD_CLOCK_SOURCE:
-            clockSource_ = clampIndex(clockSource_, delta, CLOCK_SOURCE_COUNT);
-            break;
         case FIELD_PATTERN: {
-            if (channel < 0) {
-                break;
-            }
-            const int8_t current = engine_.getSelectedPattern(static_cast<uint8_t>(channel));
+            const int8_t current = engine_.getSelectedPattern(ch);
             if (current < 0) {
                 break;
             }
             engine_.setSelectedPattern(
-                static_cast<uint8_t>(channel),
-                clampIndex(static_cast<uint8_t>(current), delta, SequencerEngine::PATTERN_COUNT)
-            );
+                ch, clampIndex(static_cast<uint8_t>(current), delta,
+                               SequencerEngine::PATTERN_COUNT));
             break;
         }
-        case FIELD_LENGTH: {
-            if (channel < 0) {
-                break;
-            }
-            const uint8_t current = engine_.getEffectiveLength(static_cast<uint8_t>(channel));
-            engine_.setEffectiveLength(
-                static_cast<uint8_t>(channel),
-                static_cast<uint8_t>(clampRange(
-                    static_cast<int16_t>(static_cast<int16_t>(current) + delta),
-                    static_cast<int16_t>(SequencerEngine::MIN_LENGTH),
-                    static_cast<int16_t>(SequencerEngine::MAX_LENGTH)
-                ))
-            );
+        case FIELD_LENGTH:
+            engine_.setEffectiveLength(ch, static_cast<uint8_t>(clampRange(
+                static_cast<int16_t>(engine_.getEffectiveLength(ch) + delta),
+                static_cast<int16_t>(SequencerEngine::MIN_LENGTH),
+                static_cast<int16_t>(SequencerEngine::MAX_LENGTH))));
             break;
-        }
         case FIELD_SUBDIV: {
-            if (channel < 0) {
-                break;
-            }
-            int8_t index = subdivIndexOf(engine_.getSubdiv(static_cast<uint8_t>(channel)));
+            int8_t index = subdivIndexOf(engine_.getSubdiv(ch));
             if (index < 0) {
                 index = static_cast<int8_t>(DEFAULT_SUBDIV_INDEX);
             }
-            const uint8_t next = clampIndex(
-                static_cast<uint8_t>(index), delta, SUBDIV_CHOICE_COUNT
-            );
-            engine_.setSubdiv(static_cast<uint8_t>(channel), subdivAtIndex(next));
+            engine_.setSubdiv(ch, subdivAtIndex(clampIndex(
+                static_cast<uint8_t>(index), delta, SUBDIV_CHOICE_COUNT)));
             break;
         }
-        case FIELD_SKIP_CHANCE: {
-            if (channel < 0) {
-                break;
-            }
-            const uint8_t current = engine_.getSkipChance(static_cast<uint8_t>(channel));
-            engine_.setSkipChance(
-                static_cast<uint8_t>(channel),
-                clampIndex(current, delta, static_cast<uint8_t>(MAX_SKIP_CHANCE + 1))
-            );
+        case FIELD_SKIP_CHANCE:
+            engine_.setSkipChance(ch, clampIndex(
+                engine_.getSkipChance(ch), delta,
+                static_cast<uint8_t>(MAX_SKIP_CHANCE + 1)));
             break;
-        }
         case FIELD_BAR_LENGTH: {
-            if (channel < 0) {
-                break;
-            }
-            const int8_t current = engine_.getBarLength(static_cast<uint8_t>(channel));
+            const int8_t current = engine_.getBarLength(ch);
             if (current < 0) {
                 break;
             }
             int8_t index = indexOfChoice(
-                barLengthAtIndex, BAR_LENGTH_CHOICE_COUNT, static_cast<uint8_t>(current)
-            );
+                barLengthAtIndex, BAR_LENGTH_CHOICE_COUNT,
+                static_cast<uint8_t>(current));
             if (index < 0) {
                 index = 0;
             }
-            const uint8_t next = clampIndex(
-                static_cast<uint8_t>(index), delta, BAR_LENGTH_CHOICE_COUNT
-            );
-            engine_.setBarLength(static_cast<uint8_t>(channel), barLengthAtIndex(next));
+            engine_.setBarLength(ch, barLengthAtIndex(clampIndex(
+                static_cast<uint8_t>(index), delta, BAR_LENGTH_CHOICE_COUNT)));
             break;
         }
         default:

@@ -184,8 +184,14 @@ else
     printf '  %s⚠  %d avertissement(s) dans NOTRE code :%s\n' "$C_ERR" "$warn_own_n" "$C_0"
     printf '%s\n' "$warn_own" | sed 's/^/     /'
   fi
-  printf '  %s%d avertissement(s) dans la dependance figee — connus, non corrigeables%s\n' \
+  # Le compte n'est annonce que si la dependance a ete recompilee : sinon c'est
+  # le meme faux negatif que d'annoncer « 0 » sur un build incremental.
+  dep_units=$(grep -cE '^Compiling \.pio/build/[^/]+/lib' "$LOG")
+  ref_units="$(sed -n 's/^# units=\([0-9]*\)$/\1/p' "$WARN_REF" 2>/dev/null)"
+  if [ "$dep_units" = "${ref_units:-x}" ] || [ "$ACCEPT_WARN" = "1" ]; then
+    printf '  %s%d avertissement(s) dans la dependance figee — connus, non corrigeables%s\n' \
     "$C_DIM" "$warn_dep" "$C_0"
+  fi
 
   # Garde de derive sur les avertissements de la dependance. Les COMPTER sans les
   # comparer laisse passer un avertissement NEUF en silence : c'est ainsi que le
@@ -195,17 +201,30 @@ else
   # reformatage de la dependance ferait rougir.
   warn_norm="$(printf '%s\n' "$warn_all" | grep '^\.pio/' \
     | sed -E 's/^([^:]+):[0-9]+:[0-9]+: warning: /\1: /' | sort)"
+
+  # Le garde n'a de sens que si la DEPENDANCE a ete recompilee. Un build qui ne
+  # reconstruit qu'un de nos fichiers ne produit aucun avertissement de la
+  # dependance : l'ensemble observe est vide, et le comparer annoncerait une
+  # derive qui n'existe pas. Vecu le 2026-08-24, des le premier usage. Le critere
+  # est donc le nombre d'unites de la dependance recompilees, garde dans la
+  # reference ; s'il ne correspond pas, le garde dit qu'il n'a pas pu se
+  # prononcer — jamais qu'il passe.
   if [ "$ACCEPT_WARN" = "1" ]; then
-    printf '%s\n' "$warn_norm" > "$WARN_REF"
-    printf '  %s✅%s reference d avertissements mise a jour (%d)\n' \
-      "$C_OK" "$C_0" "$warn_dep"
+    { echo "# units=$dep_units"; printf '%s\n' "$warn_norm"; } > "$WARN_REF"
+    printf '  %s✅%s reference d avertissements mise a jour (%d, sur %d unites)\n' \
+      "$C_OK" "$C_0" "$warn_dep" "$dep_units"
   elif [ ! -f "$WARN_REF" ]; then
     printf '  %s⚠  aucune reference d avertissements (%s)%s\n' \
       "$C_DIM" "$WARN_REF" "$C_0"
     printf '     la creer : ./tools/run-build-memory.sh --accept-warnings\n'
-  elif ! diff -q "$WARN_REF" <(printf '%s\n' "$warn_norm") >/dev/null 2>&1; then
+  elif [ "$dep_units" != "${ref_units:-x}" ]; then
+    printf '  %sgarde non evaluable : %s unite(s) de la dependance recompilee(s)\n' \
+      "$C_DIM" "$dep_units"
+    printf '  contre %s dans la reference — relancer apres `pio run -t clean`%s\n' \
+      "${ref_units:-?}" "$C_0"
+  elif ! diff -q <(sed '/^# /d' "$WARN_REF") <(printf '%s\n' "$warn_norm") >/dev/null 2>&1; then
     printf '  %s❌ DERIVE des avertissements de la dependance%s\n' "$C_ERR" "$C_0"
-    diff "$WARN_REF" <(printf '%s\n' "$warn_norm") | sed 's/^/     /'
+    diff <(sed '/^# /d' "$WARN_REF") <(printf '%s\n' "$warn_norm") | sed 's/^/     /'
     printf '     un avertissement NEUF est un defaut a documenter (docs/upstream-defects.md).\n'
     printf '     un avertissement DISPARU veut dire que la dependance a change.\n'
     printf '     acter : ./tools/run-build-memory.sh --accept-warnings\n'
