@@ -3,7 +3,9 @@ import type { PatternBank } from "./PatternBank.js";
 import {
   BAR_LENGTHS,
   CHANNEL_COUNT,
+  ChannelMode,
   MAX_LENGTH,
+  MAX_SKIP_CHANCE,
   MIN_LENGTH,
   type SequencerEngine,
 } from "./SequencerEngine.js";
@@ -13,13 +15,13 @@ import type { Transport } from "./Transport.js";
 
 export enum UiEvent {
   Rotate,
-  RotateHeld,
   Press,
   LongPress,
   ShiftRotate,
   ShiftPress,
   ShiftLongPress,
   PlayPress,
+  ShiftPlayPress,
 }
 
 export enum UiLevel {
@@ -37,6 +39,7 @@ export enum UiField {
   Subdiv,
   BarLength,
   EditEntry,
+  SkipChance,
 }
 
 export const TAB_COUNT = 8;
@@ -182,7 +185,7 @@ export class UiController {
       this.togglePlay();
       return;
     }
-    if (event === UiEvent.ShiftPress) return;
+    if (event === UiEvent.ShiftPress || event === UiEvent.ShiftPlayPress) return;
 
     switch (this.currentLevel) {
       case UiLevel.TabBar:
@@ -202,6 +205,10 @@ export class UiController {
       this.tab = wrapIndex(this.tab, oneStep(delta), TAB_COUNT);
       this.fieldCursor = 0;
       this.open = false;
+      return;
+    }
+    if (event === UiEvent.ShiftRotate) {
+      this.adjustFieldValue(this.mainField, delta);
       return;
     }
     if (event === UiEvent.Press && this.fieldCount > 0) {
@@ -250,9 +257,6 @@ export class UiController {
       case UiEvent.Rotate:
         this.step = wrapIndex(this.step, oneStep(delta), STEP_COUNT);
         break;
-      case UiEvent.RotateHeld:
-        this.adjustRatchet(delta);
-        break;
       case UiEvent.Press:
         this.toggleStep();
         break;
@@ -260,13 +264,9 @@ export class UiController {
         this.currentLevel = UiLevel.Tab;
         this.open = false;
         break;
-      case UiEvent.ShiftRotate: {
-        const channel = this.selectedChannel;
-        if (channel >= 0) {
-          this.tab = TAB_FIRST_CHANNEL + wrapIndex(channel, oneStep(delta), CHANNEL_COUNT);
-        }
+      case UiEvent.ShiftRotate:
+        this.adjustRatchet(delta);
         break;
-      }
       case UiEvent.ShiftLongPress:
         this.clearPattern();
         break;
@@ -283,10 +283,28 @@ export class UiController {
     return this.bank.getPattern(index);
   }
 
-  private adjustField(accelerated: number): void {
+  get mainField(): UiField {
+    if (this.tab === TAB_CLOCK) return UiField.Tempo;
     const channel = this.selectedChannel;
-    const delta = this.field === UiField.Tempo ? accelerated : oneStep(accelerated);
-    switch (this.field) {
+    if (channel < 0) return UiField.None;
+    switch (this.engine.getChannelMode(channel)) {
+      case ChannelMode.CLOCK:
+        return UiField.Subdiv;
+      case ChannelMode.RANDOM:
+        return UiField.SkipChance;
+      default:
+        return UiField.Pattern;
+    }
+  }
+
+  private adjustField(delta: number): void {
+    this.adjustFieldValue(this.field, delta);
+  }
+
+  private adjustFieldValue(target: UiField, raw: number): void {
+    const channel = this.selectedChannel;
+    const delta = oneStep(raw);
+    switch (target) {
       case UiField.Tempo:
         this.currentTempo = clampRange(this.currentTempo + delta, MIN_TEMPO, MAX_TEMPO);
         break;
@@ -314,6 +332,12 @@ export class UiController {
         this.engine.setSubdiv(channel, SUBDIVS[next]!);
         break;
       }
+      case UiField.SkipChance: {
+        if (channel < 0) break;
+        const current = this.engine.getSkipChance(channel);
+        this.engine.setSkipChance(channel, clampIndex(current, delta, MAX_SKIP_CHANCE + 1));
+        break;
+      }
       case UiField.BarLength: {
         if (channel < 0) break;
         let index = BAR_LENGTHS.indexOf(this.engine.getBarLength(channel));
@@ -330,6 +354,7 @@ export class UiController {
   private adjustRatchet(delta: number): void {
     const pattern = this.currentPattern();
     if (pattern === null) return;
+    if (pattern.readStep(this.step) !== true) return;
     const channel = this.selectedChannel;
     if (channel < 0) return;
     const step = oneStep(delta);

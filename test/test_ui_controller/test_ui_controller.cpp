@@ -131,11 +131,10 @@ void test_the_clock_tab_exposes_tempo_then_source() {
 void test_the_other_gestures_do_nothing_on_the_tab_bar() {
     Rig r;
     const UiController::Event inert[] = {
-        UiController::EVENT_ROTATE_HELD,
         UiController::EVENT_LONG_PRESS,
-        UiController::EVENT_SHIFT_ROTATE,
         UiController::EVENT_SHIFT_PRESS,
         UiController::EVENT_SHIFT_LONG_PRESS,
+        UiController::EVENT_SHIFT_PLAY_PRESS,
     };
     for (uint8_t i = 0; i < sizeof(inert) / sizeof(inert[0]); ++i) {
         r.ui.handle(inert[i], 1);
@@ -307,14 +306,14 @@ void test_the_bar_length_field_walks_only_the_allowed_values() {
 // LE TEMPO EST LA SEULE EXCEPTION : sa plage compte 271 valeurs, trop pour se
 // parcourir cran par cran. Il garde donc l'acceleration de libGravity, et c'est
 // la qu'un cran accelere doit atterrir sur la borne plutot que d'etre refuse.
-void test_the_tempo_is_the_only_field_that_keeps_the_acceleration() {
+void test_no_field_keeps_the_acceleration_not_even_the_tempo() {
     Rig r;
     r.gotoTab(UiController::TAB_CLOCK);
     r.enterTab();
     TEST_ASSERT_EQUAL(UiController::FIELD_TEMPO, r.ui.field());
     r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 3);
-    TEST_ASSERT_EQUAL_UINT16_MESSAGE(UiController::DEFAULT_TEMPO + 3, r.ui.tempo(),
-        "le tempo doit garder l'acceleration");
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(UiController::DEFAULT_TEMPO + 1, r.ui.tempo(),
+        "un cran vaut un BPM, l acceleration a disparu du tempo aussi");
 
     r.gotoField(UiController::FIELD_CLOCK_SOURCE);
     const uint8_t before = r.ui.clockSource();
@@ -323,15 +322,15 @@ void test_the_tempo_is_the_only_field_that_keeps_the_acceleration() {
         "la source est une liste courte : un cran vaut un pas");
 }
 
-void test_an_accelerated_turn_on_the_tempo_lands_on_the_bound() {
+void test_a_long_turn_on_the_tempo_lands_on_the_bound() {
     Rig r;
     r.gotoTab(UiController::TAB_CLOCK);
     r.enterTab();
-    for (uint16_t i = 0; i < 60; ++i) {
+    for (uint16_t i = 0; i < 200; ++i) {
         r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 3);
     }
     TEST_ASSERT_EQUAL_UINT16(UiController::MAX_TEMPO, r.ui.tempo());
-    for (uint16_t i = 0; i < 100; ++i) {
+    for (uint16_t i = 0; i < 300; ++i) {
         r.ui.handle(UiController::EVENT_SHIFT_ROTATE, -3);
     }
     TEST_ASSERT_EQUAL_UINT16(UiController::MIN_TEMPO, r.ui.tempo());
@@ -411,19 +410,20 @@ void test_press_toggles_the_step_under_the_cursor() {
     TEST_ASSERT_FALSE(active);
 }
 
-void test_rotate_held_sets_the_ratchet_and_clamps_at_both_ends() {
+void test_shift_rotate_sets_the_ratchet_of_an_active_step_and_clamps() {
     Rig r;
     r.enterEdit();
-    r.ui.handle(UiController::EVENT_ROTATE_HELD, 1);
+    r.ui.handle(UiController::EVENT_PRESS);  // le pas 0 devient actif
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
     TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_2, r.bank.getPattern(0)->getRatchet(0));
-    r.ui.handle(UiController::EVENT_ROTATE_HELD, 1);
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
     TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_3, r.bank.getPattern(0)->getRatchet(0));
     for (uint8_t i = 0; i < UiController::RATCHET_CHOICE_COUNT + 3; ++i) {
-        r.ui.handle(UiController::EVENT_ROTATE_HELD, 1);
+        r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
     }
     TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_TRIPLET, r.bank.getPattern(0)->getRatchet(0));
     for (uint8_t i = 0; i < UiController::RATCHET_CHOICE_COUNT + 3; ++i) {
-        r.ui.handle(UiController::EVENT_ROTATE_HELD, -1);
+        r.ui.handle(UiController::EVENT_SHIFT_ROTATE, -1);
     }
     TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, r.bank.getPattern(0)->getRatchet(0));
 }
@@ -431,32 +431,43 @@ void test_rotate_held_sets_the_ratchet_and_clamps_at_both_ends() {
 void test_a_ratchet_edit_takes_effect_on_the_current_step_immediately() {
     Rig r;
     r.enterEdit();
+    r.ui.handle(UiController::EVENT_PRESS);  // le pas 0 devient actif
     r.engine.start();
     TEST_ASSERT_EQUAL_UINT16(SequencerEngine::PPQN, r.engine.currentStepTicks(0));
     for (uint8_t i = 0; i < 5; ++i) {
-        r.ui.handle(UiController::EVENT_ROTATE_HELD, 5);
+        r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 5);
     }
     TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_TRIPLET, r.bank.getPattern(0)->getRatchet(0));
     TEST_ASSERT_EQUAL_UINT16(2 * SequencerEngine::PPQN, r.engine.currentStepTicks(0));
 }
 
-void test_shift_rotate_changes_channel_and_wraps() {
+void test_shift_rotate_in_edit_no_longer_changes_channel() {
     Rig r;
     r.enterEdit();
+    r.ui.handle(UiController::EVENT_PRESS);  // le pas 0 devient actif
     r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
-    TEST_ASSERT_EQUAL_INT8(1, r.ui.selectedChannel());
+    TEST_ASSERT_EQUAL_INT8_MESSAGE(0, r.ui.selectedChannel(),
+        "rien dans l original ne change de channel depuis l editeur");
     TEST_ASSERT_EQUAL(UiController::LEVEL_EDIT, r.ui.level());
-    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, -1);
-    TEST_ASSERT_EQUAL_INT8(0, r.ui.selectedChannel());
-    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, -1);
-    TEST_ASSERT_EQUAL_INT8(SequencerEngine::CHANNEL_COUNT - 1, r.ui.selectedChannel());
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_2, r.bank.getPattern(0)->getRatchet(0));
+}
+
+void test_shift_rotate_on_an_inactive_step_does_nothing() {
+    Rig r;
+    r.enterEdit();
+    bool active = true;
+    r.bank.getPattern(0)->readStep(0, active);
+    TEST_ASSERT_FALSE(active);
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(flexseq::RATCHET_NONE, r.bank.getPattern(0)->getRatchet(0),
+        "le geste ne regle le ratchet que sur un pas actif");
 }
 
 void test_the_grid_follows_the_pattern_of_the_channel_selected_in_edit() {
     Rig r;
     r.engine.setSelectedPattern(1, 5);
+    r.gotoTab(UiController::TAB_FIRST_CHANNEL + 1);
     r.enterEdit();
-    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
     r.ui.handle(UiController::EVENT_PRESS);
     bool active = false;
     r.bank.getPattern(5)->readStep(0, active);
@@ -469,8 +480,8 @@ void test_shift_long_press_clears_the_pattern_steps_and_ratchets() {
     Rig r;
     r.enterEdit();
     r.ui.handle(UiController::EVENT_PRESS);
-    r.ui.handle(UiController::EVENT_ROTATE_HELD, 3);
-    r.ui.handle(UiController::EVENT_ROTATE, 4);
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 3);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
     r.ui.handle(UiController::EVENT_PRESS);
     r.ui.handle(UiController::EVENT_SHIFT_LONG_PRESS);
     for (uint8_t step = 0; step < UiController::STEP_COUNT; ++step) {
@@ -586,6 +597,80 @@ void test_shift_press_is_deliberately_free_and_changes_nothing() {
     TEST_ASSERT_FALSE(active);
 }
 
+/*
+ * The tab's main parameter, edited from the bar with SHIFT
+ */
+
+void test_the_main_parameter_follows_the_channel_mode() {
+    Rig r;
+    TEST_ASSERT_EQUAL(UiController::FIELD_PATTERN, r.ui.mainField());
+    r.engine.setChannelMode(0, flexseq::MODE_CLOCK);
+    TEST_ASSERT_EQUAL(UiController::FIELD_SUBDIV, r.ui.mainField());
+    r.engine.setChannelMode(0, flexseq::MODE_RANDOM);
+    TEST_ASSERT_EQUAL(UiController::FIELD_SKIP_CHANCE, r.ui.mainField());
+
+    r.gotoTab(UiController::TAB_CLOCK);
+    TEST_ASSERT_EQUAL(UiController::FIELD_TEMPO, r.ui.mainField());
+    r.gotoTab(UiController::TAB_SETTINGS);
+    TEST_ASSERT_EQUAL(UiController::FIELD_NONE, r.ui.mainField());
+}
+
+void test_shift_rotate_on_the_bar_changes_the_main_parameter() {
+    {
+        Rig r;  // SEQ : le pattern
+        r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+        TEST_ASSERT_EQUAL_INT8(1, r.engine.getSelectedPattern(0));
+    }
+    {
+        Rig r;  // CLOCK : la SUBDIV
+        r.engine.setChannelMode(0, flexseq::MODE_CLOCK);
+        r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+        TEST_ASSERT_EQUAL_INT16(2, r.engine.getSubdiv(0));
+    }
+    {
+        Rig r;  // RANDOM : la chance de saut
+        r.engine.setChannelMode(0, flexseq::MODE_RANDOM);
+        r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+        TEST_ASSERT_EQUAL_UINT8(1, r.engine.getSkipChance(0));
+    }
+    {
+        Rig r;  // l onglet horloge : le tempo
+        r.gotoTab(UiController::TAB_CLOCK);
+        r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+        TEST_ASSERT_EQUAL_UINT16(UiController::DEFAULT_TEMPO + 1, r.ui.tempo());
+    }
+}
+
+void test_shift_rotate_on_the_bar_moves_nothing_else() {
+    Rig r;
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+    TEST_ASSERT_EQUAL(UiController::LEVEL_TAB_BAR, r.ui.level());
+    TEST_ASSERT_EQUAL_UINT8(UiController::TAB_FIRST_CHANNEL, r.ui.currentTab());
+    TEST_ASSERT_EQUAL_UINT8(0, r.ui.cursor());
+    TEST_ASSERT_FALSE(r.ui.fieldOpen());
+    TEST_ASSERT_EQUAL_UINT8(SequencerEngine::DEFAULT_LENGTH, r.engine.getEffectiveLength(0));
+}
+
+void test_shift_rotate_on_the_settings_tab_changes_nothing() {
+    Rig r;
+    r.gotoTab(UiController::TAB_SETTINGS);
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_UINT16(UiController::DEFAULT_TEMPO, r.ui.tempo());
+    TEST_ASSERT_EQUAL_INT8(0, r.engine.getSelectedPattern(0));
+}
+
+void test_shift_play_is_reserved_and_does_not_toggle_the_transport() {
+    Rig r;
+    TEST_ASSERT_FALSE(r.engine.isRunning());
+    r.ui.handle(UiController::EVENT_SHIFT_PLAY_PRESS);
+    TEST_ASSERT_FALSE_MESSAGE(r.engine.isRunning(),
+        "SHIFT + PLAY est reserve a RECORDING, le transport garde PLAY seul");
+    r.ui.handle(UiController::EVENT_PLAY_PRESS);
+    TEST_ASSERT_TRUE(r.engine.isRunning());
+    r.ui.handle(UiController::EVENT_SHIFT_PLAY_PRESS);
+    TEST_ASSERT_TRUE(r.engine.isRunning());
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
 
@@ -610,8 +695,8 @@ int main(int, char**) {
     RUN_TEST(test_the_length_field_is_clamped_to_one_and_twenty_four);
     RUN_TEST(test_the_subdiv_field_walks_the_libgravity_list_and_clamps);
     RUN_TEST(test_the_bar_length_field_walks_only_the_allowed_values);
-    RUN_TEST(test_the_tempo_is_the_only_field_that_keeps_the_acceleration);
-    RUN_TEST(test_an_accelerated_turn_on_the_tempo_lands_on_the_bound);
+    RUN_TEST(test_no_field_keeps_the_acceleration_not_even_the_tempo);
+    RUN_TEST(test_a_long_turn_on_the_tempo_lands_on_the_bound);
     RUN_TEST(test_short_lists_never_accelerate);
     RUN_TEST(test_a_field_edit_applies_to_the_channel_of_the_current_tab);
     RUN_TEST(test_the_edit_entry_is_not_a_value);
@@ -619,9 +704,10 @@ int main(int, char**) {
     RUN_TEST(test_press_on_the_edit_entry_enters_the_grid);
     RUN_TEST(test_rotate_moves_the_step_cursor_and_wraps_at_twenty_four);
     RUN_TEST(test_press_toggles_the_step_under_the_cursor);
-    RUN_TEST(test_rotate_held_sets_the_ratchet_and_clamps_at_both_ends);
+    RUN_TEST(test_shift_rotate_sets_the_ratchet_of_an_active_step_and_clamps);
     RUN_TEST(test_a_ratchet_edit_takes_effect_on_the_current_step_immediately);
-    RUN_TEST(test_shift_rotate_changes_channel_and_wraps);
+    RUN_TEST(test_shift_rotate_in_edit_no_longer_changes_channel);
+    RUN_TEST(test_shift_rotate_on_an_inactive_step_does_nothing);
     RUN_TEST(test_the_grid_follows_the_pattern_of_the_channel_selected_in_edit);
     RUN_TEST(test_shift_long_press_clears_the_pattern_steps_and_ratchets);
     RUN_TEST(test_long_press_returns_from_the_grid_to_the_tab);
@@ -633,6 +719,12 @@ int main(int, char**) {
     RUN_TEST(test_a_refused_setting_leaves_the_revision_alone);
     RUN_TEST(test_the_revision_wraps_without_ever_matching_its_neighbour);
     RUN_TEST(test_shift_press_is_deliberately_free_and_changes_nothing);
+
+    RUN_TEST(test_the_main_parameter_follows_the_channel_mode);
+    RUN_TEST(test_shift_rotate_on_the_bar_changes_the_main_parameter);
+    RUN_TEST(test_shift_rotate_on_the_bar_moves_nothing_else);
+    RUN_TEST(test_shift_rotate_on_the_settings_tab_changes_nothing);
+    RUN_TEST(test_shift_play_is_reserved_and_does_not_toggle_the_transport);
 
     return UNITY_END();
 }

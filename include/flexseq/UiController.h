@@ -13,13 +13,13 @@ class UiController {
 public:
     enum Event : uint8_t {
         EVENT_ROTATE,
-        EVENT_ROTATE_HELD,
         EVENT_PRESS,
         EVENT_LONG_PRESS,
         EVENT_SHIFT_ROTATE,
         EVENT_SHIFT_PRESS,
         EVENT_SHIFT_LONG_PRESS,
         EVENT_PLAY_PRESS,
+        EVENT_SHIFT_PLAY_PRESS,
         EVENT_COUNT,
     };
 
@@ -38,6 +38,7 @@ public:
         FIELD_SUBDIV,
         FIELD_BAR_LENGTH,
         FIELD_EDIT_ENTRY,
+        FIELD_SKIP_CHANCE,
     };
 
     static constexpr uint8_t TAB_COUNT = 8;
@@ -85,12 +86,15 @@ public:
     bool setTempo(uint16_t bpm);
     bool setClockSource(uint8_t source);
 
+    Field mainField() const;
+
 private:
     void handleTabBar(Event event, int8_t delta);
     void handleTab(Event event, int8_t delta);
     void handleEdit(Event event, int8_t delta);
 
     void adjustField(int8_t delta);
+    void adjustFieldValue(Field target, int8_t delta);
     void adjustRatchet(int8_t delta);
     void togglePlay();
     void toggleStep();

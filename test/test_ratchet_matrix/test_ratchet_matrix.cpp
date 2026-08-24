@@ -436,12 +436,12 @@ void test_the_choice_list_skips_a_ratchet_the_rate_refuses() {
     r.enterEdit();
 
     // Depuis RATCHET_NONE, un cran vers le haut donne RATCHET_2 : il tient.
-    r.ui.handle(UiController::EVENT_ROTATE_HELD, 1);
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
     TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_2, r.pattern()->getRatchet(0));
 
     // Le cran suivant sauterait sur R3, refuse ; le premier code jouable
     // au-dessus est le triolet.
-    r.ui.handle(UiController::EVENT_ROTATE_HELD, 1);
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
     TEST_ASSERT_EQUAL_UINT8_MESSAGE(flexseq::RATCHET_TRIPLET,
         r.pattern()->getRatchet(0),
         "la saisie doit sauter les codes que la cadence refuse");
@@ -457,7 +457,7 @@ void test_the_choice_list_offers_everything_at_unity() {
                                 flexseq::RATCHET_4, flexseq::RATCHET_6,
                                 flexseq::RATCHET_TRIPLET};
     for (uint8_t i = 0; i < 5; ++i) {
-        r.ui.handle(UiController::EVENT_ROTATE_HELD, 1);
+        r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
         TEST_ASSERT_EQUAL_UINT8_MESSAGE(expected[i], r.pattern()->getRatchet(0),
             "a l'unite, aucun code ne doit etre saute");
     }

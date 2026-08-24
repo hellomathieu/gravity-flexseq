@@ -121,11 +121,10 @@ describe("UiController — tab bar", () => {
   it("the other gestures do nothing on the tab bar", () => {
     const { ui } = rig();
     for (const event of [
-      UiEvent.RotateHeld,
       UiEvent.LongPress,
-      UiEvent.ShiftRotate,
       UiEvent.ShiftPress,
       UiEvent.ShiftLongPress,
+      UiEvent.ShiftPlayPress,
     ]) {
       ui.handle(event, 1);
       expect(ui.level).toBe(UiLevel.TabBar);
@@ -248,12 +247,12 @@ describe("UiController — inside a tab", () => {
     expect(engine.getEffectiveLength(0)).toBe(MIN_LENGTH);
   });
 
-  it("keeps the acceleration for the tempo, and only for it", () => {
+  it("no field keeps the acceleration, not even the tempo", () => {
     const { ui, gotoTab, enterTab, gotoField } = rig();
     gotoTab(TAB_CLOCK);
     enterTab();
     ui.handle(UiEvent.ShiftRotate, 3);
-    expect(ui.tempo).toBe(DEFAULT_TEMPO + 3);
+    expect(ui.tempo).toBe(DEFAULT_TEMPO + 1);
     gotoField(UiField.ClockSource);
     const before = ui.clockSource;
     ui.handle(UiEvent.ShiftRotate, 3);
@@ -372,46 +371,54 @@ describe("UiController — EDIT PATTERN", () => {
     expect(bank.getPattern(0)!.readStep(7)).toBe(false);
   });
 
-  it("rotate held sets the ratchet and clamps at both ends", () => {
+  it("shift rotate sets the ratchet of an active step and clamps", () => {
     const { ui, bank, enterEdit } = rig();
     enterEdit();
-    ui.handle(UiEvent.RotateHeld, 1);
+    ui.handle(UiEvent.Press);
+    ui.handle(UiEvent.ShiftRotate, 1);
     expect(bank.getPattern(0)!.getRatchet(0)).toBe(RATCHET_2);
-    ui.handle(UiEvent.RotateHeld, 1);
+    ui.handle(UiEvent.ShiftRotate, 1);
     expect(bank.getPattern(0)!.getRatchet(0)).toBe(RATCHET_3);
-    for (let i = 0; i < RATCHET_CODES.length + 3; i += 1) ui.handle(UiEvent.RotateHeld, 1);
+    for (let i = 0; i < RATCHET_CODES.length + 3; i += 1) ui.handle(UiEvent.ShiftRotate, 1);
     expect(bank.getPattern(0)!.getRatchet(0)).toBe(RATCHET_TRIPLET);
-    for (let i = 0; i < RATCHET_CODES.length + 3; i += 1) ui.handle(UiEvent.RotateHeld, -1);
+    for (let i = 0; i < RATCHET_CODES.length + 3; i += 1) ui.handle(UiEvent.ShiftRotate, -1);
     expect(bank.getPattern(0)!.getRatchet(0)).toBe(RATCHET_NONE);
   });
 
   it("a ratchet edit takes effect on the current step immediately", () => {
     const { ui, engine, bank, enterEdit } = rig();
     enterEdit();
+    ui.handle(UiEvent.Press);
     engine.start();
     expect(engine.currentStepTicks(0)).toBe(PPQN);
-    for (let i = 0; i < 5; ++i) ui.handle(UiEvent.RotateHeld, 5);
+    for (let i = 0; i < 5; ++i) ui.handle(UiEvent.ShiftRotate, 5);
     expect(bank.getPattern(0)!.getRatchet(0)).toBe(RATCHET_TRIPLET);
     expect(engine.currentStepTicks(0)).toBe(2 * PPQN);
   });
 
-  it("shift rotate changes channel and wraps", () => {
-    const { ui, enterEdit } = rig();
+  it("shift rotate in edit no longer changes channel", () => {
+    const { ui, bank, enterEdit } = rig();
     enterEdit();
+    ui.handle(UiEvent.Press);
     ui.handle(UiEvent.ShiftRotate, 1);
-    expect(ui.selectedChannel).toBe(1);
-    expect(ui.level).toBe(UiLevel.Edit);
-    ui.handle(UiEvent.ShiftRotate, -1);
     expect(ui.selectedChannel).toBe(0);
-    ui.handle(UiEvent.ShiftRotate, -1);
-    expect(ui.selectedChannel).toBe(CHANNEL_COUNT - 1);
+    expect(ui.level).toBe(UiLevel.Edit);
+    expect(bank.getPattern(0)!.getRatchet(0)).toBe(RATCHET_2);
+  });
+
+  it("shift rotate on an inactive step does nothing", () => {
+    const { ui, bank, enterEdit } = rig();
+    enterEdit();
+    expect(bank.getPattern(0)!.readStep(0)).toBe(false);
+    ui.handle(UiEvent.ShiftRotate, 1);
+    expect(bank.getPattern(0)!.getRatchet(0)).toBe(RATCHET_NONE);
   });
 
   it("the grid follows the pattern of the channel selected in edit", () => {
-    const { ui, engine, bank, enterEdit } = rig();
+    const { ui, engine, bank, enterEdit, gotoTab } = rig();
     engine.setSelectedPattern(1, 5);
+    gotoTab(TAB_FIRST_CHANNEL + 1);
     enterEdit();
-    ui.handle(UiEvent.ShiftRotate, 1);
     ui.handle(UiEvent.Press);
     expect(bank.getPattern(5)!.readStep(0)).toBe(true);
     expect(bank.getPattern(0)!.readStep(0)).toBe(false);
@@ -421,8 +428,8 @@ describe("UiController — EDIT PATTERN", () => {
     const { ui, bank, enterEdit } = rig();
     enterEdit();
     ui.handle(UiEvent.Press);
-    ui.handle(UiEvent.RotateHeld, 3);
-    ui.handle(UiEvent.Rotate, 4);
+    ui.handle(UiEvent.ShiftRotate, 3);
+    ui.handle(UiEvent.Rotate, 1);
     ui.handle(UiEvent.Press);
     ui.handle(UiEvent.ShiftLongPress);
     for (let step = 0; step < STEP_COUNT; step += 1) {
@@ -509,5 +516,76 @@ describe("UiController — PLAY and the gesture left free", () => {
     expect(ui.level).toBe(UiLevel.Edit);
     expect(ui.stepCursor).toBe(3);
     expect(bank.getPattern(0)!.readStep(3)).toBe(false);
+  });
+});
+
+describe("UiController — le parametre principal, edite depuis la barre avec SHIFT", () => {
+  it("the main parameter follows the channel mode", () => {
+    const { ui, engine, gotoTab } = rig();
+    expect(ui.mainField).toBe(UiField.Pattern);
+    engine.setChannelMode(0, ChannelMode.CLOCK);
+    expect(ui.mainField).toBe(UiField.Subdiv);
+    engine.setChannelMode(0, ChannelMode.RANDOM);
+    expect(ui.mainField).toBe(UiField.SkipChance);
+
+    gotoTab(TAB_CLOCK);
+    expect(ui.mainField).toBe(UiField.Tempo);
+    gotoTab(TAB_SETTINGS);
+    expect(ui.mainField).toBe(UiField.None);
+  });
+
+  it("shift rotate on the bar changes the main parameter", () => {
+    {
+      const { ui, engine } = rig();
+      ui.handle(UiEvent.ShiftRotate, 1);
+      expect(engine.getSelectedPattern(0)).toBe(1);
+    }
+    {
+      const { ui, engine } = rig();
+      engine.setChannelMode(0, ChannelMode.CLOCK);
+      ui.handle(UiEvent.ShiftRotate, 1);
+      expect(engine.getSubdiv(0)).toBe(2);
+    }
+    {
+      const { ui, engine } = rig();
+      engine.setChannelMode(0, ChannelMode.RANDOM);
+      ui.handle(UiEvent.ShiftRotate, 1);
+      expect(engine.getSkipChance(0)).toBe(1);
+    }
+    {
+      const { ui, gotoTab } = rig();
+      gotoTab(TAB_CLOCK);
+      ui.handle(UiEvent.ShiftRotate, 1);
+      expect(ui.tempo).toBe(DEFAULT_TEMPO + 1);
+    }
+  });
+
+  it("shift rotate on the bar moves nothing else", () => {
+    const { ui, engine } = rig();
+    ui.handle(UiEvent.ShiftRotate, 1);
+    expect(ui.level).toBe(UiLevel.TabBar);
+    expect(ui.currentTab).toBe(TAB_FIRST_CHANNEL);
+    expect(ui.cursor).toBe(0);
+    expect(ui.fieldOpen).toBe(false);
+    expect(engine.getEffectiveLength(0)).toBe(DEFAULT_LENGTH);
+  });
+
+  it("shift rotate on the settings tab changes nothing", () => {
+    const { ui, engine, gotoTab } = rig();
+    gotoTab(TAB_SETTINGS);
+    ui.handle(UiEvent.ShiftRotate, 1);
+    expect(ui.tempo).toBe(DEFAULT_TEMPO);
+    expect(engine.getSelectedPattern(0)).toBe(0);
+  });
+
+  it("shift play is reserved and does not toggle the transport", () => {
+    const { ui, engine } = rig();
+    expect(engine.isRunning).toBe(false);
+    ui.handle(UiEvent.ShiftPlayPress);
+    expect(engine.isRunning).toBe(false);
+    ui.handle(UiEvent.PlayPress);
+    expect(engine.isRunning).toBe(true);
+    ui.handle(UiEvent.ShiftPlayPress);
+    expect(engine.isRunning).toBe(true);
   });
 });

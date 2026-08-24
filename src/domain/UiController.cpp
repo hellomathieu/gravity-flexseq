@@ -148,7 +148,7 @@ void UiController::handle(Event event, int8_t delta) {
         togglePlay();
         return;
     }
-    if (event == EVENT_SHIFT_PRESS) {
+    if (event == EVENT_SHIFT_PRESS || event == EVENT_SHIFT_PLAY_PRESS) {
         return;
     }
     switch (level_) {
@@ -164,6 +164,9 @@ void UiController::handleTabBar(Event event, int8_t delta) {
             currentTab_ = wrapIndex(currentTab_, oneStep(delta), TAB_COUNT);
             cursor_ = 0;
             fieldOpen_ = false;
+            break;
+        case EVENT_SHIFT_ROTATE:
+            adjustFieldValue(mainField(), delta);
             break;
         case EVENT_PRESS:
             if (fieldCount() > 0) {
@@ -216,9 +219,6 @@ void UiController::handleEdit(Event event, int8_t delta) {
         case EVENT_ROTATE:
             stepCursor_ = wrapIndex(stepCursor_, oneStep(delta), STEP_COUNT);
             break;
-        case EVENT_ROTATE_HELD:
-            adjustRatchet(delta);
-            break;
         case EVENT_PRESS:
             toggleStep();
             break;
@@ -226,17 +226,9 @@ void UiController::handleEdit(Event event, int8_t delta) {
             level_ = LEVEL_TAB;
             fieldOpen_ = false;
             break;
-        case EVENT_SHIFT_ROTATE: {
-            const int8_t channel = selectedChannel();
-            if (channel >= 0) {
-                const uint8_t next = wrapIndex(
-                    static_cast<uint8_t>(channel), oneStep(delta),
-                    SequencerEngine::CHANNEL_COUNT
-                );
-                currentTab_ = static_cast<uint8_t>(TAB_FIRST_CHANNEL + next);
-            }
+        case EVENT_SHIFT_ROTATE:
+            adjustRatchet(delta);
             break;
-        }
         case EVENT_SHIFT_LONG_PRESS:
             clearPattern();
             break;
@@ -263,10 +255,29 @@ bool UiController::setClockSource(uint8_t source) {
     return true;
 }
 
-void UiController::adjustField(int8_t accelerated) {
+void UiController::adjustField(int8_t delta) {
+    adjustFieldValue(field(), delta);
+}
+
+UiController::Field UiController::mainField() const {
+    if (currentTab_ == TAB_CLOCK) {
+        return FIELD_TEMPO;
+    }
     const int8_t channel = selectedChannel();
-    const int8_t delta = field() == FIELD_TEMPO ? accelerated : oneStep(accelerated);
-    switch (field()) {
+    if (channel < 0) {
+        return FIELD_NONE;
+    }
+    switch (engine_.getChannelMode(static_cast<uint8_t>(channel))) {
+        case MODE_CLOCK:  return FIELD_SUBDIV;
+        case MODE_RANDOM: return FIELD_SKIP_CHANCE;
+        default:          return FIELD_PATTERN;
+    }
+}
+
+void UiController::adjustFieldValue(Field target, int8_t raw) {
+    const int8_t channel = selectedChannel();
+    const int8_t delta = oneStep(raw);
+    switch (target) {
         case FIELD_TEMPO:
             tempo_ = static_cast<uint16_t>(clampRange(
                 static_cast<int16_t>(static_cast<int16_t>(tempo_) + delta),
@@ -320,6 +331,17 @@ void UiController::adjustField(int8_t accelerated) {
             engine_.setSubdiv(static_cast<uint8_t>(channel), subdivAtIndex(next));
             break;
         }
+        case FIELD_SKIP_CHANCE: {
+            if (channel < 0) {
+                break;
+            }
+            const uint8_t current = engine_.getSkipChance(static_cast<uint8_t>(channel));
+            engine_.setSkipChance(
+                static_cast<uint8_t>(channel),
+                clampIndex(current, delta, static_cast<uint8_t>(MAX_SKIP_CHANCE + 1))
+            );
+            break;
+        }
         case FIELD_BAR_LENGTH: {
             if (channel < 0) {
                 break;
@@ -348,6 +370,10 @@ void UiController::adjustField(int8_t accelerated) {
 void UiController::adjustRatchet(int8_t delta) {
     Pattern* pattern = currentPattern();
     if (pattern == nullptr) {
+        return;
+    }
+    bool active = false;
+    if (!pattern->readStep(stepCursor_, active) || !active) {
         return;
     }
     const int8_t channel = selectedChannel();

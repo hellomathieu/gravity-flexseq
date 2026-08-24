@@ -227,16 +227,16 @@ describe("Le refus a la saisie", () => {
   // A x24 seuls RATCHET_2 et le triolet tiennent : tourner saute R3, R4 et R6.
   it("saute les codes que la cadence refuse", () => {
     const r = editRig(-24);
-    r.ui.handle(UiEvent.RotateHeld, 1);
+    r.ui.handle(UiEvent.ShiftRotate, 1);
     expect(r.pattern.getRatchet(0)).toBe(RATCHET_2);
-    r.ui.handle(UiEvent.RotateHeld, 1);
+    r.ui.handle(UiEvent.ShiftRotate, 1);
     expect(r.pattern.getRatchet(0)).toBe(RATCHET_TRIPLET);
   });
 
   it("n'en saute aucun a l'unite", () => {
     const r = editRig(1);
     for (const code of [RATCHET_2, RATCHET_3, RATCHET_4, RATCHET_6, RATCHET_TRIPLET]) {
-      r.ui.handle(UiEvent.RotateHeld, 1);
+      r.ui.handle(UiEvent.ShiftRotate, 1);
       expect(r.pattern.getRatchet(0)).toBe(code);
     }
   });

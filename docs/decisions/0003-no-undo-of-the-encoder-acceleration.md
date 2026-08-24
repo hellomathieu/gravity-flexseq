@@ -53,8 +53,15 @@ FlexSeq **does not try to recover a detent count** from the value libGravity
 delivers. `oneStep()` stays: one detent is one movement, everywhere except the
 tempo.
 
-The tempo keeps the raw delta. It is the only range too large to cross detent by
-detent, and it is the only field the acceleration could serve.
+**Amended on 2026-08-23 by lot 19: the tempo no longer keeps the raw delta.** The
+owner decided that the acceleration disappears everywhere, the tempo included
+(PRD §16), so `oneStep()` now applies to every field.
+
+The change is **inoffensive**, and the measurement above is why: `|change|` was 1
+on all 24 callbacks, so the raw delta and one detent were already the same value.
+Removing the exception changes nothing observable on this hardware; it removes a
+branch. The cost the owner accepted is a range crossed detent by detent: 270
+detents from 30 to 300 BPM.
 
 The ratchet ring also moves one choice per gesture (owner's decision,
 2026-08-23). It holds 6 choices and skips the ones the channel rate refuses.
