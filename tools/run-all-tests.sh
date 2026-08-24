@@ -38,6 +38,7 @@ cpp_status="skip"
 ts_status="skip"
 tc_status="skip"
 lib_status="skip"
+ad_status="skip"
 
 if [ "$RUN_CPP" = "1" ]; then
   echo "=========================================="
@@ -78,6 +79,18 @@ if [ "$RUN_TS" = "1" ]; then
   echo
 fi
 
+if [ "$RUN_CPP" = "1" ]; then
+  echo "=========================================="
+  echo "  Tests adaptateur d'entrees (env native_adapter)"
+  echo "=========================================="
+  if "$REPO_ROOT/tools/run-adapter-tests.sh"; then
+    ad_status="OK"
+  else
+    ad_status="ECHEC"
+  fi
+  echo
+fi
+
 if [ "$RUN_LIB" = "1" ]; then
   echo "=========================================="
   echo "  Caracterisation libGravity @ 9be88be1f4"
@@ -92,14 +105,16 @@ fi
 
 echo "=================== RECAP ==================="
 printf "  C++ acceptation (native)   : %s\n" "$cpp_status"
+printf "  Adaptateur d'entrees       : %s\n" "$ad_status"
 printf "  TypeScript (sim/)          : %s\n" "$ts_status"
 printf "  Typage TypeScript          : %s\n" "$tc_status"
 printf "  libGravity caracterisation : %s\n" "$lib_status"
 echo "============================================"
 
 # Code de sortie : erreur si l'une des suites lancees a echoue.
-if [ "$cpp_status" = "ECHEC" ] || [ "$ts_status" = "ECHEC" ] \
-   || [ "$tc_status" = "ECHEC" ] || [ "$lib_status" = "ECHEC" ]; then
+if [ "$cpp_status" = "ECHEC" ] || [ "$ad_status" = "ECHEC" ] \
+   || [ "$ts_status" = "ECHEC" ] || [ "$tc_status" = "ECHEC" ] \
+   || [ "$lib_status" = "ECHEC" ]; then
   exit 1
 fi
 exit 0

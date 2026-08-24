@@ -15,6 +15,12 @@ public:
         : pin1_(pin1),
           pin2_(pin2),
           mode_(mode) {
+        lastInstance() = this;
+    }
+
+    static RotaryEncoder*& lastInstance() {
+        static RotaryEncoder* instance = nullptr;
+        return instance;
     }
 
     int getPosition() const {

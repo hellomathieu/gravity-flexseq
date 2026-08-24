@@ -1,7 +1,7 @@
 PlatformIO tests for the Gravity FlexSeq project.
 
-This directory holds TWO categories of test that must never be mixed. They live
-in two distinct PlatformIO environments, and that is deliberately structural:
+This directory holds THREE categories of test that must never be mixed. They live
+in three distinct PlatformIO environments, and that is deliberately structural:
 it is what lets the acceptance suite stay a reliable signal.
 
 -------------------------------------------------------------------------------
@@ -10,7 +10,7 @@ it is what lets the acceptance suite stay a reliable signal.
     test_cv_gate, test_main_screen, test_paged_screen, test_pattern,
     test_pattern_bank, test_pattern_screen, test_persistence,
     test_ratchet_matrix, test_sequencer_engine, test_subdiv, test_transport,
-    test_trigger_sequencer, test_ui_controller
+    test_subdiv_phase, test_trigger_sequencer, test_ui_controller
 
 Pure C++ domain, no Arduino and no libGravity. MUST be green: a phase is not
 finished while one of these fails. 317 assertions as of 2026-08-23, counted
@@ -66,7 +66,37 @@ rule this produced lives in `docs/open-risks.md`, under the method rules.
     ./tools/run-cpp-tests.sh [test_name]
 
 -------------------------------------------------------------------------------
-2. libGravity characterization  ->  env `native_libgravity`
+2. Input-adapter acceptance  ->  env `native_adapter`
+-------------------------------------------------------------------------------
+    test_input_adapter
+
+`./tools/run-adapter-tests.sh`. OUR glue code, compiled against the Arduino stubs
+in test/mocks/ and libGravity's headers. MUST be green.
+
+What only this env can test: the policy that decides a hold used for a rotation
+is NOT a long press. It depends on time and on pin state, so the domain cannot
+see it -- the domain only receives events that were already decided. The defect
+it caught was real and reached the module: holding SHIFT to turn the encoder fired
+EVENT_SHIFT_LONG_PRESS on release, which CLEARED THE PATTERN.
+
+The test compiles src/hal/InputAdapter.cpp into its own translation unit, with an
+#include, and it has to. test/mocks/Arduino.h declares its pin and time state as
+`static` at header scope, so EVERY TRANSLATION UNIT GETS ITS OWN COPY: a test
+writing setDigitalPin in its copy would drive nothing at all. test_gravity
+includes libGravity.cpp for the same reason.
+
+gravity.Init() is what gives the buttons their pin. Without it, shift_button
+reads pin 0 instead of pin 12 and every SHIFT gesture is silent. The rig calls
+Init on both buttons.
+
+One finding this bench produced, and it is a bench artefact: the first main-loop
+pass delivered a spurious encoder press, because Button samples old_read_ at
+global construction, when the mock has every pin at zero. Checked on the module
+on 2026-08-23 -- IT DOES NOT HAPPEN THERE: one detent moves the selected tab, so
+the UI is still on the tab bar.
+
+-------------------------------------------------------------------------------
+3. libGravity characterization  ->  env `native_libgravity`
 -------------------------------------------------------------------------------
     test_analog_input, test_button, test_clock, test_digital_output,
     test_encoder, test_gravity
