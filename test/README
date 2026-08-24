@@ -101,7 +101,7 @@ the UI is still on the tab bar.
     test_analog_input, test_button, test_clock, test_digital_output,
     test_encoder, test_gravity
 
-libGravity headers (pinned at commit 9be88be1f4) compiled against the Arduino
+libGravity headers, at the commit platformio.ini pins, compiled against the Arduino
 stubs in `test/mocks/`. These tests describe the REAL behaviour of the pinned
 dependency, defects included: 7 assertions out of 68 fail by construction.
 Never weaken them to obtain green — that would hide a defect of the dependency.

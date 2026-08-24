@@ -82,6 +82,11 @@ allocates, so its correct operation is the proof that matters.
 **Patch the dependency to use a static buffer.** Forbidden: libGravity is pinned at
 commit `9be88be1f4` and must not be edited.
 
+⚠️ **The pin moved on 2026-08-24 and the rule changed with it.** ADR 0008
+records a project fork, pinned by commit, with a charter that says what it may
+and may not repair. `.pio/libdeps` still must never be edited: it is a build
+cache, and a repair there disappears the next time PlatformIO resolves.
+
 **Leave the allocator and raise the Flash guard.** The guard exists to make growth
 a deliberate act. Returning 554 bytes of code that nothing runs is better than
 accepting a smaller reserve.

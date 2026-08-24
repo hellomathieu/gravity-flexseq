@@ -1,0 +1,4 @@
+.pio/libdeps/nanoatmega328/libGravity/src/analog_input.h: comparison between signed and unsigned integer expressions [-Wsign-compare]
+.pio/libdeps/nanoatmega328/libGravity/src/clock.h: enumeration value 'SOURCE_LAST' not handled in switch [-Wswitch]
+.pio/libdeps/nanoatmega328/libGravity/src/clock.h: invalid conversion from 'void (*)(uint8_t, uint8_t) {aka void (*)(unsigned char, unsigned char)}' to 'NeoHWSerial::isr_t {aka bool (*)(unsigned char, unsigned char)}' [-fpermissive]
+.pio/libdeps/nanoatmega328/libGravity/src/clock.h: invalid conversion from 'void (*)(uint8_t, uint8_t) {aka void (*)(unsigned char, unsigned char)}' to 'NeoHWSerial::isr_t {aka bool (*)(unsigned char, unsigned char)}' [-fpermissive]

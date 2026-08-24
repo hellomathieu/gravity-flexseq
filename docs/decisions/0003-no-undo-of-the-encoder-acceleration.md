@@ -92,7 +92,7 @@ says so.
 **Read `getMillisBetweenRotations()` to know the factor.** FlexSeq cannot: the
 `RotaryEncoder encoder_` member is private in libGravity's `Encoder`
 (`encoder.h:86`), only `change` is protected, and `libGravity.cpp` already owns
-the two PCINT vectors. The dependency is pinned at commit `9be88be1f4` and must
+the two PCINT vectors. The dependency was pinned at commit `9be88be1f4` and must
 not be patched.
 
 **Deduce the factor from the poll period.** This is the attempt described above.

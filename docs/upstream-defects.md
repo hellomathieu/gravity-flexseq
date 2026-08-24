@@ -12,19 +12,32 @@ workaround.
 ## Scope and honesty
 
 **`libGravity` is audited; the original firmware is not.** The libGravity list
-below is complete against commit `9be88be1f4` and every entry is reproduced by a
-test in `env:native_libgravity`. The original firmware has only ever been read as
+below was audited against commit `9be88be1f4`, entries 1 to 9 are each reproduced
+by a test in `env:native_libgravity`, and the pin has moved to `5c0c34f` since. The original firmware has only ever been read as
 a behavioural reference, so its single entry is what happened to surface, not the
 result of a sweep. Do not read the short list as a clean bill of health.
 
-## libGravity, pinned at `9be88be1f4`
+## libGravity, pinned at `5c0c34f`
 
-Verified 2026-08-20: none of these is fixed upstream three commits after the
-pinned one.
+**The pin moved on 2026-08-24**, from `9be88be1f4` to `5c0c34f`, the head of the
+project fork. The whole compiled surface of the move is seven added lines in
+`src/encoder.h`. The re-audit passed: the characterization suite stays conform
+with `EXPECTED` unchanged, `test_encoder` keeps its 19 assertions and its 2
+anomalies, and `test_gravity` its 6.
+
+**A fork now exists**, and ADR 0008 carries its charter. Entries 1 to 9 below are
+the **audited anomalies**, and the charter forbids repairing them: they are the
+reason `InputAdapter` exists and 68 assertions describe them. Entries 10 and
+above are what the fork may repair.
+
+Verified 2026-08-20 for entries 1 to 9: none was fixed upstream three commits
+after `9be88be1f4`. Re-read on `5c0c34f` for two of them on 2026-08-24: the
+encoder still carries `// Validation (TODO: add debounce check).` at
+`encoder.h:101`, and the serial handler is still mistyped.
 
 | # | Defect | Proven by | Fix looks like |
 |---|---|---|---|
-| 1 | `AnalogInput::IsRisingEdge()` never reports a negative-to-positive crossing. `old_read_` is `uint16_t` while `read_` is `int16_t`, so a negative previous value becomes a large positive and "it was already high" is true whenever it was in fact negative. That is the most ordinary case on a bipolar input | `test_analog_input`, 2 assertions | one type |
+| 1 | **The compiler warns about this one at every full build**, `-Wsign-compare` on `analog_input.h`, which nobody had connected to the defect until the warning reference was generated on 2026-08-24. `AnalogInput::IsRisingEdge()` never reports a negative-to-positive crossing. `old_read_` is `uint16_t` while `read_` is `int16_t`, so a negative previous value becomes a large positive and "it was already high" is true whenever it was in fact negative. That is the most ordinary case on a bipolar input | `test_analog_input`, 2 assertions | one type |
 | 2 | `Button` loses a release that falls inside the debounce window | `test_button`, 1 assertion | moderate — the state machine has to remember the release |
 | 3 | `Encoder` starts in an unsafe state: `previous_pos_` is not initialised, so the first poll can report a movement that never happened | `test_encoder`, 2 assertions | one initialisation |
 | 4 | `Encoder` has no debounce at all, and the code says so: `_rotate_change()` carries `// Validation (TODO: add debounce check)`. ⚠️ **The consequence written here until 2026-08-23 was REFUTED on the module**: two fast detents do NOT cancel each other. Measured, they give exactly −2, and fifteen seconds of fast rotation give −917 with zero reversals. What is real is a bounce **at a turning point**, the fastest measured reversal being 2 ms | hardware, `docs/open-risks.md` line 20 | an enhancement, not a one-liner |
@@ -33,13 +46,49 @@ pinned one.
 | 7 | `Clock::SetSource()` does not handle the `SOURCE_LAST` sentinel, which surfaces as a compiler warning rather than wrong behaviour | read | one guard |
 | 8 | Packaging: a consumer must declare `NeoHWSerial @ 1.6.9` explicitly; the library does not pull it | build | manifest |
 | 9 | `Encoder` accelerates, hides the factor, and the acceleration is **unreachable by hand**. `_rotate_change()` returns the movement accumulated since the last poll, multiplied by 3 below 16 ms and by 2 below 32 ms, and `Process()` passes it to `on_rotate()` in **one** call. The factor comes from `encoder_.getMillisBetweenRotations()`, and `encoder_` is **private**, so a consumer cannot recover the true detent count from the value it receives. Measured on the module 2026-08-23: the factor never fired -- 24 callbacks, all of magnitude 1. A factor of 3 needs more than 62 detents per second | `env:encoderprobe` on the module; `docs/open-risks.md` line 30; ADR 0003 | an accessor, or a switch that turns the acceleration off |
+| 10 | **`Clock::SetSource()` attaches a serial handler with the WRONG TYPE, and `-fpermissive` accepts it.** `NeoHWSerial::isr_t` is `bool (*)(uint8_t, uint8_t)` (`NeoHWSerial.h:213`); libGravity passes functions that return `void` (`clock.h:29, 89, 115, 159`). PlatformIO's Arduino AVR builder adds `-fpermissive`, so the type error becomes a warning. At run time `_rx_complete_irq()` does `saveToBuffer = _isr(data, status)` (`NeoHWSerial.h:157`) and the callee sets no return value, so the flag reads an undefined register: **every received MIDI byte is buffered or dropped at random**. Nothing in FlexSeq reads that ring, so no behaviour is observable, but the read is undefined on each byte | the compiler, quoted below | four lines: both handlers return `bool` and return `false` |
+| 11 | **uClock is declared in `depends` while libGravity carries its own copy, in a DIFFERENT version.** The copy lives in `src/uClock/` and every include of it is quoted and relative (`clock.h:18`, `uClock.cpp:34-35`), so it is the one that compiles — measured in the build tree. Its header says **2.2.1**; `depends=uClock` resolves **2.3.0** from the registry, which is downloaded and never compiled. So the manifest advertises a version that never runs, and the running version is declared nowhere | read and measured, 2026-08-24 | one line: remove `uClock` from `depends` |
 
-Six of the eight are one to three lines.
+Entry 10's warning, quoted exactly:
+
+```
+clock.h:89:48: warning: invalid conversion from 'void (*)(uint8_t, uint8_t)'
+to 'NeoHWSerial::isr_t {aka bool (*)(unsigned char, unsigned char)}' [-fpermissive]
+```
+
+**A top-level pin cannot fix entry 11, and trying made things worse.** Measured
+on 2026-08-24: `midilab/uClock@2.3.0` in `lib_deps` pinned nothing — uClock stayed
+the transitive dependency with the bare `uClock` constraint — and it added a
+**second** `uClock.cpp.o` to the link, so a second definition of the same ISR.
+The link survives because the registry archive member is never pulled. The line
+was removed. A top-level `lib_deps` entry is compiled; a `depends` entry is only
+resolved and put on the include path.
+
+Six of the first nine are one to three lines.
 
 **Encoder direction is not on this list, deliberately.** It depends on how the
 two pins are wired, and both projects expose the setting —
 `Encoder::SetReverseDirection(bool)` here, `reverseEnc` in the original. Their
 defaults are simply opposite. See PRD §4.1.
+
+## Not a defect, but a cost worth naming once
+
+**916 bytes of Flash go into 32-bit float arithmetic, and all of it comes from
+uClock.** Measured with `avr-objdump` on 2026-08-24: the only callers of
+`__divsf3`, `__mulsf3`, `__floatunsisf`, `__fixunssfsi`, `__cmpsf2` and `__gesf2`
+are `setTimer(unsigned long)`, `uClockClass::setTempo(float)` and `__vector_11`,
+which is uClock's timer ISR. So the float maths also runs **inside an
+interrupt**, and it is part of that ISR's 974 bytes.
+
+The figure is 1072 bytes of helpers minus 156 bytes of integer helpers. It is
+3.2 % of the Flash the project has.
+
+**It is irrecoverable, and that is the point of writing it down.** uClock is
+vendored inside a pinned dependency, and ADR 0008 forbids the fork from touching
+a musical behaviour. Anyone hunting for Flash will find these symbols at the top
+of the list; this line saves them the search. The only lever would be rewriting
+uClock's tempo arithmetic in integers, inside an ISR, where musical accuracy is
+what is at stake. That needs an explicit decision, not an optimisation pass.
 
 ## Original firmware (`GravityFW`)
 
@@ -63,6 +112,7 @@ either direction**. An upstream fix would therefore turn our suite red, and the
 `EXPECTED` set plus `test/README` must be updated in the same move. That is the
 intended behaviour, not an obstacle — but it is work.
 
-**Nothing reaches us on its own.** FlexSeq pins `9be88be1f4` by decision. An
-accepted fix changes nothing here until the pin is deliberately moved, and moving
-it requires re-auditing `Gravity::Process()` (PRD §18).
+**Nothing reaches us on its own.** FlexSeq pins a commit of its own fork by
+decision (ADR 0008). An accepted upstream fix changes nothing here until the pin
+is deliberately moved, and moving it requires re-auditing `Gravity::Process()`
+(PRD §18) — which `test_gravity` turns into a failure rather than an oversight.

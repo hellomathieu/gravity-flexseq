@@ -218,7 +218,7 @@ void test_gravity_initialized_output_loop_control() {
 // ses morceaux — boutons et encodeur — et pilote les sorties lui-meme.
 //
 // Le risque que cela cree n'est pas de rater une evolution de libGravity, qui est
-// FIGEE au commit `9be88be1f4` par decision de projet : c'est d'oublier, au
+// FIGEE a un commit du fork par decision de projet (ADR 0008) : c'est d'oublier, au
 // prochain changement d'epingle, de re-auditer ce que cette fonction fait. Ce
 // test transforme cet oubli possible en ECHEC : il fige la composition observee
 // au commit epingle, par ce que la fonction va chercher sur le materiel.

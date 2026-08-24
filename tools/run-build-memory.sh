@@ -14,6 +14,26 @@
 #
 #     ./tools/run-build-memory.sh --accept
 #
+# GARDE SUR LES AVERTISSEMENTS DE LA DEPENDANCE. Les compter sans les comparer
+# laisse passer un avertissement NEUF en silence : c'est ainsi que le mauvais
+# typage de `Clock::SetSource()` est reste invisible des mois, alors que le
+# compilateur le signalait a chaque build complet. Le critere est celui de la
+# caracterisation — conformite a une reference versionnee
+# (`tools/dependency-warnings`), rouge DANS LES DEUX SENS : un avertissement neuf
+# est un defaut a documenter, un avertissement disparu veut dire que la
+# dependance a change. Acter :
+#
+#     ./tools/run-build-memory.sh --accept-warnings
+#
+# Le numero de ligne et la colonne sont retires de la comparaison, sinon un
+# reformatage de la dependance ferait rougir. Les doublons sont CONSERVES : les
+# deux conversions invalides de `clock.h` comptent pour deux, donc en perdre une
+# fait rougir.
+#
+# ⚠️ Le garde ne tourne QUE sur un build qui compile quelque chose. Sur un build
+# incremental sans recompilation le script le dit explicitement, pour la meme
+# raison qu'il refuse d'annoncer « 0 avertissement » : ce serait un faux negatif.
+#
 # Une BAISSE n'est jamais un echec : elle est signalee, et `--accept` rafraichit
 # le releve. Le fichier absent n'est pas un echec non plus — le script propose de
 # le creer.
@@ -56,10 +76,12 @@ RAM_DRIFT="${RAM_DRIFT:-16}"
 FLASH_DRIFT="${FLASH_DRIFT:-512}"
 BASELINE="tools/memory-baseline"
 ACCEPT=0
+ACCEPT_WARN=0
 for arg in "$@"; do
   case "$arg" in
     --accept) ACCEPT=1 ;;
-    *) echo "argument inconnu : $arg (attendu : --accept)" >&2; exit 2 ;;
+    --accept-warnings) ACCEPT_WARN=1 ;;
+    *) echo "argument inconnu : $arg (attendu : --accept ou --accept-warnings)" >&2; exit 2 ;;
   esac
 done
 VERBOSE="${VERBOSE:-0}"
@@ -145,6 +167,8 @@ printf '  %s✅ build OK%s  %s%s unites compilees, %s s%s\n' \
 # Ceux de la dependance figee sont connus et non corrigeables (libGravity est
 # epinglee) : on les compte. Ceux de notre code sont les seuls actionnables :
 # on les affiche.
+WARN_REF="tools/dependency-warnings"
+WARN_DRIFT=0
 warn_all="$(sed -E 's/\x1B\[[0-9;]*[mK]//g' "$LOG" | grep -E '^[^ ].*: warning: ' | sort -u)"
 warn_dep=$(printf '%s\n' "$warn_all" | grep -c '^\.pio/')
 warn_own="$(printf '%s\n' "$warn_all" | grep -E '^(src|include)/')"
@@ -162,6 +186,33 @@ else
   fi
   printf '  %s%d avertissement(s) dans la dependance figee — connus, non corrigeables%s\n' \
     "$C_DIM" "$warn_dep" "$C_0"
+
+  # Garde de derive sur les avertissements de la dependance. Les COMPTER sans les
+  # comparer laisse passer un avertissement NEUF en silence : c'est ainsi que le
+  # mauvais typage de Clock::SetSource() a vecu des mois. Le critere est celui de
+  # la caracterisation : conformite a une reference versionnee, rouge DANS LES
+  # DEUX SENS. Le numero de ligne et la colonne sont retires, sinon un simple
+  # reformatage de la dependance ferait rougir.
+  warn_norm="$(printf '%s\n' "$warn_all" | grep '^\.pio/' \
+    | sed -E 's/^([^:]+):[0-9]+:[0-9]+: warning: /\1: /' | sort)"
+  if [ "$ACCEPT_WARN" = "1" ]; then
+    printf '%s\n' "$warn_norm" > "$WARN_REF"
+    printf '  %s✅%s reference d avertissements mise a jour (%d)\n' \
+      "$C_OK" "$C_0" "$warn_dep"
+  elif [ ! -f "$WARN_REF" ]; then
+    printf '  %s⚠  aucune reference d avertissements (%s)%s\n' \
+      "$C_DIM" "$WARN_REF" "$C_0"
+    printf '     la creer : ./tools/run-build-memory.sh --accept-warnings\n'
+  elif ! diff -q "$WARN_REF" <(printf '%s\n' "$warn_norm") >/dev/null 2>&1; then
+    printf '  %s❌ DERIVE des avertissements de la dependance%s\n' "$C_ERR" "$C_0"
+    diff "$WARN_REF" <(printf '%s\n' "$warn_norm") | sed 's/^/     /'
+    printf '     un avertissement NEUF est un defaut a documenter (docs/upstream-defects.md).\n'
+    printf '     un avertissement DISPARU veut dire que la dependance a change.\n'
+    printf '     acter : ./tools/run-build-memory.sh --accept-warnings\n'
+    WARN_DRIFT=1
+  else
+    printf '  %sconformes a la reference versionnee%s\n' "$C_DIM" "$C_0"
+  fi
 fi
 
 # --- Extraction des chiffres -------------------------------------------------
@@ -248,6 +299,14 @@ else
     printf '  %s✅%s derive   RAM %+d o, Flash %+d o  %s— dans les seuils%s\n' \
       "$C_OK" "$C_0" "$d_ram" "$d_flash" "$C_DIM" "$C_0"
   fi
+fi
+
+if [ "$fail" = "0" ] && [ "$WARN_DRIFT" = "1" ]; then
+  echo "  Les budgets sont respectes, mais les avertissements de la dependance"
+  echo "  ont derive. Un avertissement neuf de la dependance est un defaut a"
+  echo "  documenter, pas un detail : c'est ainsi que le mauvais typage de"
+  echo "  Clock::SetSource() est reste invisible des mois."
+  exit 1
 fi
 
 if [ "$fail" = "0" ]; then

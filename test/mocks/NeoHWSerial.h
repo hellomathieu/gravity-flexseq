@@ -13,7 +13,7 @@ public:
     }
 
     // Compatibilité avec les callbacks réellement utilisés par
-    // libGravity::Clock dans le commit 9be88be1f4.
+    // libGravity::Clock a l'epingle courante.
     //
     // Le vrai NeoHWSerial accepte actuellement cette conversion
     // avec -fpermissive côté AVR.
