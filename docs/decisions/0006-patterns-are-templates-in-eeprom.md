@@ -34,8 +34,32 @@ The sixteen patterns are **templates**, and they live in **EEPROM only**. They a
 never played from there.
 
 A channel in `SEQ` holds its **own pattern instance in RAM**. Loading a template
-copies it into the instance and **derives the LENGTH** from the last non-empty
-step. Editing the instance touches neither the template nor any other channel.
+copies it into the instance and takes **the LENGTH stored in the template**.
+
+⚠️ **This sentence said "derives the LENGTH from the last non-empty step" until
+2026-08-25, and that was refuted by the factory patterns.** The eight patterns
+of the original all play sixteen steps, but four of them — A2, A3, A6 and A7 —
+have their last active step before index 15. Deriving would give them 12, 13, 15
+and 15, so **four of the eight would play a length the original never had**, and
+A2 would drift by four steps every cycle.
+
+The information is genuinely absent: a pattern with content up to step 11 and a
+length of 16 carries the same bits as the same pattern with a length of 12.
+Trailing silence stores nothing, so no function can recover it.
+
+The template record therefore holds the length: **21 bytes**, 20 of content plus
+one. `sizeof(Pattern)` stays at 20 — the length is a fact of STORAGE, not of
+content, exactly as it already is for the channel, whose EEPROM record has
+carried its `effectiveLength` since format version 2. Deriving while storing the
+other was the asymmetry that hid the defect.
+
+Rounding up to a multiple of eight would recover all eight factory patterns, and
+it must still be refused: it is a fit to eight samples that all happen to be
+sixteen steps long, and it would make a length of 12, 20 or 28 unreachable,
+which removes the `LEN` field the PRD adds in §1.
+
+The derivation survives for **one** case: a slot that is empty and receives
+content for the first time. PRD §5.0 point 3 is the normative source. Editing the instance touches neither the template nor any other channel.
 Reloading the template overwrites the instance.
 
 `A1` to `A8` refuse edition. The rule is the index, `index < 8`, so the refusal
@@ -51,10 +75,13 @@ otherwise lose the user's work.
 
 | | Bytes |
 |---|---|
-| 16 templates | 320 |
+| 16 templates | 336 |
 | 6 channel instances | 120 |
 | the rest of the state | about 50 |
-| **from address 384** | **up to about 874, of 1024** |
+| **from address 384** | **up to about 890, of 1024** |
+
+⚠️ **The template line was 320 bytes until 2026-08-25**, when the length moved
+into the record: 16 x 21 rather than 16 x 20.
 
 FlexSeq still writes nothing below address 384, so the original's own settings
 survive. That rule does not change.
