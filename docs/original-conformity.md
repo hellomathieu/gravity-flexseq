@@ -239,9 +239,73 @@ was supplied by the owner on 2026-08-23 and checked line by line against the
 pinned original. It also carries the two corrections that check produced: the
 original runs at **24 PPQN**, and the skip chance has two ceilings.
 
+## Runtime cost against the original — 2026-08-25
+
+This pass answers one question: has FlexSeq made the module **slower or less
+precise** than the firmware it replaces? The sources are the original firmware at
+`main` @ `40d4aac`, the upstream library at `5c0c34f`, and measurements on the
+current build.
+
+### The fork changes no behaviour of the library
+
+The pin `4c5b4d0` differs from the upstream head `5c0c34f` by **two files**: the
+README, and 21 lines of `libGravity.h`. The lines make the display transport
+selectable. A consumer that defines neither macro gets the previous class, so no
+existing build changes. This is the charter of ADR 0008, and the diff holds to it.
+
+### Where FlexSeq costs LESS than the original
+
+| | The original | FlexSeq |
+|---|---|---|
+| Timer interrupt | FlexiTimer2 at **10 kHz** (`Gravity.ino:224`), and the trigger work runs in it | uClock's Timer1 at **48 Hz** at 120 BPM (`OCR1A = 41665`, prescaler 8) — about 200 times fewer interrupts |
+| CV reading | up to **six** blocking `analogRead` calls per pass, the same pin read three times (`Interactions.ino:423-434`), about 104 µs each, so up to **0.6 ms of the pass** | a free-running ADC interrupt at about 9.6 kHz, and **zero** `analogRead` in the loop, which a test asserts. The interrupt is not free: **4.4 to 5.6 % of the CPU**, measured. It is paid outside the loop, and it samples continuously instead of once per pass |
+| Display | a **whole frame** in one call (`u8g2.firstPage()` / `nextPage()`, `UI.ino:3` and `UI.ino:353`) | **one band per pass** (ADR 0001), so a render never blocks the loop for a whole frame |
+| Flash | application **region** of 27648 B, read from the module backup on 2026-08-21. It is an upper bound, not the used size: the region above the last written page is blank | **27120 B** measured by the linker |
+
+The first two lines are read from the sources. They are not measurements of the
+original, which has never been run under the probes. The interrupt line compares
+the **timer** only: FlexSeq adds an ADC interrupt the original does not have, and
+the CV line carries its cost.
+
+### Where FlexSeq costs MORE, and why that is accepted
+
+**The trigger leaves the interrupt.** The original emits its triggers inside the
+0.1 ms timer interrupt and clears the outputs there too (`Gravity.ino:263-312`),
+so its trigger grid is 0.1 ms whatever the loop is doing. FlexSeq emits in the
+main loop, so its precision is bounded by a loop pass. **Measured on 2026-08-25**:
+jitter **1.00 to 1.23 ms**, median 0.57 to 0.65, and a step of **499.95 to
+499.97 ms** against 500.00 expected at 120 BPM, which is 0.01 %. The pass itself
+is p90 **6.50 ms** on the EDIT screen.
+
+So the timing is about one order of magnitude coarser than the original's, and it
+stays two orders below the step. Band rendering is what keeps it there: a whole
+frame in one call would put the worst case at 46 ms.
+
+**The playhead moves.** The original redraws only on a user event. FlexSeq
+animates the playhead on EDIT, so the loop works where the original's is idle. The
+main screen carries no time-varying element and almost never redraws, which is
+why the probe measures the EDIT screen.
+
+**Two constants diverge on purpose**, both already recorded below: the pulse is
+5 ms configured (4.70 to 4.83 measured) against 12 ms, and the tempo range is 30
+to 300 against 20 to 200.
+
+### Lot A added no runtime cost
+
+The 32-step pattern changed no per-pass work: the loop walks channels, not steps.
+Measured after the lot, and equal to the figures before it: p90 **6.50 ms**,
+median 5.01, band 3.35, whole frame 23.5 current and 46.0 complete, worst 13.87.
+Flash **−50 B**, RAM **+85 B**.
+
+⚠️ **One figure moved and it is the measurement, not the firmware.** The ADC's
+share of the hardware CPU printed **4.4 %** in this run against **5.6 %** recorded
+on 2026-08-21. The method is a ratio of medians over two regimes, so it varies
+between runs. Re-read it the day it matters; do not treat either number as exact.
+
 ## What the audit did NOT cover
 
-- `Gravity.ino`'s generation loop beyond the two points named above. The trigger
+- `Gravity.ino`'s generation loop beyond the two points named above, and beyond
+  the runtime comparison in the section above. The trigger
   path is covered by the domain tests and by `run-trigger-probe.sh`.
 - The MIDI expander and the expansion header. PRD §16 leaves them out.
 - CV calibration arithmetic. One defect of the original is recorded in
