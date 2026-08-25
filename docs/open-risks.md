@@ -48,6 +48,8 @@ below.
 
 | 42 | **A greedy matcher reported 1441 lost onsets where the raw count said 12.** The overload sweep of 2026-08-25 paired each edge with an expected onset under the rule "an edge at or after the next expectation means the previous one is missing". Under overload the debt pays one onset per loop pass, so a delay exceeds the interval and the pairing shifts, then propagates: `dropped` and `unexpected` came out almost equal, 1441 against 1429, with negative grid errors | **closed for the instrument, open as a method rule** | `reconcileTimeline()` counts first and pairs second, and returns **ambiguous** rather than choosing. The identity of an onset is **not recoverable**: `owed_[ch]` is a counter, not a queue, so no matcher can do better. The rule this leaves: **an instrument must not answer a question it can no longer decide** |
 
+| 43 | **The fourth witness of the gesture probe rests on a symbol that the build does not promise to keep.** `suppressedLong` is an internal counter of libGravity long presses that FlexSeq's own guard **absorbs**, and `run-gesture-probe.sh` reads it to separate "no long press fired" from "a long press fired and was swallowed" -- a distinction no behavioural witness can make. Measured 2026-08-25 on the production binary: the exported accessor `flexseq::input::suppressedLongPresses()` is **absent from the ELF**, removed by `--gc-sections` for want of a caller, and the whole image holds exactly **eight** references to the counter, all inside the two functions that increment it. **Nothing reads it.** Neither C++ nor the build guarantees that a non-`volatile` object with internal linkage and no reads survives LTO, so its presence today is an outcome of this toolchain, not a property. Observed stable over three builds, two of them from clean: same `firmware.hex` md5, same address, a **2-byte** object in SRAM at `0x0220` | **instrumentation, not firmware.** No functional behaviour of the module depends on this counter | **nothing to do on the firmware, and no fix is proposed.** The probe resolves the symbol by name on **every run** and never hardcodes its address; the validity conditions are the ones established during FRACT -- a single matching symbol, size exactly 2, type `.bss` or `.data`, the address converted by `VMA - 0x800000` and bounded by `avr->ioend` and `avr->ramend`, a readable flag distinct from the value, and a non-negative delta. If any of them fails, the witness is **unavailable**: the criterion is `INVALID`, never a firmware `FAIL`. The day the symbol disappears, the probe says so instead of concluding. Details and measurements: `docs/gesture-injection.md` |
+
 ## What is closed or accepted
 
 These lines **wait for nothing any more**. They stay written so that nobody
@@ -150,6 +152,26 @@ green on a question it could no longer answer. The harness now walks
 `screen::GRID_STEPS`, which is what the screen draws, and the criterion was
 verified red -- `LENGTH=32` gives 20/24. **A check whose bound comes from one
 source and whose subject comes from another will pass for the wrong reason.**
+
+**A witness that a safety net can mask is not a witness.** Measured 2026-08-25
+on a deliberately broken gesture harness: a `SHIFT` hold of 1434 ms fired **two**
+long presses, and the pattern came back **intact**, because
+`onShiftLongPress()` returns early when `rotatedWhileShiftHeld` is set. Every
+behavioural criterion said PASS on a gesture that was physically invalid. The
+firmware's own `suppressedLong` counter is what separates "no long press" from
+"long press absorbed", and it went 0 to 2. The rule: **when a defensive path
+swallows the effect you are watching for, watch the defensive path instead** --
+and when it cannot be read, the verdict is `INVALID`, never `PASS`.
+
+**A constant that is only printed is not a rule.** `SHIFT_BURST_DETENTS = 20`
+was defined in the harness, published in its report and in
+`docs/gesture-injection.md` as the safety rule for long `shiftRotate` gestures,
+and **applied nowhere**: `shiftRotate()` injected every detent under one hold.
+The value itself was also wrong -- 20 detents last 1110 ms against a 750 ms
+threshold. Nothing failed only because no gesture had ever reached that size. A
+published bound must be enforced by something that can turn red: here five
+`static_assert`, a pre-injection guard that exits 4, and three replayable
+mutations under `SELFTEST=1`.
 
 **Reading a firmware structure from outside is limited to what a `static_assert`
 guarantees, because the build gives nothing else.** Measured on 2026-08-25:

@@ -224,6 +224,63 @@ describe('couche 1 — recettes de gestes contre le MODELE de reference, jamais 
     });
   });
 
+  describe('crans SHIFT consecutifs — contrat avec le pilote physique', () => {
+    function longestShiftRun(driver: GestureDriver): number {
+      let best = 0;
+      let run = 0;
+      for (const gesture of driver.events) {
+        if (gesture.event === UiEvent.ShiftRotate) {
+          run += 1;
+          if (run > best) best = run;
+        } else {
+          run = 0;
+        }
+      }
+      return best;
+    }
+
+    const recipes: Array<[string, number, (d: GestureDriver) => void]> = [
+      ['4 LENGTH', 3, (d) => { d.goToTab(TAB_FIRST_CHANNEL); d.setLength(3); }],
+      ['5 LENGTH au maximum', 30, (d) => { d.goToTab(TAB_FIRST_CHANNEL); d.setLength(30); }],
+      ['6 SUBDIV', 1, (d) => { d.goToTab(TAB_FIRST_CHANNEL); d.setSubdiv(1); }],
+      ['7 SUBDIV au bout', 50, (d) => { d.goToTab(TAB_FIRST_CHANNEL); d.setSubdiv(50); }],
+      ['8 step', 0, (d) => { d.goToTab(TAB_FIRST_CHANNEL); d.enterEdit(); d.toggleStep(3); }],
+      ['9 ratchet', 4, (d) => { d.goToTab(TAB_FIRST_CHANNEL); d.enterEdit(); d.setRatchet(5, RATCHET_6); }],
+      ['10 step inactif', 0, (d) => { d.goToTab(TAB_FIRST_CHANNEL); d.enterEdit(); d.setRatchet(4, RATCHET_6); }],
+      ['11 cadence x24', 8, (d) => {
+        d.goToTab(TAB_FIRST_CHANNEL); d.setSubdiv(-8); d.enterEdit();
+        d.setRatchet(5, RATCHET_6); d.setRatchet(5, RATCHET_TRIPLET);
+      }],
+      ['12 triolet aller-retour', 10, (d) => {
+        d.goToTab(TAB_FIRST_CHANNEL); d.enterEdit();
+        d.setRatchet(9, RATCHET_TRIPLET); d.setRatchet(9, RATCHET_NONE);
+      }],
+      ['13 composition', 3, (d) => { d.goToTab(TAB_FIRST_CHANNEL + 2); d.setLength(3); d.backOneLevel(); }],
+    ];
+
+    it.each(recipes)('%s demande %i crans SHIFT consecutifs au plus', (_name, expected, play) => {
+      const { driver } = rig();
+      play(driver);
+      expect(longestShiftRun(driver)).toBe(expected);
+    });
+
+    it('seules les recettes 5 et 7 depassent les 12 crans que le pilote physique tient sous 750 ms', () => {
+      const over = recipes
+        .filter(([, detents]) => detents > 12)
+        .map(([name]) => name);
+      expect(over).toEqual(['5 LENGTH au maximum', '7 SUBDIV au bout']);
+    });
+
+    it('11 atteint bien x24, ou le code 6 ne tient pas dans un step', () => {
+      const { engine, driver } = rig();
+      driver.goToTab(TAB_FIRST_CHANNEL);
+      driver.setSubdiv(-8);
+      expect(engine.getTicksPerStep(0)).toBe(4);
+      expect(ratchetFitsStep(RATCHET_6, 4)).toBe(false);
+      expect(ratchetFitsStep(RATCHET_TRIPLET, 4)).toBe(true);
+    });
+  });
+
   describe('ce que la couche 1 NE prouve PAS', () => {
     it('les recettes ne portent que sur le modele : la quadrature, l anti-rebond et les durees de maintien restent a prouver sur le firmware', () => {
       const { driver } = rig();

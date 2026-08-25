@@ -39,13 +39,38 @@ namespace scr = flexseq::screen;
 #define PLAY_PORT  'D'
 #define PLAY_BIT   5
 
-#define EDGE_SPACING_MS      1
+#define NO_OP_PRESS_MS       5
 #define PRESS_MS            60
 #define LONG_PRESS_MS      900
-#define SETTLE_MS           50
+
 #define BUTTON_MARGIN_MS    15
-#define SHIFT_BURST_DETENTS 20
+#define DETENT_SETTLE_MS    50
 #define FRAME_SETTLE_MS    250
+
+#define EDGE_SPACING_MS      1
+#define EDGES_PER_DETENT     4
+
+#define BUTTON_DEBOUNCE_MS    10
+#define SHIFT_LONG_PRESS_MS  750
+#define LOOP_POLL_RESERVE_MS  20
+
+#define DETENT_MS             (EDGES_PER_DETENT * EDGE_SPACING_MS + DETENT_SETTLE_MS)
+#define SHIFT_HOLD_FIXED_MS   (2 * BUTTON_MARGIN_MS)
+#define SHIFT_HOLD_MS(n)      (SHIFT_HOLD_FIXED_MS + (n) * DETENT_MS)
+#define SHIFT_HOLD_CEILING_MS (SHIFT_LONG_PRESS_MS - LOOP_POLL_RESERVE_MS)
+#define SHIFT_BURST_DETENTS   ((SHIFT_HOLD_CEILING_MS - 1 - SHIFT_HOLD_FIXED_MS) / DETENT_MS)
+#define SHIFT_BURST_GAP_MS    (BUTTON_DEBOUNCE_MS + LOOP_POLL_RESERVE_MS + BUTTON_MARGIN_MS)
+
+static_assert(SHIFT_BURST_DETENTS >= 1,
+              "a burst must carry at least one detent");
+static_assert(SHIFT_HOLD_MS(SHIFT_BURST_DETENTS) < SHIFT_HOLD_CEILING_MS,
+              "the longest burst must stay below the long-press ceiling");
+static_assert(SHIFT_HOLD_MS(SHIFT_BURST_DETENTS + 1) >= SHIFT_HOLD_CEILING_MS,
+              "the burst size must be the largest one that fits");
+static_assert(SHIFT_HOLD_MS(SHIFT_BURST_DETENTS) + LOOP_POLL_RESERVE_MS < SHIFT_LONG_PRESS_MS,
+              "the hold plus one polling pass must stay below the long press");
+static_assert(SHIFT_BURST_GAP_MS > BUTTON_DEBOUNCE_MS,
+              "the gap between two bursts must clear the debounce window");
 
 #define TIMER1_COMPA_VECTOR 11
 #define OUT_COUNT 6
@@ -151,6 +176,15 @@ static int inkInTabSlot(uint8_t tab)
     return ink;
 }
 
+static int tabBandSlotsWithInk(void)
+{
+    int slots = 0;
+    for (uint8_t tab = 0; tab < ms::TAB_COUNT; ++tab) {
+        if (inkInTabSlot(tab) > 0) ++slots;
+    }
+    return slots;
+}
+
 static int selectedTab(void)
 {
     int best = -1, bestInk = -1, ties = 0;
@@ -190,6 +224,29 @@ static void read_bank(const avr_t *avr, uint8_t *out)
     memcpy(out, &avr->data[g_bank_addr], (size_t)PATTERN_COUNT * PATTERN_BYTES);
 }
 
+#define SUPPRESSED_BYTES 2
+
+static uint32_t g_suppressed_addr;
+static int g_suppressed_valid;
+static long g_suppressed_bias;
+static uint32_t g_enc_sw_lows;
+
+static int suppressedAddrFits(const avr_t *avr)
+{
+    if (g_suppressed_addr == 0) return 0;
+    if (g_suppressed_addr <= (uint32_t)avr->ioend) return 0;
+    if (g_suppressed_addr + (SUPPRESSED_BYTES - 1) > (uint32_t)avr->ramend) return 0;
+    return 1;
+}
+
+static int readSuppressedCounter(const avr_t *avr, uint32_t *out)
+{
+    if (!g_suppressed_valid) return 0;
+    *out = (uint32_t)avr->data[g_suppressed_addr]
+         | ((uint32_t)avr->data[g_suppressed_addr + 1] << 8);
+    return 1;
+}
+
 static uint16_t low_mask_of(const uint8_t *pattern)
 {
     return (uint16_t)(pattern[0] | ((uint16_t)pattern[1] << 8));
@@ -218,21 +275,51 @@ static void detentBfirst(avr_t *avr)
     setPin(g_enc_a, &g_level_a, 1); run_for(avr, EDGE_SPACING_MS);
 }
 
-static double shiftRotate(avr_t *avr, int detents, int aFirst)
+static int g_shift_bursts;
+static double g_shift_hold_max;
+
+static double shiftBurst(avr_t *avr, int detents, int aFirst)
 {
+    if (detents < 1 || detents > SHIFT_BURST_DETENTS
+        || SHIFT_HOLD_MS(detents) >= SHIFT_HOLD_CEILING_MS) {
+        printf("shift_garde        salve de %d crans refusee avant injection,"
+               " plafond %d crans (%d ms), seuil %d ms\n",
+               detents, SHIFT_BURST_DETENTS,
+               SHIFT_HOLD_MS(SHIFT_BURST_DETENTS), SHIFT_LONG_PRESS_MS);
+        exit(4);
+    }
     const uint64_t start = avr->cycle;
     setPin(g_shift, &g_level_shift, 0);
     run_for(avr, BUTTON_MARGIN_MS);
     for (int i = 0; i < detents; ++i) {
         if (aFirst) detentAfirst(avr); else detentBfirst(avr);
-        run_for(avr, SETTLE_MS);
+        run_for(avr, DETENT_SETTLE_MS);
     }
     run_for(avr, BUTTON_MARGIN_MS);
     const double heldMs = (double)(avr->cycle - start) * 1e3 / (double)F_CPU_HZ;
     setPin(g_shift, &g_level_shift, 1);
     run_for(avr, BUTTON_MARGIN_MS);
     run_for(avr, FRAME_SETTLE_MS);
+
+    ++g_shift_bursts;
+    if (heldMs > g_shift_hold_max) g_shift_hold_max = heldMs;
+    printf("shift_salve        %d crans, maintien %.1f ms, plafond %d ms\n",
+           detents, heldMs, SHIFT_HOLD_CEILING_MS);
     return heldMs;
+}
+
+static double shiftRotate(avr_t *avr, int detents, int aFirst)
+{
+    double worst = 0.0;
+    int left = detents;
+    while (left > 0) {
+        const int burst = left < SHIFT_BURST_DETENTS ? left : SHIFT_BURST_DETENTS;
+        const double heldMs = shiftBurst(avr, burst, aFirst);
+        if (heldMs > worst) worst = heldMs;
+        left -= burst;
+        if (left > 0) run_for(avr, SHIFT_BURST_GAP_MS);
+    }
+    return worst;
 }
 
 static void playPress(avr_t *avr)
@@ -259,6 +346,7 @@ static uint32_t screenSignature(void)
 static void pressFor(avr_t *avr, double ms)
 {
     run_for(avr, BUTTON_MARGIN_MS);
+    ++g_enc_sw_lows;
     setPin(g_enc_sw, &g_level_sw, 0);
     run_for(avr, ms);
     setPin(g_enc_sw, &g_level_sw, 1);
@@ -270,7 +358,7 @@ static void rotate(avr_t *avr, int detents, int aFirst)
 {
     for (int i = 0; i < detents; ++i) {
         if (aFirst) detentAfirst(avr); else detentBfirst(avr);
-        run_for(avr, SETTLE_MS);
+        run_for(avr, DETENT_SETTLE_MS);
     }
     run_for(avr, FRAME_SETTLE_MS);
 }
@@ -290,6 +378,14 @@ int main(int argc, char **argv)
     const uint16_t ee_base = (argc > 5) ? (uint16_t)strtol(argv[5], NULL, 0) : 384;
     const char *phase = (argc > 6) ? argv[6] : "structure";
     const int temporal = strcmp(phase, "temporal") == 0;
+    g_suppressed_addr = (argc > 7) ? (uint32_t)strtoul(argv[7], NULL, 0) : 0;
+    const int symbolcheck = strcmp(phase, "symbolcheck") == 0;
+    {
+        const char *bias = getenv("SUPPRESSED_BIAS");
+        g_suppressed_bias = bias ? strtol(bias, NULL, 0) : 0;
+    }
+    const int skipShift = getenv("SKIP_SHIFT") != NULL;
+    const int skipEdit = getenv("SKIP_EDIT") != NULL;
 
     setvbuf(stdout, NULL, _IONBF, 0);
 
@@ -309,6 +405,14 @@ int main(int argc, char **argv)
     if (g_bank_addr == 0 || g_bank_addr >= avr->ramend) {
         fprintf(stderr, "adresse de patternBank hors RAM : 0x%04x\n", g_bank_addr);
         return 2;
+    }
+
+    g_suppressed_valid = suppressedAddrFits(avr);
+    printf("suppressed_addr    0x%04x taille %d ioend 0x%04x ramend 0x%04x valide %d\n",
+           (unsigned)g_suppressed_addr, SUPPRESSED_BYTES,
+           (unsigned)avr->ioend, (unsigned)avr->ramend, g_suppressed_valid);
+    if (symbolcheck) {
+        return 0;
     }
 
     if (ee_path) {
@@ -358,8 +462,9 @@ int main(int argc, char **argv)
     printf("patternBank        symbole 0x%06lx, RAM 0x%04x\n",
            (unsigned long)bank_symbol, g_bank_addr);
     printf("contrat            rotate=quadrature, press=%d ms, longPress=%d ms,"
-           " shiftRotate=%d crans max par salve\n",
-           PRESS_MS, LONG_PRESS_MS, SHIFT_BURST_DETENTS);
+           " shiftRotate=%d crans max par salve (%d ms, seuil %d ms)\n",
+           PRESS_MS, LONG_PRESS_MS, SHIFT_BURST_DETENTS,
+           SHIFT_HOLD_MS(SHIFT_BURST_DETENTS), SHIFT_LONG_PRESS_MS);
 
     avr_raise_irq(enc_a, 1);
     avr_raise_irq(enc_b, 1);
@@ -485,7 +590,7 @@ int main(int argc, char **argv)
     printf("signature_tabbar   %08x\n", sigTabBar);
 
     uint32_t twiMark = g_twi_bytes;
-    pressFor(avr, 5.0);
+    pressFor(avr, (double)NO_OP_PRESS_MS);
     printf("appui_5ms          signature %08x, twi %u\n",
            screenSignature(), g_twi_bytes - twiMark);
 
@@ -500,17 +605,24 @@ int main(int argc, char **argv)
     printf("appui_900ms        signature %08x, twi %u\n",
            screenSignature(), g_twi_bytes - twiMark);
 
-    pressFor(avr, (double)PRESS_MS);
-    rotate(avr, 4, 1);
-    pressFor(avr, (double)PRESS_MS);
-    printf("entree_edit        signature %08x\n", screenSignature());
+    const int slotsBeforeEdit = tabBandSlotsWithInk();
+    twiMark = g_twi_bytes;
+    if (!skipEdit) {
+        pressFor(avr, (double)PRESS_MS);
+        rotate(avr, 4, 1);
+        pressFor(avr, (double)PRESS_MS);
+    }
+    const uint32_t sigEdit = screenSignature();
+    printf("entree_edit        signature %08x twi %u creneaux %d %d distincte %d\n",
+           sigEdit, g_twi_bytes - twiMark, slotsBeforeEdit, tabBandSlotsWithInk(),
+           (sigEdit != sigTabBar && sigEdit != sigAfterShort) ? 1 : 0);
 
     static uint8_t bankBeforeShift[PATTERN_COUNT * PATTERN_BYTES];
     read_bank(avr, bankBeforeShift);
     printf("ratchet_avant      %02x\n", bankBeforeShift[STEP_BYTES]);
 
     twiMark = g_twi_bytes;
-    const double heldMs = shiftRotate(avr, 3, 1);
+    const double heldMs = skipShift ? 192.0 : shiftRotate(avr, 3, 1);
     static uint8_t bankAfterShift[PATTERN_COUNT * PATTERN_BYTES];
     read_bank(avr, bankAfterShift);
     printf("shift_maintien_ms  %.1f\n", heldMs);
@@ -520,30 +632,83 @@ int main(int argc, char **argv)
            memcmp(bankBeforeShift, bankAfterShift, STEP_BYTES) == 0
            && low_mask_of(&bankAfterShift[0]) == 0x9111 ? 1 : 0);
 
+    twiMark = g_twi_bytes;
     shiftRotate(avr, 2, 1);
     static uint8_t bankTriplet[PATTERN_COUNT * PATTERN_BYTES];
     read_bank(avr, bankTriplet);
-    printf("triolet_pose       %02x\n", bankTriplet[STEP_BYTES] & 0x0F);
+    printf("triolet_pose       %02x twi %u\n",
+           bankTriplet[STEP_BYTES] & 0x0F, g_twi_bytes - twiMark);
 
+    twiMark = g_twi_bytes;
     shiftRotate(avr, 5, 0);
     static uint8_t bankNoRatchet[PATTERN_COUNT * PATTERN_BYTES];
     read_bank(avr, bankNoRatchet);
-    printf("triolet_retire     %02x\n", bankNoRatchet[STEP_BYTES] & 0x0F);
+    printf("triolet_retire     %02x twi %u\n",
+           bankNoRatchet[STEP_BYTES] & 0x0F, g_twi_bytes - twiMark);
     printf("banque_restauree   %d\n",
            memcmp(expectedBytes, bankNoRatchet, sizeof(flexseq::PatternBank)) == 0 ? 1 : 0);
 
     rotate(avr, 1, 1);
+    twiMark = g_twi_bytes;
     pressFor(avr, (double)PRESS_MS);
     static uint8_t bankToggled[PATTERN_COUNT * PATTERN_BYTES];
     read_bank(avr, bankToggled);
-    printf("step1_bascule      %04x\n", low_mask_of(&bankToggled[0]));
+    printf("step1_bascule      %04x twi %u\n",
+           low_mask_of(&bankToggled[0]), g_twi_bytes - twiMark);
 
+    twiMark = g_twi_bytes;
     pressFor(avr, (double)PRESS_MS);
     static uint8_t bankRestored[PATTERN_COUNT * PATTERN_BYTES];
     read_bank(avr, bankRestored);
-    printf("step1_rebascule    %04x\n", low_mask_of(&bankRestored[0]));
+    printf("step1_rebascule    %04x twi %u\n",
+           low_mask_of(&bankRestored[0]), g_twi_bytes - twiMark);
     printf("banque_finale      %d\n",
            memcmp(expectedBytes, bankRestored, sizeof(flexseq::PatternBank)) == 0 ? 1 : 0);
+
+    rotate(avr, 1, 0);
+
+    const int longDetents = SHIFT_BURST_DETENTS * 2 + 2;
+    uint32_t suppressedBefore = 0;
+    const int readableBefore = readSuppressedCounter(avr, &suppressedBefore);
+    const uint32_t encSwLowsBefore = g_enc_sw_lows;
+    const int burstsBefore = g_shift_bursts;
+    twiMark = g_twi_bytes;
+
+    printf("fract_demande      %d crans, plafond %d crans par salve\n",
+           longDetents, SHIFT_BURST_DETENTS);
+    const double heldUp = shiftRotate(avr, longDetents, 1);
+    static uint8_t bankLongUp[PATTERN_COUNT * PATTERN_BYTES];
+    read_bank(avr, bankLongUp);
+    const int burstsUp = g_shift_bursts - burstsBefore;
+    printf("fract_salves       %d\n", burstsUp);
+    printf("fract_maintien_up  %.1f\n", heldUp);
+    printf("fract_ratchet      %02x\n", bankLongUp[STEP_BYTES] & 0x0F);
+    printf("fract_masques      %d\n",
+           memcmp(bankRestored, bankLongUp, STEP_BYTES) == 0
+           && low_mask_of(&bankLongUp[0]) == 0x9111 ? 1 : 0);
+    printf("fract_twi          %u\n", g_twi_bytes - twiMark);
+
+    const double heldDown = shiftRotate(avr, longDetents, 0);
+    static uint8_t bankLongDown[PATTERN_COUNT * PATTERN_BYTES];
+    read_bank(avr, bankLongDown);
+    uint32_t suppressedAfter = 0;
+    const int readableAfter = readSuppressedCounter(avr, &suppressedAfter);
+    printf("fract_maintien_max %.1f\n", heldDown > heldUp ? heldDown : heldUp);
+    printf("fract_retour       %d\n",
+           memcmp(expectedBytes, bankLongDown, sizeof(flexseq::PatternBank)) == 0 ? 1 : 0);
+    printf("fract_enc_sw       %u\n", g_enc_sw_lows - encSwLowsBefore);
+    printf("fract_compteur     lisible %d avant %ld apres %ld\n",
+           (readableBefore && readableAfter) ? 1 : 0,
+           readableBefore ? (long)suppressedBefore : -1L,
+           readableAfter ? (long)suppressedAfter + g_suppressed_bias : -1L);
+    if (readableBefore && readableAfter) {
+        printf("fract_suppressions %ld\n",
+               (long)suppressedAfter + g_suppressed_bias - (long)suppressedBefore);
+    }
+    printf("shift_salves       %d\n", g_shift_bursts);
+    printf("shift_maintien_max %.1f\n", g_shift_hold_max);
+    printf("shift_plafond      %d %d %d\n",
+           SHIFT_BURST_DETENTS, SHIFT_HOLD_MS(SHIFT_BURST_DETENTS), SHIFT_LONG_PRESS_MS);
 
     return 0;
 }
