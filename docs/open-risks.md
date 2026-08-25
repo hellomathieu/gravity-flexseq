@@ -136,6 +136,17 @@ drawing code for the screen, field by field, before declaring the screen done.**
 The project rule this serves is the owner's, restated on 2026-08-23: keep every
 original feature and every original page; only the SEQ mode evolves.
 
+**A tolerance turns a bound into a false pass.** `run-screen-dump.sh` walked the
+steps up to `Pattern::DEFAULT_TOTAL_STEPS` and asked for **1 pixel** where a step
+sits beyond LENGTH, because such a step is drawn as a single dot. When lot A took
+the pattern to 32 steps on 2026-08-25 while the grid stayed at 24, the harness
+looked for eight steps that the screen never draws, found ink from the title and
+the footer at those coordinates, and reported **32/32 steps in place**. It read
+green on a question it could no longer answer. The harness now walks
+`screen::GRID_STEPS`, which is what the screen draws, and the criterion was
+verified red -- `LENGTH=32` gives 20/24. **A check whose bound comes from one
+source and whose subject comes from another will pass for the wrong reason.**
+
 **A glyph must not look like another function.** The eighth tab draws a filled
 5x5 square, which the owner read as a Play/Stop indicator on the module -- a fair
 reading, since that is what a stop indicator looks like. The name in the code

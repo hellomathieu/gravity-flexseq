@@ -221,7 +221,7 @@ int main(int argc, char** argv)
      * (env:bringup, par exemple) : seule la rotation reste verifiable. */
     const int skip_geometry = getenv("SKIP_GEOMETRY") != NULL;
     int placed = 0, missing = 0;
-    for (uint8_t i = 0; !skip_geometry && i < flexseq::Pattern::DEFAULT_TOTAL_STEPS; ++i) {
+    for (uint8_t i = 0; !skip_geometry && i < scr::GRID_STEPS; ++i) {
         const uint8_t px = rotX(scr::colX(i));
         const uint8_t py = rotY(scr::rowCY(i));
         /* Un step au-dela de LENGTH n'est qu'un point : on tolere 1 pixel. */
@@ -288,7 +288,7 @@ int main(int argc, char** argv)
         printf("  ignoree (SKIP_GEOMETRY)\n");
     } else {
         printf("  %d / %d steps a leur place attendue%s\n", placed,
-               (int)flexseq::Pattern::DEFAULT_TOTAL_STEPS, missing ? "  <-- INCOHERENT" : "");
+               (int)scr::GRID_STEPS, missing ? "  <-- INCOHERENT" : "");
     }
     printf("  encre totale %d pixels\n\n", total);
     printf("=== ROTATION ===\n");
