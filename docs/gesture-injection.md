@@ -115,11 +115,36 @@ contract was simply not enforced.
   `SHIFT_BURST_DETENTS`, and **releases SHIFT between them**, with a gap of
   `SHIFT_BURST_GAP_MS` = 45 ms, above the debounce plus one polling pass.
 
+⚠️ **45 ms is not the rest between two bursts.** `shiftBurst()` already ends with
+`BUTTON_MARGIN_MS` + `FRAME_SETTLE_MS`, so the real rest is **310 ms**. Read the
+figure from the sum, never from `SHIFT_BURST_GAP_MS` alone.
+
 A release under 750 ms fires `EVENT_SHIFT_PRESS`, which `UiController::handle()`
 **discards on its first line**. Splitting therefore adds no side effect. What it
 must never do is inject a detent while SHIFT is high, because that becomes
 `EVENT_ROTATE` and navigates instead of adjusting; the splitter drives detents
 inside the hold only.
+
+⚠️ **The splitter meets that condition on the pin, and the condition is not
+sufficient.** The campaign of 2026-08-25 measured two distinct defects of this
+harness. Neither is a firmware defect: the bank stays at 0 diff and the five
+untouched outputs stay at 96 / 1536 in every course.
+
+**Defect 1 -- a burst above six detents is not reliable on LENGTH.** A single
+burst applies exactly its detents up to **6**, and becomes erratic from **7**:
+3, 5, 7, 5, 1 and 4 applied for 7 to 12 requested. Slowing 6 detents to a 654 ms
+hold keeps them exact; accelerating 8 detents to a 222 ms hold keeps them wrong,
+with the same deficit. So the factor is the **detent count**, not the hold, not
+the rhythm. ⚠️ The limit is **not universal**: on SUBDIV, bursts of 7 (`rig`) and
+8 (R11) apply in full. The contradiction is open -- `docs/open-risks.md` line 44.
+
+**Defect 2 -- the field cursor moves.** After a burst the selection frame can
+move by exactly one field. Every detent is driven inside the hold, so the stray
+event is not an injection. The rest between bursts is **not** the cause, and
+neither entry nor release margin explains it. **Undetermined.**
+
+**The working rule until a splitter is designed:** keep a burst to **6 detents
+or fewer**. Every recipe validated in P2.6 respects it on LENGTH.
 
 The suppression flag (`rotatedWhileShiftHeld`) stays a safety net, never the
 plan — and the counter below is what proves it was not used.
@@ -558,10 +583,38 @@ immediately; two re-run the whole probe and check that it exits non-zero with an
 ## Verification A, MEASURED on 2026-08-25
 
 The control is not a list of expected numbers copied into the harness. The
-harness **links the domain itself** — `FactoryPatterns.cpp`, `Pattern.cpp`,
-`PatternBank.cpp` — builds a `PatternBank` natively, seeds it with
-`loadFactoryPatterns()`, and compares it **byte for byte** with the 320 bytes read
+harness **links the domain itself** — all of `src/domain/` — builds a
+`PatternBank` natively, and compares it **byte for byte** with the 320 bytes read
 from the simulated RAM.
+
+**The expectation is produced by the firmware's own boot rule**, not by a rewrite
+of it (`src/main.cpp:170-176`):
+
+```c
+if (!persistence.load(eeprom, persistentImage)) {
+    loadFactoryPatterns(patternBank);
+}
+```
+
+The harness replays exactly that. `PersistenceScheduler::load()` is a template
+over a `Storage` that exposes `read(address)`, so the harness supplies a ten-line
+adapter over the EEPROM image bytes it hands to the machine, and falls back to
+`loadFactoryPatterns()` when the reader refuses the header — which is also the
+no-image case, simavr returning `0xFF`. **One control covers both**, and it
+reports which source it used: `controle_source` reads `usine` or `image`.
+
+⚠️ **Until 2026-08-25 the control was BYPASSED whenever an image was preloaded**
+(`temporal || memcmp(...)`), because the image replaces the bank and the factory
+comparison could only fail. Verification B therefore ran with no class-2 control
+at all. It now verifies the state **actually injected**. Counter-evidence:
+`IMAGE_MUTATE=<offset>` flips one byte of the copy given to the machine while the
+expectation keeps the original image — measured, the control turns red and the
+run exits **3**.
+
+⚠️ **The exit codes 3 and 4 were never propagated by the script.** It used
+`if ! "$BIN" …; then RC=$?`, where `$?` is the status of the negation, so `RC`
+was always 0 and the run died with the default code 1. Found by the counter-evidence
+above, which demanded a 3 and got a 1.
 
 | Step | Observation |
 |---|---|
