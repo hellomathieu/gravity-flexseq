@@ -303,12 +303,14 @@ int main(int argc, char **argv)
     const uint64_t target  = (uint64_t)(seconds * (double)F_CPU_HZ);
     const uint64_t play_dn = (uint64_t)(0.60 * (double)F_CPU_HZ);
     const uint64_t play_up = (uint64_t)(0.66 * (double)F_CPU_HZ);
+    const int no_play = getenv("NO_PLAY") != NULL;
     avr_irq_t *play = avr_io_getirq(avr, AVR_IOCTL_IOPORT_GETIRQ('D'), 5);
     if (!play) { fprintf(stderr, "broche PLAY introuvable\n"); return 1; }
     int play_state = 2;
+    printf("play_injection     %s\n", no_play ? "aucune" : "60 ms a 600 ms");
 
     while (avr->cycle < target) {
-        const int want = (avr->cycle >= play_dn && avr->cycle < play_up) ? 0 : 1;
+        const int want = (!no_play && avr->cycle >= play_dn && avr->cycle < play_up) ? 0 : 1;
         if (want != play_state) { play_state = want; avr_raise_irq(play, want); }
         const int state = avr_run(avr);
         if (state == cpu_Done || state == cpu_Crashed) {

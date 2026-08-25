@@ -11,6 +11,7 @@ SUBDIV="${SUBDIV:-1}"
 LENGTH="${LENGTH:-16}"
 MODE="${MODE:-seq}"
 SAVE="${SAVE:-}"
+EDIT="${EDIT:-}"
 
 if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
   cat <<'USAGE'
@@ -23,6 +24,7 @@ run-drift-probe.sh — derive cumulative du moteur de sequence, en simulation.
   RATCHETS=        liste step:code, par exemple 0:6,3:2
   LENGTH=16        longueur jouee
   MODE=seq         seq ou clock
+  EDIT=1           firmware pose sur l'ecran EDIT, transport demarre par lui-meme
   SAVE=1           conserve le CSV et le resume dans tools/timing-runs/
 
 Sortie 0 si aucune derive cumulative n'est detectee et si la coherence tient,
@@ -82,6 +84,10 @@ fi
 progress "build env:nanoatmega328"
 PIO_EXTRA=""
 [ "$TEMPO" != "120" ] && PIO_EXTRA="-DFLEXSEQ_DEFAULT_TEMPO=$TEMPO"
+if [ -n "$EDIT" ]; then
+  PIO_EXTRA="$PIO_EXTRA -DFLEXSEQ_START_IN_EDIT=1"
+  export NO_PLAY=1
+fi
 if PLATFORMIO_BUILD_FLAGS="$PIO_EXTRA" "$PIO" run -e nanoatmega328 -d "$ROOT" > "$LOG" 2>&1; then
   ok "firmware" "$(grep -E '^RAM:' "$LOG" | sed 's/.*(used /RAM /; s/ bytes from .*/ o/')"
 else
@@ -117,6 +123,11 @@ if [ "$PROBE" -ne 0 ]; then
   cat "$LOG"; die "la sonde s'est terminee anormalement (code $PROBE)"
 fi
 ok "simulation" "$DURATION s simulees en $WALL s reelles"
+if [ -n "$EDIT" ]; then
+  ok "ecran" "EDIT PATTERN, playhead anime, transport demarre par le firmware"
+else
+  ok "ecran" "principal, aucun element variant dans le temps"
+fi
 
 field() { grep -E "^$1 " "$LOG" | head -1 | awk '{print $2}'; }
 TICKS="$(field ticks)"
@@ -174,6 +185,8 @@ if [ -n "$SAVE" ]; then
   DEST="$ROOT/tools/timing-runs"
   mkdir -p "$DEST"
   NAME="drift-${DURATION}s-${TEMPO}bpm-subdiv${SUBDIV}"
+  [ -n "$EDIT" ] && NAME="$NAME-edit"
+  [ -n "$RATCHETS" ] && NAME="$NAME-ratchet"
   cp "$CSV" "$DEST/$NAME.csv"
   cp "$LOG" "$DEST/$NAME.probe.txt"
   printf '  %s✅%s %-22s %s%s%s\n' "$C_OK" "$C_0" "conserve" "$C_DIM" "tools/timing-runs/$NAME.*" "$C_0"

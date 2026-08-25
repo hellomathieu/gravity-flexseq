@@ -1,0 +1,36 @@
+Loaded 27196 bytes of Flash data at 0
+SSD1306: 37uS is 592 cycles for your AVR
+SSD1306: 1uS is 16 cycles for your AVR
+firmware   /Users/mathieu.carpentier/Documents/GitHub/gravity-flexseq/.pio/build/nanoatmega328/firmware.hex
+simulation 300.0 s ; mode seq ; ticksPerStep 96 ; length 16
+play_injection     aucune
+
+=== MESURE ===
+isr_total          57603
+start_isr_index    67
+ticks              57536
+midi_start         3
+midi_stop          2
+midi_clock         14401
+restart_after_edge 0
+anchor_ms          356.592
+transport_event    START a 1.332 ms
+transport_event    STOP a 351.403 ms
+transport_event    START a 351.759 ms
+transport_event    STOP a 352.119 ms
+transport_event    START a 352.463 ms
+sync_gap_ticks     4..4
+monotonic          1
+expected_per_line  187
+edges_OUT1           187
+edges_OUT2           187
+edges_OUT3           187
+edges_OUT4           187
+edges_OUT5           187
+edges_OUT6           187
+matched            1122
+dropped            0
+unexpected         0
+isr_period_cycles  83327.9985 (min 83121 max 83527)
+isr_period_us      5207.999905
+csv                /var/folders/dp/m734y21165d49c1wqtybrnb40000gp/T/tmp.n5umZrKH4t/onsets.csv
