@@ -28,6 +28,14 @@ Free RAM is 321 B, the measured peak stack is 206 B, and the guard demands 256 B
 free. The template model therefore **returns about 120 B** where a resident
 32-step bank would cost 80 B more.
 
+⚠️ **The table above reads "today" as of this ADR's date, 2026-08-23. Lot A
+changed the first two lines on 2026-08-25**: the pattern is 20 B, and the bank is
+the middle line — 16 residents, 320 B — because lot B has not moved the templates
+to EEPROM yet. The measured cost of that step was RAM +85 B, not +80: `PagedScreen`
+holds a copy of the pattern by value in its frozen frame, and it grew with it.
+Free RAM is now 534 B. The third line stays the target, and the arithmetic that
+justified the decision does not change.
+
 ## Decision
 
 The sixteen patterns are **templates**, and they live in **EEPROM only**. They are

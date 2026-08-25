@@ -13,8 +13,13 @@ it is what lets the acceptance suite stay a reliable signal.
     test_subdiv_phase, test_trigger_sequencer, test_ui_controller
 
 Pure C++ domain, no Arduino and no libGravity. MUST be green: a phase is not
-finished while one of these fails. 317 assertions as of 2026-08-23, counted
+finished while one of these fails. 336 assertions as of 2026-08-25, counted
 from the `RUN_TEST` calls and confirmed by the runner's own total.
+
+Lot A added eight of them, on the 32-step pattern: the steps and the ratchets
+above index 23, the fourth step byte, the reach of `clear()`, and two assertions
+that keep the EDIT grid at 24 steps until lot F -- the pattern grew, the grid did
+not. Each of the eight was verified by MUTATION.
 
 ⚠️ **`onsetCount()` is not what the outputs see.** The engine counts step and
 sub-step crossings, so it reports the onsets of an **inactive** step too, ratchets

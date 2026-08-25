@@ -140,4 +140,4 @@ offers eleven steps instead of ten.
 - The **layout** of each screen, field by field: that is
   `docs/original-conformity.md`.
 - The **gestures**: same document.
-- FlexSeq's own evolution of SEQ — 24 steps, LENGTH, ratchets: PRD §5 and §6.
+- FlexSeq's own evolution of SEQ — 32 steps, LENGTH, ratchets: PRD §5 and §6.
