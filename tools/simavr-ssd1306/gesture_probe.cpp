@@ -16,6 +16,10 @@ extern "C" {
 }
 
 #include "simavr_uart_quiet.h"
+#include "burst_policy.h"
+#include "harness_burst_limits.h"
+
+static const uint8_t DIAGNOSTIC_MEASURES_THE_POLICY = burst::NO_EMPIRICAL_LIMIT;
 
 #include <flexseq/MainScreen.h>
 #include <flexseq/PatternScreen.h>
@@ -391,8 +395,11 @@ static uint16_t low_mask_of(const uint8_t *pattern)
     return (uint16_t)(pattern[0] | ((uint16_t)pattern[1] << 8));
 }
 
+static uint32_t g_pin_writes = 0;
+
 static void setPin(avr_irq_t *pin, int *level, int value)
 {
+    ++g_pin_writes;
     if (*level == value) return;
     *level = value;
     avr_raise_irq(pin, value);
@@ -454,16 +461,64 @@ static double shiftBurst(avr_t *avr, int detents, int aFirst)
     return heldMs;
 }
 
-static double shiftRotate(avr_t *avr, int detents, int aFirst)
+static const char *decisionName(burst::Decision decision)
 {
+    switch (decision) {
+        case burst::REFUSE_INVALID_REQUEST: return "REFUSE_INVALID_REQUEST";
+        case burst::REFUSE_PHYSICAL_LIMIT:  return "REFUSE_PHYSICAL_LIMIT";
+        case burst::REFUSE_EMPIRICAL_LIMIT: return "REFUSE_EMPIRICAL_LIMIT";
+        case burst::ACCEPT_SINGLE_BURST:    return "ACCEPT_SINGLE_BURST";
+        default:                            return "ACCEPT_SPLIT";
+    }
+}
+
+static double shiftRotate(avr_t *avr, int detents, int aFirst,
+                          uint8_t empiricalLimit, bool allowSplit)
+{
+    burst::Request request;
+    request.detents = (detents < 0 || detents > 255)
+                    ? 255 : static_cast<uint8_t>(detents);
+    request.physicalLimit = SHIFT_BURST_DETENTS;
+    request.empiricalLimit = empiricalLimit;
+    request.allowSplit = allowSplit;
+
+    const burst::Verdict verdict = burst::decide(request);
+    printf("shift_plan         demande %d physique %u empirique %u effectif %u"
+           " liant %u fractionnement %s decision %s\n",
+           detents, (unsigned)request.physicalLimit, (unsigned)empiricalLimit,
+           (unsigned)verdict.effectiveLimit, (unsigned)verdict.bindingLimit,
+           allowSplit ? "autorise" : "refuse", decisionName(verdict.decision));
+
+    if (verdict.decision == burst::REFUSE_INVALID_REQUEST
+        || verdict.decision == burst::REFUSE_PHYSICAL_LIMIT
+        || verdict.decision == burst::REFUSE_EMPIRICAL_LIMIT) {
+        printf("shift_refus        aucune injection, aucune broche pilotee\n");
+        exit(4);
+    }
+
+    uint8_t plan[burst::MAX_BURSTS];
+    uint8_t count = 0;
+    if (verdict.decision == burst::ACCEPT_SINGLE_BURST) {
+        plan[0] = request.detents;
+        count = 1;
+    } else {
+        count = burst::split(request.detents, verdict.effectiveLimit,
+                             plan, burst::MAX_BURSTS);
+        if (count == 0) {
+            printf("shift_refus        decoupage impossible, aucune injection\n");
+            exit(4);
+        }
+    }
+
+    printf("shift_salves_plan  %u salves :", (unsigned)count);
+    for (uint8_t i = 0; i < count; ++i) printf(" %u", (unsigned)plan[i]);
+    printf("\n");
+
     double worst = 0.0;
-    int left = detents;
-    while (left > 0) {
-        const int burst = left < SHIFT_BURST_DETENTS ? left : SHIFT_BURST_DETENTS;
-        const double heldMs = shiftBurst(avr, burst, aFirst);
+    for (uint8_t i = 0; i < count; ++i) {
+        const double heldMs = shiftBurst(avr, plan[i], aFirst);
         if (heldMs > worst) worst = heldMs;
-        left -= burst;
-        if (left > 0) run_for(avr, SHIFT_BURST_GAP_MS);
+        if (i + 1 < count) run_for(avr, SHIFT_BURST_GAP_MS);
     }
     return worst;
 }
@@ -535,6 +590,7 @@ int main(int argc, char **argv)
     const int diagDb = strcmp(phase, "diagDb") == 0;
     const int diagDd = strcmp(phase, "diagDd") == 0;
     const int diagDh = strcmp(phase, "diagDh") == 0;
+    const int policycheck = strcmp(phase, "policycheck") == 0;
 
     {
         const char *e = getenv("DE_ENTRY_MS");
@@ -777,6 +833,43 @@ int main(int argc, char **argv)
         return 3;
     }
 
+    if (policycheck) {
+        struct Cas { const char *nom; int crans; uint8_t emp; bool split; };
+        static const Cas cas[6] = {
+            { "V4_length_30_sans_split",  30, harness::LENGTH_BURST_LIMIT, false },
+            { "V4_length_7_sans_split",    7, harness::LENGTH_BURST_LIMIT, false },
+            { "V5_length_30_avec_split",  30, harness::LENGTH_BURST_LIMIT, true  },
+            { "V6_subdiv_8_non_mesure",    8, harness::SUBDIV_BURST_LIMIT, false },
+            { "V6_subdiv_7_non_mesure",    7, harness::SUBDIV_BURST_LIMIT, false },
+            { "V7_ratchet_50_avec_split", 50, harness::RATCHET_BURST_LIMIT, true },
+        };
+        const char *only = getenv("POLICY_CASE");
+        for (int i = 0; i < 6; ++i) {
+            if (only != NULL && strcmp(only, cas[i].nom) != 0) continue;
+            burst::Request req;
+            req.detents = (uint8_t)cas[i].crans;
+            req.physicalLimit = SHIFT_BURST_DETENTS;
+            req.empiricalLimit = cas[i].emp;
+            req.allowSplit = cas[i].split;
+            const burst::Verdict v = burst::decide(req);
+            printf("pc_%-24s decision %s effectif %u liant %u",
+                   cas[i].nom, decisionName(v.decision),
+                   (unsigned)v.effectiveLimit, (unsigned)v.bindingLimit);
+            if (v.decision == burst::ACCEPT_SPLIT) {
+                uint8_t plan[burst::MAX_BURSTS];
+                const uint8_t n = burst::split(req.detents, v.effectiveLimit,
+                                               plan, burst::MAX_BURSTS);
+                printf(" plan %u :", (unsigned)n);
+                for (uint8_t k = 0; k < n; ++k) printf(" %u", (unsigned)plan[k]);
+            }
+            printf("\n");
+        }
+        printf("pc_broches         ecritures %u\n", g_pin_writes);
+        if (only != NULL && strcmp(only, "injection") == 0) {
+        }
+        return 0;
+    }
+
     if (diagDh) {
         static uint8_t vu[PATTERN_COUNT * PATTERN_BYTES];
         const uint32_t pasActifs = activeStepsInPattern(expectedBytes);
@@ -815,7 +908,7 @@ int main(int argc, char **argv)
         }
 
         const uint32_t m = g_twi_bytes;
-        shiftRotate(avr, crans, 0);
+        shiftRotate(avr, crans, 0, DIAGNOSTIC_MEASURES_THE_POLICY, false);
         const uint32_t twiSalve = g_twi_bytes - m;
         printChampInk("apres");
 
@@ -879,7 +972,7 @@ int main(int argc, char **argv)
         };
         for (int i = 0; i < 4; ++i) {
             const uint32_t m = g_twi_bytes;
-            shiftRotate(avr, sv[i].crans, sv[i].aFirst);
+            shiftRotate(avr, sv[i].crans, sv[i].aFirst, DIAGNOSTIC_MEASURES_THE_POLICY, false);
             read_bank(avr, vu);
             uint32_t prem = 0;
             printf("dd_%-9s twi %u banque %u onglet %d\n", sv[i].nom,
@@ -937,7 +1030,7 @@ int main(int argc, char **argv)
             uint32_t twiGeste = 0;
             if (salves[i].crans > 0) {
                 const uint32_t m = g_twi_bytes;
-                shiftRotate(avr, salves[i].crans, salves[i].aFirst);
+                shiftRotate(avr, salves[i].crans, salves[i].aFirst, DIAGNOSTIC_MEASURES_THE_POLICY, false);
                 twiGeste = g_twi_bytes - m;
             }
             printChampInk(salves[i].nom);
@@ -998,7 +1091,8 @@ int main(int argc, char **argv)
                 twiGeste = g_twi_bytes - m;
             } else {
                 const uint32_t m = g_twi_bytes;
-                shiftRotate(avr, marches[etape - 1].crans, marches[etape - 1].aFirst);
+                shiftRotate(avr, marches[etape - 1].crans,
+                            marches[etape - 1].aFirst, DIAGNOSTIC_MEASURES_THE_POLICY, false);
                 twiGeste = g_twi_bytes - m;
                 printChampInk(marches[etape - 1].nom);
             }
@@ -1046,11 +1140,12 @@ int main(int argc, char **argv)
                 marque = g_twi_bytes;
                 pressFor(avr, (double)PRESS_MS);
                 rotate(avr, 1, 1);
-                if (!skipBGeste && r5Crans > 0) shiftRotate(avr, r5Crans, 1);
+                if (!skipBGeste && r5Crans > 0) shiftRotate(avr, r5Crans, 1, harness::LENGTH_BURST_LIMIT, false);
                 twiGeste = g_twi_bytes - marque;
             } else if (etape == 2) {
                 marque = g_twi_bytes;
-                if (!skipBGeste) { shiftRotate(avr, 24, 0); shiftRotate(avr, 15, 1); }
+                if (!skipBGeste) { shiftRotate(avr, 24, 0, harness::LENGTH_BURST_LIMIT, false);
+                                   shiftRotate(avr, 15, 1, harness::LENGTH_BURST_LIMIT, false); }
                 twiGeste = g_twi_bytes - marque;
             } else if (etape == 3) {
                 pressFor(avr, (double)LONG_PRESS_MS);
@@ -1061,13 +1156,14 @@ int main(int argc, char **argv)
                 pressFor(avr, (double)PRESS_MS);
                 rotate(avr, 2, 1);
                 if (!skipBGeste) {
-                    shiftRotate(avr, 50, 1);
-                    if (r7CransRetour > 0) shiftRotate(avr, r7CransRetour, 0);
+                    shiftRotate(avr, 50, 1, harness::SUBDIV_BURST_LIMIT, false);
+                    if (r7CransRetour > 0) shiftRotate(avr, r7CransRetour, 0, harness::SUBDIV_BURST_LIMIT, false);
                 }
                 twiGeste = g_twi_bytes - marque;
             } else if (etape == 4) {
                 marque = g_twi_bytes;
-                if (!skipBGeste) { shiftRotate(avr, 24, 0); shiftRotate(avr, 8, 1); }
+                if (!skipBGeste) { shiftRotate(avr, 24, 0, harness::SUBDIV_BURST_LIMIT, false);
+                                   shiftRotate(avr, 8, 1, harness::SUBDIV_BURST_LIMIT, false); }
                 twiGeste = g_twi_bytes - marque;
             }
 
@@ -1122,7 +1218,8 @@ int main(int argc, char **argv)
         marque = g_twi_bytes;
         pressFor(avr, (double)PRESS_MS);
         rotate(avr, 2, 1);
-        if (!skipBGeste && r11CransSubdiv > 0) shiftRotate(avr, r11CransSubdiv, 0);
+        if (!skipBGeste && r11CransSubdiv > 0)
+            shiftRotate(avr, r11CransSubdiv, 0, harness::SUBDIV_BURST_LIMIT, false);
         printf("rD_nav_subdiv      onglet %d twi %u crans %d\n",
                selectedTab(), g_twi_bytes - marque, r11CransSubdiv);
 
@@ -1148,7 +1245,7 @@ int main(int argc, char **argv)
 
         for (int cran = 1; cran <= 3; ++cran) {
             marque = g_twi_bytes;
-            if (!skipBGeste) shiftRotate(avr, 1, 1);
+            if (!skipBGeste) shiftRotate(avr, 1, 1, harness::RATCHET_BURST_LIMIT, false);
             read_bank(avr, vu);
             ecarts = bankDiffCount(vu, expectedBytes, &premier);
             printf("rD_cran%d           nibble %02x octet %02x ecarts %u premier %u twi %u\n",
@@ -1157,7 +1254,7 @@ int main(int argc, char **argv)
         }
 
         marque = g_twi_bytes;
-        if (!skipBGeste) shiftRotate(avr, 6, 0);
+        if (!skipBGeste) shiftRotate(avr, 6, 0, harness::RATCHET_BURST_LIMIT, false);
         read_bank(avr, vu);
         ecarts = bankDiffCount(vu, expectedBytes, &premier);
         printf("rD_retour          nibble %02x octet %02x ecarts %u twi %u\n",
@@ -1172,7 +1269,8 @@ int main(int argc, char **argv)
         marque = g_twi_bytes;
         pressFor(avr, (double)PRESS_MS);
         rotate(avr, 2, 1);
-        if (!skipBGeste && r11CransSubdiv > 0) shiftRotate(avr, r11CransSubdiv, 1);
+        if (!skipBGeste && r11CransSubdiv > 0)
+            shiftRotate(avr, r11CransSubdiv, 1, harness::SUBDIV_BURST_LIMIT, false);
         run_for(avr, 2500.0);
         depart = g_ticks;
         run_for(avr, 20000.0);
@@ -1212,11 +1310,16 @@ int main(int argc, char **argv)
                 pressFor(avr, (double)PRESS_MS);
                 const int rotations = (etape == 1) ? 1 : r2Rotations;
                 if (rotations > 0) rotate(avr, rotations, 1);
-                if (!skipBGeste) shiftRotate(avr, 1, etape == 1 ? 1 : 0);
+                if (!skipBGeste)
+                    shiftRotate(avr, 1, etape == 1 ? 1 : 0,
+                                harness::limitForFieldIndex((uint8_t)rotations), false);
                 twiGeste = g_twi_bytes - marque;
             } else if (etape == 2 || etape == 4) {
                 marque = g_twi_bytes;
-                if (!skipBGeste) shiftRotate(avr, 1, etape == 2 ? 0 : 1);
+                if (!skipBGeste)
+                    shiftRotate(avr, 1, etape == 2 ? 0 : 1,
+                                harness::limitForFieldIndex(
+                                    (uint8_t)(etape == 2 ? 1 : r2Rotations)), false);
                 twiGeste = g_twi_bytes - marque;
             }
 
@@ -1275,7 +1378,7 @@ int main(int argc, char **argv)
 
             for (int etape = 0; etape < 2; ++etape) {
                 marque = g_twi_bytes;
-                if (!skipBGeste) shiftRotate(avr, 1, etape == 0 ? 0 : 1);
+                if (!skipBGeste) shiftRotate(avr, 1, etape == 0 ? 0 : 1, harness::SUBDIV_BURST_LIMIT, false);
                 const uint32_t twiGeste = g_twi_bytes - marque;
                 run_for(avr, 2000.0);
                 const uint32_t depart = g_ticks;
@@ -1312,7 +1415,7 @@ int main(int argc, char **argv)
 
         for (int etape = 0; etape < 2; ++etape) {
             marque = g_twi_bytes;
-            if (!skipBGeste) shiftRotate(avr, 3, etape == 0 ? 1 : 0);
+            if (!skipBGeste) shiftRotate(avr, 3, etape == 0 ? 1 : 0, harness::LENGTH_BURST_LIMIT, false);
             const uint32_t twiGeste = g_twi_bytes - marque;
             const uint32_t twiRetour0 = g_twi_bytes;
             pressFor(avr, (double)LONG_PRESS_MS);
@@ -1379,13 +1482,13 @@ int main(int argc, char **argv)
 
         rotate(avr, 2, 1);
         marque = g_twi_bytes;
-        shiftRotate(avr, 4, 1);
+        shiftRotate(avr, 4, 1, harness::STEP_BURST_LIMIT, false);
         read_bank(avr, vu);
         ecarts = bankDiffCount(vu, expectedBytes, &premier);
         printf("rA_r9_pose         octet6 %02x ecarts %u premier %u twi %u\n",
                vu[STEP_BYTES + 2], ecarts, premier, g_twi_bytes - marque);
         marque = g_twi_bytes;
-        shiftRotate(avr, 4, 0);
+        shiftRotate(avr, 4, 0, harness::RATCHET_BURST_LIMIT, false);
         read_bank(avr, vu);
         ecarts = bankDiffCount(vu, expectedBytes, &premier);
         printf("rA_r9_retour       octet6 %02x ecarts %u twi %u\n",
@@ -1394,7 +1497,7 @@ int main(int argc, char **argv)
         const int versR10 = (r10Step - 5 + 24) % 24;
         rotate(avr, versR10 == 0 ? 24 : versR10, 1);
         marque = g_twi_bytes;
-        shiftRotate(avr, 4, 1);
+        shiftRotate(avr, 4, 1, harness::STEP_BURST_LIMIT, false);
         read_bank(avr, vu);
         ecarts = bankDiffCount(vu, expectedBytes, &premier);
         printf("rA_r10             cible %d rotations %d octet6 %02x ecarts %u twi %u\n",
@@ -1403,13 +1506,13 @@ int main(int argc, char **argv)
 
         rotate(avr, (9 - r10Step + 24) % 24, 1);
         marque = g_twi_bytes;
-        shiftRotate(avr, 5, 1);
+        shiftRotate(avr, 5, 1, harness::RATCHET_BURST_LIMIT, false);
         read_bank(avr, vu);
         ecarts = bankDiffCount(vu, expectedBytes, &premier);
         printf("rA_r12_pose        octet8 %02x ecarts %u premier %u twi %u\n",
                vu[STEP_BYTES + 4], ecarts, premier, g_twi_bytes - marque);
         marque = g_twi_bytes;
-        shiftRotate(avr, 5, 0);
+        shiftRotate(avr, 5, 0, harness::RATCHET_BURST_LIMIT, false);
         read_bank(avr, vu);
         ecarts = bankDiffCount(vu, expectedBytes, &premier);
         printf("rA_r12_retour      octet8 %02x ecarts %u twi %u\n",
@@ -1436,7 +1539,7 @@ int main(int argc, char **argv)
         int cumule = 0;
         for (int etape = 0; etape < 3; ++etape) {
             const uint32_t twiBefore = g_twi_bytes;
-            shiftRotate(avr, marche[etape], 0);
+            shiftRotate(avr, marche[etape], 0, harness::SUBDIV_BURST_LIMIT, false);
             cumule += marche[etape];
             run_for(avr, 2000.0);
             const uint32_t from = g_ticks;
@@ -1468,7 +1571,7 @@ int main(int argc, char **argv)
         rotate(avr, 1, 1);
         const uint32_t tickLengthGesture = g_ticks;
         const uint32_t twiBeforeLength = g_twi_bytes;
-        shiftRotate(avr, 3, 1);
+        shiftRotate(avr, 3, 1, harness::LENGTH_BURST_LIMIT, false);
         printf("p25_geste_length   %u %u\n", tickLengthGesture, g_twi_bytes - twiBeforeLength);
 
         const uint32_t tickAfterLength = g_ticks;
@@ -1484,7 +1587,7 @@ int main(int argc, char **argv)
         rotate(avr, 1, 1);
         const uint32_t tickSubdivGesture = g_ticks;
         const uint32_t twiBeforeSubdiv = g_twi_bytes;
-        shiftRotate(avr, 1, 1);
+        shiftRotate(avr, 1, 1, harness::SUBDIV_BURST_LIMIT, false);
         const uint32_t expectedBoundary = ((tickSubdivGesture / 96) + 1) * 96;
         run_for(avr, 9000.0);
         const uint32_t applyTick = firstOnsetWithGap(&g_out[0], tickSubdivGesture, 32);
@@ -1541,7 +1644,7 @@ int main(int argc, char **argv)
     printf("ratchet_avant      %02x\n", bankBeforeShift[STEP_BYTES]);
 
     twiMark = g_twi_bytes;
-    const double heldMs = skipShift ? 192.0 : shiftRotate(avr, 3, 1);
+    const double heldMs = skipShift ? 192.0 : shiftRotate(avr, 3, 1, harness::RATCHET_BURST_LIMIT, false);
     static uint8_t bankAfterShift[PATTERN_COUNT * PATTERN_BYTES];
     read_bank(avr, bankAfterShift);
     printf("shift_maintien_ms  %.1f\n", heldMs);
@@ -1552,14 +1655,14 @@ int main(int argc, char **argv)
            && low_mask_of(&bankAfterShift[0]) == 0x9111 ? 1 : 0);
 
     twiMark = g_twi_bytes;
-    shiftRotate(avr, 2, 1);
+    shiftRotate(avr, 2, 1, harness::RATCHET_BURST_LIMIT, false);
     static uint8_t bankTriplet[PATTERN_COUNT * PATTERN_BYTES];
     read_bank(avr, bankTriplet);
     printf("triolet_pose       %02x twi %u\n",
            bankTriplet[STEP_BYTES] & 0x0F, g_twi_bytes - twiMark);
 
     twiMark = g_twi_bytes;
-    shiftRotate(avr, 5, 0);
+    shiftRotate(avr, 5, 0, harness::RATCHET_BURST_LIMIT, false);
     static uint8_t bankNoRatchet[PATTERN_COUNT * PATTERN_BYTES];
     read_bank(avr, bankNoRatchet);
     printf("triolet_retire     %02x twi %u\n",
@@ -1595,7 +1698,7 @@ int main(int argc, char **argv)
 
     printf("fract_demande      %d crans, plafond %d crans par salve\n",
            longDetents, SHIFT_BURST_DETENTS);
-    const double heldUp = shiftRotate(avr, longDetents, 1);
+    const double heldUp = shiftRotate(avr, longDetents, 1, harness::RATCHET_BURST_LIMIT, true);
     static uint8_t bankLongUp[PATTERN_COUNT * PATTERN_BYTES];
     read_bank(avr, bankLongUp);
     const int burstsUp = g_shift_bursts - burstsBefore;
@@ -1607,7 +1710,7 @@ int main(int argc, char **argv)
            && low_mask_of(&bankLongUp[0]) == 0x9111 ? 1 : 0);
     printf("fract_twi          %u\n", g_twi_bytes - twiMark);
 
-    const double heldDown = shiftRotate(avr, longDetents, 0);
+    const double heldDown = shiftRotate(avr, longDetents, 0, harness::RATCHET_BURST_LIMIT, true);
     static uint8_t bankLongDown[PATTERN_COUNT * PATTERN_BYTES];
     read_bank(avr, bankLongDown);
     uint32_t suppressedAfter = 0;
