@@ -21,6 +21,8 @@ extern "C" {
 #include <flexseq/PatternScreen.h>
 #include <flexseq/PatternBank.h>
 #include <flexseq/FactoryPatterns.h>
+#include <flexseq/Persistence.h>
+#include <flexseq/Transport.h>
 
 namespace ms = flexseq::mainscreen;
 namespace scr = flexseq::screen;
@@ -59,6 +61,10 @@ namespace scr = flexseq::screen;
 #define SHIFT_HOLD_MS(n)      (SHIFT_HOLD_FIXED_MS + (n) * DETENT_MS)
 #define SHIFT_HOLD_CEILING_MS (SHIFT_LONG_PRESS_MS - LOOP_POLL_RESERVE_MS)
 #define SHIFT_BURST_DETENTS   ((SHIFT_HOLD_CEILING_MS - 1 - SHIFT_HOLD_FIXED_MS) / DETENT_MS)
+
+static double g_de_entry_ms   = (double)BUTTON_MARGIN_MS;
+static double g_de_release_ms = (double)BUTTON_MARGIN_MS;
+static double g_di_settle_ms  = (double)DETENT_SETTLE_MS;
 #define SHIFT_BURST_GAP_MS    (BUTTON_DEBOUNCE_MS + LOOP_POLL_RESERVE_MS + BUTTON_MARGIN_MS)
 
 static_assert(SHIFT_BURST_DETENTS >= 1,
@@ -141,6 +147,74 @@ static uint32_t periodInWindow(const outline_t *l, uint32_t from, uint32_t to)
     return 0;
 }
 
+static uint32_t gcd32(uint32_t a, uint32_t b)
+{
+    while (b != 0) { const uint32_t t = a % b; a = b; b = t; }
+    return a;
+}
+
+#define GAP_KINDS 16
+
+static uint32_t gapGcdInWindow(const outline_t *l, uint32_t from, uint32_t to,
+                               uint32_t *keptOut, uint32_t *countOut,
+                               uint32_t *droppedOut)
+{
+    uint32_t value[GAP_KINDS];
+    uint32_t tally[GAP_KINDS];
+    uint32_t kinds = 0, count = 0;
+    for (uint32_t i = 1; i < l->n; ++i) {
+        if (l->tick[i - 1] < from || l->tick[i] > to) continue;
+        const uint32_t gap = l->tick[i] - l->tick[i - 1];
+        if (gap == 0) continue;
+        ++count;
+        uint32_t k = 0;
+        while (k < kinds && value[k] != gap) ++k;
+        if (k == kinds) {
+            if (kinds == GAP_KINDS) continue;
+            value[kinds] = gap;
+            tally[kinds] = 0;
+            ++kinds;
+        }
+        ++tally[k];
+    }
+    uint32_t g = 0, kept = 0, dropped = 0;
+    for (uint32_t k = 0; k < kinds; ++k) {
+        if (tally[k] < 2) { ++dropped; continue; }
+        g = gcd32(g, value[k]);
+        ++kept;
+    }
+    if (keptOut) *keptOut = kept;
+    if (countOut) *countOut = count;
+    if (droppedOut) *droppedOut = dropped;
+    return g;
+}
+
+static uint32_t activeStepsInPattern(const uint8_t *bank)
+{
+    uint32_t n = 0;
+    for (uint32_t b = 0; b < (uint32_t)STEP_BYTES; ++b) {
+        for (uint32_t bit = 0; bit < 8; ++bit) {
+            if (bank[b] & (1u << bit)) ++n;
+        }
+    }
+    return n;
+}
+
+static uint32_t periodOverOnsets(const outline_t *l, uint32_t from, uint32_t to,
+                                 uint32_t m, uint32_t *onsetsOut)
+{
+    uint32_t onsets = 0, period = 0;
+    for (uint32_t i = 0; i < l->n; ++i) {
+        if (l->tick[i] < from || l->tick[i] > to) continue;
+        ++onsets;
+        if (period == 0 && i + m < l->n && l->tick[i + m] <= to) {
+            period = l->tick[i + m] - l->tick[i];
+        }
+    }
+    if (onsetsOut) *onsetsOut = onsets;
+    return period;
+}
+
 static uint32_t firstOnsetWithGap(const outline_t *l, uint32_t from, uint32_t gapWanted)
 {
     for (uint32_t i = 1; i < l->n; ++i) {
@@ -174,6 +248,27 @@ static int inkInTabSlot(uint8_t tab)
         }
     }
     return ink;
+}
+
+static int inkInBox(uint8_t x0, uint8_t y0, uint8_t w, uint8_t h)
+{
+    int ink = 0;
+    for (uint8_t dx = 0; dx < w; ++dx) {
+        for (uint8_t dy = 0; dy < h; ++dy) {
+            ink += pixelAt(rotX((uint8_t)(x0 + dx)), rotY((uint8_t)(y0 + dy)));
+        }
+    }
+    return ink;
+}
+
+static void printChampInk(const char *etiquette)
+{
+    printf("diag_champs        %-10s titre %d LEN %d SUB %d SEP %d EDIT %d\n", etiquette,
+           inkInBox(ms::HEADLINE_BOX_X, ms::HEADLINE_BOX_Y, ms::HEADLINE_BOX_W, ms::HEADLINE_BOX_H),
+           inkInBox(ms::COL_LEFT_X,  ms::ROW_A_BOX_Y, ms::COL_W, ms::ROW_BOX_H),
+           inkInBox(ms::COL_RIGHT_X, ms::ROW_A_BOX_Y, ms::COL_W, ms::ROW_BOX_H),
+           inkInBox(ms::COL_LEFT_X,  ms::ROW_B_BOX_Y, ms::COL_W, ms::ROW_BOX_H),
+           inkInBox(ms::COL_RIGHT_X, ms::ROW_B_BOX_Y, ms::COL_W, ms::ROW_BOX_H));
 }
 
 static int tabBandSlotsWithInk(void)
@@ -247,6 +342,50 @@ static int readSuppressedCounter(const avr_t *avr, uint32_t *out)
     return 1;
 }
 
+static uint8_t g_image[1024];
+static uint8_t g_image_ref[1024];
+static size_t g_image_bytes;
+static uint16_t g_image_base = 384;
+
+struct ImageStorage {
+    uint8_t read(uint16_t address) const
+    {
+        const uint32_t index = (uint32_t)address - (uint32_t)g_image_base;
+        if (g_image_bytes == 0 || index >= (uint32_t)g_image_bytes) return 0xFF;
+        return g_image_ref[index];
+    }
+    void write(uint16_t, uint8_t) {}
+};
+
+static flexseq::SequencerEngine g_expected_engine;
+
+static const char *buildExpectedBank(flexseq::PatternBank &bank)
+{
+    static flexseq::Transport transport(g_expected_engine);
+    static flexseq::UiController ui(g_expected_engine, bank, transport);
+    static flexseq::Preferences preferences;
+    flexseq::PersistentImage image(bank, g_expected_engine, ui, preferences);
+    flexseq::PersistenceScheduler scheduler;
+    g_expected_engine.setPatternBank(&bank);
+
+    ImageStorage storage;
+    if (!scheduler.load(storage, image)) {
+        flexseq::loadFactoryPatterns(bank);
+        return "usine";
+    }
+    return "image";
+}
+
+static uint32_t bankDiffCount(const uint8_t *a, const uint8_t *b, uint32_t *firstOut)
+{
+    uint32_t n = 0, first = 0xFFFFFFFFu;
+    for (uint32_t i = 0; i < (uint32_t)(PATTERN_COUNT * PATTERN_BYTES); ++i) {
+        if (a[i] != b[i]) { ++n; if (first == 0xFFFFFFFFu) first = i; }
+    }
+    if (firstOut) *firstOut = (first == 0xFFFFFFFFu) ? 0 : first;
+    return n;
+}
+
 static uint16_t low_mask_of(const uint8_t *pattern)
 {
     return (uint16_t)(pattern[0] | ((uint16_t)pattern[1] << 8));
@@ -280,22 +419,29 @@ static double g_shift_hold_max;
 
 static double shiftBurst(avr_t *avr, int detents, int aFirst)
 {
+    const double holdPlanned =
+        g_de_entry_ms
+        + (double)detents * (EDGES_PER_DETENT * EDGE_SPACING_MS + g_di_settle_ms)
+        + g_de_release_ms;
     if (detents < 1 || detents > SHIFT_BURST_DETENTS
-        || SHIFT_HOLD_MS(detents) >= SHIFT_HOLD_CEILING_MS) {
+        || SHIFT_HOLD_MS(detents) >= SHIFT_HOLD_CEILING_MS
+        || holdPlanned >= (double)SHIFT_HOLD_CEILING_MS) {
         printf("shift_garde        salve de %d crans refusee avant injection,"
-               " plafond %d crans (%d ms), seuil %d ms\n",
+               " plafond %d crans (%d ms), maintien prevu %.1f ms, seuil %d ms\n",
                detents, SHIFT_BURST_DETENTS,
-               SHIFT_HOLD_MS(SHIFT_BURST_DETENTS), SHIFT_LONG_PRESS_MS);
+               SHIFT_HOLD_MS(SHIFT_BURST_DETENTS), holdPlanned,
+               SHIFT_LONG_PRESS_MS);
         exit(4);
     }
     const uint64_t start = avr->cycle;
+    const uint32_t twiAvant = g_twi_bytes;
     setPin(g_shift, &g_level_shift, 0);
-    run_for(avr, BUTTON_MARGIN_MS);
+    run_for(avr, g_de_entry_ms);
     for (int i = 0; i < detents; ++i) {
         if (aFirst) detentAfirst(avr); else detentBfirst(avr);
-        run_for(avr, DETENT_SETTLE_MS);
+        run_for(avr, g_di_settle_ms);
     }
-    run_for(avr, BUTTON_MARGIN_MS);
+    run_for(avr, g_de_release_ms);
     const double heldMs = (double)(avr->cycle - start) * 1e3 / (double)F_CPU_HZ;
     setPin(g_shift, &g_level_shift, 1);
     run_for(avr, BUTTON_MARGIN_MS);
@@ -303,8 +449,8 @@ static double shiftBurst(avr_t *avr, int detents, int aFirst)
 
     ++g_shift_bursts;
     if (heldMs > g_shift_hold_max) g_shift_hold_max = heldMs;
-    printf("shift_salve        %d crans, maintien %.1f ms, plafond %d ms\n",
-           detents, heldMs, SHIFT_HOLD_CEILING_MS);
+    printf("shift_salve        %d crans, maintien %.1f ms, plafond %d ms, twi %u\n",
+           detents, heldMs, SHIFT_HOLD_CEILING_MS, g_twi_bytes - twiAvant);
     return heldMs;
 }
 
@@ -378,6 +524,85 @@ int main(int argc, char **argv)
     const uint16_t ee_base = (argc > 5) ? (uint16_t)strtol(argv[5], NULL, 0) : 384;
     const char *phase = (argc > 6) ? argv[6] : "structure";
     const int temporal = strcmp(phase, "temporal") == 0;
+    const int rig = strcmp(phase, "rig") == 0;
+    const int recettesA = strcmp(phase, "recettesA") == 0;
+    const int recettesB = strcmp(phase, "recettesB") == 0;
+    const int skipBGeste = getenv("SKIP_B_GESTE") != NULL;
+    const int recetteR2 = strcmp(phase, "recetteR2") == 0;
+    const int recetteR11 = strcmp(phase, "recetteR11") == 0;
+    const int recetteR5R7 = strcmp(phase, "recetteR5R7") == 0;
+    const int diagDa = strcmp(phase, "diagDa") == 0;
+    const int diagDb = strcmp(phase, "diagDb") == 0;
+    const int diagDd = strcmp(phase, "diagDd") == 0;
+    const int diagDh = strcmp(phase, "diagDh") == 0;
+
+    {
+        const char *e = getenv("DE_ENTRY_MS");
+        const char *r = getenv("DE_RELEASE_MS");
+        const char *t = getenv("DI_SETTLE_MS");
+        if (t != NULL) g_di_settle_ms = atof(t);
+        if (g_di_settle_ms < 1.0 || g_di_settle_ms > 500.0) {
+            fprintf(stderr, "DI_SETTLE_MS hors bornes\n");
+            return 2;
+        }
+        if (t != NULL) {
+            printf("di_rythme          settle %.0f ms, reference %d ms,"
+                   " cran %.0f ms\n",
+                   g_di_settle_ms, DETENT_SETTLE_MS,
+                   EDGES_PER_DETENT * EDGE_SPACING_MS + g_di_settle_ms);
+        }
+        if (e != NULL) g_de_entry_ms = atof(e);
+        if (r != NULL) g_de_release_ms = atof(r);
+        if (g_de_entry_ms < 1.0 || g_de_entry_ms > 2000.0
+            || g_de_release_ms < 1.0 || g_de_release_ms > 2000.0) {
+            fprintf(stderr, "DE_ENTRY_MS / DE_RELEASE_MS hors bornes\n");
+            return 2;
+        }
+        if (e != NULL || r != NULL) {
+            printf("de_fenetres        entree %.0f ms, relachement %.0f ms,"
+                   " marge de reference %d ms\n",
+                   g_de_entry_ms, g_de_release_ms, BUTTON_MARGIN_MS);
+        }
+    }
+    int r5Crans = 30;
+    int r7CransRetour = 16;
+    {
+        const char *a = getenv("R5_CRANS");
+        if (a != NULL) r5Crans = (int)strtol(a, NULL, 0);
+        const char *b = getenv("R7_CRANS_RETOUR");
+        if (b != NULL) r7CransRetour = (int)strtol(b, NULL, 0);
+        if (r5Crans < 0 || r5Crans > 60 || r7CransRetour < 0 || r7CransRetour > 60) {
+            fprintf(stderr, "levier R5/R7 hors bornes : %d %d\n", r5Crans, r7CransRetour);
+            return 2;
+        }
+    }
+    int r11CransSubdiv = 8;
+    {
+        const char *text = getenv("R11_CRANS_SUBDIV");
+        if (text != NULL) r11CransSubdiv = (int)strtol(text, NULL, 0);
+        if (r11CransSubdiv < 0 || r11CransSubdiv > 24) {
+            fprintf(stderr, "R11_CRANS_SUBDIV hors de la liste : %d\n", r11CransSubdiv);
+            return 2;
+        }
+    }
+    int r2Rotations = 2;
+    {
+        const char *text = getenv("R2_ROTATIONS");
+        if (text != NULL) r2Rotations = (int)strtol(text, NULL, 0);
+        if (r2Rotations < 0 || r2Rotations > 4) {
+            fprintf(stderr, "R2_ROTATIONS hors des champs : %d\n", r2Rotations);
+            return 2;
+        }
+    }
+    int r10Step = 4;
+    {
+        const char *text = getenv("R10_STEP");
+        if (text != NULL) r10Step = (int)strtol(text, NULL, 0);
+        if (r10Step < 0 || r10Step >= 24) {
+            fprintf(stderr, "R10_STEP hors de la grille : %d\n", r10Step);
+            return 2;
+        }
+    }
     g_suppressed_addr = (argc > 7) ? (uint32_t)strtoul(argv[7], NULL, 0) : 0;
     const int symbolcheck = strcmp(phase, "symbolcheck") == 0;
     {
@@ -418,11 +643,27 @@ int main(int argc, char **argv)
     if (ee_path) {
         FILE *ef = fopen(ee_path, "rb");
         if (!ef) { fprintf(stderr, "image EEPROM illisible : %s\n", ee_path); return 2; }
-        static uint8_t image[1024];
-        const size_t en = fread(image, 1, sizeof(image), ef);
+        const size_t en = fread(g_image, 1, sizeof(g_image), ef);
         fclose(ef);
-        avr_eeprom_desc_t ee = { .ee = image, .offset = ee_base, .size = (uint32_t)en };
-        if (en == 0 || avr_ioctl(avr, AVR_IOCTL_EEPROM_SET, &ee) != 0) {
+        if (en == 0) { fprintf(stderr, "image EEPROM vide\n"); return 2; }
+        g_image_bytes = en;
+        g_image_base = ee_base;
+        memcpy(g_image_ref, g_image, en);
+
+        const char *mutateText = getenv("IMAGE_MUTATE");
+        if (mutateText != NULL) {
+            const long index = strtol(mutateText, NULL, 0);
+            if (index < 0 || (size_t)index >= en) {
+                fprintf(stderr, "IMAGE_MUTATE hors de l'image : %ld\n", index);
+                return 2;
+            }
+            g_image[index] = (uint8_t)(g_image[index] ^ 0xFF);
+            printf("image_mutee        octet %ld inverse dans la copie donnee a la machine,"
+                   " l attendu garde l image d origine\n", index);
+        }
+
+        avr_eeprom_desc_t ee = { .ee = g_image, .offset = ee_base, .size = (uint32_t)en };
+        if (avr_ioctl(avr, AVR_IOCTL_EEPROM_SET, &ee) != 0) {
             fprintf(stderr, "image EEPROM refusee\n"); return 2;
         }
         printf("eeprom_prechargee  %zu octets a %u\n", en, ee_base);
@@ -518,16 +759,694 @@ int main(int argc, char **argv)
     }
 
     static flexseq::PatternBank expectedBank;
-    flexseq::loadFactoryPatterns(expectedBank);
+    const char *expectedSource = buildExpectedBank(expectedBank);
     const uint8_t *expectedBytes = reinterpret_cast<const uint8_t *>(&expectedBank);
     const int controlOk =
         sizeof(flexseq::PatternBank) == (size_t)(PATTERN_COUNT * PATTERN_BYTES)
-        && (temporal || memcmp(expectedBytes, bank, sizeof(flexseq::PatternBank)) == 0);
+        && memcmp(expectedBytes, bank, sizeof(flexseq::PatternBank)) == 0;
+    printf("controle_source    %s\n", expectedSource);
+    printf("image_lue          masque %04x subdiv %d length %u mode %d\n",
+           low_mask_of(expectedBytes),
+           (int)g_expected_engine.getSubdiv(0),
+           (unsigned)g_expected_engine.getEffectiveLength(0),
+           (int)g_expected_engine.getChannelMode(0));
     printf("controle_usine     %d\n", controlOk);
     if (!controlOk) {
         printf("controle_detail    taille native %zu, attendue %d\n",
                sizeof(flexseq::PatternBank), PATTERN_COUNT * PATTERN_BYTES);
         return 3;
+    }
+
+    if (diagDh) {
+        static uint8_t vu[PATTERN_COUNT * PATTERN_BYTES];
+        const uint32_t pasActifs = activeStepsInPattern(expectedBytes);
+        const int ongletDh = 5;
+        int crans = 12;
+        {
+            const char *c = getenv("DH_CRANS");
+            if (c != NULL) crans = atoi(c);
+            if (crans < 1 || crans > SHIFT_BURST_DETENTS) {
+                fprintf(stderr, "DH_CRANS hors bornes 1..%d\n", SHIFT_BURST_DETENTS);
+                return 2;
+            }
+        }
+        printf("dh_crans           %d demandes\n", crans);
+
+        playPress(avr);
+        run_for(avr, 1000.0);
+        rotate(avr, 1, 1);
+        {
+            const int courant = selectedTab();
+            const int pas = ((ongletDh - courant) % 8 + 8) % 8;
+            if (pas > 0) rotate(avr, pas, 1);
+        }
+        pressFor(avr, (double)PRESS_MS);
+        rotate(avr, 1, 1);
+        printChampInk("avant");
+
+        uint32_t depart = g_ticks;
+        run_for(avr, 20000.0);
+        for (int o = 0; o < OUT_COUNT; ++o) {
+            uint32_t k = 0, g = 0, d = 0, on = 0;
+            printf("dh_avant_OUT%d pgcd %u periode3 %u distances %u retenues %u onsets %u\n",
+                   o + 1,
+                   gapGcdInWindow(&g_out[o], depart, g_ticks, &k, &g, &d),
+                   periodOverOnsets(&g_out[o], depart, g_ticks, pasActifs, &on), g, k, on);
+        }
+
+        const uint32_t m = g_twi_bytes;
+        shiftRotate(avr, crans, 0);
+        const uint32_t twiSalve = g_twi_bytes - m;
+        printChampInk("apres");
+
+        run_for(avr, 2500.0);
+        depart = g_ticks;
+        run_for(avr, 20000.0);
+        read_bank(avr, vu);
+        uint32_t prem = 0;
+        printf("dh_apres           onglet %d twi %u ecarts %u\n",
+               selectedTab(), twiSalve, bankDiffCount(vu, expectedBytes, &prem));
+        for (int o = 0; o < OUT_COUNT; ++o) {
+            uint32_t k = 0, g = 0, d = 0, on = 0;
+            printf("dh_apres_OUT%d pgcd %u periode3 %u distances %u retenues %u onsets %u\n",
+                   o + 1,
+                   gapGcdInWindow(&g_out[o], depart, g_ticks, &k, &g, &d),
+                   periodOverOnsets(&g_out[o], depart, g_ticks, pasActifs, &on), g, k, on);
+        }
+        return 0;
+    }
+
+    if (diagDd) {
+        static uint8_t vu[PATTERN_COUNT * PATTERN_BYTES];
+        const uint32_t pasActifs = activeStepsInPattern(expectedBytes);
+        const int ongletDd = 5;
+        double gapMs = 0.0;
+        {
+            const char *g = getenv("DB_GAP_MS");
+            if (g != NULL) gapMs = atof(g);
+            if (gapMs < 0.0 || gapMs > 10000.0) {
+                fprintf(stderr, "DB_GAP_MS hors bornes\n"); return 2;
+            }
+        }
+        printf("dd_repos           additionnel %.0f ms, structurel %d ms, total %.0f ms\n",
+               gapMs, BUTTON_MARGIN_MS + FRAME_SETTLE_MS,
+               gapMs + BUTTON_MARGIN_MS + FRAME_SETTLE_MS);
+
+        playPress(avr);
+        run_for(avr, 1000.0);
+        rotate(avr, 1, 1);
+        {
+            const int courant = selectedTab();
+            const int pas = ((ongletDd - courant) % 8 + 8) % 8;
+            if (pas > 0) rotate(avr, pas, 1);
+        }
+        pressFor(avr, (double)PRESS_MS);
+        rotate(avr, 1, 1);
+
+        uint32_t depart = g_ticks;
+        run_for(avr, 20000.0);
+        {
+            uint32_t k = 0, g = 0, d = 0, on = 0;
+            printf("dd_base            pgcd %u periode3 %u distances %u retenues %u onsets %u\n",
+                   gapGcdInWindow(&g_out[4], depart, g_ticks, &k, &g, &d),
+                   periodOverOnsets(&g_out[4], depart, g_ticks, pasActifs, &on), g, k, on);
+        }
+        printChampInk("avant");
+
+        struct { const char *nom; int crans; int aFirst; } sv[4] = {
+            { "s1_bas12", 12, 0 }, { "s2_bas12", 12, 0 },
+            { "s3_haut12", 12, 1 }, { "s4_haut3", 3, 1 },
+        };
+        for (int i = 0; i < 4; ++i) {
+            const uint32_t m = g_twi_bytes;
+            shiftRotate(avr, sv[i].crans, sv[i].aFirst);
+            read_bank(avr, vu);
+            uint32_t prem = 0;
+            printf("dd_%-9s twi %u banque %u onglet %d\n", sv[i].nom,
+                   g_twi_bytes - m, bankDiffCount(vu, expectedBytes, &prem),
+                   selectedTab());
+            printChampInk(sv[i].nom);
+            if (i < 3 && gapMs > 0.0) run_for(avr, gapMs);
+        }
+
+        run_for(avr, 2500.0);
+        depart = g_ticks;
+        run_for(avr, 20000.0);
+        read_bank(avr, vu);
+        uint32_t premier = 0;
+        printf("dd_final           onglet %d ecarts %u\n",
+               selectedTab(), bankDiffCount(vu, expectedBytes, &premier));
+        for (int o = 0; o < OUT_COUNT; ++o) {
+            uint32_t k = 0, g = 0, d = 0, on = 0;
+            printf("dd_final_OUT%d pgcd %u periode3 %u distances %u retenues %u onsets %u\n",
+                   o + 1,
+                   gapGcdInWindow(&g_out[o], depart, g_ticks, &k, &g, &d),
+                   periodOverOnsets(&g_out[o], depart, g_ticks, pasActifs, &on), g, k, on);
+        }
+        return 0;
+    }
+
+    if (diagDb) {
+        static uint8_t vu[PATTERN_COUNT * PATTERN_BYTES];
+        const uint32_t pasActifs = activeStepsInPattern(expectedBytes);
+        const int ongletDb = 5;
+        uint32_t premier = 0;
+
+        playPress(avr);
+        run_for(avr, 1000.0);
+        rotate(avr, 1, 1);
+        {
+            const int courant = selectedTab();
+            const int pas = ((ongletDb - courant) % 8 + 8) % 8;
+            if (pas > 0) rotate(avr, pas, 1);
+        }
+        pressFor(avr, (double)PRESS_MS);
+        rotate(avr, 1, 1);
+        printChampInk("sur-LEN");
+
+        struct { const char *nom; int crans; int aFirst; } salves[5] = {
+            { "depart",   0,  0 },
+            { "bas12",   12,  0 },
+            { "bas24",   12,  0 },
+            { "haut12",  12,  1 },
+            { "haut15",   3,  1 },
+        };
+
+        const int serre = getenv("DB_TIGHT") != NULL;
+        for (int i = 0; i < 5; ++i) {
+            uint32_t twiGeste = 0;
+            if (salves[i].crans > 0) {
+                const uint32_t m = g_twi_bytes;
+                shiftRotate(avr, salves[i].crans, salves[i].aFirst);
+                twiGeste = g_twi_bytes - m;
+            }
+            printChampInk(salves[i].nom);
+            if (serre && i > 0 && i < 4) {
+                printf("dbg_%-7s SERRE : aucune fenetre, twi %u\n", salves[i].nom, twiGeste);
+                continue;
+            }
+
+            run_for(avr, 2500.0);
+            const uint32_t depart = g_ticks;
+            run_for(avr, 20000.0);
+
+            read_bank(avr, vu);
+            const uint32_t ecarts = bankDiffCount(vu, expectedBytes, &premier);
+            printf("dbg_%-7s onglet %d twi %u ecarts %u\n",
+                   salves[i].nom, selectedTab(), twiGeste, ecarts);
+            for (int o = 0; o < OUT_COUNT; ++o) {
+                uint32_t kept = 0, gaps = 0, dropped = 0, onsets = 0;
+                const uint32_t pgcd = gapGcdInWindow(&g_out[o], depart, g_ticks,
+                                                     &kept, &gaps, &dropped);
+                const uint32_t per = periodOverOnsets(&g_out[o], depart, g_ticks,
+                                                      pasActifs, &onsets);
+                printf("dbg_%s_OUT%d pgcd %u periode3 %u distances %u retenues %u onsets %u\n",
+                       salves[i].nom, o + 1, pgcd, per, gaps, kept, onsets);
+            }
+        }
+        return 0;
+    }
+
+    if (diagDa) {
+        const uint32_t pasActifs = activeStepsInPattern(expectedBytes);
+        const int ongletDiag = 5;
+        const int sortieDiag = 4;
+
+        playPress(avr);
+        run_for(avr, 1000.0);
+        printf("diag_steps_actifs  %u\n", pasActifs);
+        rotate(avr, 1, 1);
+
+        struct { const char *nom; int crans; int aFirst; } marches[3] = {
+            { "descente4",  4, 0 },
+            { "remonte4",   4, 1 },
+            { "descente13", 13, 0 },
+        };
+
+        for (int etape = 0; etape <= 3; ++etape) {
+            uint32_t twiGeste = 0;
+            if (etape == 0) {
+                const int courant = selectedTab();
+                const int pas = ((ongletDiag - courant) % 8 + 8) % 8;
+                if (pas > 0) rotate(avr, pas, 1);
+                printChampInk("barre");
+                const uint32_t m = g_twi_bytes;
+                pressFor(avr, (double)PRESS_MS);
+                printChampInk("dans-tab");
+                rotate(avr, 1, 1);
+                printChampInk("sur-LEN");
+                twiGeste = g_twi_bytes - m;
+            } else {
+                const uint32_t m = g_twi_bytes;
+                shiftRotate(avr, marches[etape - 1].crans, marches[etape - 1].aFirst);
+                twiGeste = g_twi_bytes - m;
+                printChampInk(marches[etape - 1].nom);
+            }
+
+            run_for(avr, 2500.0);
+            const uint32_t depart = g_ticks;
+            run_for(avr, 20000.0);
+            uint32_t kept = 0, gaps = 0, dropped = 0, onsets = 0;
+            const uint32_t pgcd = gapGcdInWindow(&g_out[sortieDiag], depart, g_ticks,
+                                                 &kept, &gaps, &dropped);
+            const uint32_t per = periodOverOnsets(&g_out[sortieDiag], depart, g_ticks,
+                                                  pasActifs, &onsets);
+            printf("diag_%-10s onglet %d twi %u pgcd %u periode3 %u distances %u retenues %u onsets %u\n",
+                   etape == 0 ? "base" : marches[etape - 1].nom,
+                   selectedTab(), twiGeste, pgcd, per, gaps, kept, onsets);
+        }
+        return 0;
+    }
+
+    if (recetteR5R7) {
+        static uint8_t vu[PATTERN_COUNT * PATTERN_BYTES];
+        const uint32_t pasActifs = activeStepsInPattern(expectedBytes);
+        const int ongletR5 = 5;
+        uint32_t premier = 0, marque = 0;
+
+        playPress(avr);
+        run_for(avr, 1000.0);
+        printf("rE_steps_actifs    %u\n", pasActifs);
+
+        marque = g_twi_bytes;
+        rotate(avr, 1, 1);
+        printf("rE_amorce          onglet %d twi %u\n", selectedTab(), g_twi_bytes - marque);
+
+        for (int etape = 0; etape < 5; ++etape) {
+            const char *nom = (etape == 0) ? "base"
+                            : (etape == 1) ? "r5"
+                            : (etape == 2) ? "r5rest"
+                            : (etape == 3) ? "r7" : "r7rest";
+            uint32_t twiGeste = 0;
+
+            if (etape == 1) {
+                const int courant = selectedTab();
+                const int pas = ((ongletR5 - courant) % 8 + 8) % 8;
+                if (pas > 0) rotate(avr, pas, 1);
+                marque = g_twi_bytes;
+                pressFor(avr, (double)PRESS_MS);
+                rotate(avr, 1, 1);
+                if (!skipBGeste && r5Crans > 0) shiftRotate(avr, r5Crans, 1);
+                twiGeste = g_twi_bytes - marque;
+            } else if (etape == 2) {
+                marque = g_twi_bytes;
+                if (!skipBGeste) { shiftRotate(avr, 24, 0); shiftRotate(avr, 15, 1); }
+                twiGeste = g_twi_bytes - marque;
+            } else if (etape == 3) {
+                pressFor(avr, (double)LONG_PRESS_MS);
+                const int courant = selectedTab();
+                const int pas = ((ongletR5 - courant) % 8 + 8) % 8;
+                if (pas > 0) rotate(avr, pas, 1);
+                marque = g_twi_bytes;
+                pressFor(avr, (double)PRESS_MS);
+                rotate(avr, 2, 1);
+                if (!skipBGeste) {
+                    shiftRotate(avr, 50, 1);
+                    if (r7CransRetour > 0) shiftRotate(avr, r7CransRetour, 0);
+                }
+                twiGeste = g_twi_bytes - marque;
+            } else if (etape == 4) {
+                marque = g_twi_bytes;
+                if (!skipBGeste) { shiftRotate(avr, 24, 0); shiftRotate(avr, 8, 1); }
+                twiGeste = g_twi_bytes - marque;
+            }
+
+            run_for(avr, 2500.0);
+            const uint32_t depart = g_ticks;
+            run_for(avr, etape == 1 ? 25000.0 : 20000.0);
+
+            read_bank(avr, vu);
+            const uint32_t ecarts = bankDiffCount(vu, expectedBytes, &premier);
+            printf("rE_%s onglet %d twi %u ecarts %u\n", nom, selectedTab(), twiGeste, ecarts);
+            for (int o = 0; o < OUT_COUNT; ++o) {
+                uint32_t kept = 0, gaps = 0, dropped = 0, onsets = 0;
+                const uint32_t pas = gapGcdInWindow(&g_out[o], depart, g_ticks,
+                                                    &kept, &gaps, &dropped);
+                const uint32_t per = periodOverOnsets(&g_out[o], depart, g_ticks,
+                                                      pasActifs, &onsets);
+                printf("rE_%s_OUT%d pas %u periode %u distances %u retenues %u onsets %u\n",
+                       nom, o + 1, pas, per, gaps, kept, onsets);
+            }
+        }
+        printf("rE_leviers         r5crans %d r7retour %d\n", r5Crans, r7CransRetour);
+        return 0;
+    }
+
+    if (recetteR11) {
+        static uint8_t vu[PATTERN_COUNT * PATTERN_BYTES];
+        const uint32_t pasActifs = activeStepsInPattern(expectedBytes);
+        const int ongletR11 = 4;
+        const int sortieR11 = 3;
+        const int offsetR11 = STEP_BYTES + 2;
+        uint32_t premier = 0, ecarts = 0, kept = 0, gaps = 0, dropped = 0, marque = 0;
+
+        playPress(avr);
+        run_for(avr, 1000.0);
+        printf("rD_steps_actifs    %u\n", pasActifs);
+
+        marque = g_twi_bytes;
+        rotate(avr, 1, 1);
+        printf("rD_amorce          onglet %d twi %u\n", selectedTab(), g_twi_bytes - marque);
+
+        uint32_t depart = g_ticks;
+        run_for(avr, 20000.0);
+        read_bank(avr, vu);
+        ecarts = bankDiffCount(vu, expectedBytes, &premier);
+        uint32_t cad = gapGcdInWindow(&g_out[sortieR11], depart, g_ticks, &kept, &gaps, &dropped);
+        printf("rD_base            cadence %u distances %u retenues %u ecarts %u\n",
+               cad, gaps, kept, ecarts);
+
+        int courant = selectedTab();
+        int pas = ((ongletR11 - courant) % 8 + 8) % 8;
+        if (pas > 0) rotate(avr, pas, 1);
+        marque = g_twi_bytes;
+        pressFor(avr, (double)PRESS_MS);
+        rotate(avr, 2, 1);
+        if (!skipBGeste && r11CransSubdiv > 0) shiftRotate(avr, r11CransSubdiv, 0);
+        printf("rD_nav_subdiv      onglet %d twi %u crans %d\n",
+               selectedTab(), g_twi_bytes - marque, r11CransSubdiv);
+
+        run_for(avr, 2500.0);
+        depart = g_ticks;
+        run_for(avr, 20000.0);
+        read_bank(avr, vu);
+        ecarts = bankDiffCount(vu, expectedBytes, &premier);
+        cad = gapGcdInWindow(&g_out[sortieR11], depart, g_ticks, &kept, &gaps, &dropped);
+        printf("rD_x24             cadence %u distances %u retenues %u ecarts %u\n",
+               cad, gaps, kept, ecarts);
+
+        pressFor(avr, (double)LONG_PRESS_MS);
+        const int creneauxAvant = tabBandSlotsWithInk();
+        marque = g_twi_bytes;
+        pressFor(avr, (double)PRESS_MS);
+        rotate(avr, 4, 1);
+        if (!skipBGeste) pressFor(avr, (double)PRESS_MS);
+        printf("rD_nav_edit        creneaux %d %d twi %u\n",
+               creneauxAvant, tabBandSlotsWithInk(), g_twi_bytes - marque);
+
+        rotate(avr, 5, 1);
+
+        for (int cran = 1; cran <= 3; ++cran) {
+            marque = g_twi_bytes;
+            if (!skipBGeste) shiftRotate(avr, 1, 1);
+            read_bank(avr, vu);
+            ecarts = bankDiffCount(vu, expectedBytes, &premier);
+            printf("rD_cran%d           nibble %02x octet %02x ecarts %u premier %u twi %u\n",
+                   cran, (unsigned)(vu[offsetR11] >> 4), (unsigned)vu[offsetR11],
+                   ecarts, premier, g_twi_bytes - marque);
+        }
+
+        marque = g_twi_bytes;
+        if (!skipBGeste) shiftRotate(avr, 6, 0);
+        read_bank(avr, vu);
+        ecarts = bankDiffCount(vu, expectedBytes, &premier);
+        printf("rD_retour          nibble %02x octet %02x ecarts %u twi %u\n",
+               (unsigned)(vu[offsetR11] >> 4), (unsigned)vu[offsetR11],
+               ecarts, g_twi_bytes - marque);
+
+        pressFor(avr, (double)LONG_PRESS_MS);
+        pressFor(avr, (double)LONG_PRESS_MS);
+        courant = selectedTab();
+        pas = ((ongletR11 - courant) % 8 + 8) % 8;
+        if (pas > 0) rotate(avr, pas, 1);
+        marque = g_twi_bytes;
+        pressFor(avr, (double)PRESS_MS);
+        rotate(avr, 2, 1);
+        if (!skipBGeste && r11CransSubdiv > 0) shiftRotate(avr, r11CransSubdiv, 1);
+        run_for(avr, 2500.0);
+        depart = g_ticks;
+        run_for(avr, 20000.0);
+        read_bank(avr, vu);
+        ecarts = bankDiffCount(vu, expectedBytes, &premier);
+        cad = gapGcdInWindow(&g_out[sortieR11], depart, g_ticks, &kept, &gaps, &dropped);
+        printf("rD_cadence_fin     cadence %u distances %u retenues %u ecarts %u twi %u\n",
+               cad, gaps, kept, ecarts, g_twi_bytes - marque);
+        return 0;
+    }
+
+    if (recetteR2) {
+        static uint8_t vu[PATTERN_COUNT * PATTERN_BYTES];
+        const uint32_t pasActifs = activeStepsInPattern(expectedBytes);
+        const int ongletR2 = 4;
+
+        playPress(avr);
+        run_for(avr, 1000.0);
+        printf("rC_steps_actifs    %u\n", pasActifs);
+
+        uint32_t marque = g_twi_bytes;
+        rotate(avr, 1, 1);
+        printf("rC_amorce          onglet %d twi %u\n", selectedTab(), g_twi_bytes - marque);
+
+        for (int etape = 0; etape < 5; ++etape) {
+            const char *nom = (etape == 0) ? "base"
+                            : (etape == 1) ? "length"
+                            : (etape == 2) ? "lenrest"
+                            : (etape == 3) ? "subdiv" : "subrest";
+            uint32_t twiGeste = 0;
+
+            if (etape == 1 || etape == 3) {
+                const int courant = selectedTab();
+                const int pas = ((ongletR2 - courant) % 8 + 8) % 8;
+                if (pas > 0) rotate(avr, pas, 1);
+                marque = g_twi_bytes;
+                pressFor(avr, (double)PRESS_MS);
+                const int rotations = (etape == 1) ? 1 : r2Rotations;
+                if (rotations > 0) rotate(avr, rotations, 1);
+                if (!skipBGeste) shiftRotate(avr, 1, etape == 1 ? 1 : 0);
+                twiGeste = g_twi_bytes - marque;
+            } else if (etape == 2 || etape == 4) {
+                marque = g_twi_bytes;
+                if (!skipBGeste) shiftRotate(avr, 1, etape == 2 ? 0 : 1);
+                twiGeste = g_twi_bytes - marque;
+            }
+
+            run_for(avr, 2500.0);
+            const uint32_t depart = g_ticks;
+            run_for(avr, 20000.0);
+
+            read_bank(avr, vu);
+            uint32_t premier = 0;
+            const uint32_t ecarts = bankDiffCount(vu, expectedBytes, &premier);
+            printf("rC_%s onglet %d twi %u ecarts %u\n", nom, selectedTab(), twiGeste, ecarts);
+            for (int o = 0; o < OUT_COUNT; ++o) {
+                uint32_t kept = 0, gaps = 0, dropped = 0, onsets = 0;
+                const uint32_t pas = gapGcdInWindow(&g_out[o], depart, g_ticks,
+                                                    &kept, &gaps, &dropped);
+                const uint32_t per = periodOverOnsets(&g_out[o], depart, g_ticks,
+                                                      pasActifs, &onsets);
+                printf("rC_%s_OUT%d pas %u periode %u distances %u retenues %u onsets %u\n",
+                       nom, o + 1, pas, per, gaps, kept, onsets);
+            }
+
+            if (etape == 2) {
+                marque = g_twi_bytes;
+                pressFor(avr, (double)LONG_PRESS_MS);
+                printf("rC_retour_barre    onglet %d creneaux %d twi %u\n",
+                       selectedTab(), tabBandSlotsWithInk(), g_twi_bytes - marque);
+            }
+        }
+        return 0;
+    }
+
+    if (recettesB) {
+        playPress(avr);
+        run_for(avr, 1000.0);
+
+        const uint32_t pasActifs = activeStepsInPattern(expectedBytes);
+        printf("rB_steps_actifs    %u\n", pasActifs);
+
+        uint32_t marque = g_twi_bytes;
+        rotate(avr, 1, 1);
+        printf("rB_amorce          onglet %d twi %u\n",
+               selectedTab(), g_twi_bytes - marque);
+
+        for (int k = 1; k <= 6; ++k) {
+            const int courant = selectedTab();
+            const int pas = ((k - courant) % 8 + 8) % 8;
+            if (pas > 0) rotate(avr, pas, 1);
+            const int surBarre = selectedTab();
+            marque = g_twi_bytes;
+            pressFor(avr, (double)PRESS_MS);
+            const int dedans = selectedTab();
+            printf("rB_r1_nav          k %d barre %d dedans %d twi %u\n",
+                   k, surBarre, dedans, g_twi_bytes - marque);
+
+            rotate(avr, 2, 1);
+
+            for (int etape = 0; etape < 2; ++etape) {
+                marque = g_twi_bytes;
+                if (!skipBGeste) shiftRotate(avr, 1, etape == 0 ? 0 : 1);
+                const uint32_t twiGeste = g_twi_bytes - marque;
+                run_for(avr, 2000.0);
+                const uint32_t depart = g_ticks;
+                run_for(avr, 20000.0);
+                printf("rB_r1_%s k %d twi %u pas",
+                       etape == 0 ? "change   " : "restaure ", k, twiGeste);
+                uint32_t minDist = 0xFFFFFFFFu, minRet = 0xFFFFFFFFu;
+                for (int o = 0; o < OUT_COUNT; ++o) {
+                    uint32_t kept = 0, gaps = 0, dropped = 0;
+                    const uint32_t g = gapGcdInWindow(&g_out[o], depart, g_ticks,
+                                                      &kept, &gaps, &dropped);
+                    printf(" %u", g);
+                    if (gaps < minDist) minDist = gaps;
+                    if (kept < minRet) minRet = kept;
+                }
+                printf(" distances %u retenues %u\n", minDist, minRet);
+            }
+
+            marque = g_twi_bytes;
+            pressFor(avr, (double)LONG_PRESS_MS);
+            printf("rB_r1_retour       k %d onglet %d creneaux %d twi %u\n",
+                   k, selectedTab(), tabBandSlotsWithInk(), g_twi_bytes - marque);
+        }
+
+        const int cibleR13 = 3;
+        const int courant13 = selectedTab();
+        const int pas13 = ((cibleR13 - courant13) % 8 + 8) % 8;
+        if (pas13 > 0) rotate(avr, pas13, 1);
+        marque = g_twi_bytes;
+        pressFor(avr, (double)PRESS_MS);
+        printf("rB_r13_nav         onglet %d twi %u\n", selectedTab(), g_twi_bytes - marque);
+
+        rotate(avr, 1, 1);
+
+        for (int etape = 0; etape < 2; ++etape) {
+            marque = g_twi_bytes;
+            if (!skipBGeste) shiftRotate(avr, 3, etape == 0 ? 1 : 0);
+            const uint32_t twiGeste = g_twi_bytes - marque;
+            const uint32_t twiRetour0 = g_twi_bytes;
+            pressFor(avr, (double)LONG_PRESS_MS);
+            const uint32_t twiRetour = g_twi_bytes - twiRetour0;
+            run_for(avr, 2000.0);
+            const uint32_t depart = g_ticks;
+            run_for(avr, etape == 0 ? 20000.0 : 18000.0);
+            printf("rB_r13_%s onglet %d creneaux %d twi %u %u periode",
+                   etape == 0 ? "change  " : "restaure", selectedTab(),
+                   tabBandSlotsWithInk(), twiGeste, twiRetour);
+            uint32_t minOnsets = 0xFFFFFFFFu;
+            for (int o = 0; o < OUT_COUNT; ++o) {
+                uint32_t onsets = 0;
+                const uint32_t p = periodOverOnsets(&g_out[o], depart, g_ticks,
+                                                    pasActifs, &onsets);
+                printf(" %u", p);
+                if (onsets < minOnsets) minOnsets = onsets;
+            }
+            printf(" onsets %u\n", minOnsets);
+            if (etape == 0) {
+                const int c2 = selectedTab();
+                const int p2 = ((cibleR13 - c2) % 8 + 8) % 8;
+                if (p2 > 0) rotate(avr, p2, 1);
+                pressFor(avr, (double)PRESS_MS);
+                rotate(avr, 1, 1);
+            }
+        }
+        return 0;
+    }
+
+    if (recettesA) {
+        static uint8_t vu[PATTERN_COUNT * PATTERN_BYTES];
+        uint32_t premier = 0, ecarts = 0;
+        uint32_t marque = 0;
+
+        const int creneauxAvant = tabBandSlotsWithInk();
+        marque = g_twi_bytes;
+        if (!skipEdit) {
+            pressFor(avr, (double)PRESS_MS);
+            rotate(avr, 4, 1);
+            pressFor(avr, (double)PRESS_MS);
+        }
+        printf("rA_edit            twi %u creneaux %d %d\n",
+               g_twi_bytes - marque, creneauxAvant, tabBandSlotsWithInk());
+
+        read_bank(avr, vu);
+        ecarts = bankDiffCount(vu, expectedBytes, &premier);
+        printf("rA_base            masque %04x octet6 %02x octet8 %02x ecarts %u\n",
+               low_mask_of(&vu[0]), vu[STEP_BYTES + 2], vu[STEP_BYTES + 4], ecarts);
+
+        rotate(avr, 3, 1);
+        marque = g_twi_bytes;
+        pressFor(avr, (double)PRESS_MS);
+        read_bank(avr, vu);
+        ecarts = bankDiffCount(vu, expectedBytes, &premier);
+        printf("rA_r8_pose         masque %04x ecarts %u premier %u twi %u\n",
+               low_mask_of(&vu[0]), ecarts, premier, g_twi_bytes - marque);
+        marque = g_twi_bytes;
+        pressFor(avr, (double)PRESS_MS);
+        read_bank(avr, vu);
+        ecarts = bankDiffCount(vu, expectedBytes, &premier);
+        printf("rA_r8_retour       masque %04x ecarts %u twi %u\n",
+               low_mask_of(&vu[0]), ecarts, g_twi_bytes - marque);
+
+        rotate(avr, 2, 1);
+        marque = g_twi_bytes;
+        shiftRotate(avr, 4, 1);
+        read_bank(avr, vu);
+        ecarts = bankDiffCount(vu, expectedBytes, &premier);
+        printf("rA_r9_pose         octet6 %02x ecarts %u premier %u twi %u\n",
+               vu[STEP_BYTES + 2], ecarts, premier, g_twi_bytes - marque);
+        marque = g_twi_bytes;
+        shiftRotate(avr, 4, 0);
+        read_bank(avr, vu);
+        ecarts = bankDiffCount(vu, expectedBytes, &premier);
+        printf("rA_r9_retour       octet6 %02x ecarts %u twi %u\n",
+               vu[STEP_BYTES + 2], ecarts, g_twi_bytes - marque);
+
+        const int versR10 = (r10Step - 5 + 24) % 24;
+        rotate(avr, versR10 == 0 ? 24 : versR10, 1);
+        marque = g_twi_bytes;
+        shiftRotate(avr, 4, 1);
+        read_bank(avr, vu);
+        ecarts = bankDiffCount(vu, expectedBytes, &premier);
+        printf("rA_r10             cible %d rotations %d octet6 %02x ecarts %u twi %u\n",
+               r10Step, versR10 == 0 ? 24 : versR10, vu[STEP_BYTES + 2], ecarts,
+               g_twi_bytes - marque);
+
+        rotate(avr, (9 - r10Step + 24) % 24, 1);
+        marque = g_twi_bytes;
+        shiftRotate(avr, 5, 1);
+        read_bank(avr, vu);
+        ecarts = bankDiffCount(vu, expectedBytes, &premier);
+        printf("rA_r12_pose        octet8 %02x ecarts %u premier %u twi %u\n",
+               vu[STEP_BYTES + 4], ecarts, premier, g_twi_bytes - marque);
+        marque = g_twi_bytes;
+        shiftRotate(avr, 5, 0);
+        read_bank(avr, vu);
+        ecarts = bankDiffCount(vu, expectedBytes, &premier);
+        printf("rA_r12_retour      octet8 %02x ecarts %u twi %u\n",
+               vu[STEP_BYTES + 4], ecarts, g_twi_bytes - marque);
+        return 0;
+    }
+
+    if (rig) {
+        playPress(avr);
+        run_for(avr, 1000.0);
+
+        uint32_t kept = 0, gaps = 0, dropped = 0;
+        const uint32_t tStart = g_ticks;
+        run_for(avr, 16000.0);
+        uint32_t g = gapGcdInWindow(&g_out[0], tStart, g_ticks, &kept, &gaps, &dropped);
+        printf("rig_pas_initial    %u pgcd, %u retenues, %u distances, %u isolees rejetees\n",
+               g, kept, gaps, dropped);
+
+        pressFor(avr, (double)PRESS_MS);
+        rotate(avr, 1, 1);
+        rotate(avr, 1, 1);
+
+        static const int marche[3] = { 7, 1, 1 };
+        int cumule = 0;
+        for (int etape = 0; etape < 3; ++etape) {
+            const uint32_t twiBefore = g_twi_bytes;
+            shiftRotate(avr, marche[etape], 0);
+            cumule += marche[etape];
+            run_for(avr, 2000.0);
+            const uint32_t from = g_ticks;
+            run_for(avr, 2000.0);
+            g = gapGcdInWindow(&g_out[0], from, g_ticks, &kept, &gaps, &dropped);
+            printf("rig_marche         %d crans, %u pgcd, %u retenues, %u distances,"
+                   " %u isolees rejetees, twi %u\n",
+                   cumule, g, kept, gaps, dropped, g_twi_bytes - twiBefore);
+        }
+        return 0;
     }
 
     if (temporal) {

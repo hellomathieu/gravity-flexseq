@@ -19,6 +19,22 @@ production simule, et verifie leur effet.
   SUPPRESSED_SYMBOL=<regex>      vise un autre symbole que suppressedLong
   SUPPRESSED_ADDR_FORCE=<addr>   force l'adresse du compteur
   SUPPRESSED_BIAS=<n>            biaise la lecture d'apres du compteur
+  IMAGE_MUTATE=<offset>          altere un octet de l'image donnee a la machine,
+                                 l'attendu gardant l'image d'origine
+  RIG_STEPS=0,5,9                steps actifs du rig de recette
+  RIG_SUBDIV=1                   subdiv du rig de recette
+  EXPECT_R8_MASK / EXPECT_R9_NIBBLE / EXPECT_R12_NIBBLE
+                                 deplacent l'attente d'une recette A
+  R10_STEP=<n>                   vise un autre step que le 4 pour R10
+  EXPECT_R1_PAS / EXPECT_R1_CHANNEL / EXPECT_R13_PERIODE
+                                 deplacent l'attente d'une recette B
+  SKIP_B_GESTE=1                 n'injecte pas les salves des recettes B ni de R2
+  EXPECT_R2_PAS / EXPECT_R2_LENGTH / EXPECT_R2_CHANNEL
+                                 deplacent l'attente de R2
+  R2_ROTATIONS=<n>               nombre de rotations avant le cran de l'etape SUBDIV
+  EXPECT_R11_NIBBLE_1 / EXPECT_R11_NIBBLE_TRIOLET / EXPECT_R11_CADENCE
+                                 deplacent l'attente de R11
+  R11_CRANS_SUBDIV=<n>           crans pour atteindre x24 depuis /1 (defaut 8)
   SKIP_SHIFT=1                   n'injecte pas le geste SHIFT (classe 1)
   SKIP_EDIT=1                    n'entre pas dans EDIT (classe 2)
   EXPECT_RATCHET_APRES=<hh>      change l'attente du ratchet (classe 3)
@@ -90,6 +106,43 @@ done
 
 CRAN_EXPECTED=6
 TAB_SLOTS=8
+TIMING_STEPS="0,3,4,9,15"
+TIMING_SUBDIV="-4"
+TIMING_MASK="8219"
+RIG_STEPS="${RIG_STEPS:-0,5,9}"
+RIG_SUBDIV="${RIG_SUBDIV:-1}"
+RIG_MASK_ATTENDU="0221"
+RIG_SUBDIV_ATTENDU="1"
+RIG_GAPS_MIN=6
+RIG_KEPT_MIN=2
+SALVES_MIN_A2=5
+B_STEPS_ACTIFS_ATTENDU=3
+B_PAS_BASE=96
+B_PAS_CHANGE=48
+B_DIST_MIN=6
+B_RET_MIN=2
+R13_ONGLET=3
+R13_PERIODE_BASE=1536
+R13_PERIODE_CHANGE_ATTENDUE=1824
+R2_ONGLET=4
+R2_PAS_BASE=96
+R2_PERIODE_BASE=1536
+R2_PAS_SUBDIV_ATTENDU=48
+R2_LENGTH_BASE=16
+R2_LENGTH_APRES_ATTENDUE=17
+R11_ONGLET=4
+R11_CADENCE_BASE=96
+R11_CADENCE_X24_ATTENDUE=4
+R11_NIBBLE_1_ATTENDU="02"
+R11_NIBBLE_TRIOLET_ATTENDU="07"
+R11_NIBBLE_ZERO="00"
+R11_OFFSET_ATTENDU=6
+R11_CODES_REFUSES="03 04 06"
+TAB_COUNT_ECRAN=8
+R8_MASK_ATTENDU="0229"
+R9_OCTET_ATTENDU="60"
+R12_OCTET_ATTENDU="70"
+RIG_MASQUE_BASE="0221"
 SALVES_MIN_A=5
 SALVES_MIN_B=2
 
@@ -104,8 +157,7 @@ BIN="$WORK/gesture_probe"
 if c++ -O2 -Wall -std=gnu++11 -I"$PREFIX/include/simavr" -I"$PREFIX/include" \
      -I"$ROOT/include" \
      "$ROOT/tools/simavr-ssd1306/gesture_probe.cpp" \
-     "$ROOT/src/domain/FactoryPatterns.cpp" "$ROOT/src/domain/Pattern.cpp" \
-     "$ROOT/src/domain/PatternBank.cpp" -o "$BIN" \
+     "$ROOT"/src/domain/*.cpp -o "$BIN" \
      -L"$PREFIX/lib" -lsimavrparts -lsimavr -lelf > "$LOG" 2>&1; then
   ok "harnais compile" "$PREFIX"
 else
@@ -127,10 +179,16 @@ if c++ -std=gnu++11 -I"$ROOT/include" -o "$GEN" "$ROOT/tools/eeprom-image.cpp" \
 else
   printf '\n'; cat "$LOG"; die "compilation du generateur en echec"
 fi
-if ! "$GEN" --mode seq --steps 0,3,4,9,15 --subdiv -4 --tempo 138 > "$WORK/image.bin" 2>"$LOG"; then
-  cat "$LOG"; die "generation de l'image EEPROM en echec"
+if ! "$GEN" --mode seq --steps "$TIMING_STEPS" --subdiv "$TIMING_SUBDIV" --tempo 138 \
+     > "$WORK/image.bin" 2>"$LOG"; then
+  cat "$LOG"; die "generation de l'image de mesure temporelle en echec"
 fi
-ok "image EEPROM" "SEQ, steps 0,3,4,9,15, subdiv x4, 138 BPM"
+ok "image de mesure" "SEQ, steps $TIMING_STEPS, subdiv $TIMING_SUBDIV, 138 BPM — phases P2.1 a P2.5"
+if ! "$GEN" --mode seq --steps "$RIG_STEPS" --subdiv "$RIG_SUBDIV" --tempo 138 \
+     > "$WORK/rig.bin" 2>"$LOG"; then
+  cat "$LOG"; die "generation du rig de recette en echec"
+fi
+ok "image de rig" "SEQ, steps $RIG_STEPS, subdiv $RIG_SUBDIV, 138 BPM — rig de la couche 1"
 
 ELF="$ROOT/.pio/build/nanoatmega328/firmware.elf"
 BANK_ADDR="$("$NM" "$ELF" | grep -E ' [bB] .*patternBank' | head -1 | awk '{print "0x"$1}')"
@@ -209,8 +267,7 @@ if [ -n "${SELFTEST:-}" ]; then
   build_mutant() {
     c++ -O2 -w -std=gnu++11 -I"$PREFIX/include/simavr" -I"$PREFIX/include" \
       -I"$ROOT/tools/simavr-ssd1306" -I"$ROOT/include" "$1" \
-      "$ROOT/src/domain/FactoryPatterns.cpp" "$ROOT/src/domain/Pattern.cpp" \
-      "$ROOT/src/domain/PatternBank.cpp" -o "$2" \
+      "$ROOT"/src/domain/*.cpp -o "$2" \
       -L"$PREFIX/lib" -lsimavrparts -lsimavr -lelf
   }
 
@@ -393,6 +450,110 @@ MUTANT3
     && ok "c. la precondition est nommee" "entree dans EDIT non etablie" \
     || selfbad "c. la precondition est nommee" "le critere d entree dans EDIT n est pas INVALID"
 
+  progress "P2.6.0 : image alteree cote machine"
+  if env -u SELFTEST IMAGE_MUTATE=1 "$0" > "$WORK/img.log" 2>&1; then
+    selfbad "P2.6.0 controle de l image" "la sonde rend 0 alors que l image injectee ne correspond pas a l attendu"
+  else
+    IMG_RC=$?
+    if [ "$IMG_RC" = "3" ] && grep -q '^controle_usine     0' "$WORK/img.log"; then
+      ok "P2.6.0 controle de l image" "un octet altere cote machine rend le controle rouge, sortie 3, aucun verdict firmware"
+    else
+      selfbad "P2.6.0 controle de l image" "sortie $IMG_RC au lieu de 3"
+    fi
+  fi
+
+  progress "P2.6.1 : motif temporel injecte dans la phase rig"
+  expect_verdict "P2.6.1 rig : mauvais steps" INVALID 5 0 "+" RIG_STEPS=0,3,4,9,15
+  grep -q '⛔ image du rig' "$WORK/class.log" \
+    && ok "P2.6.1 rig : identite" "le masque 8219 est refuse comme rig de recette" \
+    || selfbad "P2.6.1 rig : identite" "un masque etranger est passe pour le rig"
+
+  progress "P2.6.1 : subdiv x4 au lieu de /1"
+  expect_verdict "P2.6.1 rig : mauvais subdiv" INVALID 5 0 "+" RIG_SUBDIV=-4
+  if grep -qE '^ *rig_marche +7 crans, 4 pgcd' "$WORK/class.log" \
+     && grep -q '⛔ rig : parcours de R11' "$WORK/class.log"; then
+    ok "P2.6.1 rig : plafonnement" "a x4 le 7e cran lit deja 4 ticks — parcours plafonne, et non attribuable"
+  else
+    selfbad "P2.6.1 rig : plafonnement" "le plafonnement n est pas visible, ou le parcours a ete attribue"
+  fi
+
+  progress "P2.6.2 : attente de R8 deplacee"
+  expect_verdict "P2.6.2 R8 -> FAIL" FAIL 1 1 "*" EXPECT_R8_MASK=0231
+  progress "P2.6.2 : attente de R9 deplacee"
+  expect_verdict "P2.6.2 R9 -> FAIL" FAIL 1 1 "*" EXPECT_R9_NIBBLE=05
+  progress "P2.6.2 : attente de R12 deplacee"
+  expect_verdict "P2.6.2 R12 -> FAIL" FAIL 1 1 "*" EXPECT_R12_NIBBLE=06
+
+  progress "P2.6.2 : R10 vise un step ACTIF"
+  expect_verdict "P2.6.2 R10 -> FAIL" FAIL 1 1 "+" R10_STEP=5
+  if grep -q '❌ R10 : refus sur step inactif' "$WORK/class.log" \
+     && grep -q '⛔ R12 : triolet sur step 9' "$WORK/class.log"; then
+    ok "P2.6.2 R10 n est pas un faux vert" "un ratchet ecrit sur un step actif rend le critere rouge, et R12 devient non decidable"
+  else
+    selfbad "P2.6.2 R10 n est pas un faux vert" "le critere « rien ne change » n a pas rougi, ou R12 a herite d un defaut"
+  fi
+
+  progress "P2.6.2 : precondition EDIT absente"
+  expect_verdict "P2.6.2 EDIT absent -> INVALID" INVALID 5 0 "+" SKIP_EDIT=1
+  if [ "$(grep -cE '❌ (R8|R9|R10|R12)' "$WORK/class.log")" = "0" ] \
+     && [ "$(grep -cE '⛔ (R8|R9|R10|R12)' "$WORK/class.log")" -ge 7 ]; then
+    ok "P2.6.2 recettes A non attribuables" "les 7 criteres de recette sont INVALID, aucun defaut firmware"
+  else
+    selfbad "P2.6.2 recettes A non attribuables" "une recette A a produit un defaut firmware sans precondition"
+  fi
+
+  progress "P2.6.3 : attente du pas de R1 deplacee"
+  expect_verdict "P2.6.3 R1 pas -> FAIL" FAIL 1 1 "*" EXPECT_R1_PAS=60
+  progress "P2.6.3 : R1 attend l effet sur un autre channel"
+  expect_verdict "P2.6.3 R1 channel -> FAIL" FAIL 1 2 "*" EXPECT_R1_CHANNEL=2
+  if grep -q '❌ R1 : non-contagion' "$WORK/class.log"; then
+    ok "P2.6.3 non-contagion sait rougir" "attendre l effet sur un autre channel fait rougir la sortie visee ET la non-contagion"
+  else
+    selfbad "P2.6.3 non-contagion sait rougir" "le critere de non-contagion n a pas rougi"
+  fi
+  progress "P2.6.3 : geste B non injecte"
+  expect_verdict "P2.6.3 geste B absent -> INVALID" INVALID 5 0 "+" SKIP_B_GESTE=1
+  progress "P2.6.3 : attente de periode de R13 deplacee"
+  expect_verdict "P2.6.3 R13 -> FAIL" FAIL 1 1 "*" EXPECT_R13_PERIODE=1920
+
+  progress "P2.6.4 : attente du pas de R2 deplacee"
+  expect_verdict "P2.6.4 R2 pas -> FAIL" FAIL 1 1 "*" EXPECT_R2_PAS=60
+  progress "P2.6.4 : R2 pretend que LENGTH change"
+  expect_verdict "P2.6.4 R2 length -> FAIL" FAIL 1 1 "*" EXPECT_R2_LENGTH=17
+  progress "P2.6.4 : R2 attend l effet sur un autre channel"
+  expect_verdict "P2.6.4 R2 channel -> FAIL" FAIL 1 3 "*" EXPECT_R2_CHANNEL=2
+  if grep -q '❌ R2 : non-contagion' "$WORK/class.log"; then
+    ok "P2.6.4 R2 non-contagion sait rougir" "le critere nomme la sortie qui a change"
+  else
+    selfbad "P2.6.4 R2 non-contagion sait rougir" "le critere de non-contagion n a pas rougi"
+  fi
+  progress "P2.6.4 : une seule rotation avant le cran de SUBDIV"
+  expect_verdict "P2.6.4 R2 une rotation -> FAIL" FAIL 1 2 "*" R2_ROTATIONS=1
+  if grep -q '❌ R2 : LENGTH inchangee sous SUBDIV' "$WORK/class.log"; then
+    ok "P2.6.4 absence d effet sait rougir" "avec une seule rotation le cran touche LENGTH, qui tombe a 15 : le critere n est pas un faux vert"
+  else
+    selfbad "P2.6.4 absence d effet sait rougir" "le critere « LENGTH inchangee » est reste vert alors que LENGTH a change"
+  fi
+  progress "P2.6.4 : gestes de R2 non injectes"
+  expect_verdict "P2.6.4 R2 geste absent -> INVALID" INVALID 5 0 "+" SKIP_B_GESTE=1
+
+  progress "P2.6.5 : attente du premier nibble deplacee"
+  expect_verdict "P2.6.5 R11 nibble1 -> FAIL" FAIL 1 1 "*" EXPECT_R11_NIBBLE_1=03
+  progress "P2.6.5 : attente du triolet deplacee"
+  expect_verdict "P2.6.5 R11 triolet -> FAIL" FAIL 1 1 "*" EXPECT_R11_NIBBLE_TRIOLET=06
+  progress "P2.6.5 : attente de cadence deplacee"
+  expect_verdict "P2.6.5 R11 cadence -> INVALID" INVALID 5 0 "+" EXPECT_R11_CADENCE=6
+  progress "P2.6.5 : gestes de R11 non injectes"
+  expect_verdict "P2.6.5 R11 geste absent -> INVALID" INVALID 5 0 "+" SKIP_B_GESTE=1
+  progress "P2.6.5 : rester a /1 au lieu de x24"
+  expect_verdict "P2.6.5 R11 sans x24 -> FAIL" FAIL 1 3 "+" R11_CRANS_SUBDIV=0
+  if grep -q '❌ R11 : les codes refuses n apparaissent jamais' "$WORK/class.log" \
+     && grep -q '⛔ R11 : cadence x24' "$WORK/class.log"; then
+    ok "P2.6.5 le critere des codes refuses sait rougir" "a /1 la marche donne 02 03 04 : le critere nomme les codes ecrits, et la cadence reste non decidable"
+  else
+    selfbad "P2.6.5 le critere des codes refuses sait rougir" "le critere est reste vert alors qu un code refuse a x24 a ete ecrit"
+  fi
+
   progress "d : classe 1 avec effet aval faux -> INVALID"
   expect_verdict "d. classe 1 -> INVALID" INVALID 5 0 "+" SKIP_SHIFT=1
   if grep -q '⛔ triolet pose' "$WORK/class.log" && ! grep -q '❌ triolet pose' "$WORK/class.log"; then
@@ -419,9 +580,10 @@ MUTANT3
 fi
 
 progress "demarrage simule ($BOOT_MS ms)"
-if ! "$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$BANK_ADDR" "$BOOT_MS" \
-     "" 384 structure "$SUPPRESSED_ADDR" > "$LOG" 2>&1; then
-  RC=$?
+"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$BANK_ADDR" "$BOOT_MS" \
+     "" 384 structure "$SUPPRESSED_ADDR" > "$LOG" 2>&1
+RC=$?
+if [ "$RC" != "0" ]; then
   cat "$LOG"
   case "$RC" in
     3) die "INVALID (classe 2) : controle de la banque en echec, aucun verdict sur le firmware" 3 ;;
@@ -497,7 +659,7 @@ if [ "$CRAN_LINES" -eq "$CRAN_EXPECTED" ]; then
 fi
 
 printf '\n%s--- PRECONDITIONS DE L INSTRUMENT ---%s\n' "$C_B" "$C_0"
-grep -E '^bank_inchangee|^controle_usine|^entree_edit' "$LOG" | sed 's/^/  /'
+grep -E '^bank_inchangee|^controle_source|^controle_usine|^entree_edit' "$LOG" | sed 's/^/  /'
 printf '\n'
 
 BANK_OK="$(grep -E '^bank_inchangee ' "$LOG" | awk '{print $2}')"
@@ -510,8 +672,12 @@ else
 fi
 
 CTRL="$(grep -E '^controle_usine ' "$LOG" | awk '{print $2}')"
-if [ "$CTRL" = "1" ]; then
-  ok "controle d usine" "la banque lue en RAM est IDENTIQUE, octet pour octet, a celle que le domaine construit"
+CTRL_SRC="$(grep -E '^controle_source ' "$LOG" | awk '{print $2}')"
+if [ "$CTRL_SRC" != "usine" ]; then
+  inval "controle d usine" "attendu construit depuis '${CTRL_SRC:-rien}' alors qu aucune image n est prechargee"
+  W_FACTORY=0
+elif [ "$CTRL" = "1" ]; then
+  ok "controle d usine" "attendu = $CTRL_SRC ; la banque lue en RAM est IDENTIQUE, octet pour octet, a celle que le domaine construit"
   W_FACTORY=1
 else
   inval "controle d usine" "classe 2 : l instrument est faux, aucun verdict sur le firmware"
@@ -794,9 +960,10 @@ fi
 
 LOG2="$WORK/log2"
 progress "phase temporelle (P2.5)"
-if ! "$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$BANK_ADDR" "$BOOT_MS" \
-     "$WORK/image.bin" 384 temporal "$SUPPRESSED_ADDR" > "$LOG2" 2>&1; then
-  RC=$?
+"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$BANK_ADDR" "$BOOT_MS" \
+     "$WORK/image.bin" 384 temporal "$SUPPRESSED_ADDR" > "$LOG2" 2>&1
+RC=$?
+if [ "$RC" != "0" ]; then
   cat "$LOG2"
   case "$RC" in
     3) die "INVALID (classe 2) : controle de la banque en echec, aucun verdict sur le firmware" 3 ;;
@@ -841,6 +1008,21 @@ else
   W_SALVES_B=0
 fi
 
+CTRL_B="$(grep -E '^controle_usine ' "$LOG2" | awk '{print $2}')"
+CTRL_B_SRC="$(grep -E '^controle_source ' "$LOG2" | awk '{print $2}')"
+IMG_B_MASK="$(grep -E '^image_lue ' "$LOG2" | awk '{print $3}')"
+IMG_B_SUBDIV="$(grep -E '^image_lue ' "$LOG2" | awk '{print $5}')"
+if [ "$IMG_B_MASK" != "$TIMING_MASK" ] || [ "$IMG_B_SUBDIV" != "$TIMING_SUBDIV" ]; then
+  inval "image de la phase B" "masque ${IMG_B_MASK:-rien} subdiv ${IMG_B_SUBDIV:-rien} : ce n est pas l image de mesure temporelle ($TIMING_MASK / $TIMING_SUBDIV)"
+  W_B_IMAGE=0
+elif [ "$CTRL_B_SRC" = "image" ] && [ "$CTRL_B" = "1" ]; then
+  ok "image de la phase B" "masque $IMG_B_MASK subdiv $IMG_B_SUBDIV : image de MESURE TEMPORELLE, banque identique a l attendu"
+  W_B_IMAGE=1
+else
+  inval "image de la phase B" "attendu = ${CTRL_B_SRC:-rien}, controle = ${CTRL_B:-rien} : l etat injecte n est pas verifie"
+  W_B_IMAGE=0
+fi
+
 if [ "$P_AV1" = "384" ] && [ "$G_AV1" = "24" ]; then
   ok "etat initial mesure" "OUT1 : periode 384 ticks (16 steps), step 24 ticks (x4)"
   W_B_INIT=1
@@ -856,7 +1038,7 @@ else
   W_B_TWI=0
 fi
 
-W_B=$(( W_B_INIT * W_B_TWI * W_SALVES_B * W_FACTORY ))
+W_B=$(( W_B_INIT * W_B_TWI * W_SALVES_B * W_FACTORY * W_B_IMAGE ))
 if [ "$W_B" != "1" ]; then
   inval "LENGTH 16 -> 19" "temoins amont invalides : l effet n est pas attribuable au firmware"
   inval "non-contagion" "temoins amont invalides : l effet n est pas attribuable au firmware"
@@ -895,6 +1077,731 @@ else
     bad "report ADR 0004" "un step de 32 ticks des le tick $SUB_FIRST32, avant la frontiere $SUB_FRONT"
   fi
 fi
+LOG3="$WORK/log3"
+progress "rig de la couche 1 (P2.6.1)"
+"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$BANK_ADDR" "$BOOT_MS" \
+     "$WORK/rig.bin" 384 rig "$SUPPRESSED_ADDR" > "$LOG3" 2>&1
+RC=$?
+if [ "$RC" != "0" ]; then
+  cat "$LOG3"
+  case "$RC" in
+    3) die "INVALID (classe 2) : controle de la banque en echec sur le rig, aucun verdict sur le firmware" 3 ;;
+    4) die "INVALID (classe 2) : salve de SHIFT refusee avant injection, le geste n etait pas valide" 4 ;;
+    *) die "la phase rig s'est terminee anormalement (code $RC)" ;;
+  esac
+fi
+
+printf '\n%s--- RIG DE LA COUCHE 1 (P2.6.1) ---%s\n' "$C_B" "$C_0"
+grep -E '^controle_source|^image_lue|^controle_usine|^rig_' "$LOG3" | sed 's/^/  /'
+printf '\n'
+
+RIG_SRC="$(grep -E '^controle_source ' "$LOG3" | awk '{print $2}')"
+RIG_CTRL="$(grep -E '^controle_usine ' "$LOG3" | awk '{print $2}')"
+RIG_MASK_LU="$(grep -E '^image_lue ' "$LOG3" | awk '{print $3}')"
+RIG_SUBDIV_LU="$(grep -E '^image_lue ' "$LOG3" | awk '{print $5}')"
+RIG_LEN_LU="$(grep -E '^image_lue ' "$LOG3" | awk '{print $7}')"
+RIG_MODE_LU="$(grep -E '^image_lue ' "$LOG3" | awk '{print $9}')"
+
+if [ "$RIG_MASK_LU" != "$RIG_MASK_ATTENDU" ] || [ "$RIG_SUBDIV_LU" != "$RIG_SUBDIV_ATTENDU" ]; then
+  inval "image du rig" "masque ${RIG_MASK_LU:-rien} subdiv ${RIG_SUBDIV_LU:-rien} : ce n est pas le rig de la couche 1 ($RIG_MASK_ATTENDU / $RIG_SUBDIV_ATTENDU)"
+  W_RIG=0
+elif [ "$RIG_SRC" = "image" ] && [ "$RIG_CTRL" = "1" ]; then
+  ok "image du rig" "masque $RIG_MASK_LU (steps $RIG_STEPS), subdiv $RIG_SUBDIV_LU, length $RIG_LEN_LU, mode $RIG_MODE_LU : RIG DE RECETTE"
+  W_RIG=1
+else
+  inval "image du rig" "attendu = ${RIG_SRC:-rien}, controle = ${RIG_CTRL:-rien}"
+  W_RIG=0
+fi
+
+rig_field() { grep -E "^rig_marche .* $1 crans," "$LOG3" | head -1 | awk "{print \$$2}"; }
+PAS0="$(grep -E '^rig_pas_initial ' "$LOG3" | awk '{print $2}')"
+GAPS0="$(grep -E '^rig_pas_initial ' "$LOG3" | awk '{print $6}')"
+KEPT0="$(grep -E '^rig_pas_initial ' "$LOG3" | awk '{print $4}')"
+
+if [ "$W_RIG" != "1" ]; then
+  inval "rig : SUBDIV /1" "image du rig invalide : le pas mesure n est pas attribuable"
+elif [ "${GAPS0:-0}" -lt "$RIG_GAPS_MIN" ] 2>/dev/null || [ "${KEPT0:-0}" -lt "$RIG_KEPT_MIN" ] 2>/dev/null; then
+  inval "rig : SUBDIV /1" "${GAPS0:-0} distances et ${KEPT0:-0} retenues, minimum $RIG_GAPS_MIN / $RIG_KEPT_MIN : rien a conclure"
+  W_RIG=0
+elif [ "$PAS0" = "96" ]; then
+  ok "rig : SUBDIV /1" "pas de $PAS0 ticks mesure sur les broches, $GAPS0 distances, $KEPT0 retenues"
+else
+  bad "rig : SUBDIV /1" "pas de ${PAS0:-rien} ticks au lieu de 96"
+fi
+
+RIG_WALK_OK=1
+RIG_WALK_DETAIL=""
+for pair in "7:6" "8:4" "9:4"; do
+  crans="${pair%%:*}"; attendu="${pair##*:}"
+  ligne="$(grep -E "^rig_marche +$crans crans," "$LOG3" | head -1)"
+  mesure="$(printf '%s' "$ligne" | awk '{print $4}')"
+  twi="$(printf '%s' "$ligne" | awk '{print $NF}')"
+  RIG_WALK_DETAIL="$RIG_WALK_DETAIL ${crans}crans=${mesure:-rien}"
+  [ "$mesure" = "$attendu" ] || RIG_WALK_OK=0
+  [ "${twi:-0}" -gt 0 ] 2>/dev/null || RIG_WALK_OK=0
+done
+if [ "$W_RIG" != "1" ]; then
+  inval "rig : parcours de R11" "image du rig invalide : le parcours n est pas attribuable"
+elif [ "$RIG_WALK_OK" = "1" ]; then
+  ok "rig : parcours de R11" "96 ->$RIG_WALK_DETAIL ticks : index 0 atteint au 8e cran, le 9e ne bouge plus"
+else
+  bad "rig : parcours de R11" "parcours$RIG_WALK_DETAIL (attendu 7crans=6 8crans=4 9crans=4)"
+fi
+
+LOG4="$WORK/log4"
+progress "recettes de verification A (P2.6.2)"
+"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$BANK_ADDR" "$BOOT_MS" \
+     "$WORK/rig.bin" 384 recettesA "$SUPPRESSED_ADDR" > "$LOG4" 2>&1
+RC=$?
+if [ "$RC" != "0" ]; then
+  cat "$LOG4"
+  case "$RC" in
+    3) die "INVALID (classe 2) : controle de la banque en echec sur les recettes A, aucun verdict sur le firmware" 3 ;;
+    4) die "INVALID (classe 2) : salve de SHIFT refusee avant injection, le geste n etait pas valide" 4 ;;
+    *) die "la phase des recettes A s'est terminee anormalement (code $RC)" ;;
+  esac
+fi
+
+printf '\n%s--- RECETTES DE VERIFICATION A : R8 R9 R10 R12 (P2.6.2) ---%s\n' "$C_B" "$C_0"
+grep -E '^controle_source|^image_lue|^controle_usine|^rA_' "$LOG4" | sed 's/^/  /'
+printf '\n'
+
+a2() { grep -E "^$1 " "$LOG4" | head -1 | awk "{print \$$2}"; }
+
+A2_SRC="$(a2 controle_source 2)"
+A2_CTRL="$(a2 controle_usine 2)"
+A2_MASK_IMG="$(a2 image_lue 3)"
+A2_SUBDIV_IMG="$(a2 image_lue 5)"
+if [ "$A2_MASK_IMG" != "$RIG_MASK_ATTENDU" ] || [ "$A2_SUBDIV_IMG" != "$RIG_SUBDIV_ATTENDU" ]; then
+  inval "A : image du rig" "masque ${A2_MASK_IMG:-rien} subdiv ${A2_SUBDIV_IMG:-rien} : ce n est pas le rig de la couche 1"
+  W_A2_IMG=0
+elif [ "$A2_SRC" = "image" ] && [ "$A2_CTRL" = "1" ]; then
+  ok "A : image du rig" "masque $A2_MASK_IMG subdiv $A2_SUBDIV_IMG, banque identique a l attendu"
+  W_A2_IMG=1
+else
+  inval "A : image du rig" "attendu = ${A2_SRC:-rien}, controle = ${A2_CTRL:-rien}"
+  W_A2_IMG=0
+fi
+
+A2_EDIT_TWI="$(a2 rA_edit 3)"
+A2_EDIT_AV="$(a2 rA_edit 5)"
+A2_EDIT_AP="$(a2 rA_edit 6)"
+if [ -z "$A2_EDIT_TWI" ]; then
+  inval "A : entree dans EDIT" "aucune mesure de navigation publiee"
+  W_A2_EDIT=0
+elif [ "${A2_EDIT_TWI:-0}" -eq 0 ] 2>/dev/null; then
+  inval "A : entree dans EDIT" "aucun trafic : le geste de navigation n a pas ete injecte"
+  W_A2_EDIT=0
+elif [ "${A2_EDIT_AV:-0}" != "$TAB_SLOTS" ] || [ "${A2_EDIT_AP:-$TAB_SLOTS}" -ge "$TAB_SLOTS" ] 2>/dev/null; then
+  inval "A : entree dans EDIT" "creneaux encres ${A2_EDIT_AV:-?} -> ${A2_EDIT_AP:-?} : EDIT n est pas etabli"
+  W_A2_EDIT=0
+else
+  ok "A : entree dans EDIT" "$A2_EDIT_TWI octets, creneaux encres $A2_EDIT_AV -> $A2_EDIT_AP"
+  W_A2_EDIT=1
+fi
+
+A2_BASE_MASK="$(a2 rA_base 3)"
+A2_BASE_O6="$(a2 rA_base 5)"
+A2_BASE_O8="$(a2 rA_base 7)"
+A2_BASE_ECARTS="$(a2 rA_base 9)"
+if [ -z "$A2_BASE_MASK" ]; then
+  inval "A : etat initial" "aucune lecture de banque publiee"
+  W_A2_BASE=0
+elif [ "$A2_BASE_MASK" = "$RIG_MASQUE_BASE" ] && [ "$A2_BASE_O6" = "00" ] \
+     && [ "$A2_BASE_O8" = "00" ] && [ "$A2_BASE_ECARTS" = "0" ]; then
+  ok "A : etat initial" "masque $A2_BASE_MASK, ratchets a 00, 0 ecart avec l attendu du rig"
+  W_A2_BASE=1
+else
+  inval "A : etat initial" "masque ${A2_BASE_MASK:-rien}, octets ${A2_BASE_O6:-?}/${A2_BASE_O8:-?}, ${A2_BASE_ECARTS:-?} ecarts"
+  W_A2_BASE=0
+fi
+
+OVER_A2=0; MAX_A2=0; NSALVES_A2=0
+while read -r CRANS HOLD; do
+  [ -n "$CRANS" ] || continue
+  NSALVES_A2=$((NSALVES_A2 + 1))
+  [ "${CRANS:-0}" -gt "${CEIL_DETENTS:-0}" ] 2>/dev/null && OVER_A2=1
+  OVER_A2=$(awk -v h="$HOLD" -v o="$OVER_A2" 'BEGIN { print (h >= 750) ? 1 : o }')
+  MAX_A2=$(awk -v h="$HOLD" -v m="$MAX_A2" 'BEGIN { print (h > m) ? h : m }')
+done <<EOF
+$(grep -E '^shift_salve ' "$LOG4" | awk '{print $2, $5}')
+EOF
+if [ "$NSALVES_A2" -lt "$SALVES_MIN_A2" ]; then
+  inval "A : salves mesurees" "$NSALVES_A2 salves, minimum $SALVES_MIN_A2 : rien a conclure"
+  W_A2_SALVES=0
+elif [ "$OVER_A2" = "0" ]; then
+  ok "A : salves mesurees" "$NSALVES_A2 salves, maintien maximal $MAX_A2 ms, sous le seuil de 750 ms"
+  W_A2_SALVES=1
+else
+  inval "A : salves mesurees" "maintien maximal $MAX_A2 ms ou salve hors plafond : injection invalide"
+  W_A2_SALVES=0
+fi
+
+W_A2=$(( W_A2_IMG * W_A2_EDIT * W_A2_BASE * W_A2_SALVES * W_FACTORY ))
+R8_OK=0
+R9_OK=0
+
+juge_a2() {
+  local label="$1" cle="$2" champ="$3" attendu="$4" ecarts="$5" premier="$6" twi_champ="$7"
+  local vu ec pr tw
+  vu="$(a2 "$cle" "$champ")"; ec="$(a2 "$cle" "$ecarts")"
+  tw="$(a2 "$cle" "$twi_champ")"
+  pr="-"
+  [ -n "$9" ] && pr="$(a2 "$cle" "$premier")"
+  if [ -z "$vu" ] || [ -z "$ec" ]; then
+    inval "$label" "aucun echantillon publie pour $cle"
+    return 1
+  fi
+  if [ "${tw:-0}" -eq 0 ] 2>/dev/null; then
+    inval "$label" "aucun trafic : geste NON INJECTE"
+    return 1
+  fi
+  if [ "$vu" = "$attendu" ] && [ "$ec" = "$8" ] && { [ -z "$9" ] || [ "$pr" = "$9" ]; }; then
+    ok "$label" "valeur $vu, $ec ecart(s) avec l attendu du rig, $tw octets"
+    return 0
+  fi
+  bad "$label" "valeur $vu (attendu $attendu), $ec ecart(s) (attendu $8), premier octet ${pr:-?}"
+  return 1
+}
+
+if [ "$W_A2" != "1" ]; then
+  inval "R8 : bascule du step 3" "temoins amont invalides : l effet n est pas attribuable au firmware"
+  inval "R8 : retour" "temoins amont invalides"
+  inval "R9 : ratchet sur step 5 actif" "temoins amont invalides"
+  inval "R9 : retour" "temoins amont invalides"
+  inval "R10 : refus sur step inactif" "temoins amont invalides"
+  inval "R12 : triolet sur step 9" "temoins amont invalides"
+  inval "R12 : retour" "temoins amont invalides"
+else
+  juge_a2 "R8 : bascule du step 3" rA_r8_pose 3 "${EXPECT_R8_MASK:-$R8_MASK_ATTENDU}" 5 7 9 1 0 && R8_OK=1
+  juge_a2 "R8 : retour" rA_r8_retour 3 "$RIG_MASQUE_BASE" 5 0 7 0 "" || R8_OK=0
+
+  if [ "$R8_OK" != "1" ]; then
+    inval "R9 : ratchet sur step 5 actif" "R8 n a pas etabli la correspondance rotations -> step"
+    inval "R9 : retour" "R8 n a pas etabli la correspondance rotations -> step"
+  else
+    juge_a2 "R9 : ratchet sur step 5 actif" rA_r9_pose 3 "${EXPECT_R9_NIBBLE:-$R9_OCTET_ATTENDU}" 5 7 9 1 6 && R9_OK=1
+    juge_a2 "R9 : retour" rA_r9_retour 3 "00" 5 0 7 0 "" || R9_OK=0
+  fi
+
+  if [ "$R8_OK" != "1" ] || [ "$R9_OK" != "1" ]; then
+    inval "R10 : refus sur step inactif" "R8 et R9 n ont pas etabli la correspondance rotations -> step : le refus n est pas attribuable"
+    inval "R12 : triolet sur step 9" "R8 et R9 n ont pas etabli la correspondance rotations -> step"
+    inval "R12 : retour" "R8 et R9 n ont pas etabli la correspondance"
+  else
+    R10_CIBLE="$(a2 rA_r10 3)"; R10_ROT="$(a2 rA_r10 5)"
+    R10_O6="$(a2 rA_r10 7)"; R10_EC="$(a2 rA_r10 9)"; R10_TWI="$(a2 rA_r10 11)"
+    R10_OK=0
+    if [ -z "$R10_EC" ]; then
+      inval "R10 : refus sur step inactif" "aucun echantillon publie"
+    elif [ "${R10_TWI:-0}" -eq 0 ] 2>/dev/null; then
+      inval "R10 : refus sur step inactif" "aucun trafic : un refus et un geste non injecte seraient indistinguables"
+    elif [ "$R10_EC" = "0" ] && [ "$R10_O6" = "00" ]; then
+      ok "R10 : refus sur step inactif" "step $R10_CIBLE atteint en $R10_ROT rotations, $R10_TWI octets, banque INCHANGEE"
+      R10_OK=1
+    else
+      bad "R10 : refus sur step inactif" "step $R10_CIBLE : octet6 $R10_O6, $R10_EC ecart(s) — un ratchet a ete ecrit"
+    fi
+    if [ "$R10_OK" != "1" ]; then
+      inval "R12 : triolet sur step 9" "R10 a laisse la banque hors de l etat du rig : l effet n est pas attribuable"
+      inval "R12 : retour" "R10 a laisse la banque hors de l etat du rig"
+    else
+      juge_a2 "R12 : triolet sur step 9" rA_r12_pose 3 "${EXPECT_R12_NIBBLE:-$R12_OCTET_ATTENDU}" 5 7 9 1 8
+      juge_a2 "R12 : retour" rA_r12_retour 3 "00" 5 0 7 0 ""
+    fi
+  fi
+fi
+
+LOG5="$WORK/log5"
+progress "recettes de verification B : R1 et R13 (P2.6.3)"
+"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$BANK_ADDR" "$BOOT_MS" \
+     "$WORK/rig.bin" 384 recettesB "$SUPPRESSED_ADDR" > "$LOG5" 2>&1
+RC=$?
+if [ "$RC" != "0" ]; then
+  cat "$LOG5"
+  case "$RC" in
+    3) die "INVALID (classe 2) : controle de la banque en echec sur les recettes B, aucun verdict sur le firmware" 3 ;;
+    4) die "INVALID (classe 2) : salve de SHIFT refusee avant injection, le geste n etait pas valide" 4 ;;
+    *) die "la phase des recettes B s'est terminee anormalement (code $RC)" ;;
+  esac
+fi
+
+printf '\n%s--- RECETTES DE VERIFICATION B : R1 et R13 (P2.6.3) ---%s\n' "$C_B" "$C_0"
+grep -E '^controle_source|^image_lue|^controle_usine|^rB_' "$LOG5" | sed 's/^/  /'
+printf '\n'
+
+B_SRC="$(grep -E '^controle_source ' "$LOG5" | awk '{print $2}')"
+B_CTRL="$(grep -E '^controle_usine ' "$LOG5" | awk '{print $2}')"
+B_MASK="$(grep -E '^image_lue ' "$LOG5" | awk '{print $3}')"
+B_SUB="$(grep -E '^image_lue ' "$LOG5" | awk '{print $5}')"
+B_ACTIFS="$(grep -E '^rB_steps_actifs ' "$LOG5" | awk '{print $2}')"
+
+if [ "$B_MASK" != "$RIG_MASK_ATTENDU" ] || [ "$B_SUB" != "$RIG_SUBDIV_ATTENDU" ]; then
+  inval "B : image du rig" "masque ${B_MASK:-rien} subdiv ${B_SUB:-rien} : ce n est pas le rig de la couche 1"
+  W_B3_IMG=0
+elif [ "$B_SRC" = "image" ] && [ "$B_CTRL" = "1" ] && [ "$B_ACTIFS" = "$B_STEPS_ACTIFS_ATTENDU" ]; then
+  ok "B : image du rig" "masque $B_MASK subdiv $B_SUB, $B_ACTIFS steps actifs derives de l image, banque identique a l attendu"
+  W_B3_IMG=1
+else
+  inval "B : image du rig" "controle ${B_CTRL:-rien}, steps actifs ${B_ACTIFS:-rien} (attendu $B_STEPS_ACTIFS_ATTENDU)"
+  W_B3_IMG=0
+fi
+
+R1_NAV_OK=1; R1_CIBLE_OK=1; R1_CONTAG_OK=1; R1_REST_OK=1; R1_RETOUR_OK=1; R1_ECH_OK=1
+R1_NAV_D=""; R1_CIBLE_D=""; R1_CONTAG_D=""; R1_REST_D=""; R1_RETOUR_D=""; R1_ECH_D=""
+R1_LIGNES=0
+for k in 1 2 3 4 5 6; do
+  nav="$(grep -E "^rB_r1_nav +k $k " "$LOG5" | head -1)"
+  chg="$(grep -E "^rB_r1_change +k $k " "$LOG5" | head -1)"
+  res="$(grep -E "^rB_r1_restaure +k $k " "$LOG5" | head -1)"
+  ret="$(grep -E "^rB_r1_retour +k $k " "$LOG5" | head -1)"
+  if [ -z "$nav" ] || [ -z "$chg" ] || [ -z "$res" ] || [ -z "$ret" ]; then
+    R1_ECH_OK=0; R1_ECH_D="$R1_ECH_D k$k:ligne-absente"; continue
+  fi
+  R1_LIGNES=$((R1_LIGNES + 1))
+  barre="$(printf '%s' "$nav" | awk '{print $5}')"
+  dedans="$(printf '%s' "$nav" | awk '{print $7}')"
+  navtwi="$(printf '%s' "$nav" | awk '{print $9}')"
+  { [ "$barre" = "$k" ] && [ "$dedans" = "$k" ] && [ "${navtwi:-0}" -gt 0 ] 2>/dev/null; } \
+    || { R1_NAV_OK=0; R1_NAV_D="$R1_NAV_D k$k:barre=$barre,dedans=$dedans,twi=$navtwi"; }
+
+  chgtwi="$(printf '%s' "$chg" | awk '{print $5}')"
+  [ "${chgtwi:-0}" -gt 0 ] 2>/dev/null || { R1_ECH_OK=0; R1_ECH_D="$R1_ECH_D k$k:geste-sans-trafic"; }
+  dist="$(printf '%s' "$chg" | awk '{print $14}')"
+  retn="$(printf '%s' "$chg" | awk '{print $16}')"
+  { [ "${dist:-0}" -ge "$B_DIST_MIN" ] && [ "${retn:-0}" -ge "$B_RET_MIN" ]; } 2>/dev/null \
+    || { R1_ECH_OK=0; R1_ECH_D="$R1_ECH_D k$k:distances=$dist,retenues=$retn"; }
+
+  cible="${EXPECT_R1_CHANNEL:-$k}"
+  for o in 1 2 3 4 5 6; do
+    v="$(printf '%s' "$chg" | awk -v c=$((7 + o - 1)) '{print $c}')"
+    if [ "$o" = "$cible" ]; then
+      [ "$v" = "${EXPECT_R1_PAS:-$B_PAS_CHANGE}" ] \
+        || { R1_CIBLE_OK=0; R1_CIBLE_D="$R1_CIBLE_D k$k:OUT$o=$v"; }
+    else
+      [ "$v" = "$B_PAS_BASE" ] \
+        || { R1_CONTAG_OK=0; R1_CONTAG_D="$R1_CONTAG_D k$k:OUT$o=$v"; }
+    fi
+  done
+
+  for o in 1 2 3 4 5 6; do
+    v="$(printf '%s' "$res" | awk -v c=$((7 + o - 1)) '{print $c}')"
+    [ "$v" = "$B_PAS_BASE" ] || { R1_REST_OK=0; R1_REST_D="$R1_REST_D k$k:OUT$o=$v"; }
+  done
+
+  rong="$(printf '%s' "$ret" | awk '{print $5}')"
+  rcre="$(printf '%s' "$ret" | awk '{print $7}')"
+  { [ "$rong" = "$k" ] && [ "$rcre" = "$TAB_COUNT_ECRAN" ]; } \
+    || { R1_RETOUR_OK=0; R1_RETOUR_D="$R1_RETOUR_D k$k:onglet=$rong,creneaux=$rcre"; }
+done
+
+if [ "$R1_LIGNES" -ne 6 ] || [ "$R1_ECH_OK" != "1" ]; then
+  inval "R1 : echantillons" "$R1_LIGNES onglets mesures sur 6 —$R1_ECH_D"
+  W_R1_ECH=0
+else
+  ok "R1 : echantillons" "6 onglets, chaque geste avec trafic, au moins $B_DIST_MIN distances et $B_RET_MIN retenues par sortie"
+  W_R1_ECH=1
+fi
+if [ "$W_R1_ECH" != "1" ] || [ "$W_B3_IMG" != "1" ]; then
+  inval "R1 : navigation" "echantillons ou image invalides"
+  W_R1_NAV=0
+elif [ "$R1_NAV_OK" = "1" ]; then
+  ok "R1 : navigation" "les six onglets atteints et confirmes a l ecran, sur la barre puis dedans"
+  W_R1_NAV=1
+else
+  bad "R1 : navigation" "onglet non confirme —$R1_NAV_D"
+  W_R1_NAV=0
+fi
+
+R1_OK=0
+if [ "$W_R1_NAV" != "1" ]; then
+  inval "R1 : la sortie visee change" "navigation non etablie"
+  inval "R1 : non-contagion" "navigation non etablie"
+  inval "R1 : restauration" "navigation non etablie"
+  inval "R1 : retour a la barre" "navigation non etablie"
+else
+  CIBLE_OK=0
+  if [ "$R1_CIBLE_OK" = "1" ]; then
+    ok "R1 : la sortie visee change" "OUT(k+1) passe de $B_PAS_BASE a ${EXPECT_R1_PAS:-$B_PAS_CHANGE} ticks, pour k = 1 a 6"
+    CIBLE_OK=1
+  else
+    bad "R1 : la sortie visee change" "pas attendu ${EXPECT_R1_PAS:-$B_PAS_CHANGE} —$R1_CIBLE_D"
+  fi
+  CONTAG_OK=0
+  if [ "$R1_CONTAG_OK" = "1" ]; then
+    ok "R1 : non-contagion" "les cinq autres sorties restent a $B_PAS_BASE ticks, pour les six onglets"
+    CONTAG_OK=1
+  else
+    bad "R1 : non-contagion" "une autre sortie a change —$R1_CONTAG_D"
+  fi
+  REST_OK=0
+  if [ "$R1_REST_OK" = "1" ]; then
+    ok "R1 : restauration" "les six sorties reviennent a $B_PAS_BASE ticks apres le cran inverse"
+    REST_OK=1
+  else
+    bad "R1 : restauration" "restauration incomplete —$R1_REST_D"
+  fi
+  RET_OK=0
+  if [ "$R1_RETOUR_OK" = "1" ]; then
+    ok "R1 : retour a la barre" "appui long : onglet conserve et $TAB_COUNT_ECRAN creneaux encres, pour les six"
+    RET_OK=1
+  else
+    bad "R1 : retour a la barre" "retour incorrect —$R1_RETOUR_D"
+  fi
+  [ "$CIBLE_OK" = "1" ] && [ "$CONTAG_OK" = "1" ] && [ "$REST_OK" = "1" ] && [ "$RET_OK" = "1" ] && R1_OK=1
+fi
+
+R13_NAV="$(grep -E '^rB_r13_nav ' "$LOG5" | head -1)"
+R13_CHG="$(grep -E '^rB_r13_change ' "$LOG5" | head -1)"
+R13_RES="$(grep -E '^rB_r13_restaure ' "$LOG5" | head -1)"
+if [ -z "$R13_NAV" ] || [ -z "$R13_CHG" ] || [ -z "$R13_RES" ]; then
+  inval "R13 : composition" "une ligne de mesure manque : rien a conclure"
+elif [ "$R1_OK" != "1" ]; then
+  inval "R13 : composition" "R1 n a pas etabli la carte onglet -> sortie : l effet n est pas attribuable"
+else
+  R13_ONSETS="$(printf '%s' "$R13_CHG" | awk '{print $NF}')"
+  R13_TWI="$(printf '%s' "$R13_CHG" | awk '{print $7}')"
+  R13_TWIR="$(printf '%s' "$R13_CHG" | awk '{print $8}')"
+  R13_ONG="$(printf '%s' "$R13_CHG" | awk '{print $3}')"
+  R13_CRE="$(printf '%s' "$R13_CHG" | awk '{print $5}')"
+  ONSETS_MIN=$(( 2 * B_STEPS_ACTIFS_ATTENDU ))
+  if [ "${R13_TWI:-0}" -eq 0 ] 2>/dev/null || [ "${R13_TWIR:-0}" -eq 0 ] 2>/dev/null; then
+    inval "R13 : composition" "geste sans trafic : NON INJECTE"
+  elif [ "${R13_ONSETS:-0}" -lt "$ONSETS_MIN" ] 2>/dev/null; then
+    inval "R13 : composition" "${R13_ONSETS:-0} onsets, minimum $ONSETS_MIN soit deux cycles : rien a conclure"
+  elif [ "$R13_ONG" != "$R13_ONGLET" ] || [ "$R13_CRE" != "$TAB_COUNT_ECRAN" ]; then
+    inval "R13 : composition" "apres le retour : onglet $R13_ONG, $R13_CRE creneaux — l etat d interface n est pas etabli"
+  else
+    R13_PER_OK=1; R13_PER_D=""
+    for o in 1 2 3 4 5 6; do
+      v="$(printf '%s' "$R13_CHG" | awk -v c=$((10 + o - 1)) '{print $c}')"
+      if [ "$o" = "$R13_ONGLET" ]; then
+        [ "$v" = "${EXPECT_R13_PERIODE:-$R13_PERIODE_CHANGE_ATTENDUE}" ] \
+          || { R13_PER_OK=0; R13_PER_D="$R13_PER_D OUT$o=$v"; }
+      else
+        [ "$v" = "$R13_PERIODE_BASE" ] || { R13_PER_OK=0; R13_PER_D="$R13_PER_D OUT$o=$v"; }
+      fi
+    done
+    if [ "$R13_PER_OK" = "1" ]; then
+      ok "R13 : composition" "onglet $R13_ONG retrouve, $R13_CRE creneaux, OUT$R13_ONGLET a ${EXPECT_R13_PERIODE:-$R13_PERIODE_CHANGE_ATTENDUE} ticks, les cinq autres a $R13_PERIODE_BASE"
+    else
+      bad "R13 : composition" "periodes —$R13_PER_D (attendu OUT$R13_ONGLET=${EXPECT_R13_PERIODE:-$R13_PERIODE_CHANGE_ATTENDUE}, autres $R13_PERIODE_BASE)"
+    fi
+    R13_REST_OK=1; R13_REST_D=""
+    for o in 1 2 3 4 5 6; do
+      v="$(printf '%s' "$R13_RES" | awk -v c=$((10 + o - 1)) '{print $c}')"
+      [ "$v" = "$R13_PERIODE_BASE" ] || { R13_REST_OK=0; R13_REST_D="$R13_REST_D OUT$o=$v"; }
+    done
+    if [ "$R13_REST_OK" = "1" ]; then
+      ok "R13 : restauration" "les six sorties reviennent a $R13_PERIODE_BASE ticks"
+    else
+      bad "R13 : restauration" "restauration incomplete —$R13_REST_D"
+    fi
+  fi
+fi
+
+LOG6="$WORK/log6"
+progress "recette R2 (P2.6.4)"
+"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$BANK_ADDR" "$BOOT_MS" \
+     "$WORK/rig.bin" 384 recetteR2 "$SUPPRESSED_ADDR" > "$LOG6" 2>&1
+RC=$?
+if [ "$RC" != "0" ]; then
+  cat "$LOG6"
+  case "$RC" in
+    3) die "INVALID (classe 2) : controle de la banque en echec sur R2, aucun verdict sur le firmware" 3 ;;
+    4) die "INVALID (classe 2) : salve de SHIFT refusee avant injection, le geste n etait pas valide" 4 ;;
+    *) die "la phase R2 s'est terminee anormalement (code $RC)" ;;
+  esac
+fi
+
+printf '\n%s--- RECETTE R2 : LA DISTANCE ET LE CHAMP (P2.6.4) ---%s\n' "$C_B" "$C_0"
+grep -E '^controle_source|^image_lue|^controle_usine|^rC_' "$LOG6" | sed 's/^/  /'
+printf '\n'
+
+c2()  { grep -E "^rC_$1 " "$LOG6" | head -1 | awk "{print \$$2}"; }
+c2o() { grep -E "^rC_$1_OUT$2 " "$LOG6" | head -1 | awk "{print \$$3}"; }
+
+R2_SRC="$(grep -E '^controle_source ' "$LOG6" | awk '{print $2}')"
+R2_CTRL="$(grep -E '^controle_usine ' "$LOG6" | awk '{print $2}')"
+R2_MASK="$(grep -E '^image_lue ' "$LOG6" | awk '{print $3}')"
+R2_SUB="$(grep -E '^image_lue ' "$LOG6" | awk '{print $5}')"
+R2_ACTIFS="$(grep -E '^rC_steps_actifs ' "$LOG6" | awk '{print $2}')"
+if [ "$R2_MASK" != "$RIG_MASK_ATTENDU" ] || [ "$R2_SUB" != "$RIG_SUBDIV_ATTENDU" ] \
+   || [ "$R2_ACTIFS" != "$B_STEPS_ACTIFS_ATTENDU" ]; then
+  inval "R2 : image du rig" "masque ${R2_MASK:-rien} subdiv ${R2_SUB:-rien} steps ${R2_ACTIFS:-rien} : ce n est pas le rig"
+  W_R2_IMG=0
+elif [ "$R2_SRC" = "image" ] && [ "$R2_CTRL" = "1" ]; then
+  ok "R2 : image du rig" "masque $R2_MASK subdiv $R2_SUB, $R2_ACTIFS steps actifs, banque identique a l attendu"
+  W_R2_IMG=1
+else
+  inval "R2 : image du rig" "controle ${R2_CTRL:-rien}"
+  W_R2_IMG=0
+fi
+
+R2_ECH_OK=1; R2_ECH_D=""
+R2_ONSETS_MIN=$(( 2 * B_STEPS_ACTIFS_ATTENDU ))
+for st in base length lenrest subdiv subrest; do
+  [ -n "$(c2 "$st" 3)" ] || { R2_ECH_OK=0; R2_ECH_D="$R2_ECH_D $st:entete-absente"; continue; }
+  case "$st" in
+    base) ;;
+    *) [ "$(c2 "$st" 5)" -gt 0 ] 2>/dev/null \
+         || { R2_ECH_OK=0; R2_ECH_D="$R2_ECH_D $st:geste-sans-trafic"; } ;;
+  esac
+  for o in 1 2 3 4 5 6; do
+    d="$(c2o "$st" $o 7)"; r="$(c2o "$st" $o 9)"; on="$(c2o "$st" $o 11)"; pa="$(c2o "$st" $o 3)"
+    { [ "${d:-0}" -ge "$B_DIST_MIN" ] && [ "${r:-0}" -ge "$B_RET_MIN" ] \
+      && [ "${on:-0}" -ge "$R2_ONSETS_MIN" ] && [ "${pa:-0}" -gt 0 ]; } 2>/dev/null \
+      || { R2_ECH_OK=0; R2_ECH_D="$R2_ECH_D $st/OUT$o:d=$d,r=$r,onsets=$on,pas=$pa"; }
+  done
+done
+if [ "$R2_ECH_OK" = "1" ]; then
+  ok "R2 : echantillons" "5 etapes x 6 sorties : au moins $B_DIST_MIN distances, $B_RET_MIN retenues, $R2_ONSETS_MIN onsets, et un pas non nul"
+  W_R2_ECH=1
+else
+  inval "R2 : echantillons" "plancher non atteint —$R2_ECH_D"
+  W_R2_ECH=0
+fi
+
+R2_BASE_OK=1; R2_BASE_D=""
+for o in 1 2 3 4 5 6; do
+  [ "$(c2o base $o 3)" = "$R2_PAS_BASE" ] && [ "$(c2o base $o 5)" = "$R2_PERIODE_BASE" ] \
+    || { R2_BASE_OK=0; R2_BASE_D="$R2_BASE_D OUT$o=$(c2o base $o 3)/$(c2o base $o 5)"; }
+done
+if [ "$R2_BASE_OK" = "1" ] && [ "$(c2 base 7)" = "0" ]; then
+  ok "R2 : etat initial" "les six sorties a $R2_PAS_BASE / $R2_PERIODE_BASE ticks, banque a 0 ecart"
+  W_R2_BASE=1
+else
+  inval "R2 : etat initial" "etat de depart non etabli —$R2_BASE_D ecarts=$(c2 base 7)"
+  W_R2_BASE=0
+fi
+
+W_R2=$(( W_R2_IMG * W_R2_ECH * W_R2_BASE * R1_OK ))
+if [ "$W_R2" != "1" ]; then
+  inval "R2 : une rotation touche LENGTH" "temoins amont invalides (dont R1) : l effet n est pas attribuable"
+  inval "R2 : deux rotations touchent SUBDIV" "temoins amont invalides"
+  inval "R2 : LENGTH inchangee sous SUBDIV" "temoins amont invalides"
+  inval "R2 : non-contagion" "temoins amont invalides"
+  inval "R2 : pattern intact" "temoins amont invalides"
+  inval "R2 : restaurations" "temoins amont invalides"
+  inval "R2 : retour a la barre" "temoins amont invalides"
+else
+  CIB="${EXPECT_R2_CHANNEL:-$R2_ONGLET}"
+  LPAS="$(c2o length $CIB 3)"; LPER="$(c2o length $CIB 5)"
+  LLEN=$(( LPER / LPAS ))
+  if [ "$LPAS" = "$R2_PAS_BASE" ] && [ "$LLEN" = "$R2_LENGTH_APRES_ATTENDUE" ]; then
+    ok "R2 : une rotation touche LENGTH" "OUT$CIB : pas inchange a $LPAS, periode $LPER, donc LENGTH $R2_LENGTH_BASE -> $LLEN"
+  else
+    bad "R2 : une rotation touche LENGTH" "OUT$CIB : pas $LPAS, periode $LPER, LENGTH deduite $LLEN (attendu pas $R2_PAS_BASE et LENGTH $R2_LENGTH_APRES_ATTENDUE)"
+  fi
+
+  SPAS="$(c2o subdiv $CIB 3)"; SPER="$(c2o subdiv $CIB 5)"
+  SLEN=$(( SPER / SPAS ))
+  if [ "$SPAS" = "${EXPECT_R2_PAS:-$R2_PAS_SUBDIV_ATTENDU}" ]; then
+    ok "R2 : deux rotations touchent SUBDIV" "OUT$CIB : pas $R2_PAS_BASE -> $SPAS ticks"
+  else
+    bad "R2 : deux rotations touchent SUBDIV" "OUT$CIB : pas $SPAS (attendu ${EXPECT_R2_PAS:-$R2_PAS_SUBDIV_ATTENDU})"
+  fi
+  if [ "$SLEN" = "${EXPECT_R2_LENGTH:-$R2_LENGTH_BASE}" ]; then
+    ok "R2 : LENGTH inchangee sous SUBDIV" "OUT$CIB : periode $SPER / pas $SPAS = LENGTH $SLEN, inchangee"
+  else
+    bad "R2 : LENGTH inchangee sous SUBDIV" "OUT$CIB : LENGTH deduite $SLEN (attendu ${EXPECT_R2_LENGTH:-$R2_LENGTH_BASE}) — le geste a touche un autre champ"
+  fi
+
+  R2_CON_OK=1; R2_CON_D=""
+  for st in base length lenrest subdiv subrest; do
+    for o in 1 2 3 4 5 6; do
+      [ "$o" = "$CIB" ] && continue
+      [ "$(c2o "$st" $o 3)" = "$R2_PAS_BASE" ] && [ "$(c2o "$st" $o 5)" = "$R2_PERIODE_BASE" ] \
+        || { R2_CON_OK=0; R2_CON_D="$R2_CON_D $st/OUT$o=$(c2o "$st" $o 3)/$(c2o "$st" $o 5)"; }
+    done
+  done
+  [ "$R2_CON_OK" = "1" ] \
+    && ok "R2 : non-contagion" "les cinq autres sorties restent a $R2_PAS_BASE / $R2_PERIODE_BASE aux cinq etapes" \
+    || bad "R2 : non-contagion" "une autre sortie a change —$R2_CON_D"
+
+  R2_PAT_OK=1; R2_PAT_D=""
+  for st in base length lenrest subdiv subrest; do
+    [ "$(c2 "$st" 7)" = "0" ] || { R2_PAT_OK=0; R2_PAT_D="$R2_PAT_D $st=$(c2 "$st" 7)"; }
+  done
+  [ "$R2_PAT_OK" = "1" ] \
+    && ok "R2 : pattern intact" "0 ecart avec l attendu du rig aux cinq etapes : aucun step ni ratchet touche" \
+    || bad "R2 : pattern intact" "la banque a change —$R2_PAT_D ecart(s)"
+
+  R2_RES_OK=1; R2_RES_D=""
+  for st in lenrest subrest; do
+    for o in 1 2 3 4 5 6; do
+      [ "$(c2o "$st" $o 3)" = "$R2_PAS_BASE" ] && [ "$(c2o "$st" $o 5)" = "$R2_PERIODE_BASE" ] \
+        || { R2_RES_OK=0; R2_RES_D="$R2_RES_D $st/OUT$o=$(c2o "$st" $o 3)/$(c2o "$st" $o 5)"; }
+    done
+  done
+  [ "$R2_RES_OK" = "1" ] \
+    && ok "R2 : restaurations" "apres chaque cran inverse, les six sorties reviennent a $R2_PAS_BASE / $R2_PERIODE_BASE" \
+    || bad "R2 : restaurations" "restauration incomplete —$R2_RES_D"
+
+  RB_ONG="$(grep -E '^rC_retour_barre ' "$LOG6" | awk '{print $3}')"
+  RB_CRE="$(grep -E '^rC_retour_barre ' "$LOG6" | awk '{print $5}')"
+  RB_TWI="$(grep -E '^rC_retour_barre ' "$LOG6" | awk '{print $7}')"
+  if [ -z "$RB_ONG" ]; then
+    inval "R2 : retour a la barre" "aucune mesure de retour publiee"
+  elif [ "${RB_TWI:-0}" -eq 0 ] 2>/dev/null; then
+    inval "R2 : retour a la barre" "aucun trafic : appui long NON INJECTE"
+  elif [ "$RB_ONG" = "$R2_ONGLET" ] && [ "$RB_CRE" = "$TAB_COUNT_ECRAN" ]; then
+    ok "R2 : retour a la barre" "onglet $RB_ONG conserve, $RB_CRE creneaux encres"
+  else
+    bad "R2 : retour a la barre" "onglet $RB_ONG, $RB_CRE creneaux"
+  fi
+fi
+
+LOG7="$WORK/log7"
+progress "recette R11 (P2.6.5)"
+"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$BANK_ADDR" "$BOOT_MS" \
+     "$WORK/rig.bin" 384 recetteR11 "$SUPPRESSED_ADDR" > "$LOG7" 2>&1
+RC=$?
+if [ "$RC" != "0" ]; then
+  cat "$LOG7"
+  case "$RC" in
+    3) die "INVALID (classe 2) : controle de la banque en echec sur R11, aucun verdict sur le firmware" 3 ;;
+    4) die "INVALID (classe 2) : salve de SHIFT refusee avant injection, le geste n etait pas valide" 4 ;;
+    *) die "la phase R11 s'est terminee anormalement (code $RC)" ;;
+  esac
+fi
+
+printf '\n%s--- RECETTE R11 : LES CODES REFUSES A x24 (P2.6.5) ---%s\n' "$C_B" "$C_0"
+grep -E '^controle_source|^image_lue|^controle_usine|^rD_' "$LOG7" | sed 's/^/  /'
+printf '\n'
+
+d2() { grep -E "^rD_$1 " "$LOG7" | head -1 | awk "{print \$$2}"; }
+
+D_SRC="$(grep -E '^controle_source ' "$LOG7" | awk '{print $2}')"
+D_CTRL="$(grep -E '^controle_usine ' "$LOG7" | awk '{print $2}')"
+D_MASK="$(grep -E '^image_lue ' "$LOG7" | awk '{print $3}')"
+D_SUB="$(grep -E '^image_lue ' "$LOG7" | awk '{print $5}')"
+if [ "$D_MASK" != "$RIG_MASK_ATTENDU" ] || [ "$D_SUB" != "$RIG_SUBDIV_ATTENDU" ]; then
+  inval "R11 : image du rig" "masque ${D_MASK:-rien} subdiv ${D_SUB:-rien} : ce n est pas le rig"
+  W_R11_IMG=0
+elif [ "$D_SRC" = "image" ] && [ "$D_CTRL" = "1" ]; then
+  ok "R11 : image du rig" "masque $D_MASK subdiv $D_SUB, banque identique a l attendu"
+  W_R11_IMG=1
+else
+  inval "R11 : image du rig" "controle ${D_CTRL:-rien}"
+  W_R11_IMG=0
+fi
+
+D_ECH_OK=1; D_ECH_D=""
+for f in base x24 cadence_fin; do
+  dd="$(d2 "$f" 5)"; rr="$(d2 "$f" 7)"
+  { [ "${dd:-0}" -ge "$B_DIST_MIN" ] && [ "${rr:-0}" -ge "$B_RET_MIN" ]; } 2>/dev/null \
+    || { D_ECH_OK=0; D_ECH_D="$D_ECH_D $f:distances=$dd,retenues=$rr"; }
+done
+for g in nav_subdiv cran1 cran2 cran3 retour; do
+  case "$g" in
+    nav_subdiv) tw="$(d2 "$g" 5)" ;;
+    retour)     tw="$(d2 "$g" 9)" ;;
+    *)          tw="$(d2 "$g" 11)" ;;
+  esac
+  [ "${tw:-0}" -gt 0 ] 2>/dev/null || { D_ECH_OK=0; D_ECH_D="$D_ECH_D $g:sans-trafic"; }
+done
+NAVED_TWI="$(grep -E '^rD_nav_edit ' "$LOG7" | awk '{print $6}')"
+[ "${NAVED_TWI:-0}" -gt 0 ] 2>/dev/null || { D_ECH_OK=0; D_ECH_D="$D_ECH_D nav_edit:sans-trafic"; }
+if [ "$D_ECH_OK" = "1" ]; then
+  ok "R11 : echantillons" "planchers atteints sur les trois fenetres, trafic present sur les six gestes"
+  W_R11_ECH=1
+else
+  inval "R11 : echantillons" "plancher ou trafic manquant —$D_ECH_D"
+  W_R11_ECH=0
+fi
+
+if [ "$(d2 base 3)" = "$R11_CADENCE_BASE" ] && [ "$(d2 base 9)" = "0" ]; then
+  ok "R11 : etat initial" "cadence $(d2 base 3) ticks, banque a 0 ecart"
+  W_R11_BASE=1
+else
+  inval "R11 : etat initial" "cadence $(d2 base 3), ecarts $(d2 base 9) : etat de depart non etabli"
+  W_R11_BASE=0
+fi
+
+NAVE_AV="$(grep -E '^rD_nav_edit ' "$LOG7" | awk '{print $3}')"
+NAVE_AP="$(grep -E '^rD_nav_edit ' "$LOG7" | awk '{print $4}')"
+if [ "${NAVE_AV:-0}" = "$TAB_SLOTS" ] && [ "${NAVE_AP:-$TAB_SLOTS}" -lt "$TAB_SLOTS" ] 2>/dev/null; then
+  ok "R11 : entree dans EDIT" "creneaux encres $NAVE_AV -> $NAVE_AP, $NAVED_TWI octets"
+  W_R11_EDIT=1
+else
+  inval "R11 : entree dans EDIT" "creneaux ${NAVE_AV:-?} -> ${NAVE_AP:-?} : EDIT n est pas etabli"
+  W_R11_EDIT=0
+fi
+
+W_R11=$(( W_R11_IMG * W_R11_ECH * W_R11_BASE * W_R11_EDIT ))
+
+D_CAD="$(d2 x24 3)"
+if [ "$W_R11" != "1" ]; then
+  inval "R11 : cadence x24" "temoins amont invalides"
+  W_R11_CAD=0
+elif [ "$D_CAD" = "${EXPECT_R11_CADENCE:-$R11_CADENCE_X24_ATTENDUE}" ]; then
+  ok "R11 : cadence x24" "$D_CAD ticks par step, mesures sur OUT4 AVANT toute edition de ratchet"
+  W_R11_CAD=1
+else
+  inval "R11 : cadence x24" "cadence $D_CAD au lieu de ${EXPECT_R11_CADENCE:-$R11_CADENCE_X24_ATTENDUE} : la premisse « incompatible a x24 » n est pas etablie"
+  W_R11_CAD=0
+fi
+
+if [ "$W_R11" != "1" ]; then
+  inval "R11 : premier cran" "temoins amont invalides"
+  inval "R11 : le triolet est retenu" "temoins amont invalides"
+  inval "R11 : plafond du choix" "temoins amont invalides"
+  inval "R11 : les codes refuses n apparaissent jamais" "temoins amont invalides"
+  inval "R11 : retour a 00" "temoins amont invalides"
+  inval "R11 : cadence restauree" "temoins amont invalides"
+else
+  N1="$(d2 cran1 3)"; O1="$(d2 cran1 5)"; E1="$(d2 cran1 7)"; P1="$(d2 cran1 9)"
+  if [ "$N1" = "${EXPECT_R11_NIBBLE_1:-$R11_NIBBLE_1_ATTENDU}" ] && [ "$E1" = "1" ] \
+     && [ "$P1" = "$R11_OFFSET_ATTENDU" ]; then
+    ok "R11 : premier cran" "nibble $N1 (octet 0x$O1), 1 seul ecart, a l offset $P1"
+  else
+    bad "R11 : premier cran" "nibble $N1 (attendu ${EXPECT_R11_NIBBLE_1:-$R11_NIBBLE_1_ATTENDU}), $E1 ecart(s), offset $P1"
+  fi
+
+  N2="$(d2 cran2 3)"; O2="$(d2 cran2 5)"; E2="$(d2 cran2 7)"; P2="$(d2 cran2 9)"
+  if [ "$N2" = "${EXPECT_R11_NIBBLE_TRIOLET:-$R11_NIBBLE_TRIOLET_ATTENDU}" ] && [ "$E2" = "1" ] \
+     && [ "$P2" = "$R11_OFFSET_ATTENDU" ]; then
+    ok "R11 : le triolet est retenu" "nibble $N2 (octet 0x$O2) : R3, R4 et R6 sautes en un seul cran"
+  else
+    bad "R11 : le triolet est retenu" "nibble $N2 (attendu ${EXPECT_R11_NIBBLE_TRIOLET:-$R11_NIBBLE_TRIOLET_ATTENDU}), $E2 ecart(s), offset $P2"
+  fi
+
+  N3="$(d2 cran3 3)"; E3="$(d2 cran3 7)"; T3="$(d2 cran3 11)"
+  if [ "$N3" = "$N2" ] && [ "$E3" = "$E2" ] && [ "${T3:-0}" -gt 0 ] 2>/dev/null; then
+    ok "R11 : plafond du choix" "3e cran : nibble inchange a $N3, $T3 octets de trafic — le geste a bien atteint le controleur"
+  else
+    bad "R11 : plafond du choix" "nibble $N3 (attendu $N2), $E3 ecart(s), trafic $T3"
+  fi
+
+  D_REF_OK=1; D_REF_D=""
+  for et in cran1 cran2 cran3 retour; do
+    n="$(d2 "$et" 3)"
+    for c in $R11_CODES_REFUSES; do
+      [ "$n" = "$c" ] && { D_REF_OK=0; D_REF_D="$D_REF_D $et=$n"; }
+    done
+  done
+  if [ "$D_REF_OK" = "1" ]; then
+    ok "R11 : les codes refuses n apparaissent jamais" "aucune etape ne montre 03, 04 ni 06 dans le nibble du step 5"
+  else
+    bad "R11 : les codes refuses n apparaissent jamais" "un code refuse a x24 a ete ecrit —$D_REF_D"
+  fi
+
+  NR="$(d2 retour 3)"; ER="$(d2 retour 7)"
+  if [ "$NR" = "$R11_NIBBLE_ZERO" ] && [ "$ER" = "0" ]; then
+    ok "R11 : retour a 00" "nibble $NR, banque entiere identique a l attendu du rig"
+  else
+    bad "R11 : retour a 00" "nibble $NR, $ER ecart(s)"
+  fi
+
+  CF="$(d2 cadence_fin 3)"; EF="$(d2 cadence_fin 9)"
+  if [ "$CF" = "$R11_CADENCE_BASE" ] && [ "$EF" = "0" ]; then
+    ok "R11 : cadence restauree" "retour a $CF ticks par step, banque a 0 ecart"
+  else
+    bad "R11 : cadence restauree" "cadence $CF (attendu $R11_CADENCE_BASE), $EF ecart(s)"
+  fi
+fi
+
 printf '\n'
 if [ "$BAD_COUNT" -gt 0 ]; then
   printf '  %s❌ VERDICT : FAIL — %d defaut(s) du firmware, %d critere(s) rendu(s) non decidable(s) en aval.%s\n' \
