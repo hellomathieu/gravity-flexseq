@@ -25,6 +25,8 @@ constexpr uint8_t WIDTH = 128;
 constexpr uint8_t HEIGHT = 64;
 
 constexpr uint8_t PER_ROW = 12;
+constexpr uint8_t GRID_ROWS = 2;
+constexpr uint8_t GRID_STEPS = PER_ROW * GRID_ROWS;
 constexpr uint8_t COL_SPACING = 10;
 constexpr uint8_t GRID_WIDTH = (PER_ROW - 1) * COL_SPACING;      // 110
 constexpr uint8_t COL_X0 = (WIDTH - GRID_WIDTH + 1) / 2;         // 9
@@ -228,7 +230,7 @@ void drawPatternScreen(Canvas& canvas, const PatternScreenModel& model,
 
     // Separations de mesure : verticale dans la gouttiere, jamais en bord de ligne.
     if (model.barLength > 0) {
-        for (uint8_t k = model.barLength; k < Pattern::DEFAULT_TOTAL_STEPS;
+        for (uint8_t k = model.barLength; k < screen::GRID_STEPS;
              k = static_cast<uint8_t>(k + model.barLength)) {
             if (k % screen::PER_ROW == 0) {
                 continue;
@@ -296,7 +298,7 @@ void drawPatternScreen(Canvas& canvas, const PatternScreenModel& model,
     }
 
     // Cadre d'edition autour du step courant.
-    if (model.cursor >= 0 && model.cursor < Pattern::DEFAULT_TOTAL_STEPS) {
+    if (model.cursor >= 0 && model.cursor < screen::GRID_STEPS) {
         const uint8_t c = static_cast<uint8_t>(model.cursor);
         const int16_t cy = screen::rowCY(c);
         if (touches(band, cy - screen::SELECT_HALF, cy + screen::SELECT_HALF)) {
@@ -312,7 +314,7 @@ void drawPatternScreen(Canvas& canvas, const PatternScreenModel& model,
     }
 
     // Step joue : pixel central inverse (efface sur un step actif, encre sinon).
-    if (model.playhead >= 0 && model.playhead < Pattern::DEFAULT_TOTAL_STEPS) {
+    if (model.playhead >= 0 && model.playhead < screen::GRID_STEPS) {
         const uint8_t h = static_cast<uint8_t>(model.playhead);
         const int16_t cy = screen::rowCY(h);
         if (h < model.length && touches(band, cy, cy)) {

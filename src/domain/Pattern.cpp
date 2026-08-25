@@ -9,11 +9,11 @@ bool isValidRatchet(uint8_t code) {
 
 uint8_t ratchetTriggers(uint8_t code) {
     if (code == RATCHET_TRIPLET) {
-        return 3; // three triggers, spread over two step durations
+        return 3;
     }
     if (code == RATCHET_2 || code == RATCHET_3 || code == RATCHET_4 ||
         code == RATCHET_6) {
-        return code; // the code IS the trigger count
+        return code;
     }
     return 1;
 }
@@ -69,9 +69,9 @@ bool Pattern::writeStep(uint8_t index, bool active) {
 }
 
 void Pattern::clear() {
-    packedSteps[0] = 0;
-    packedSteps[1] = 0;
-    packedSteps[2] = 0;
+    for (uint8_t i = 0; i < STEP_BYTES; ++i) {
+        packedSteps[i] = 0;
+    }
 
     clearRatchets();
 }
@@ -81,7 +81,7 @@ bool Pattern::setRatchet(uint8_t index, uint8_t code) {
         return false;
     }
 
-    const uint8_t byteIndex = index >> 1;      // two nibbles per byte
+    const uint8_t byteIndex = index >> 1;
     const bool highNibble = (index & 0x01) != 0;
 
     if (highNibble) {
@@ -109,7 +109,7 @@ uint8_t Pattern::getRatchet(uint8_t index) const {
 }
 
 void Pattern::clearRatchets() {
-    for (uint8_t i = 0; i < 12; ++i) {
+    for (uint8_t i = 0; i < RATCHET_BYTES; ++i) {
         packedRatchets[i] = 0;
     }
 }

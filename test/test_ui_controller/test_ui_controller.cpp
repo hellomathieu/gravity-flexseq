@@ -380,11 +380,22 @@ void test_press_on_the_edit_entry_enters_the_grid() {
     TEST_ASSERT_EQUAL_UINT8(0, r.ui.stepCursor());
 }
 
+void test_the_step_cursor_walks_twenty_four_steps() {
+    Rig r;
+    r.enterEdit();
+    for (uint8_t i = 0; i < 23; ++i) {
+        r.ui.handle(UiController::EVENT_ROTATE, 1);
+    }
+    TEST_ASSERT_EQUAL_UINT8(23, r.ui.stepCursor());
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_UINT8(0, r.ui.stepCursor());
+}
+
 void test_rotate_moves_the_step_cursor_and_wraps_at_twenty_four() {
     Rig r;
     r.enterEdit();
     r.ui.handle(UiController::EVENT_ROTATE, -1);
-    TEST_ASSERT_EQUAL_UINT8(UiController::STEP_COUNT - 1, r.ui.stepCursor());
+    TEST_ASSERT_EQUAL_UINT8(23, r.ui.stepCursor());
     r.ui.handle(UiController::EVENT_ROTATE, 1);
     TEST_ASSERT_EQUAL_UINT8(0, r.ui.stepCursor());
     for (uint8_t i = 0; i < 5; ++i) {
@@ -722,6 +733,7 @@ int main(int, char**) {
     RUN_TEST(test_the_edit_entry_is_not_a_value);
 
     RUN_TEST(test_press_on_the_edit_entry_enters_the_grid);
+    RUN_TEST(test_the_step_cursor_walks_twenty_four_steps);
     RUN_TEST(test_rotate_moves_the_step_cursor_and_wraps_at_twenty_four);
     RUN_TEST(test_press_toggles_the_step_under_the_cursor);
     RUN_TEST(test_shift_rotate_sets_the_ratchet_of_an_active_step_and_clamps);

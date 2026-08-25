@@ -298,6 +298,31 @@ void test_separations_2_3_6_stay_inside_the_rows() {
  * Curseur & step joue
  */
 
+void test_the_grid_ignores_the_steps_above_23() {
+    for (uint8_t step = 24; step < 32; ++step) {
+        pattern.writeStep(step, true);
+        pattern.setRatchet(step, RATCHET_6);
+    }
+    drawPatternScreen(canvas, model(24));
+    const uint16_t withHiddenContent = canvas.inkCount();
+
+    canvas.reset();
+    pattern.clear();
+    drawPatternScreen(canvas, model(24));
+
+    TEST_ASSERT_EQUAL_UINT16(canvas.inkCount(), withHiddenContent);
+}
+
+void test_a_cursor_above_23_frames_nothing() {
+    drawPatternScreen(canvas, model(24, -1));
+    const uint16_t withoutCursor = canvas.inkCount();
+
+    canvas.reset();
+    drawPatternScreen(canvas, model(24, 24));
+
+    TEST_ASSERT_EQUAL_UINT16(withoutCursor, canvas.inkCount());
+}
+
 void test_cursor_frames_the_edited_step() {
     drawPatternScreen(canvas, model(24, 5));
     const uint8_t x = static_cast<uint8_t>(screen::colX(5) - screen::SELECT_HALF);
@@ -498,6 +523,8 @@ int main() {
     RUN_TEST(test_no_bar_when_separation_is_none);
     RUN_TEST(test_separations_2_3_6_stay_inside_the_rows);
 
+    RUN_TEST(test_the_grid_ignores_the_steps_above_23);
+    RUN_TEST(test_a_cursor_above_23_frames_nothing);
     RUN_TEST(test_cursor_frames_the_edited_step);
     RUN_TEST(test_playhead_clears_the_centre_of_an_active_step);
     RUN_TEST(test_playhead_inks_the_centre_of_an_inactive_step);

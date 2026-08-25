@@ -23,7 +23,11 @@ describe("Pattern — steps", () => {
     }
   });
 
-  it("writes and reads all 24 steps", () => {
+  it("holds thirty-two steps", () => {
+    expect(Pattern.DEFAULT_TOTAL_STEPS).toBe(32);
+  });
+
+  it("writes and reads every step", () => {
     const pattern = new Pattern();
     for (let i = 0; i < Pattern.DEFAULT_TOTAL_STEPS; ++i) {
       expect(pattern.writeStep(i, i % 2 === 0)).toBe(true);
@@ -42,12 +46,25 @@ describe("Pattern — steps", () => {
     }
   });
 
-  it("rejects step index 24 without mutation", () => {
+  it("rejects step index 32 without mutation", () => {
     const pattern = new Pattern();
-    expect(pattern.readStep(24)).toBeNull();
-    expect(pattern.writeStep(23, true)).toBe(true);
-    expect(pattern.writeStep(24, false)).toBe(false);
-    expect(pattern.readStep(23)).toBe(true);
+    expect(pattern.readStep(32)).toBeNull();
+    expect(pattern.writeStep(31, true)).toBe(true);
+    expect(pattern.writeStep(32, false)).toBe(false);
+    expect(pattern.readStep(31)).toBe(true);
+  });
+
+  it("writes and reads the steps above 23", () => {
+    const pattern = new Pattern();
+    for (const step of [24, 27, 30, 31]) {
+      expect(pattern.writeStep(step, true), `step ${step}`).toBe(true);
+    }
+    for (let i = 24; i < 32; ++i) {
+      expect(pattern.readStep(i), `step ${i}`).toBe(
+        i === 24 || i === 27 || i === 30 || i === 31,
+      );
+    }
+    expect(pattern.readStep(23)).toBe(false);
   });
 
   it("clear turns all 24 steps off and removes ratchets", () => {
@@ -76,11 +93,20 @@ describe("Pattern — ratchets (un code par step)", () => {
     const p = new Pattern();
     expect(p.setRatchet(0, RATCHET_2)).toBe(true);
     expect(p.setRatchet(1, RATCHET_3)).toBe(true);
-    expect(p.setRatchet(23, RATCHET_TRIPLET)).toBe(true);
+    expect(p.setRatchet(31, RATCHET_TRIPLET)).toBe(true);
     expect(p.getRatchet(0)).toBe(RATCHET_2);
     expect(p.getRatchet(1)).toBe(RATCHET_3);
-    expect(p.getRatchet(23)).toBe(RATCHET_TRIPLET);
+    expect(p.getRatchet(31)).toBe(RATCHET_TRIPLET);
     expect(p.getRatchet(2)).toBe(RATCHET_NONE);
+  });
+
+  it("accepte un ratchet sur les steps au-dela de 23", () => {
+    const p = new Pattern();
+    expect(p.setRatchet(24, RATCHET_6)).toBe(true);
+    expect(p.setRatchet(31, RATCHET_4)).toBe(true);
+    expect(p.getRatchet(24)).toBe(RATCHET_6);
+    expect(p.getRatchet(31)).toBe(RATCHET_4);
+    expect(p.getRatchet(25)).toBe(RATCHET_NONE);
   });
 
   it("accepte un ratchet sur N'IMPORTE quel step (plus de contrainte de groupe)", () => {
@@ -88,17 +114,17 @@ describe("Pattern — ratchets (un code par step)", () => {
     for (let i = 0; i < Pattern.DEFAULT_TOTAL_STEPS; ++i) {
       expect(p.setRatchet(i, RATCHET_TRIPLET), `step ${i}`).toBe(true);
     }
-    expect(p.getRatchet(21)).toBe(RATCHET_TRIPLET);
-    expect(p.getRatchet(23)).toBe(RATCHET_TRIPLET);
+    expect(p.getRatchet(29)).toBe(RATCHET_TRIPLET);
+    expect(p.getRatchet(31)).toBe(RATCHET_TRIPLET);
   });
 
   it("rejette un code ou un index invalide", () => {
     const p = new Pattern();
     expect(p.setRatchet(0, 1)).toBe(false);
     expect(p.setRatchet(0, 5)).toBe(false); // non representable a 96 PPQN
-    expect(p.setRatchet(24, RATCHET_2)).toBe(false);
+    expect(p.setRatchet(32, RATCHET_2)).toBe(false);
     expect(p.getRatchet(0)).toBe(RATCHET_NONE);
-    expect(p.getRatchet(24)).toBe(RATCHET_NONE);
+    expect(p.getRatchet(32)).toBe(RATCHET_NONE);
   });
 
   it("expose le nombre de declenchements et la duree occupee", () => {

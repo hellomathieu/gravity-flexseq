@@ -56,7 +56,7 @@ export const MIN_TEMPO = 30;
 export const MAX_TEMPO = 300;
 export const DEFAULT_TEMPO = 120;
 
-export const STEP_COUNT = Pattern.DEFAULT_TOTAL_STEPS;
+export const STEP_COUNT = 24;
 
 function wrapIndex(current: number, delta: number, count: number): number {
   if (count === 0) return 0;

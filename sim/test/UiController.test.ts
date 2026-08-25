@@ -349,11 +349,20 @@ describe("UiController — EDIT PATTERN", () => {
     expect(ui.stepCursor).toBe(0);
   });
 
+  it("the step cursor walks twenty four steps", () => {
+    const { ui, enterEdit } = rig();
+    enterEdit();
+    for (let i = 0; i < 23; ++i) ui.handle(UiEvent.Rotate, 1);
+    expect(ui.stepCursor).toBe(23);
+    ui.handle(UiEvent.Rotate, 1);
+    expect(ui.stepCursor).toBe(0);
+  });
+
   it("rotate moves the step cursor and wraps at twenty four", () => {
     const { ui, enterEdit } = rig();
     enterEdit();
     ui.handle(UiEvent.Rotate, -1);
-    expect(ui.stepCursor).toBe(STEP_COUNT - 1);
+    expect(ui.stepCursor).toBe(23);
     ui.handle(UiEvent.Rotate, 1);
     expect(ui.stepCursor).toBe(0);
     for (let i = 0; i < 5; ++i) ui.handle(UiEvent.Rotate, 5);

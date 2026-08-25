@@ -9,7 +9,11 @@ void setUp() {}
 void tearDown() {}
 
 void test_pattern_has_expected_memory_footprint() {
-    TEST_ASSERT_EQUAL_UINT16(15, sizeof(Pattern)); // 3 steps + 12 ratchet nibbles
+    TEST_ASSERT_EQUAL_UINT16(20, sizeof(Pattern));
+}
+
+void test_pattern_holds_thirty_two_steps() {
+    TEST_ASSERT_EQUAL_UINT8(32, Pattern::DEFAULT_TOTAL_STEPS);
 }
 
 void test_pattern_defaults_to_all_steps_off() {
@@ -22,7 +26,7 @@ void test_pattern_defaults_to_all_steps_off() {
     }
 }
 
-void test_pattern_writes_and_reads_all_24_steps() {
+void test_pattern_writes_and_reads_every_step() {
     Pattern pattern;
 
     for (uint8_t i = 0; i < Pattern::DEFAULT_TOTAL_STEPS; ++i) {
@@ -58,19 +62,67 @@ void test_pattern_covers_bit_boundaries_0_7_8_15_16_23() {
     }
 }
 
-void test_pattern_rejects_step_index_24_without_mutation() {
+void test_pattern_rejects_step_index_32_without_mutation() {
     Pattern pattern;
 
     bool active = true;
-    TEST_ASSERT_FALSE(pattern.readStep(24, active));
+    TEST_ASSERT_FALSE(pattern.readStep(32, active));
     TEST_ASSERT_TRUE(active);
 
-    TEST_ASSERT_TRUE(pattern.writeStep(23, true));
-    TEST_ASSERT_FALSE(pattern.writeStep(24, false));
+    TEST_ASSERT_TRUE(pattern.writeStep(31, true));
+    TEST_ASSERT_FALSE(pattern.writeStep(32, false));
 
     active = false;
-    TEST_ASSERT_TRUE(pattern.readStep(23, active));
+    TEST_ASSERT_TRUE(pattern.readStep(31, active));
     TEST_ASSERT_TRUE(active);
+}
+
+void test_pattern_writes_and_reads_the_steps_above_23() {
+    Pattern pattern;
+
+    const uint8_t written[4] = {24, 27, 30, 31};
+
+    for (uint8_t i = 0; i < 4; ++i) {
+        TEST_ASSERT_TRUE(pattern.writeStep(written[i], true));
+    }
+
+    for (uint8_t i = 24; i < 32; ++i) {
+        bool active = false;
+        TEST_ASSERT_TRUE(pattern.readStep(i, active));
+        const bool expected = i == 24 || i == 27 || i == 30 || i == 31;
+        TEST_ASSERT_EQUAL(expected, active);
+    }
+
+    bool low = true;
+    TEST_ASSERT_TRUE(pattern.readStep(23, low));
+    TEST_ASSERT_FALSE(low);
+}
+
+void test_pattern_covers_the_fourth_byte_boundaries_24_and_31() {
+    Pattern pattern;
+
+    TEST_ASSERT_TRUE(pattern.writeStep(23, true));
+    TEST_ASSERT_TRUE(pattern.writeStep(24, true));
+    TEST_ASSERT_TRUE(pattern.writeStep(31, true));
+
+    for (uint8_t i = 0; i < 32; ++i) {
+        bool active = false;
+        TEST_ASSERT_TRUE(pattern.readStep(i, active));
+        const bool expected = i == 23 || i == 24 || i == 31;
+        TEST_ASSERT_EQUAL(expected, active);
+    }
+}
+
+void test_pattern_carries_a_ratchet_on_the_steps_above_23() {
+    Pattern pattern;
+
+    TEST_ASSERT_TRUE(pattern.setRatchet(24, flexseq::RATCHET_6));
+    TEST_ASSERT_TRUE(pattern.setRatchet(31, flexseq::RATCHET_4));
+
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_6, pattern.getRatchet(24));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_4, pattern.getRatchet(31));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, pattern.getRatchet(25));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, pattern.getRatchet(30));
 }
 
 void test_pattern_defaults_to_no_ratchet() {
@@ -84,11 +136,11 @@ void test_pattern_sets_and_reads_ratchet_per_step() {
     Pattern pattern;
     TEST_ASSERT_TRUE(pattern.setRatchet(0, flexseq::RATCHET_2));
     TEST_ASSERT_TRUE(pattern.setRatchet(1, flexseq::RATCHET_3));
-    TEST_ASSERT_TRUE(pattern.setRatchet(23, flexseq::RATCHET_TRIPLET));
+    TEST_ASSERT_TRUE(pattern.setRatchet(31, flexseq::RATCHET_TRIPLET));
 
     TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_2, pattern.getRatchet(0));
     TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_3, pattern.getRatchet(1));
-    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_TRIPLET, pattern.getRatchet(23));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_TRIPLET, pattern.getRatchet(31));
     TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, pattern.getRatchet(2));
 }
 
@@ -111,9 +163,9 @@ void test_pattern_any_step_can_carry_a_ratchet() {
     for (uint8_t i = 0; i < Pattern::DEFAULT_TOTAL_STEPS; ++i) {
         TEST_ASSERT_TRUE(pattern.setRatchet(i, flexseq::RATCHET_TRIPLET));
     }
-    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_TRIPLET, pattern.getRatchet(21));
-    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_TRIPLET, pattern.getRatchet(22));
-    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_TRIPLET, pattern.getRatchet(23));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_TRIPLET, pattern.getRatchet(29));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_TRIPLET, pattern.getRatchet(30));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_TRIPLET, pattern.getRatchet(31));
 }
 
 void test_pattern_rejects_invalid_ratchet_code_and_index() {
@@ -121,9 +173,9 @@ void test_pattern_rejects_invalid_ratchet_code_and_index() {
     TEST_ASSERT_FALSE(pattern.setRatchet(0, 1));  // 1 is meaningless
     TEST_ASSERT_FALSE(pattern.setRatchet(0, 5));  // 5 is not representable
     TEST_ASSERT_FALSE(pattern.setRatchet(0, 15));
-    TEST_ASSERT_FALSE(pattern.setRatchet(24, flexseq::RATCHET_2));
+    TEST_ASSERT_FALSE(pattern.setRatchet(32, flexseq::RATCHET_2));
     TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, pattern.getRatchet(0));
-    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, pattern.getRatchet(24));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, pattern.getRatchet(32));
 }
 
 void test_ratchet_trigger_counts_and_spans() {
@@ -148,6 +200,23 @@ void test_pattern_clear_resets_steps_and_ratchets() {
     TEST_ASSERT_TRUE(pattern.readStep(3, active));
     TEST_ASSERT_FALSE(active);
     TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, pattern.getRatchet(3));
+}
+
+void test_pattern_clear_reaches_the_steps_above_23() {
+    Pattern pattern;
+    for (uint8_t step = 24; step < 32; ++step) {
+        TEST_ASSERT_TRUE(pattern.writeStep(step, true));
+        TEST_ASSERT_TRUE(pattern.setRatchet(step, flexseq::RATCHET_3));
+    }
+
+    pattern.clear();
+
+    for (uint8_t step = 24; step < 32; ++step) {
+        bool active = true;
+        TEST_ASSERT_TRUE(pattern.readStep(step, active));
+        TEST_ASSERT_FALSE(active);
+        TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, pattern.getRatchet(step));
+    }
 }
 
 void test_pattern_ratchets_survive_step_edits() {
@@ -180,10 +249,14 @@ int main() {
     UNITY_BEGIN();
 
     RUN_TEST(test_pattern_has_expected_memory_footprint);
+    RUN_TEST(test_pattern_holds_thirty_two_steps);
     RUN_TEST(test_pattern_defaults_to_all_steps_off);
-    RUN_TEST(test_pattern_writes_and_reads_all_24_steps);
+    RUN_TEST(test_pattern_writes_and_reads_every_step);
     RUN_TEST(test_pattern_covers_bit_boundaries_0_7_8_15_16_23);
-    RUN_TEST(test_pattern_rejects_step_index_24_without_mutation);
+    RUN_TEST(test_pattern_rejects_step_index_32_without_mutation);
+    RUN_TEST(test_pattern_writes_and_reads_the_steps_above_23);
+    RUN_TEST(test_pattern_covers_the_fourth_byte_boundaries_24_and_31);
+    RUN_TEST(test_pattern_carries_a_ratchet_on_the_steps_above_23);
 
     RUN_TEST(test_pattern_defaults_to_no_ratchet);
     RUN_TEST(test_pattern_sets_and_reads_ratchet_per_step);
@@ -192,6 +265,7 @@ int main() {
     RUN_TEST(test_pattern_rejects_invalid_ratchet_code_and_index);
     RUN_TEST(test_ratchet_trigger_counts_and_spans);
     RUN_TEST(test_pattern_clear_resets_steps_and_ratchets);
+    RUN_TEST(test_pattern_clear_reaches_the_steps_above_23);
     RUN_TEST(test_pattern_ratchets_survive_step_edits);
     RUN_TEST(test_set_low_step_mask_writes_sixteen_and_spares_the_rest);
 
