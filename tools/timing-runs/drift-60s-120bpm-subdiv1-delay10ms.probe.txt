@@ -1,0 +1,47 @@
+Loaded 27120 bytes of Flash data at 0
+SSD1306: 37uS is 592 cycles for your AVR
+SSD1306: 1uS is 16 cycles for your AVR
+firmware   /Users/mathieu.carpentier/Documents/GitHub/gravity-flexseq/.pio/build/nanoatmega328/firmware.hex
+simulation 60.0 s ; mode seq ; ticksPerStep 96 ; length 16
+play_injection     60 ms a 600 ms
+delay_request_ms   10.000 ms a 5158.400 ms, par la cadence de l'ADC
+
+=== MESURE ===
+isr_total          11520
+start_isr_index    126
+ticks              11394
+midi_start         3
+midi_stop          2
+midi_clock         2866
+restart_after_edge 0
+anchor_ms          663.858
+transport_event    START a 1.332 ms
+transport_event    STOP a 351.403 ms
+transport_event    START a 351.759 ms
+transport_event    STOP a 352.119 ms
+transport_event    START a 660.430 ms
+sync_gap_ticks     4..4
+monotonic          1
+adc_isr_total      2299131
+expected_per_line  37
+edges_OUT1           37
+edges_OUT2           37
+edges_OUT3           37
+edges_OUT4           37
+edges_OUT5           37
+edges_OUT6           37
+matched            222
+dropped            0
+unexpected         0
+isr_period_cycles  83327.9999 (min 83131 max 83524)
+isr_period_us      5207.999995
+delay_window_ms    5158.400 a 5168.400
+delay_window_ticks 864 a 865
+delay_adc_isr      772
+ticks_in_window    1
+timing_in_max_us   8139.188 sur 6 onsets
+timing_out_med_us  757.375 sur 216 onsets
+width_before_ms    4.699 mediane, 5.239 max, 12 impulsions
+width_during_ms    4.951 mediane, 5.282 max, 6 impulsions
+width_after_ms     4.772 mediane, 5.246 max, 204 impulsions
+csv                /var/folders/dp/m734y21165d49c1wqtybrnb40000gp/T/tmp.rvRYlMUyHr/onsets.csv

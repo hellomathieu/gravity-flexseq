@@ -235,6 +235,62 @@ export function reconcileOnsets(budget: OnsetBudget): { consistent: boolean; res
   return { consistent: residual === 0, residual };
 }
 
+export interface RecoveryVerdict {
+  nominal: number;
+  maxError: number;
+  affectedCount: number;
+  firstAffectedIndex: number;
+  lastAffectedIndex: number;
+  samplesToRecover: number;
+  recovered: boolean;
+  finalError: number;
+  persistentOffset: number;
+}
+
+export function assessRecovery(ys: number[], nominal = 0): RecoveryVerdict {
+  const n = ys.length;
+  if (n === 0) {
+    return {
+      nominal,
+      maxError: 0,
+      affectedCount: 0,
+      firstAffectedIndex: -1,
+      lastAffectedIndex: -1,
+      samplesToRecover: 0,
+      recovered: true,
+      finalError: 0,
+      persistentOffset: 0,
+    };
+  }
+  let maxError = 0;
+  let affectedCount = 0;
+  let firstAffectedIndex = -1;
+  let lastAffectedIndex = -1;
+  for (let i = 0; i < n; ++i) {
+    const deviation = Math.abs(ys[i]! - nominal);
+    if (deviation > maxError) maxError = deviation;
+    if (ys[i]! !== nominal) {
+      ++affectedCount;
+      if (firstAffectedIndex < 0) firstAffectedIndex = i;
+      lastAffectedIndex = i;
+    }
+  }
+  const recovered = lastAffectedIndex < 0 || ys[n - 1]! === nominal;
+  const samplesToRecover =
+    lastAffectedIndex < 0 ? 0 : recovered ? lastAffectedIndex - firstAffectedIndex + 1 : n - firstAffectedIndex;
+  return {
+    nominal,
+    maxError,
+    affectedCount,
+    firstAffectedIndex,
+    lastAffectedIndex,
+    samplesToRecover,
+    recovered,
+    finalError: ys[n - 1]!,
+    persistentOffset: recovered ? 0 : ys[n - 1]! - nominal,
+  };
+}
+
 export function subOnsetTick(stepTicks: number, triggers: number, k: number): number {
   if (triggers <= 1) return stepTicks;
   return Math.floor((stepTicks * k) / triggers);

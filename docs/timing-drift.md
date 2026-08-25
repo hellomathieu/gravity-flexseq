@@ -4,9 +4,9 @@ Tracking document, **never normative**. It records how the drift campaign
 measures, what it measured, and what it cannot say. Decisions belong to the PRD
 or to an ADR.
 
-Started 2026-08-25. This page covers the instrumentation and the **short
-validation campaign** only. The long campaigns, the delay test and the overload
-sweep come later, and this page grows with them.
+Started 2026-08-25. This page covers the instrumentation, the campaigns of 1, 5
+and 15 minutes, the EDIT screen condition and the artificial delay. The overload
+sweep comes later, and this page grows with it.
 
 ## The question
 
@@ -141,6 +141,93 @@ without exception over the whole run, a single anchor with no restart after it.
 5208.0 µs exactly. The prediction was −64 ppm and the measurement is −64.0 ppm.
 The sequencer therefore runs **fast** by about 0.23 s per hour at 120 BPM, and
 that belongs to the timer, never to the engine.
+
+## The longer campaigns — 2026-08-25
+
+Same conditions as the first one, on the main screen unless stated.
+
+| | 5 minutes | 15 minutes | 5 minutes on EDIT |
+|---|---|---|---|
+| ticks | 57 477 | **172 684** | 57 536 |
+| onsets expected / emitted | 1122 / 1122 | **3372 / 3372** | 1122 / 1122 |
+| dropped | 0 | 0 | 0 |
+| `grid_error_ticks` | only 0 | only 0 | only 0 |
+| `timing_error_us` median | 753 | 756 | 734 |
+| cumulative drift | 0.000 tick | **0.000 tick** | 0.000 tick |
+| ISR period | −64.0 ppm | −64.0 ppm | −64.0 ppm |
+
+The fifteen-minute run resolves one tick over 900 s, which is **5.8 ppm**, eleven
+times finer than the timer term. Nothing appears.
+
+**The EDIT screen did not produce the regime it was chosen for, and the cause is
+structural.** The loop pays the onsets at the top of the pass, before it renders,
+and a frame only starts when the playhead moves. A frame is eight bands over
+eight passes, about 27 ms, while a step at 120 BPM in SUBDIV `/1` lasts 500 ms.
+The render is therefore phase locked to the onset and finishes long before the
+next one. Rendering can only delay an onset when two onsets fall closer together
+than a frame.
+
+## The artificial delay — 2026-08-25
+
+The question is not whether a trigger can be late. It is whether a punctual
+delay of the main loop leaves a **permanent** offset in the grid.
+
+### Two mechanisms were rejected by measurement
+
+**A burst of received MIDI bytes.** simavr delivers them at the port speed,
+31250 baud, so the interrupt tops out near 3 kHz and steals one or two percent
+of the CPU. It cannot starve the loop, and simavr floods its log with
+"RX buffer overrun" for every byte beyond the FIFO.
+
+**A burst of edges on the external clock input.** `INT0` is vector 1 and
+`TIMER1_COMPA` is vector 11, so the burst runs **before the tick**. The measured
+interrupt period went to **+396 ppm** instead of −64: the harness was moving the
+very reference it measures against.
+
+### The retained mechanism
+
+The harness raises the **ADC prescaler** to its fastest setting for the length of
+the window, then restores it. The ADC vector is 21, therefore **below** the tick,
+which keeps being served on time. Nothing else is touched, and the firmware is
+not modified.
+
+Restoring matters as much as boosting. A first version wrote the whole saved
+register back and the conversion chain died: the ADC ran 186 765 times over the
+run instead of 449 574, and the loop became faster than nominal **after** the
+window. The restore now rewrites the prescaler bits only, and the totals confirm
+it: 449 947 with the delay against 449 574 without, a difference of 373, which is
+the surplus of the window itself.
+
+### Two proofs, and they need two placements
+
+| Proof | Measurement |
+|---|---|
+| the onset is late | emitted **8139 µs** after its tick, against **757 µs** median outside the window |
+| the loop misses its end of pass | a pulse caught by the window stays high **8.867 ms** against **4.699 ms** median |
+
+At 500 ms between onsets, a window that covers an onset's tick cannot also
+overlap a pulse that is already high. The first proof therefore comes from a
+window placed on the tick, the second from the same 10 ms window placed 0.9 ms
+after the rising edge.
+
+### The campaign
+
+60 s simulated, 120 BPM, SUBDIV `/1`, main screen, six channels, one 10 ms delay
+at 5158.4 ms.
+
+| | before | during | after |
+|---|---|---|---|
+| onsets | 12 | **6**, one per channel | **204** |
+| `grid_error_ticks` | 0 | **1** everywhere | **0** everywhere |
+| `timing_error_us` median | 707 | 7687 (7241 to 8139) | 758 |
+
+222 onsets expected, 222 emitted, **0 dropped**, 0 unexpected. The debt reached
+one onset per channel, deduced rather than read. Recovery took **one onset**: the
+next one, 500 ms later, is already back on the grid. Final error 0, persistent
+offset 0, Theil-Sen slope 0.
+
+**Verdict: recovery.** A punctual delay of the loop moves one onset by one tick
+and nothing else. The grid is not displaced.
 
 ## What this campaign does NOT establish
 

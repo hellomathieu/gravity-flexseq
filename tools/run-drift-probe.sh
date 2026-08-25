@@ -2,6 +2,8 @@
 
 set -u
 
+unset -f grep awk sed 2>/dev/null || true
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DURATION="${DURATION:-60}"
 TEMPO="${TEMPO:-120}"
@@ -12,6 +14,8 @@ LENGTH="${LENGTH:-16}"
 MODE="${MODE:-seq}"
 SAVE="${SAVE:-}"
 EDIT="${EDIT:-}"
+DELAY_MS="${DELAY_MS:-0}"
+DELAY_AT_MS="${DELAY_AT_MS:-5000}"
 
 if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
   cat <<'USAGE'
@@ -25,6 +29,8 @@ run-drift-probe.sh — derive cumulative du moteur de sequence, en simulation.
   LENGTH=16        longueur jouee
   MODE=seq         seq ou clock
   EDIT=1           firmware pose sur l'ecran EDIT, transport demarre par lui-meme
+  DELAY_MS=0       retard artificiel ponctuel, en ms (cadence ADC portee au maximum)
+  DELAY_AT_MS=5000 instant du retard, en ms de simulation
   SAVE=1           conserve le CSV et le resume dans tools/timing-runs/
 
 Sortie 0 si aucune derive cumulative n'est detectee et si la coherence tient,
@@ -114,6 +120,7 @@ progress "simulation ($DURATION s simulees)"
 CSV="$WORK/onsets.csv"
 START_S=$(date +%s)
 set +e
+DELAY_MS="$DELAY_MS" DELAY_AT_MS="$DELAY_AT_MS" \
 "$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$DURATION" "$WORK/image.bin" \
   384 "$STEPS" "$RATCHETS" "$TICKS_PER_STEP" "$LENGTH" "$MODE" "$CSV" > "$LOG" 2>&1
 PROBE=$?
@@ -122,6 +129,7 @@ WALL=$(( $(date +%s) - START_S ))
 if [ "$PROBE" -ne 0 ]; then
   cat "$LOG"; die "la sonde s'est terminee anormalement (code $PROBE)"
 fi
+cp "$LOG" /tmp/drift-last.log 2>/dev/null || true
 ok "simulation" "$DURATION s simulees en $WALL s reelles"
 if [ -n "$EDIT" ]; then
   ok "ecran" "EDIT PATTERN, playhead anime, transport demarre par le firmware"
@@ -174,9 +182,51 @@ ok "ticks" "$TICKS ticks, MIDI Clock $MIDI_CLOCK"
 IDEAL_PPM=$(awk -v m="$PERIOD_US" -v i="$TICK_US" 'BEGIN { printf "%+.1f", (m - i) / i * 1e6 }')
 ok "periode d'ISR (terme B)" "$PERIOD_US us contre $TICK_US ideal, soit $IDEAL_PPM ppm"
 
+WINDOW_ARGS=""
+if [ "$DELAY_MS" != "0" ]; then
+  printf '\n%s--- RETARD ARTIFICIEL ---%s\n' "$C_B" "$C_0"
+  WFROM="$(grep -E '^delay_window_ticks ' "$LOG" | awk '{print $2}')"
+  WTO="$(grep -E '^delay_window_ticks ' "$LOG" | awk '{print $4}')"
+  TICKS_IN="$(field ticks_in_window)"
+  BYTES="$(field delay_adc_isr)"
+  USART="$(field adc_isr_total)"
+  EXPECT_TICKS=$(awk -v d="$DELAY_MS" -v t="$TICK_US" 'BEGIN { printf "%.1f", d * 1000.0 / t }')
+  ok "fenetre demandee" "$DELAY_MS ms a $DELAY_AT_MS ms"
+  ok "fenetre observee" "ticks $WFROM a $WTO"
+  ok "ISR ADC pendant" "$BYTES dans la fenetre, $USART sur toute la course"
+  if [ "$TICKS_IN" -gt 0 ] 2>/dev/null; then
+    ok "ISR servies pendant" "$TICKS_IN ticks dans la fenetre, ~$EXPECT_TICKS attendus"
+  else
+    bad "ISR servies pendant" "aucun tick dans la fenetre : le harnais a fige la machine"; FAILED=1
+  fi
+  grep -E '^width_(before|during|after)_ms ' "$LOG" | while read -r k rest; do
+    ok "impulsion ${k#width_}" "$rest"
+  done
+  WD_BEFORE="$(grep -E '^width_before_ms ' "$LOG" | awk '{print $2}')"
+  WD_DURING="$(grep -E '^width_during_ms ' "$LOG" | awk '{print $4}')"
+  T_IN="$(field timing_in_max_us)"
+  T_OUT="$(field timing_out_med_us)"
+  PROOF1=$(awk -v i="$T_IN" -v o="$T_OUT" 'BEGIN { print (o > 0 && i > o * 3) ? 1 : 0 }')
+  PROOF2=$(awk -v b="$WD_BEFORE" -v d="$WD_DURING" 'BEGIN { print (b > 0 && d > b * 1.5) ? 1 : 0 }')
+  if [ "$PROOF1" = "1" ]; then
+    ok "preuve 1, retard" "onset au plus tard a $T_IN us contre $T_OUT us hors fenetre"
+  else
+    bad "preuve 1, retard" "$T_IN us dans la fenetre contre $T_OUT us hors fenetre : pas de retard mesure"
+  fi
+  if [ "$PROOF2" = "1" ]; then
+    ok "preuve 2, impulsion" "$WD_DURING ms pendant contre $WD_BEFORE ms mediane avant"
+  else
+    bad "preuve 2, impulsion" "$WD_DURING ms contre $WD_BEFORE ms : aucune impulsion ne chevauche la fenetre"
+  fi
+  if [ "$PROOF1" = "0" ] && [ "$PROOF2" = "0" ]; then
+    bad "campagne" "aucune des deux preuves : NON VALIDE"; FAILED=1
+  fi
+  WINDOW_ARGS="$WFROM $WTO"
+fi
+
 printf '\n'
 set +e
-( cd "$ROOT/sim" && npx vite-node src/analysis/driftReport.ts "$CSV" "$TICK_US" )
+( cd "$ROOT/sim" && npx vite-node src/analysis/driftReport.ts "$CSV" "$TICK_US" $WINDOW_ARGS )
 ANALYSIS=$?
 set -e
 [ "$ANALYSIS" -ne 0 ] && FAILED=1
@@ -187,6 +237,7 @@ if [ -n "$SAVE" ]; then
   NAME="drift-${DURATION}s-${TEMPO}bpm-subdiv${SUBDIV}"
   [ -n "$EDIT" ] && NAME="$NAME-edit"
   [ -n "$RATCHETS" ] && NAME="$NAME-ratchet"
+  [ "$DELAY_MS" != "0" ] && NAME="$NAME-delay${DELAY_MS}ms"
   cp "$CSV" "$DEST/$NAME.csv"
   cp "$LOG" "$DEST/$NAME.probe.txt"
   printf '  %s✅%s %-22s %s%s%s\n' "$C_OK" "$C_0" "conserve" "$C_DIM" "tools/timing-runs/$NAME.*" "$C_0"

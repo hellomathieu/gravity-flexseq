@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import {
   assessDrift,
+  assessRecovery,
   parseOnsetCsv,
   seriesStats,
   type OnsetRow,
@@ -35,17 +36,69 @@ function reportChannel(label: string, rows: OnsetRow[], tickUs: number): boolean
   process.stdout.write(
     `    derive cumulative  ${fmt(verdict.cumulativeDriftTicks)} tick sur la course` +
       `  (Theil-Sen ${fmt(verdict.theilSenSpanChange)})` +
-      `  = ${fmt(verdict.cumulativeDriftTicks * tickUs / 1000)} ms\n`,
+      `  = ${fmt((verdict.cumulativeDriftTicks * tickUs) / 1000)} ms\n`,
   );
   process.stdout.write(`    verdict            ${verdict.drifting ? 'DERIVE' : 'pas de derive'}\n`);
   return verdict.drifting;
 }
 
+function phase(rows: OnsetRow[], from: number, to: number, which: 'before' | 'during' | 'after'): OnsetRow[] {
+  if (which === 'before') return rows.filter((r) => r.expectedTick < from);
+  if (which === 'during') return rows.filter((r) => r.expectedTick >= from && r.expectedTick <= to);
+  return rows.filter((r) => r.expectedTick > to);
+}
+
+function reportWindow(rows: OnsetRow[], from: number, to: number): boolean {
+  process.stdout.write(`\n=== RETARD ARTIFICIEL : ticks ${from} a ${to} ===\n`);
+  for (const which of ['before', 'during', 'after'] as const) {
+    const sub = phase(rows, from, to, which);
+    const g = seriesStats(sub.map((r) => r.gridErrorTicks));
+    const t = seriesStats(sub.map((r) => r.timingErrorUs));
+    const label = which === 'before' ? 'avant ' : which === 'during' ? 'pendant' : 'apres ';
+    process.stdout.write(
+      `  ${label}  ${String(sub.length).padStart(5)} onsets` +
+        `   grid_error min ${g.min} max ${g.max} moyenne ${fmt(g.mean, 4)}` +
+        `   timing_us min ${fmt(t.min, 1)} max ${fmt(t.max, 1)} mediane ${fmt(t.median, 1)}\n`,
+    );
+  }
+
+  const channels = [...new Set(rows.map((r) => r.channel))].sort((a, b) => a - b);
+  let allRecovered = true;
+  let worstError = 0;
+  let worstRecovery = 0;
+  let persistent = 0;
+  for (const channel of channels) {
+    const sub = rows
+      .filter((r) => r.channel === channel)
+      .sort((a, b) => a.expectedTick - b.expectedTick);
+    const r = assessRecovery(sub.map((x) => x.gridErrorTicks));
+    allRecovered = allRecovered && r.recovered;
+    worstError = Math.max(worstError, r.maxError);
+    worstRecovery = Math.max(worstRecovery, r.samplesToRecover);
+    persistent = Math.max(persistent, Math.abs(r.persistentOffset));
+  }
+  process.stdout.write(
+    `\n  recuperation       erreur maximale ${worstError} tick(s)` +
+      `  onsets affectes jusqu a ${worstRecovery}` +
+      `  erreur persistante ${persistent}\n`,
+  );
+  process.stdout.write(
+    `  conclusion         ${
+      allRecovered
+        ? 'le moteur revient sur sa grille apres le retard'
+        : 'UNE ERREUR SUBSISTE apres le retour au regime nominal'
+    }\n`,
+  );
+  return !allRecovered;
+}
+
 function main(): void {
   const csvPath = process.argv[2];
   const tickUs = Number(process.argv[3] ?? '5208.333');
+  const windowFrom = process.argv[4] ? Number(process.argv[4]) : null;
+  const windowTo = process.argv[5] ? Number(process.argv[5]) : null;
   if (!csvPath) {
-    process.stderr.write('usage: driftReport <onsets.csv> [tick_us]\n');
+    process.stderr.write('usage: driftReport <onsets.csv> [tick_us] [tick_debut] [tick_fin]\n');
     process.exit(2);
   }
   const rows = parseOnsetCsv(readFileSync(csvPath, 'utf8'));
@@ -55,25 +108,30 @@ function main(): void {
   }
 
   process.stdout.write('=== ANALYSE DE DERIVE ===\n');
-  let drifting = false;
+  let failed = false;
   const channels = [...new Set(rows.map((r) => r.channel))].sort((a, b) => a - b);
   for (const channel of channels) {
     const sub = rows.filter((r) => r.channel === channel);
-    drifting = reportChannel(`channel ${channel}`, sub, tickUs) || drifting;
+    failed = reportChannel(`channel ${channel}`, sub, tickUs) || failed;
   }
-  drifting = reportChannel('TOUS CHANNELS', rows, tickUs) || drifting;
+  failed = reportChannel('TOUS CHANNELS', rows, tickUs) || failed;
 
   const grid = rows.map((r) => r.gridErrorTicks);
   const distinct = [...new Set(grid)].sort((a, b) => a - b);
   process.stdout.write(`\n  valeurs de grid_error_ticks rencontrees : ${distinct.join(', ')}\n`);
   process.stdout.write(
     `  conclusion : ${
-      drifting
+      failed
         ? 'DERIVE CUMULATIVE DETECTEE'
         : '0 tick de derive cumulative detecte dans les conditions du test'
     }\n`,
   );
-  process.exit(drifting ? 1 : 0);
+
+  if (windowFrom !== null && windowTo !== null) {
+    failed = reportWindow(rows, windowFrom, windowTo) || failed;
+  }
+
+  process.exit(failed ? 1 : 0);
 }
 
 main();

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   assessDrift,
+  assessRecovery,
   matchOnsets,
   parseOnsetCsv,
   reconcileOnsets,
@@ -77,6 +78,72 @@ describe('driftEstimator — series de reference', () => {
     const v = assessDrift(xs, ys);
     expect(v.lastMinusFirst).toBe(0);
     expect(v.drifting).toBe(true);
+  });
+});
+
+describe('driftEstimator — recuperation apres un retard', () => {
+  it('A. un retard ponctuel avec retour a la grille est une perturbation locale', () => {
+    const r = assessRecovery([0, 0, 0, 1, 1, 0, 0, 0]);
+    expect(r.recovered).toBe(true);
+    expect(r.maxError).toBe(1);
+    expect(r.affectedCount).toBe(2);
+    expect(r.samplesToRecover).toBe(2);
+    expect(r.finalError).toBe(0);
+    expect(r.persistentOffset).toBe(0);
+  });
+
+  it('B. un decalage qui reste est un decalage permanent', () => {
+    const r = assessRecovery([0, 0, 0, 1, 1, 1, 1, 1]);
+    expect(r.recovered).toBe(false);
+    expect(r.persistentOffset).toBe(1);
+    expect(r.finalError).toBe(1);
+    expect(r.firstAffectedIndex).toBe(3);
+  });
+
+  it('C. une derive progressive n est pas une recuperation, et la pente la voit', () => {
+    const ys = [0, 1, 2, 3, 4, 5];
+    const r = assessRecovery(ys);
+    expect(r.recovered).toBe(false);
+    expect(r.persistentOffset).toBe(5);
+    const xs = ys.map((_, i) => i * 96);
+    expect(assessDrift(xs, ys).drifting).toBe(true);
+  });
+
+  it('D. un retard important suivi d un retour est une recuperation', () => {
+    const r = assessRecovery([0, 0, 2, 2, 2, 1, 0, 0]);
+    expect(r.recovered).toBe(true);
+    expect(r.maxError).toBe(2);
+    expect(r.affectedCount).toBe(4);
+    expect(r.samplesToRecover).toBe(4);
+    expect(r.finalError).toBe(0);
+  });
+
+  it('E. un onset perdu se distingue d un onset en retard', () => {
+    const expected = [96, 192, 288, 384];
+    const late = matchOnsets(expected, [96, 194, 288, 384]);
+    expect(late.dropped).toEqual([]);
+    expect(assessRecovery(late.matched.map((m) => m.gridErrorTicks)).recovered).toBe(true);
+
+    const lost = matchOnsets(expected, [96, 288, 384]);
+    expect(lost.dropped).toEqual([1]);
+    expect(lost.matched).toHaveLength(3);
+  });
+
+  it('F. une dette temporaire remonte puis retombe, et ce n est pas une derive', () => {
+    const pending = [0, 0, 3, 2, 1, 0, 0, 0];
+    const r = assessRecovery(pending);
+    expect(r.maxError).toBe(3);
+    expect(r.recovered).toBe(true);
+    expect(r.finalError).toBe(0);
+
+    const xs = pending.map((_, i) => i * 96);
+    expect(assessDrift(xs, pending).drifting).toBe(false);
+  });
+
+  it('une dette qui ne redescend jamais n est pas une recuperation', () => {
+    const r = assessRecovery([0, 0, 3, 3, 3, 3]);
+    expect(r.recovered).toBe(false);
+    expect(r.persistentOffset).toBe(3);
   });
 });
 

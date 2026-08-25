@@ -7,6 +7,7 @@
 #include <sim_elf.h>
 #include <sim_hex.h>
 #include <sim_irq.h>
+#include <sim_core.h>
 #include <avr_twi.h>
 #include <avr_ioport.h>
 #include <avr_uart.h>
@@ -42,8 +43,20 @@ static uint32_t  g_isr_count, g_isr_cap;
 static int64_t   g_start_isr = -1;
 static uint64_t  g_start_cycle;
 
-typedef struct { uint64_t *cycle; uint32_t n, cap; int last; } line_t;
+typedef struct {
+    uint64_t *cycle; uint32_t n, cap;
+    uint64_t *fall; uint32_t fn, fcap;
+    int last;
+} line_t;
 static line_t g_line[OUT_COUNT];
+
+#define ADC_VECTOR 21
+#define ADCSRA_ADDR 0x7A
+#define ADC_PRESCALER_MASK 0x07
+#define ADC_PRESCALER_FASTEST 0x01
+static uint32_t g_adc_isr;
+static uint64_t g_delay_from, g_delay_to;
+static uint32_t g_delay_bytes;
 
 static uint32_t g_midi_clock, g_midi_start, g_midi_stop;
 #define MAX_TRANSPORT_EVENTS 64
@@ -64,6 +77,12 @@ static void grow(uint64_t **buf, uint32_t *cap, uint32_t need)
     if (!p) { fprintf(stderr, "memoire epuisee\n"); exit(1); }
     *buf = p;
     *cap = next;
+}
+
+static void adc_isr_hook(struct avr_irq_t *irq, uint32_t value, void *param)
+{
+    (void)irq; (void)param;
+    if (value) ++g_adc_isr;
 }
 
 static void isr_hook(struct avr_irq_t *irq, uint32_t value, void *param)
@@ -98,7 +117,7 @@ static void uart_hook(struct avr_irq_t *irq, uint32_t value, void *param)
         g_sync_gap_max = 0;
         if (g_first_edge_cycle != 0) ++g_restart_after_edges;
         g_first_edge_cycle = 0;
-        for (int i = 0; i < OUT_COUNT; ++i) g_line[i].n = 0;
+        for (int i = 0; i < OUT_COUNT; ++i) { g_line[i].n = 0; g_line[i].fn = 0; }
     } else if (byte == MIDI_STOP) {
         ++g_midi_stop;
     } else if (byte == MIDI_CLOCK) {
@@ -122,8 +141,12 @@ static void pin_hook(struct avr_irq_t *irq, uint32_t value, void *param)
     const int level = value ? 1 : 0;
     if (level == l->last) return;
     l->last = level;
-    if (!level) return;
     if (g_start_isr < 0) return;
+    if (!level) {
+        grow(&l->fall, &l->fcap, l->fn);
+        l->fall[l->fn++] = g_avr->cycle;
+        return;
+    }
     if (g_first_edge_cycle == 0) g_first_edge_cycle = g_avr->cycle;
     grow(&l->cycle, &l->cap, l->n);
     l->cycle[l->n++] = g_avr->cycle;
@@ -210,6 +233,39 @@ static uint64_t cycle_of_tick(uint32_t tick)
 
 static double us_of(uint64_t cycles) { return (double)cycles * 1e6 / (double)F_CPU_HZ; }
 
+static int cmp_double(const void *a, const void *b)
+{
+    const double x = *(const double *)a, y = *(const double *)b;
+    return (x > y) - (x < y);
+}
+
+static void width_stats(int phase, double *median, double *max, uint32_t *count)
+{
+    static double w[65536];
+    uint32_t n = 0;
+    for (int c = 0; c < OUT_COUNT; ++c) {
+        const line_t *l = &g_line[c];
+        uint32_t f = 0;
+        for (uint32_t r = 0; r < l->n && n < 65536; ++r) {
+            while (f < l->fn && l->fall[f] <= l->cycle[r]) ++f;
+            if (f >= l->fn) break;
+            const uint64_t rise = l->cycle[r];
+            int in_phase;
+            const uint64_t span = g_delay_to - g_delay_from;
+            const uint64_t fall = l->fall[f];
+            if (phase < 0) in_phase = fall <= g_delay_from;
+            else if (phase == 0) in_phase = fall > g_delay_from && rise < g_delay_to + span;
+            else in_phase = rise >= g_delay_to + span;
+            if (in_phase) w[n++] = us_of(l->fall[f] - rise) / 1000.0;
+        }
+    }
+    *count = n;
+    if (n == 0) { *median = 0.0; *max = 0.0; return; }
+    qsort(w, n, sizeof(double), cmp_double);
+    *median = w[n / 2];
+    *max = w[n - 1];
+}
+
 int main(int argc, char **argv)
 {
     if (argc < 4) {
@@ -289,6 +345,9 @@ int main(int argc, char **argv)
     if (!tx) { fprintf(stderr, "UART introuvable\n"); return 1; }
     avr_irq_register_notify(tx, uart_hook, NULL);
 
+    avr_irq_t *adc_vec = avr_get_interrupt_irq(avr, ADC_VECTOR);
+    if (adc_vec) avr_irq_register_notify(adc_vec + AVR_INT_IRQ_RUNNING, adc_isr_hook, NULL);
+
     for (int i = 0; i < OUT_COUNT; ++i) {
         g_line[i].last = -1;
         avr_irq_t *pin = avr_io_getirq(avr, AVR_IOCTL_IOPORT_GETIRQ(OUTS[i].port), OUTS[i].bit);
@@ -309,9 +368,33 @@ int main(int argc, char **argv)
     int play_state = 2;
     printf("play_injection     %s\n", no_play ? "aucune" : "60 ms a 600 ms");
 
+    const double delay_ms = getenv("DELAY_MS") ? atof(getenv("DELAY_MS")) : 0.0;
+    const double delay_at_ms = getenv("DELAY_AT_MS") ? atof(getenv("DELAY_AT_MS")) : 5000.0;
+    uint8_t adc_saved = 0;
+    int adc_boosted = 0, adc_restored = 0;
+    g_delay_from = delay_ms > 0.0 ? (uint64_t)(delay_at_ms * 1e-3 * (double)F_CPU_HZ) : 0;
+    g_delay_to = delay_ms > 0.0
+        ? g_delay_from + (uint64_t)(delay_ms * 1e-3 * (double)F_CPU_HZ) : 0;
+    printf("delay_request_ms   %.3f ms a %.3f ms, par la cadence de l'ADC\n",
+           delay_ms, delay_at_ms);
+
     while (avr->cycle < target) {
         const int want = (!no_play && avr->cycle >= play_dn && avr->cycle < play_up) ? 0 : 1;
         if (want != play_state) { play_state = want; avr_raise_irq(play, want); }
+        if (delay_ms > 0.0 && !adc_boosted && avr->cycle >= g_delay_from) {
+            adc_boosted = 1;
+            adc_saved = (uint8_t)(avr->data[ADCSRA_ADDR] & ADC_PRESCALER_MASK);
+            avr_core_watch_write(avr, ADCSRA_ADDR,
+                (uint8_t)((avr->data[ADCSRA_ADDR] & (uint8_t)~ADC_PRESCALER_MASK)
+                          | ADC_PRESCALER_FASTEST));
+            g_delay_bytes = g_adc_isr;
+        }
+        if (adc_boosted && !adc_restored && avr->cycle >= g_delay_to) {
+            adc_restored = 1;
+            g_delay_bytes = g_adc_isr - g_delay_bytes;
+            avr_core_watch_write(avr, ADCSRA_ADDR,
+                (uint8_t)((avr->data[ADCSRA_ADDR] & (uint8_t)~ADC_PRESCALER_MASK) | adc_saved));
+        }
         const int state = avr_run(avr);
         if (state == cpu_Done || state == cpu_Crashed) {
             printf("!! CPU arrete (state=%d)\n", state);
@@ -343,6 +426,10 @@ int main(int argc, char **argv)
     }
 
     uint32_t total_matched = 0, total_dropped = 0, total_unexpected = 0;
+    static double timing_in[4096], timing_out[262144];
+    uint32_t n_in = 0, n_out = 0;
+    const uint32_t win_from_tick = g_delay_to > g_delay_from ? tick_at(g_delay_from) : 0;
+    const uint32_t win_to_tick = g_delay_to > g_delay_from ? tick_at(g_delay_to) + 2 : 0;
 
     for (int c = 0; c < OUT_COUNT; ++c) {
         uint32_t i = 0, j = 0;
@@ -358,6 +445,13 @@ int main(int argc, char **argv)
                 continue;
             }
             const uint64_t exp_cycle = cycle_of_tick(g_expect[i].tick);
+            const double err_us = us_of(l->cycle[j]) - us_of(exp_cycle);
+            if (g_delay_to > g_delay_from
+                && g_expect[i].tick >= win_from_tick && g_expect[i].tick <= win_to_tick) {
+                if (n_in < 4096) timing_in[n_in++] = err_us;
+            } else if (n_out < 262144) {
+                timing_out[n_out++] = err_us;
+            }
             if (csv) {
                 fprintf(csv, "%d,%u,%u,%u,%u,%u,%d,%.3f,%.3f,%.3f\n",
                         c + 1, i, g_expect[i].step, g_expect[i].sub,
@@ -405,6 +499,7 @@ int main(int argc, char **argv)
     printf("sync_gap_ticks     %u..%u\n",
            g_sync_gap_min == 0xFFFFFFFFu ? 0 : g_sync_gap_min, g_sync_gap_max);
     printf("monotonic          %d\n", monotonic);
+    printf("adc_isr_total      %u\n", g_adc_isr);
     printf("expected_per_line  %u\n", g_expect_n);
     for (int c = 0; c < OUT_COUNT; ++c)
         printf("edges_%s           %u\n", OUTS[c].name, g_line[c].n);
@@ -414,6 +509,35 @@ int main(int argc, char **argv)
     printf("isr_period_cycles  %.4f (min %" PRIu64 " max %" PRIu64 ")\n",
            period_mean, pmin, pmax);
     printf("isr_period_us      %.6f\n", us_of(1) * period_mean);
+
+    if (g_delay_to > g_delay_from) {
+        uint32_t ticks_in_window = 0;
+        for (uint32_t k = (uint32_t)g_start_isr; k < g_isr_count; ++k) {
+            if (g_isr_cycle[k] >= g_delay_from && g_isr_cycle[k] < g_delay_to) ++ticks_in_window;
+        }
+        printf("delay_window_ms    %.3f a %.3f\n",
+               us_of(g_delay_from) / 1000.0, us_of(g_delay_to) / 1000.0);
+        printf("delay_window_ticks %u a %u\n", tick_at(g_delay_from), tick_at(g_delay_to));
+        printf("delay_adc_isr      %u\n", g_delay_bytes);
+        printf("ticks_in_window    %u\n", ticks_in_window);
+    }
+    if (g_delay_to > g_delay_from) {
+        double in_max = 0.0, out_med = 0.0;
+        for (uint32_t i = 0; i < n_in; ++i) if (timing_in[i] > in_max) in_max = timing_in[i];
+        if (n_out) {
+            qsort(timing_out, n_out, sizeof(double), cmp_double);
+            out_med = timing_out[n_out / 2];
+        }
+        printf("timing_in_max_us   %.3f sur %u onsets\n", in_max, n_in);
+        printf("timing_out_med_us  %.3f sur %u onsets\n", out_med, n_out);
+    }
+    double med, mx; uint32_t cnt;
+    width_stats(-1, &med, &mx, &cnt);
+    printf("width_before_ms    %.3f mediane, %.3f max, %u impulsions\n", med, mx, cnt);
+    width_stats(0, &med, &mx, &cnt);
+    printf("width_during_ms    %.3f mediane, %.3f max, %u impulsions\n", med, mx, cnt);
+    width_stats(1, &med, &mx, &cnt);
+    printf("width_after_ms     %.3f mediane, %.3f max, %u impulsions\n", med, mx, cnt);
     if (csv_path) printf("csv                %s\n", csv_path);
 
     return 0;
