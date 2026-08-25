@@ -284,6 +284,7 @@ int main(int argc, char **argv)
     const uint8_t length = (argc > 8) ? (uint8_t)strtoul(argv[8], NULL, 10) : 16;
     const char *mode = (argc > 9) ? argv[9] : "seq";
     const char *csv_path = (argc > 10 && argv[10][0]) ? argv[10] : NULL;
+    const char *timeline_path = (argc > 11 && argv[11][0]) ? argv[11] : NULL;
     const int seq_mode = strcmp(mode, "seq") == 0;
 
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -416,6 +417,23 @@ int main(int argc, char **argv)
     for (int c = 0; c < OUT_COUNT && monotonic; ++c)
         for (uint32_t i = 1; i < g_line[c].n; ++i)
             if (g_line[c].cycle[i] <= g_line[c].cycle[i - 1]) { monotonic = 0; break; }
+
+    if (timeline_path) {
+        FILE *tl = fopen(timeline_path, "w");
+        if (!tl) { fprintf(stderr, "timeline impossible : %s\n", timeline_path); return 1; }
+        fprintf(tl, "channel,kind,tick,us\n");
+        for (uint32_t k = 0; k < g_expect_n; ++k) {
+            fprintf(tl, "0,E,%u,%.3f\n", g_expect[k].tick, us_of(cycle_of_tick(g_expect[k].tick)));
+        }
+        for (int c = 0; c < OUT_COUNT; ++c) {
+            for (uint32_t k = 0; k < g_line[c].n; ++k) {
+                fprintf(tl, "%d,O,%u,%.3f\n", c + 1,
+                        tick_at(g_line[c].cycle[k]), us_of(g_line[c].cycle[k]));
+            }
+        }
+        fclose(tl);
+        printf("timeline           %s\n", timeline_path);
+    }
 
     FILE *csv = NULL;
     if (csv_path) {

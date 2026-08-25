@@ -46,6 +46,8 @@ below.
 
 | 41 | **The module emits MIDI Start, Stop, Start, Stop on the bus before the user presses PLAY.** Observed on 2026-08-25 with `run-drift-probe.sh`, on the production binary: START at 1.33 ms (`Clock::Init()` starts uClock), STOP at 351.40 ms (the first `apply()` sees the engine stopped), START at 351.76 ms and STOP at 352.12 ms. The middle pair comes from libGravity: `Clock::SetSource()` ends with `if (was_playing) uClock.start()`, so selecting the source restarts a clock that FlexSeq then stops again on the next pass | low, and only for connected gear | **nothing today.** A slaved device would see two spurious transport messages at power-up, one loop pass apart. It costs nothing musically because the module is silent until PLAY. To revisit when the MIDI expander enters the path, and to weigh against the fork charter of ADR 0008: the cause is in the dependency, not in FlexSeq |
 
+| 42 | **A greedy matcher reported 1441 lost onsets where the raw count said 12.** The overload sweep of 2026-08-25 paired each edge with an expected onset under the rule "an edge at or after the next expectation means the previous one is missing". Under overload the debt pays one onset per loop pass, so a delay exceeds the interval and the pairing shifts, then propagates: `dropped` and `unexpected` came out almost equal, 1441 against 1429, with negative grid errors | **closed for the instrument, open as a method rule** | `reconcileTimeline()` counts first and pairs second, and returns **ambiguous** rather than choosing. The identity of an onset is **not recoverable**: `owed_[ch]` is a counter, not a queue, so no matcher can do better. The rule this leaves: **an instrument must not answer a question it can no longer decide** |
+
 ## What is closed or accepted
 
 These lines **wait for nothing any more**. They stay written so that nobody
@@ -148,6 +150,17 @@ green on a question it could no longer answer. The harness now walks
 `screen::GRID_STEPS`, which is what the screen draws, and the criterion was
 verified red -- `LENGTH=32` gives 20/24. **A check whose bound comes from one
 source and whose subject comes from another will pass for the wrong reason.**
+
+**Reading a firmware structure from outside is limited to what a `static_assert`
+guarantees, because the build gives nothing else.** Measured on 2026-08-25:
+adding `-g` leaves the `.hex` **byte-identical** — proven on two clean builds,
+same md5 — but produces **no usable type information**: `.debug_info` stays at
+its 4.5 kB of library content and carries **zero** `DW_TAG_member`. The cause is
+LTO: the objects hold GIMPLE, not code, and the link does not regenerate the
+types. `-Wl,-g` and `-fno-lto` change nothing that can be used without changing
+the measured binary. What remains readable is therefore what the firmware itself
+asserts — `sizeof(Pattern) == 20`, `PatternBank` being `Pattern[16]` — and
+everything else must be observed on the pins.
 
 **A glyph must not look like another function.** The eighth tab draws a filled
 5x5 square, which the owner read as a Play/Stop indicator on the module -- a fair

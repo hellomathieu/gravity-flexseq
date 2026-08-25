@@ -229,6 +229,93 @@ offset 0, Theil-Sen slope 0.
 **Verdict: recovery.** A punctual delay of the loop moves one onset by one tick
 and nothing else. The grid is not displaced.
 
+## The greedy matching broke, and the fix is to stop matching first — 2026-08-25
+
+The overload sweep reported **1441 dropped onsets** on one configuration. The raw
+edge count said **12**. The analyser was wrong, and the way it was wrong matters.
+
+### Why it broke
+
+The old rule read:
+
+```
+if the edge is before the expectation minus a tolerance  -> unexpected
+else if the edge is at or after the NEXT expectation     -> the onset is missing
+else                                                     -> matched
+```
+
+The second line assumes **the delay is smaller than the interval between two
+onsets**. Under overload that assumption is false by construction: the debt pays
+one onset per main-loop pass, so six sub-onsets packed into 4.17 ms come out
+spread over tens of milliseconds. The edge of onset *i* lands past the
+expectation of *i+1*, the matcher calls *i* missing, pairs the edge with *i+1*,
+and **the shift propagates to the end of the run**. Hence the signature:
+`dropped` and `unexpected` almost equal — 1441 against 1429 — and negative grid
+errors once the shift inverted.
+
+### What is impossible, and it is not a matter of algorithm
+
+`TriggerSequencer` holds the debt in **`owed_[ch]`, a counter**, not a queue of
+identities. When three onsets are owed and three pulses come out, nothing in the
+system says which is which — the information does not exist, on the pin or in
+memory. When the clamp at `MAX_OWED = 6` bites, the surplus disappears without a
+trace.
+
+No matcher can therefore attribute an edge to a given onset once the delay
+exceeds the interval. The answer is not a better matcher: it is a measurement
+that does not need matching.
+
+### The method
+
+Two cumulative series per channel, one arithmetic and one observed:
+
+```
+E(t) = onsets expected up to t
+O(t) = edges observed up to t
+D(t) = E(t) - O(t)     the outstanding debt
+```
+
+`D(t)` needs no identity. Its **peak** is the largest backlog, its **floor** is
+what was lost for good, and its shape separates the four cases: a bump that
+returns to zero is a delay, a floor that rises is a loss, a positive slope is an
+accumulating debt, and none of them is a drift of the grid.
+
+Pairing survives, but it now declares its limits. `reconcileTimeline()` pairs in
+order, counts `matched`, `late`, `missing`, `extra`, and — the new one —
+**`ambiguous`**. A single loss is attributed to a position only when exactly one
+position is feasible under "an onset cannot be emitted before its tick"; when
+several are, the analyser returns `ambiguous` with the candidate range rather
+than choosing silently. Above one loss it does not attribute at all.
+
+### The reference campaign, replayed — 300 BPM, x8 + R6, 20 s
+
+| | old analyser | new analyser |
+|---|---:|---:|
+| expected | 8742 | 8742 |
+| edges observed | 8730 | 8730 |
+| dropped / missing | **1441** | **12** |
+| unexpected / extra | **1429** | **0** |
+| ambiguous | not measured | **12** |
+| grid error | −1 to 4, negative values | not published, pairing ambiguous |
+| max delay | not measured | **65 ticks**, 135 ms |
+| max debt | not measured | **8** |
+
+**The 12 are real losses, and the deficit says where.** The floor of `D(t)` is
+**2 per channel from tick 1000 to the end of the run**, and it never returns to
+zero. The peak of 8 happens at **tick 50**, in the startup burst, which is also
+the only window where the backlog exceeds the firmware's clamp of 6 — ticks 46 to
+60. Eight owed against a cap of six leaves two, which is exactly the floor that
+follows. Nothing is lost afterwards: the floor stays at 2 for the remaining
+9000 ticks.
+
+The horizon explains none of it: a truncation at the end would leave a transient
+deficit, not a floor carried across the whole run.
+
+**No ceiling is concluded from this.** Whether those losses come from the pulse
+width, from the loop rate, from the simulated ADC or from a combination is a
+separate question, and this campaign was run to make the measurement trustworthy,
+not to answer it.
+
 ## What this campaign does NOT establish
 
 - **The real crystal.** simavr models a perfect 16 MHz. Measuring the module's

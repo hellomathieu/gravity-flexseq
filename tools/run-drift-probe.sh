@@ -118,11 +118,12 @@ ok "image generee" "$(wc -c < "$WORK/image.bin" | tr -d ' ') octets, steps $STEP
 
 progress "simulation ($DURATION s simulees)"
 CSV="$WORK/onsets.csv"
+TIMELINE="$WORK/timeline.csv"
 START_S=$(date +%s)
 set +e
 DELAY_MS="$DELAY_MS" DELAY_AT_MS="$DELAY_AT_MS" \
 "$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$DURATION" "$WORK/image.bin" \
-  384 "$STEPS" "$RATCHETS" "$TICKS_PER_STEP" "$LENGTH" "$MODE" "$CSV" > "$LOG" 2>&1
+  384 "$STEPS" "$RATCHETS" "$TICKS_PER_STEP" "$LENGTH" "$MODE" "$CSV" "$TIMELINE" > "$LOG" 2>&1
 PROBE=$?
 set -e
 WALL=$(( $(date +%s) - START_S ))
@@ -168,16 +169,7 @@ ok "transport au boot" "$MIDI_START START / $(field midi_stop) STOP avant la mes
 EXPECTED_TOTAL=$((EXPECTED_LINE * 6))
 ok "onsets attendus" "$EXPECTED_LINE par ligne, $EXPECTED_TOTAL sur 6 lignes"
 ok "onsets apparies" "$MATCHED"
-if [ "$DROPPED" = "0" ]; then
-  ok "onsets perdus" "0"
-else
-  bad "onsets perdus" "$DROPPED"; FAILED=1
-fi
-if [ "$UNEXPECTED" = "0" ]; then
-  ok "onsets inattendus" "0"
-else
-  bad "onsets inattendus" "$UNEXPECTED"; FAILED=1
-fi
+ok "appariement glouton" "perdus $DROPPED, inattendus $UNEXPECTED — INDICATIF, voir le comptage brut"
 ok "ticks" "$TICKS ticks, MIDI Clock $MIDI_CLOCK"
 IDEAL_PPM=$(awk -v m="$PERIOD_US" -v i="$TICK_US" 'BEGIN { printf "%+.1f", (m - i) / i * 1e6 }')
 ok "periode d'ISR (terme B)" "$PERIOD_US us contre $TICK_US ideal, soit $IDEAL_PPM ppm"
@@ -226,7 +218,9 @@ fi
 
 printf '\n'
 set +e
-( cd "$ROOT/sim" && npx vite-node src/analysis/driftReport.ts "$CSV" "$TICK_US" $WINDOW_ARGS )
+[ -z "$WINDOW_ARGS" ] && WINDOW_ARGS="0 0"
+( cd "$ROOT/sim" && npx vite-node src/analysis/driftReport.ts "$CSV" "$TICK_US" $WINDOW_ARGS \
+    "$TIMELINE" "${MAX_DELAY_TICKS:-}" )
 ANALYSIS=$?
 set -e
 [ "$ANALYSIS" -ne 0 ] && FAILED=1
@@ -239,6 +233,7 @@ if [ -n "$SAVE" ]; then
   [ -n "$RATCHETS" ] && NAME="$NAME-ratchet"
   [ "$DELAY_MS" != "0" ] && NAME="$NAME-delay${DELAY_MS}ms"
   cp "$CSV" "$DEST/$NAME.csv"
+  cp "$TIMELINE" "$DEST/$NAME.timeline.csv"
   cp "$LOG" "$DEST/$NAME.probe.txt"
   printf '  %s✅%s %-22s %s%s%s\n' "$C_OK" "$C_0" "conserve" "$C_DIM" "tools/timing-runs/$NAME.*" "$C_0"
 fi

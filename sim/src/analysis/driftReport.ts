@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { reconcileTimeline } from './reconcile';
 import {
   assessDrift,
   assessRecovery,
@@ -92,6 +93,84 @@ function reportWindow(rows: OnsetRow[], from: number, to: number): boolean {
   return !allRecovered;
 }
 
+interface TimelineRow { channel: number; kind: string; tick: number }
+
+function parseTimeline(text: string): TimelineRow[] {
+  const lines = text.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
+  const start = lines[0]!.startsWith('channel,') ? 1 : 0;
+  const rows: TimelineRow[] = [];
+  for (let i = start; i < lines.length; ++i) {
+    const f = lines[i]!.split(',');
+    if (f.length < 3) throw new Error(`ligne de timeline incomplete: ${lines[i]}`);
+    rows.push({ channel: Number(f[0]), kind: f[1]!, tick: Number(f[2]) });
+  }
+  return rows;
+}
+
+function reportTimeline(path: string, maxDelayTicks: number | undefined): void {
+  const rows = parseTimeline(readFileSync(path, 'utf8'));
+  const expected = rows.filter((r) => r.kind === 'E').map((r) => r.tick);
+  const channels = [...new Set(rows.filter((r) => r.kind === 'O').map((r) => r.channel))].sort(
+    (a, b) => a - b,
+  );
+
+  process.stdout.write('\n=== COMPTAGE BRUT ET APPARIEMENT ===\n');
+  process.stdout.write(
+    `  borne de retard plausible : ${
+      maxDelayTicks === undefined ? 'aucune' : `${maxDelayTicks} ticks`
+    }\n`,
+  );
+  process.stdout.write(
+    '  channel  attendus  fronts   ecart  apparies  en retard  manquants  en trop  ambigus' +
+      '  retard max  dette max\n',
+  );
+
+  let totalExpected = 0;
+  let totalObserved = 0;
+  let totalMissing = 0;
+  let totalExtra = 0;
+  let totalAmbiguous = 0;
+  let worstDelay = 0;
+  let worstDeficit = 0;
+
+  for (const channel of channels) {
+    const observed = rows.filter((r) => r.kind === 'O' && r.channel === channel).map((r) => r.tick);
+    const r = reconcileTimeline(
+      expected,
+      observed,
+      maxDelayTicks === undefined ? {} : { maxDelayTicks },
+    );
+    totalExpected += r.expected;
+    totalObserved += r.observed;
+    totalMissing += r.missing;
+    totalExtra += r.extra;
+    totalAmbiguous += r.ambiguous;
+    worstDelay = Math.max(worstDelay, r.maxDelayTicks);
+    worstDeficit = Math.max(worstDeficit, r.maxDeficit);
+    process.stdout.write(
+      `  ${String(channel).padStart(7)}  ${String(r.expected).padStart(8)}` +
+        `  ${String(r.observed).padStart(6)}  ${String(r.rawDifference).padStart(6)}` +
+        `  ${String(r.matched).padStart(8)}  ${String(r.late).padStart(9)}` +
+        `  ${String(r.missing).padStart(9)}  ${String(r.extra).padStart(7)}` +
+        `  ${String(r.ambiguous).padStart(7)}  ${String(r.maxDelayTicks).padStart(10)}` +
+        `  ${String(r.maxDeficit).padStart(9)}\n`,
+    );
+  }
+
+  process.stdout.write(
+    `\n  TOTAL    attendus ${totalExpected}  fronts ${totalObserved}` +
+      `  ecart brut ${totalExpected - totalObserved}` +
+      `  manquants ${totalMissing}  en trop ${totalExtra}  ambigus ${totalAmbiguous}` +
+      `  retard max ${worstDelay} ticks  dette max ${worstDeficit}\n`,
+  );
+  if (totalAmbiguous > 0) {
+    process.stdout.write(
+      '  ⚠ appariement AMBIGU sur au moins un channel : le comptage brut fait foi,' +
+        ' la position des manquants n est pas etablie\n',
+    );
+  }
+}
+
 function main(): void {
   const csvPath = process.argv[2];
   const tickUs = Number(process.argv[3] ?? '5208.333');
@@ -127,8 +206,14 @@ function main(): void {
     }\n`,
   );
 
-  if (windowFrom !== null && windowTo !== null) {
+  if (windowFrom !== null && windowTo !== null && windowTo > 0) {
     failed = reportWindow(rows, windowFrom, windowTo) || failed;
+  }
+
+  const timelinePath = process.argv[6];
+  if (timelinePath) {
+    const bound = process.argv[7] ? Number(process.argv[7]) : undefined;
+    reportTimeline(timelinePath, bound);
   }
 
   process.exit(failed ? 1 : 0);
