@@ -62,6 +62,65 @@ const V3_PREFS_OFFSET = V3_GLOBAL_OFFSET + V3_GLOBAL_SIZE;
 const V3_PREFS_SIZE = 6;
 const V3_TOTAL_SIZE = V3_PREFS_OFFSET + V3_PREFS_SIZE;
 
+const V3_MIN_TEMPLATE_LENGTH = 1;
+const V3_MAX_TEMPLATE_LENGTH = Pattern.DEFAULT_TOTAL_STEPS;
+
+export interface TemplateLength {
+  value: number;
+}
+
+function v3ContentByte(pattern: Pattern, offset: number): number {
+  if (offset < V3_STEP_BYTES) {
+    let packed = 0;
+    for (let bit = 0; bit < 8; ++bit) {
+      if (pattern.readStep(offset * 8 + bit) === true) packed |= 1 << bit;
+    }
+    return packed;
+  }
+  const pair = offset - V3_STEP_BYTES;
+  const low = pattern.getRatchet(pair * 2) & 0x0f;
+  const high = pattern.getRatchet(pair * 2 + 1) & 0x0f;
+  return (high << 4) | low;
+}
+
+function v3ApplyContentByte(pattern: Pattern, offset: number, value: number): void {
+  if (offset < V3_STEP_BYTES) {
+    for (let bit = 0; bit < 8; ++bit) {
+      pattern.writeStep(offset * 8 + bit, (value & (1 << bit)) !== 0);
+    }
+    return;
+  }
+  const low = value & 0x0f;
+  const high = (value >> 4) & 0x0f;
+  const pair = offset - V3_STEP_BYTES;
+  pattern.setRatchet(pair * 2, isValidRatchet(low) ? low : RATCHET_NONE);
+  pattern.setRatchet(pair * 2 + 1, isValidRatchet(high) ? high : RATCHET_NONE);
+}
+
+function v3TemplateByte(pattern: Pattern, length: number, offset: number): number {
+  if (offset === V3_RECORD_LENGTH_AT) {
+    if (length < V3_MIN_TEMPLATE_LENGTH) return V3_MIN_TEMPLATE_LENGTH;
+    if (length > V3_MAX_TEMPLATE_LENGTH) return V3_MAX_TEMPLATE_LENGTH;
+    return length;
+  }
+  return v3ContentByte(pattern, offset);
+}
+
+function v3ApplyTemplateByte(
+  pattern: Pattern,
+  length: TemplateLength,
+  offset: number,
+  value: number,
+): boolean {
+  if (offset === V3_RECORD_LENGTH_AT) {
+    if (value < V3_MIN_TEMPLATE_LENGTH || value > V3_MAX_TEMPLATE_LENGTH) return false;
+    length.value = value;
+    return true;
+  }
+  v3ApplyContentByte(pattern, offset, value);
+  return true;
+}
+
 export const v3 = {
   FORMAT_VERSION: 3,
 
@@ -101,6 +160,14 @@ export const v3 = {
 
   TOTAL_SIZE: V3_TOTAL_SIZE,
   LAST_ADDRESS: BASE_ADDRESS + V3_TOTAL_SIZE - 1,
+
+  MIN_TEMPLATE_LENGTH: V3_MIN_TEMPLATE_LENGTH,
+  MAX_TEMPLATE_LENGTH: V3_MAX_TEMPLATE_LENGTH,
+
+  contentByte: v3ContentByte,
+  applyContentByte: v3ApplyContentByte,
+  templateByte: v3TemplateByte,
+  applyTemplateByte: v3ApplyTemplateByte,
 } as const;
 
 export interface Preferences {

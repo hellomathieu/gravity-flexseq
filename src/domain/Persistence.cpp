@@ -14,6 +14,59 @@ uint8_t sanitisedRatchetNibbles(uint8_t value) {
 
 }  // namespace
 
+namespace persist {
+namespace v3 {
+
+uint8_t contentByte(const Pattern& pattern, uint8_t offset) {
+    if (offset < STEP_BYTES) {
+        const uint8_t raw = pattern.stepByte(offset);
+        return (offset == STEP_BYTES - 1)
+                   ? static_cast<uint8_t>(raw & LAST_STEP_BYTE_MASK)
+                   : raw;
+    }
+    return pattern.ratchetByte(static_cast<uint8_t>(offset - STEP_BYTES));
+}
+
+void applyContentByte(Pattern& pattern, uint8_t offset, uint8_t value) {
+    if (offset < STEP_BYTES) {
+        const uint8_t kept = (offset == STEP_BYTES - 1)
+                                 ? static_cast<uint8_t>(value & LAST_STEP_BYTE_MASK)
+                                 : value;
+        pattern.setStepByte(offset, kept);
+        return;
+    }
+    pattern.setRatchetByte(static_cast<uint8_t>(offset - STEP_BYTES),
+                           sanitisedRatchetNibbles(value));
+}
+
+uint8_t templateByte(const Pattern& pattern, uint8_t length, uint8_t offset) {
+    if (offset == RECORD_LENGTH_AT) {
+        if (length < MIN_TEMPLATE_LENGTH) {
+            return MIN_TEMPLATE_LENGTH;
+        }
+        if (length > MAX_TEMPLATE_LENGTH) {
+            return MAX_TEMPLATE_LENGTH;
+        }
+        return length;
+    }
+    return contentByte(pattern, offset);
+}
+
+bool applyTemplateByte(Pattern& pattern, uint8_t& length, uint8_t offset, uint8_t value) {
+    if (offset == RECORD_LENGTH_AT) {
+        if (value < MIN_TEMPLATE_LENGTH || value > MAX_TEMPLATE_LENGTH) {
+            return false;
+        }
+        length = value;
+        return true;
+    }
+    applyContentByte(pattern, offset, value);
+    return true;
+}
+
+}  // namespace v3
+}  // namespace persist
+
 uint8_t PersistentImage::patternByte(uint8_t pattern, uint8_t offset) const {
     const Pattern* p = bank_.getPattern(pattern);
     if (p == nullptr) {

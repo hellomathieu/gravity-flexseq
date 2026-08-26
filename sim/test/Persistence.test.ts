@@ -24,11 +24,19 @@ import {
   ChannelMode,
   DEFAULT_CHANNEL_MODE,
   DEFAULT_LENGTH,
+  MAX_LENGTH,
   SequencerEngine,
 } from "../src/domain/SequencerEngine.js";
 import { Transport } from "../src/domain/Transport.js";
 import { DEFAULT_TEMPO, UiController } from "../src/domain/UiController.js";
-import { RATCHET_3, RATCHET_6, RATCHET_NONE, RATCHET_TRIPLET } from "../src/domain/Pattern.js";
+import {
+  Pattern,
+  RATCHET_3,
+  RATCHET_4,
+  RATCHET_6,
+  RATCHET_NONE,
+  RATCHET_TRIPLET,
+} from "../src/domain/Pattern.js";
 import { subdivAt } from "./helpers/subdivAt.js";
 
 const SENTINEL = 0x5a;
@@ -172,6 +180,208 @@ describe("Persistence — the version 3 layout, declared but not in service", ()
   it("leaves the original firmware's memCode alone", () => {
     expect(BASE_ADDRESS + v3.TOTAL_SIZE).toBeLessThanOrEqual(1023);
     expect(1022 - v3.LAST_ADDRESS).toBe(51);
+  });
+});
+
+function fillDistinctPattern(pattern: Pattern): void {
+  for (const step of [0, 7, 8, 23, 31, 32, 35]) pattern.writeStep(step, true);
+  pattern.setRatchet(0, RATCHET_3);
+  pattern.setRatchet(1, RATCHET_6);
+  pattern.setRatchet(34, RATCHET_TRIPLET);
+  pattern.setRatchet(35, RATCHET_4);
+}
+
+describe("Persistence — the version 3 content codec", () => {
+  it("round trips the twenty-three bytes", () => {
+    const source = new Pattern();
+    fillDistinctPattern(source);
+
+    const image = Array.from({ length: 23 }, (_, offset) => v3.contentByte(source, offset));
+
+    const loaded = new Pattern();
+    for (let offset = 0; offset < 23; ++offset) v3.applyContentByte(loaded, offset, image[offset] ?? 0);
+
+    for (let step = 0; step < Pattern.DEFAULT_TOTAL_STEPS; ++step) {
+      expect(loaded.readStep(step)).toBe(source.readStep(step));
+      expect(loaded.getRatchet(step)).toBe(source.getRatchet(step));
+    }
+    for (let offset = 0; offset < 23; ++offset) {
+      expect(v3.contentByte(loaded, offset)).toBe(image[offset]);
+    }
+  });
+
+  it("drops the four bits above the last step on load", () => {
+    const pattern = new Pattern();
+    v3.applyContentByte(pattern, 4, 0xff);
+
+    expect(v3.contentByte(pattern, 4)).toBe(0x0f);
+    for (let step = 32; step < Pattern.DEFAULT_TOTAL_STEPS; ++step) {
+      expect(pattern.readStep(step)).toBe(true);
+    }
+  });
+
+  it("has no representation at all for the four bits above the last step", () => {
+    const pattern = new Pattern();
+    for (let step = 0; step < Pattern.DEFAULT_TOTAL_STEPS; ++step) pattern.writeStep(step, true);
+
+    expect(v3.contentByte(pattern, 4)).toBe(0x0f);
+    expect(pattern.writeStep(36, true)).toBe(false);
+    expect(pattern.readStep(36)).toBe(null);
+    expect(v3.contentByte(pattern, 4)).toBe(0x0f);
+  });
+
+  it("leaves the other step bytes whole", () => {
+    const pattern = new Pattern();
+    for (let offset = 0; offset < 4; ++offset) {
+      v3.applyContentByte(pattern, offset, 0xff);
+      expect(v3.contentByte(pattern, offset)).toBe(0xff);
+    }
+  });
+
+  it("normalises an invalid ratchet nibble", () => {
+    const pattern = new Pattern();
+    v3.applyContentByte(pattern, 5, 0x53);
+
+    expect(pattern.getRatchet(0)).toBe(RATCHET_3);
+    expect(pattern.getRatchet(1)).toBe(RATCHET_NONE);
+    expect(v3.contentByte(pattern, 5)).toBe(0x03);
+  });
+
+  it("replaces a previous ratchet when the stored nibble is invalid", () => {
+    const pattern = new Pattern();
+    v3.applyContentByte(pattern, 5, 0x36);
+    expect(pattern.getRatchet(0)).toBe(RATCHET_6);
+    expect(pattern.getRatchet(1)).toBe(RATCHET_3);
+
+    v3.applyContentByte(pattern, 5, 0x51);
+    expect(pattern.getRatchet(0)).toBe(RATCHET_NONE);
+    expect(pattern.getRatchet(1)).toBe(RATCHET_NONE);
+    expect(v3.contentByte(pattern, 5)).toBe(0);
+  });
+
+  it("ignores an offset past the record", () => {
+    const pattern = new Pattern();
+    for (let offset = 0; offset < 23; ++offset) v3.applyContentByte(pattern, offset, (0x11 * offset) & 0xff);
+
+    const before = Array.from({ length: 23 }, (_, offset) => v3.contentByte(pattern, offset));
+
+    v3.applyContentByte(pattern, 23, 0xff);
+    v3.applyContentByte(pattern, 200, 0xff);
+
+    for (let offset = 0; offset < 23; ++offset) {
+      expect(v3.contentByte(pattern, offset)).toBe(before[offset]);
+    }
+    expect(v3.contentByte(pattern, 23)).toBe(0);
+    expect(v3.contentByte(pattern, 200)).toBe(0);
+  });
+});
+
+describe("Persistence — the version 3 template record", () => {
+  it("round trips its twenty-four bytes", () => {
+    const source = new Pattern();
+    fillDistinctPattern(source);
+
+    const image = Array.from({ length: 24 }, (_, offset) => v3.templateByte(source, 20, offset));
+
+    const loaded = new Pattern();
+    const length = { value: 1 };
+    for (let offset = 0; offset < 24; ++offset) {
+      expect(v3.applyTemplateByte(loaded, length, offset, image[offset] ?? 0)).toBe(true);
+    }
+
+    expect(length.value).toBe(20);
+    for (let step = 0; step < Pattern.DEFAULT_TOTAL_STEPS; ++step) {
+      expect(loaded.readStep(step)).toBe(source.readStep(step));
+      expect(loaded.getRatchet(step)).toBe(source.getRatchet(step));
+    }
+    for (let offset = 0; offset < 24; ++offset) {
+      expect(v3.templateByte(loaded, length.value, offset)).toBe(image[offset]);
+    }
+  });
+
+  it("accepts every length in range", () => {
+    for (const wanted of [1, 16, 24, 35, 36]) {
+      const pattern = new Pattern();
+      const length = { value: 8 };
+      expect(v3.applyTemplateByte(pattern, length, 23, wanted)).toBe(true);
+      expect(length.value).toBe(wanted);
+      expect(v3.templateByte(pattern, length.value, 23)).toBe(wanted);
+    }
+  });
+
+  it("refuses a length out of range", () => {
+    for (const refused of [0, 37, 255]) {
+      const pattern = new Pattern();
+      const length = { value: 12 };
+      expect(v3.applyTemplateByte(pattern, length, 23, refused)).toBe(false);
+      expect(length.value).toBe(12);
+    }
+  });
+
+  it("keeps the loaded content when the length is refused", () => {
+    const source = new Pattern();
+    fillDistinctPattern(source);
+
+    const loaded = new Pattern();
+    const length = { value: 12 };
+    for (let offset = 0; offset < 23; ++offset) {
+      expect(v3.applyTemplateByte(loaded, length, offset, v3.contentByte(source, offset))).toBe(true);
+    }
+
+    expect(v3.applyTemplateByte(loaded, length, 23, 0)).toBe(false);
+    expect(length.value).toBe(12);
+
+    for (let offset = 0; offset < 23; ++offset) {
+      expect(v3.contentByte(loaded, offset)).toBe(v3.contentByte(source, offset));
+    }
+  });
+
+  it("clamps the length it emits", () => {
+    const pattern = new Pattern();
+    expect(v3.templateByte(pattern, 0, 23)).toBe(1);
+    expect(v3.templateByte(pattern, 37, 23)).toBe(36);
+    expect(v3.templateByte(pattern, 255, 23)).toBe(36);
+    expect(v3.templateByte(pattern, 1, 23)).toBe(1);
+    expect(v3.templateByte(pattern, 36, 23)).toBe(36);
+    expect(v3.templateByte(pattern, 20, 23)).toBe(20);
+  });
+
+  it("lets the length byte touch no content byte", () => {
+    const pattern = new Pattern();
+    fillDistinctPattern(pattern);
+
+    for (let offset = 0; offset < 23; ++offset) {
+      expect(v3.templateByte(pattern, 4, offset)).toBe(v3.templateByte(pattern, 33, offset));
+      expect(v3.templateByte(pattern, 4, offset)).toBe(v3.contentByte(pattern, offset));
+    }
+    expect(v3.templateByte(pattern, 4, 23)).toBe(4);
+    expect(v3.templateByte(pattern, 33, 23)).toBe(33);
+  });
+
+  it("carries no length in the instance record", () => {
+    const source = new Pattern();
+    fillDistinctPattern(source);
+
+    const loaded = new Pattern();
+    for (let offset = 0; offset < 23; ++offset) {
+      v3.applyContentByte(loaded, offset, v3.contentByte(source, offset));
+    }
+
+    for (let step = 0; step < Pattern.DEFAULT_TOTAL_STEPS; ++step) {
+      expect(loaded.readStep(step)).toBe(source.readStep(step));
+      expect(loaded.getRatchet(step)).toBe(source.getRatchet(step));
+    }
+  });
+
+  it("bounds the length by the pattern capacity, never by the engine cap", () => {
+    expect(v3.MIN_TEMPLATE_LENGTH).toBe(1);
+    expect(v3.MAX_TEMPLATE_LENGTH).toBe(36);
+    expect(MAX_LENGTH).toBe(24);
+
+    const pattern = new Pattern();
+    const length = { value: 1 };
+    expect(v3.applyTemplateByte(pattern, length, 23, 36)).toBe(true);
+    expect(length.value).toBe(36);
   });
 });
 

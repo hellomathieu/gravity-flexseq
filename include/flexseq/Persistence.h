@@ -127,6 +127,29 @@ static_assert(PREFS_SIZE == sizeof(Preferences), "the prefs zone must match the 
 static_assert(Pattern::DEFAULT_TOTAL_STEPS <= 255,
               "the target length must fit the record's length byte");
 
+constexpr uint8_t LAST_STEP_BYTE_BITS =
+    Pattern::DEFAULT_TOTAL_STEPS - (STEP_BYTES - 1) * 8;
+constexpr uint8_t LAST_STEP_BYTE_MASK =
+    static_cast<uint8_t>((1u << LAST_STEP_BYTE_BITS) - 1u);
+
+static_assert(LAST_STEP_BYTE_BITS == 4,
+              "the last step byte carries four steps and four bits that carry none");
+static_assert(LAST_STEP_BYTE_MASK == 0x0F,
+              "the mask must keep the four low bits and drop the four high ones");
+
+constexpr uint8_t MIN_TEMPLATE_LENGTH = 1;
+constexpr uint8_t MAX_TEMPLATE_LENGTH = Pattern::DEFAULT_TOTAL_STEPS;
+
+static_assert(MIN_TEMPLATE_LENGTH == 1, "a template plays at least one step");
+static_assert(MAX_TEMPLATE_LENGTH == 36,
+              "the format bound is the pattern capacity, never the engine's cap");
+
+uint8_t contentByte(const Pattern& pattern, uint8_t offset);
+void applyContentByte(Pattern& pattern, uint8_t offset, uint8_t value);
+
+uint8_t templateByte(const Pattern& pattern, uint8_t length, uint8_t offset);
+bool applyTemplateByte(Pattern& pattern, uint8_t& length, uint8_t offset, uint8_t value);
+
 }  // namespace v3
 
 }  // namespace persist

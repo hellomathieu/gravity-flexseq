@@ -114,4 +114,32 @@ void Pattern::clearRatchets() {
     }
 }
 
+uint8_t Pattern::stepByte(uint8_t index) const {
+    if (index >= STEP_BYTES) {
+        return 0;
+    }
+    return packedSteps[index];
+}
+
+void Pattern::setStepByte(uint8_t index, uint8_t value) {
+    if (index >= STEP_BYTES) {
+        return;
+    }
+    packedSteps[index] = value;
+}
+
+uint8_t Pattern::ratchetByte(uint8_t index) const {
+    if (index >= RATCHET_BYTES) {
+        return 0;
+    }
+    return packedRatchets[index];
+}
+
+void Pattern::setRatchetByte(uint8_t index, uint8_t value) {
+    if (index >= RATCHET_BYTES) {
+        return;
+    }
+    packedRatchets[index] = value;
+}
+
 } // namespace flexseq

@@ -44,6 +44,12 @@ public:
 
     void clearRatchets();
 
+    uint8_t stepByte(uint8_t index) const;
+    void setStepByte(uint8_t index, uint8_t value);
+
+    uint8_t ratchetByte(uint8_t index) const;
+    void setRatchetByte(uint8_t index, uint8_t value);
+
 private:
     uint8_t packedSteps[STEP_BYTES];
     uint8_t packedRatchets[RATCHET_BYTES];

@@ -189,6 +189,301 @@ void test_the_v3_image_leaves_the_original_memcode_alone() {
 }
 
 /*
+ * Les accesseurs octet bruts de Pattern
+ */
+
+void test_the_pattern_keeps_its_twenty_three_bytes() {
+    TEST_ASSERT_EQUAL_UINT8(23, sizeof(Pattern));
+}
+
+void test_a_raw_step_byte_refuses_an_index_past_the_pattern() {
+    Pattern pattern;
+    pattern.setStepByte(5, 0xFF);
+    pattern.setStepByte(200, 0xFF);
+    TEST_ASSERT_EQUAL_UINT8(0, pattern.stepByte(5));
+    TEST_ASSERT_EQUAL_UINT8(0, pattern.stepByte(200));
+    for (uint8_t i = 0; i < 5; ++i) {
+        TEST_ASSERT_EQUAL_UINT8(0, pattern.stepByte(i));
+    }
+}
+
+void test_a_raw_ratchet_byte_refuses_an_index_past_the_pattern() {
+    Pattern pattern;
+    pattern.setRatchetByte(18, 0xFF);
+    pattern.setRatchetByte(200, 0xFF);
+    TEST_ASSERT_EQUAL_UINT8(0, pattern.ratchetByte(18));
+    TEST_ASSERT_EQUAL_UINT8(0, pattern.ratchetByte(200));
+    for (uint8_t i = 0; i < 18; ++i) {
+        TEST_ASSERT_EQUAL_UINT8(0, pattern.ratchetByte(i));
+    }
+}
+
+void test_a_raw_step_byte_stores_what_it_is_given_without_canonicalising() {
+    Pattern pattern;
+    pattern.setStepByte(4, 0xF0);
+    TEST_ASSERT_EQUAL_UINT8(0xF0, pattern.stepByte(4));
+}
+
+/*
+ * Le codec de contenu de la version 3
+ */
+
+void test_the_v3_content_codec_round_trips_the_twenty_three_bytes() {
+    Pattern source;
+    const uint8_t activeSteps[] = {0, 7, 8, 23, 31, 32, 35};
+    for (uint8_t i = 0; i < sizeof(activeSteps); ++i) {
+        source.writeStep(activeSteps[i], true);
+    }
+    source.setRatchet(0, flexseq::RATCHET_3);
+    source.setRatchet(1, flexseq::RATCHET_6);
+    source.setRatchet(34, flexseq::RATCHET_TRIPLET);
+    source.setRatchet(35, flexseq::RATCHET_4);
+
+    uint8_t image[persist::v3::CONTENT_BYTES];
+    for (uint8_t offset = 0; offset < persist::v3::CONTENT_BYTES; ++offset) {
+        image[offset] = persist::v3::contentByte(source, offset);
+    }
+
+    Pattern loaded;
+    for (uint8_t offset = 0; offset < persist::v3::CONTENT_BYTES; ++offset) {
+        persist::v3::applyContentByte(loaded, offset, image[offset]);
+    }
+
+    for (uint8_t step = 0; step < Pattern::DEFAULT_TOTAL_STEPS; ++step) {
+        bool wanted = false;
+        bool got = false;
+        TEST_ASSERT_TRUE(source.readStep(step, wanted));
+        TEST_ASSERT_TRUE(loaded.readStep(step, got));
+        TEST_ASSERT_EQUAL_INT(wanted, got);
+        TEST_ASSERT_EQUAL_UINT8(source.getRatchet(step), loaded.getRatchet(step));
+    }
+
+    for (uint8_t offset = 0; offset < persist::v3::CONTENT_BYTES; ++offset) {
+        TEST_ASSERT_EQUAL_UINT8(image[offset], persist::v3::contentByte(loaded, offset));
+    }
+}
+
+void test_the_v3_codec_drops_the_four_bits_above_the_last_step_on_load() {
+    Pattern pattern;
+    persist::v3::applyContentByte(pattern, 4, 0xFF);
+
+    TEST_ASSERT_EQUAL_UINT8(0x0F, pattern.stepByte(4));
+
+    for (uint8_t step = 32; step < Pattern::DEFAULT_TOTAL_STEPS; ++step) {
+        bool active = false;
+        TEST_ASSERT_TRUE(pattern.readStep(step, active));
+        TEST_ASSERT_TRUE(active);
+    }
+}
+
+void test_the_v3_codec_drops_the_four_bits_above_the_last_step_on_emit() {
+    Pattern pattern;
+    pattern.setStepByte(4, 0xF0);
+    TEST_ASSERT_EQUAL_UINT8(0, persist::v3::contentByte(pattern, 4));
+
+    pattern.setStepByte(4, 0xF5);
+    TEST_ASSERT_EQUAL_UINT8(0x05, persist::v3::contentByte(pattern, 4));
+}
+
+void test_the_v3_codec_leaves_the_other_step_bytes_whole() {
+    Pattern pattern;
+    for (uint8_t offset = 0; offset < 4; ++offset) {
+        persist::v3::applyContentByte(pattern, offset, 0xFF);
+        TEST_ASSERT_EQUAL_UINT8(0xFF, pattern.stepByte(offset));
+        TEST_ASSERT_EQUAL_UINT8(0xFF, persist::v3::contentByte(pattern, offset));
+    }
+}
+
+void test_the_v3_codec_normalises_an_invalid_ratchet_nibble() {
+    Pattern pattern;
+    persist::v3::applyContentByte(pattern, 5, 0x53);
+
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_3, pattern.getRatchet(0));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, pattern.getRatchet(1));
+    TEST_ASSERT_EQUAL_UINT8(0x03, persist::v3::contentByte(pattern, 5));
+}
+
+void test_an_invalid_v3_nibble_replaces_a_previous_ratchet_instead_of_keeping_it() {
+    Pattern pattern;
+    persist::v3::applyContentByte(pattern, 5, 0x36);
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_6, pattern.getRatchet(0));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_3, pattern.getRatchet(1));
+
+    persist::v3::applyContentByte(pattern, 5, 0x51);
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, pattern.getRatchet(0));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, pattern.getRatchet(1));
+    TEST_ASSERT_EQUAL_UINT8(0, persist::v3::contentByte(pattern, 5));
+}
+
+void test_the_v3_codec_ignores_an_offset_past_the_record() {
+    Pattern pattern;
+    for (uint8_t offset = 0; offset < persist::v3::CONTENT_BYTES; ++offset) {
+        persist::v3::applyContentByte(pattern, offset, static_cast<uint8_t>(0x11 * offset));
+    }
+
+    uint8_t before[persist::v3::CONTENT_BYTES];
+    for (uint8_t offset = 0; offset < persist::v3::CONTENT_BYTES; ++offset) {
+        before[offset] = persist::v3::contentByte(pattern, offset);
+    }
+
+    persist::v3::applyContentByte(pattern, persist::v3::CONTENT_BYTES, 0xFF);
+    persist::v3::applyContentByte(pattern, 200, 0xFF);
+
+    for (uint8_t offset = 0; offset < persist::v3::CONTENT_BYTES; ++offset) {
+        TEST_ASSERT_EQUAL_UINT8(before[offset], persist::v3::contentByte(pattern, offset));
+    }
+
+    TEST_ASSERT_EQUAL_UINT8(0, persist::v3::contentByte(pattern, persist::v3::CONTENT_BYTES));
+    TEST_ASSERT_EQUAL_UINT8(0, persist::v3::contentByte(pattern, 200));
+}
+
+/*
+ * Le record de modele de la version 3 — 23 octets de contenu, plus la longueur
+ */
+
+namespace {
+
+void fillDistinctPattern(Pattern& pattern) {
+    const uint8_t activeSteps[] = {0, 7, 8, 23, 31, 32, 35};
+    for (uint8_t i = 0; i < sizeof(activeSteps); ++i) {
+        pattern.writeStep(activeSteps[i], true);
+    }
+    pattern.setRatchet(0, flexseq::RATCHET_3);
+    pattern.setRatchet(1, flexseq::RATCHET_6);
+    pattern.setRatchet(34, flexseq::RATCHET_TRIPLET);
+    pattern.setRatchet(35, flexseq::RATCHET_4);
+}
+
+}  // namespace
+
+void test_the_v3_template_record_round_trips_its_twenty_four_bytes() {
+    Pattern source;
+    fillDistinctPattern(source);
+    const uint8_t sourceLength = 20;
+
+    uint8_t image[persist::v3::TEMPLATE_RECORD];
+    for (uint8_t offset = 0; offset < persist::v3::TEMPLATE_RECORD; ++offset) {
+        image[offset] = persist::v3::templateByte(source, sourceLength, offset);
+    }
+
+    Pattern loaded;
+    uint8_t loadedLength = 1;
+    for (uint8_t offset = 0; offset < persist::v3::TEMPLATE_RECORD; ++offset) {
+        TEST_ASSERT_TRUE(persist::v3::applyTemplateByte(loaded, loadedLength, offset,
+                                                        image[offset]));
+    }
+
+    TEST_ASSERT_EQUAL_UINT8(20, loadedLength);
+    for (uint8_t step = 0; step < Pattern::DEFAULT_TOTAL_STEPS; ++step) {
+        bool wanted = false;
+        bool got = false;
+        TEST_ASSERT_TRUE(source.readStep(step, wanted));
+        TEST_ASSERT_TRUE(loaded.readStep(step, got));
+        TEST_ASSERT_EQUAL_INT(wanted, got);
+        TEST_ASSERT_EQUAL_UINT8(source.getRatchet(step), loaded.getRatchet(step));
+    }
+    for (uint8_t offset = 0; offset < persist::v3::TEMPLATE_RECORD; ++offset) {
+        TEST_ASSERT_EQUAL_UINT8(image[offset],
+                                persist::v3::templateByte(loaded, loadedLength, offset));
+    }
+}
+
+void test_the_v3_template_record_accepts_every_length_in_range() {
+    const uint8_t wanted[] = {1, 16, 24, 35, 36};
+    for (uint8_t i = 0; i < sizeof(wanted); ++i) {
+        Pattern pattern;
+        uint8_t length = 8;
+        TEST_ASSERT_TRUE(persist::v3::applyTemplateByte(pattern, length, 23, wanted[i]));
+        TEST_ASSERT_EQUAL_UINT8(wanted[i], length);
+        TEST_ASSERT_EQUAL_UINT8(wanted[i], persist::v3::templateByte(pattern, length, 23));
+    }
+}
+
+void test_the_v3_template_record_refuses_a_length_out_of_range() {
+    const uint8_t refused[] = {0, 37, 255};
+    for (uint8_t i = 0; i < sizeof(refused); ++i) {
+        Pattern pattern;
+        uint8_t length = 12;
+        TEST_ASSERT_FALSE(persist::v3::applyTemplateByte(pattern, length, 23, refused[i]));
+        TEST_ASSERT_EQUAL_UINT8(12, length);
+    }
+}
+
+void test_a_refused_length_leaves_the_loaded_content_intact() {
+    Pattern source;
+    fillDistinctPattern(source);
+
+    Pattern loaded;
+    uint8_t length = 12;
+    for (uint8_t offset = 0; offset < persist::v3::CONTENT_BYTES; ++offset) {
+        TEST_ASSERT_TRUE(persist::v3::applyTemplateByte(
+            loaded, length, offset, persist::v3::contentByte(source, offset)));
+    }
+
+    TEST_ASSERT_FALSE(persist::v3::applyTemplateByte(loaded, length, 23, 0));
+    TEST_ASSERT_EQUAL_UINT8(12, length);
+
+    for (uint8_t offset = 0; offset < persist::v3::CONTENT_BYTES; ++offset) {
+        TEST_ASSERT_EQUAL_UINT8(persist::v3::contentByte(source, offset),
+                                persist::v3::contentByte(loaded, offset));
+    }
+}
+
+void test_the_v3_template_record_clamps_the_length_it_emits() {
+    Pattern pattern;
+    TEST_ASSERT_EQUAL_UINT8(1, persist::v3::templateByte(pattern, 0, 23));
+    TEST_ASSERT_EQUAL_UINT8(36, persist::v3::templateByte(pattern, 37, 23));
+    TEST_ASSERT_EQUAL_UINT8(36, persist::v3::templateByte(pattern, 255, 23));
+    TEST_ASSERT_EQUAL_UINT8(1, persist::v3::templateByte(pattern, 1, 23));
+    TEST_ASSERT_EQUAL_UINT8(36, persist::v3::templateByte(pattern, 36, 23));
+    TEST_ASSERT_EQUAL_UINT8(20, persist::v3::templateByte(pattern, 20, 23));
+}
+
+void test_the_length_byte_touches_no_content_byte() {
+    Pattern pattern;
+    fillDistinctPattern(pattern);
+
+    for (uint8_t offset = 0; offset < persist::v3::CONTENT_BYTES; ++offset) {
+        TEST_ASSERT_EQUAL_UINT8(persist::v3::templateByte(pattern, 4, offset),
+                                persist::v3::templateByte(pattern, 33, offset));
+        TEST_ASSERT_EQUAL_UINT8(persist::v3::contentByte(pattern, offset),
+                                persist::v3::templateByte(pattern, 4, offset));
+    }
+    TEST_ASSERT_EQUAL_UINT8(4, persist::v3::templateByte(pattern, 4, 23));
+    TEST_ASSERT_EQUAL_UINT8(33, persist::v3::templateByte(pattern, 33, 23));
+}
+
+void test_the_v3_instance_record_carries_no_length() {
+    Pattern source;
+    fillDistinctPattern(source);
+
+    Pattern loaded;
+    for (uint8_t offset = 0; offset < persist::v3::INSTANCE_RECORD; ++offset) {
+        persist::v3::applyContentByte(loaded, offset, persist::v3::contentByte(source, offset));
+    }
+
+    for (uint8_t step = 0; step < Pattern::DEFAULT_TOTAL_STEPS; ++step) {
+        bool wanted = false;
+        bool got = false;
+        TEST_ASSERT_TRUE(source.readStep(step, wanted));
+        TEST_ASSERT_TRUE(loaded.readStep(step, got));
+        TEST_ASSERT_EQUAL_INT(wanted, got);
+        TEST_ASSERT_EQUAL_UINT8(source.getRatchet(step), loaded.getRatchet(step));
+    }
+}
+
+void test_the_v3_length_bound_is_the_pattern_capacity_not_the_engine_cap() {
+    TEST_ASSERT_EQUAL_UINT8(1, persist::v3::MIN_TEMPLATE_LENGTH);
+    TEST_ASSERT_EQUAL_UINT8(36, persist::v3::MAX_TEMPLATE_LENGTH);
+    TEST_ASSERT_EQUAL_UINT8(24, SequencerEngine::MAX_LENGTH);
+
+    Pattern pattern;
+    uint8_t length = 1;
+    TEST_ASSERT_TRUE(persist::v3::applyTemplateByte(pattern, length, 23, 36));
+    TEST_ASSERT_EQUAL_UINT8(36, length);
+}
+
+/*
  * Aller-retour
  */
 
@@ -620,6 +915,28 @@ int main() {
     RUN_TEST(test_the_v3_records_carry_thirty_six_steps);
     RUN_TEST(test_the_v3_global_zone_reserves_mod_and_range);
     RUN_TEST(test_the_v3_image_leaves_the_original_memcode_alone);
+
+    RUN_TEST(test_the_pattern_keeps_its_twenty_three_bytes);
+    RUN_TEST(test_a_raw_step_byte_refuses_an_index_past_the_pattern);
+    RUN_TEST(test_a_raw_ratchet_byte_refuses_an_index_past_the_pattern);
+    RUN_TEST(test_a_raw_step_byte_stores_what_it_is_given_without_canonicalising);
+
+    RUN_TEST(test_the_v3_content_codec_round_trips_the_twenty_three_bytes);
+    RUN_TEST(test_the_v3_codec_drops_the_four_bits_above_the_last_step_on_load);
+    RUN_TEST(test_the_v3_codec_drops_the_four_bits_above_the_last_step_on_emit);
+    RUN_TEST(test_the_v3_codec_leaves_the_other_step_bytes_whole);
+    RUN_TEST(test_the_v3_codec_normalises_an_invalid_ratchet_nibble);
+    RUN_TEST(test_an_invalid_v3_nibble_replaces_a_previous_ratchet_instead_of_keeping_it);
+    RUN_TEST(test_the_v3_codec_ignores_an_offset_past_the_record);
+
+    RUN_TEST(test_the_v3_template_record_round_trips_its_twenty_four_bytes);
+    RUN_TEST(test_the_v3_template_record_accepts_every_length_in_range);
+    RUN_TEST(test_the_v3_template_record_refuses_a_length_out_of_range);
+    RUN_TEST(test_a_refused_length_leaves_the_loaded_content_intact);
+    RUN_TEST(test_the_v3_template_record_clamps_the_length_it_emits);
+    RUN_TEST(test_the_length_byte_touches_no_content_byte);
+    RUN_TEST(test_the_v3_instance_record_carries_no_length);
+    RUN_TEST(test_the_v3_length_bound_is_the_pattern_capacity_not_the_engine_cap);
 
     RUN_TEST(test_a_round_trip_restores_the_state_byte_for_byte);
     RUN_TEST(test_the_patterns_survive_with_their_ratchets);
