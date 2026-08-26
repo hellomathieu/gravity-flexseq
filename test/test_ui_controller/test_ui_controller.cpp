@@ -255,14 +255,14 @@ void test_the_length_field_is_clamped_to_one_and_twenty_four() {
     Rig r;
     r.enterTab();
     r.gotoField(UiController::FIELD_LENGTH);
-    for (uint8_t i = 0; i < SequencerEngine::MAX_LENGTH + 5; ++i) {
+    for (uint8_t i = 0; i < 40; ++i) {
         r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
     }
-    TEST_ASSERT_EQUAL_UINT8(SequencerEngine::MAX_LENGTH, r.engine.getEffectiveLength(0));
-    for (uint8_t i = 0; i < SequencerEngine::MAX_LENGTH + 5; ++i) {
+    TEST_ASSERT_EQUAL_UINT8(24, r.engine.getEffectiveLength(0));
+    for (uint8_t i = 0; i < 40; ++i) {
         r.ui.handle(UiController::EVENT_SHIFT_ROTATE, -1);
     }
-    TEST_ASSERT_EQUAL_UINT8(SequencerEngine::MIN_LENGTH, r.engine.getEffectiveLength(0));
+    TEST_ASSERT_EQUAL_UINT8(1, r.engine.getEffectiveLength(0));
 }
 
 void test_the_subdiv_field_walks_the_libgravity_list_and_clamps() {

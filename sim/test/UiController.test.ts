@@ -22,8 +22,6 @@ import {
   CHANNEL_COUNT,
   DEFAULT_BAR_LENGTH,
   DEFAULT_LENGTH,
-  MAX_LENGTH,
-  MIN_LENGTH,
   PPQN,
   SequencerEngine,
   ChannelMode,
@@ -241,10 +239,10 @@ describe("UiController — inside a tab", () => {
     const { ui, engine, enterTab, gotoField } = rig();
     enterTab();
     gotoField(UiField.Length);
-    for (let i = 0; i < MAX_LENGTH + 5; i += 1) ui.handle(UiEvent.ShiftRotate, 1);
-    expect(engine.getEffectiveLength(0)).toBe(MAX_LENGTH);
-    for (let i = 0; i < MAX_LENGTH + 5; i += 1) ui.handle(UiEvent.ShiftRotate, -1);
-    expect(engine.getEffectiveLength(0)).toBe(MIN_LENGTH);
+    for (let i = 0; i < 40; i += 1) ui.handle(UiEvent.ShiftRotate, 1);
+    expect(engine.getEffectiveLength(0)).toBe(24);
+    for (let i = 0; i < 40; i += 1) ui.handle(UiEvent.ShiftRotate, -1);
+    expect(engine.getEffectiveLength(0)).toBe(1);
   });
 
   it("no field keeps the acceleration, not even the tempo", () => {
@@ -274,12 +272,12 @@ describe("UiController — inside a tab", () => {
     for (let i = 0; i < 7; i += 1) ui.handle(UiEvent.ShiftRotate, 1);
     expect(engine.getEffectiveLength(0)).toBe(23);
     ui.handle(UiEvent.ShiftRotate, 3);
-    expect(engine.getEffectiveLength(0)).toBe(MAX_LENGTH);
+    expect(engine.getEffectiveLength(0)).toBe(24);
 
     for (let i = 0; i < 22; i += 1) ui.handle(UiEvent.ShiftRotate, -1);
     expect(engine.getEffectiveLength(0)).toBe(2);
     ui.handle(UiEvent.ShiftRotate, -3);
-    expect(engine.getEffectiveLength(0)).toBe(MIN_LENGTH);
+    expect(engine.getEffectiveLength(0)).toBe(1);
 
     gotoField(UiField.Pattern);
     for (let i = 0; i < 14; i += 1) ui.handle(UiEvent.ShiftRotate, 1);
