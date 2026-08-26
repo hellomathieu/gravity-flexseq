@@ -64,6 +64,40 @@ it is worth watching if the format grows again.
 seventh ratchet code would break the two-tick floor arithmetic of PRD §6.3.1 on
 the fast rates, which is the reason ratchet 5 was excluded in the first place.
 
+## Amendment — 2026-08-26
+
+The 36-step foundation (commit `58e238a`) changed the figures of this ADR. The
+decision — one nibble per step — does not change.
+
+| | At 32 steps | At 36 steps |
+|---|---:|---:|
+| Step bytes | 4 | **5** |
+| Ratchet bytes | 16 | **18** |
+| `sizeof(Pattern)` | 20 | **23** |
+| RAM, 6 resident instances | 120 | **138** |
+| EEPROM, 16 templates, content only | 320 | **368** |
+
+ADR 0006 counts 384 bytes for the same sixteen records. Each record adds one
+length byte, which is storage and not content.
+
+⚠️ **This ADR asked to watch the EEPROM margin if the format grew again. The
+format grew.** Templates and instances now reach address 969. The free space
+falls from about 150 bytes to **53 bytes**, from address 970 to address 1022.
+Address 1023 carries the original firmware's `memCode`.
+
+**The unused bits of the fifth pattern byte.** The fifth pattern byte contains
+the data for the final four steps. Bits 36 through 39 do not belong to any step,
+and they are not part of the pattern content.
+
+These four bits are canonical:
+
+- the firmware forces them to zero when it writes a pattern;
+- the firmware masks them when it loads a pattern;
+- content operations ignore them, empty-slot detection included.
+
+A persistence test must inject non-zero values into bits 36 through 39. The test
+must verify that the loaded pattern does not expose them as content.
+
 ## Alternatives set aside
 
 **Three bits per step.** Set aside on the numbers above. It was the right answer

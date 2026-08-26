@@ -108,6 +108,39 @@ is deliberately replaced, and PRD §5.0 says so.
 the eight plus the ninth are taken. The PATTERNS tab carries them, in its own
 context, which is what makes them possible without a tenth gesture.
 
+## Amendment — 2026-08-26
+
+The 36-step foundation (commit `58e238a`) changed the pattern representation
+from 20 to 23 bytes:
+
+- 5 bytes of step data;
+- 18 bytes of ratchets.
+
+The template record therefore grows from 21 to 24 bytes, because it stores the
+pattern content plus its length.
+
+The EEPROM allocation becomes:
+
+| | Bytes |
+|---|---:|
+| 16 template records | 384 |
+| 6 channel instances | 138 |
+| the rest of the state | 64 |
+| **total, from address 384** | **586, up to address 969** |
+
+"The rest of the state" is 54 bytes of channel records, 3 global bytes, 6
+preference bytes and the version byte.
+
+The decision that EEPROM holds both the templates and the instances does not
+change.
+
+**The free space is 53 bytes**, from address 970 to address 1022. Address 1023
+carries the original firmware's `memCode`, and FlexSeq never writes it. The
+`static_assert` in `include/flexseq/Persistence.h` states that rule.
+
+PRD §11.1 must describe the instance area in addition to the template area. It
+does not describe it today.
+
 ## Alternatives set aside
 
 **Keep the resident shared bank.** At 32 steps it costs 320 B of RAM, 200 B more
