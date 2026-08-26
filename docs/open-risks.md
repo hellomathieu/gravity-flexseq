@@ -182,7 +182,7 @@ its 4.5 kB of library content and carries **zero** `DW_TAG_member`. The cause is
 LTO: the objects hold GIMPLE, not code, and the link does not regenerate the
 types. `-Wl,-g` and `-fno-lto` change nothing that can be used without changing
 the measured binary. What remains readable is therefore what the firmware itself
-asserts — `sizeof(Pattern) == 20`, `PatternBank` being `Pattern[16]` — and
+asserts — `sizeof(Pattern) == 23`, `PatternBank` being `Pattern[16]` — and
 everything else must be observed on the pins.
 
 **A glyph must not look like another function.** The eighth tab draws a filled

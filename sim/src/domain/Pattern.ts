@@ -41,7 +41,7 @@ export function ratchetLabel(code: number): string {
   return String(code);
 }
 export class Pattern {
-  static readonly DEFAULT_TOTAL_STEPS = 32;
+  static readonly DEFAULT_TOTAL_STEPS = 36;
 
   private readonly steps: boolean[];
   private readonly ratchets: number[];

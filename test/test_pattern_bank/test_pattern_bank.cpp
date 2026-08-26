@@ -11,7 +11,7 @@ void setUp() {}
 void tearDown() {}
 
 void test_pattern_bank_has_expected_memory_footprint() {
-    TEST_ASSERT_EQUAL_UINT(320, sizeof(PatternBank));
+    TEST_ASSERT_EQUAL_UINT(368, sizeof(PatternBank));
     TEST_ASSERT_EQUAL_UINT(PATTERN_COUNT * sizeof(Pattern), sizeof(PatternBank));
 }
 

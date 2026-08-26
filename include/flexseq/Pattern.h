@@ -26,8 +26,8 @@ bool ratchetFitsStep(uint8_t code, uint16_t ticksPerStep);
 
 class Pattern {
 public:
-    static constexpr uint8_t DEFAULT_TOTAL_STEPS = 32;
-    static constexpr uint8_t STEP_BYTES = DEFAULT_TOTAL_STEPS / 8;
+    static constexpr uint8_t DEFAULT_TOTAL_STEPS = 36;
+    static constexpr uint8_t STEP_BYTES = (DEFAULT_TOTAL_STEPS + 7) / 8;
     static constexpr uint8_t RATCHET_BYTES = DEFAULT_TOTAL_STEPS / 2;
 
     constexpr Pattern() : packedSteps{}, packedRatchets{} {}
@@ -49,7 +49,7 @@ private:
     uint8_t packedRatchets[RATCHET_BYTES];
 };
 
-static_assert(sizeof(Pattern) == 20, "Pattern must remain 20 bytes (content only)");
+static_assert(sizeof(Pattern) == 23, "Pattern must remain 23 bytes (content only)");
 
 } // namespace flexseq
 

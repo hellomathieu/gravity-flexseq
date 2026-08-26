@@ -88,9 +88,9 @@ static_assert(SHIFT_BURST_GAP_MS > BUTTON_DEBOUNCE_MS,
 #define ACTIVE_STEPS 5
 
 #define PATTERN_COUNT 16
-#define PATTERN_BYTES 20
-#define STEP_BYTES     4
-#define RATCHET_BYTES 16
+#define PATTERN_BYTES 23
+#define STEP_BYTES     5
+#define RATCHET_BYTES 18
 
 static avr_t *g_avr;
 static uint32_t g_twi_bytes;

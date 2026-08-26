@@ -584,7 +584,7 @@ immediately; two re-run the whole probe and check that it exits non-zero with an
 
 The control is not a list of expected numbers copied into the harness. The
 harness **links the domain itself** — all of `src/domain/` — builds a
-`PatternBank` natively, and compares it **byte for byte** with the 320 bytes read
+`PatternBank` natively, and compares it **byte for byte** with the 368 bytes read
 from the simulated RAM.
 
 **The expectation is produced by the firmware's own boot rule**, not by a rewrite
@@ -631,7 +631,7 @@ nothing else can be concluded.
 ## What is read, and why it is legitimate
 
 `patternBank` only. Its layout is guaranteed by a `static_assert` that ships with
-the firmware: `sizeof(Pattern) == 20`, four bytes of steps then sixteen bytes of
+the firmware: `sizeof(Pattern) == 23`, five bytes of steps then eighteen bytes of
 ratchet nibbles, and `PatternBank` is `Pattern[16]`. The address comes from
 `avr-nm`. **Nothing else is read**: LENGTH and SUBDIV are verified on the output
 pins, because their storage carries no such guarantee.

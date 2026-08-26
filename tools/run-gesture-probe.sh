@@ -136,7 +136,7 @@ R11_CADENCE_X24_ATTENDUE=4
 R11_NIBBLE_1_ATTENDU="02"
 R11_NIBBLE_TRIOLET_ATTENDU="07"
 R11_NIBBLE_ZERO="00"
-R11_OFFSET_ATTENDU=6
+R11_OFFSET_ATTENDU=7
 R11_CODES_REFUSES="03 04 06"
 TAB_COUNT_ECRAN=8
 R8_MASK_ATTENDU="0229"
@@ -1280,7 +1280,7 @@ else
     inval "R9 : ratchet sur step 5 actif" "R8 n a pas etabli la correspondance rotations -> step"
     inval "R9 : retour" "R8 n a pas etabli la correspondance rotations -> step"
   else
-    juge_a2 "R9 : ratchet sur step 5 actif" rA_r9_pose 3 "${EXPECT_R9_NIBBLE:-$R9_OCTET_ATTENDU}" 5 7 9 1 6 && R9_OK=1
+    juge_a2 "R9 : ratchet sur step 5 actif" rA_r9_pose 3 "${EXPECT_R9_NIBBLE:-$R9_OCTET_ATTENDU}" 5 7 9 1 7 && R9_OK=1
     juge_a2 "R9 : retour" rA_r9_retour 3 "00" 5 0 7 0 "" || R9_OK=0
   fi
 
@@ -1306,7 +1306,7 @@ else
       inval "R12 : triolet sur step 9" "R10 a laisse la banque hors de l etat du rig : l effet n est pas attribuable"
       inval "R12 : retour" "R10 a laisse la banque hors de l etat du rig"
     else
-      juge_a2 "R12 : triolet sur step 9" rA_r12_pose 3 "${EXPECT_R12_NIBBLE:-$R12_OCTET_ATTENDU}" 5 7 9 1 8
+      juge_a2 "R12 : triolet sur step 9" rA_r12_pose 3 "${EXPECT_R12_NIBBLE:-$R12_OCTET_ATTENDU}" 5 7 9 1 9
       juge_a2 "R12 : retour" rA_r12_retour 3 "00" 5 0 7 0 ""
     fi
   fi

@@ -12,7 +12,7 @@ import {
 } from "../src/domain/Pattern.js";
 
 /**
- * Pattern = contenu partage (24 steps + triolets), sans longueur.
+ * Pattern = contenu partage (36 steps + ratchets), sans longueur.
  * La longueur est un etat par channel (voir SequencerEngine).
  */
 describe("Pattern — steps", () => {
@@ -23,8 +23,8 @@ describe("Pattern — steps", () => {
     }
   });
 
-  it("holds thirty-two steps", () => {
-    expect(Pattern.DEFAULT_TOTAL_STEPS).toBe(32);
+  it("holds thirty-six steps", () => {
+    expect(Pattern.DEFAULT_TOTAL_STEPS).toBe(36);
   });
 
   it("writes and reads every step", () => {
@@ -46,12 +46,12 @@ describe("Pattern — steps", () => {
     }
   });
 
-  it("rejects step index 32 without mutation", () => {
+  it("rejects step index 36 without mutation", () => {
     const pattern = new Pattern();
-    expect(pattern.readStep(32)).toBeNull();
-    expect(pattern.writeStep(31, true)).toBe(true);
-    expect(pattern.writeStep(32, false)).toBe(false);
-    expect(pattern.readStep(31)).toBe(true);
+    expect(pattern.readStep(36)).toBeNull();
+    expect(pattern.writeStep(35, true)).toBe(true);
+    expect(pattern.writeStep(36, false)).toBe(false);
+    expect(pattern.readStep(35)).toBe(true);
   });
 
   it("writes and reads the steps above 23", () => {
@@ -67,7 +67,32 @@ describe("Pattern — steps", () => {
     expect(pattern.readStep(23)).toBe(false);
   });
 
-  it("clear turns all 24 steps off and removes ratchets", () => {
+  it("writes and reads the fifth-byte steps 32..35", () => {
+    const pattern = new Pattern();
+    for (const step of [32, 35]) {
+      expect(pattern.writeStep(step, true)).toBe(true);
+    }
+    for (let i = 32; i < Pattern.DEFAULT_TOTAL_STEPS; ++i) {
+      expect(pattern.readStep(i)).toBe(i === 32 || i === 35);
+    }
+    expect(pattern.readStep(31)).toBe(false);
+  });
+
+  it("refuses every index above the last step", () => {
+    const pattern = new Pattern();
+    for (let i = Pattern.DEFAULT_TOTAL_STEPS; i <= 255; ++i) {
+      expect(pattern.readStep(i)).toBeNull();
+      expect(pattern.writeStep(i, true)).toBe(false);
+      expect(pattern.setRatchet(i, RATCHET_4)).toBe(false);
+      expect(pattern.getRatchet(i)).toBe(RATCHET_NONE);
+    }
+    for (let i = 0; i < Pattern.DEFAULT_TOTAL_STEPS; ++i) {
+      expect(pattern.readStep(i)).toBe(false);
+      expect(pattern.getRatchet(i)).toBe(RATCHET_NONE);
+    }
+  });
+
+  it("clear turns all 36 steps off and removes ratchets", () => {
     const pattern = new Pattern();
     for (let i = 0; i < Pattern.DEFAULT_TOTAL_STEPS; ++i) pattern.writeStep(i, true);
     pattern.setRatchet(0, RATCHET_3);
@@ -122,9 +147,9 @@ describe("Pattern — ratchets (un code par step)", () => {
     const p = new Pattern();
     expect(p.setRatchet(0, 1)).toBe(false);
     expect(p.setRatchet(0, 5)).toBe(false); // non representable a 96 PPQN
-    expect(p.setRatchet(32, RATCHET_2)).toBe(false);
+    expect(p.setRatchet(36, RATCHET_2)).toBe(false);
     expect(p.getRatchet(0)).toBe(RATCHET_NONE);
-    expect(p.getRatchet(32)).toBe(RATCHET_NONE);
+    expect(p.getRatchet(36)).toBe(RATCHET_NONE);
   });
 
   it("expose le nombre de declenchements et la duree occupee", () => {

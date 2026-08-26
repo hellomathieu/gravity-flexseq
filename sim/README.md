@@ -18,7 +18,7 @@ still to come).
 ## Parity contract
 
 TS ↔ C++ parity targets **behaviour, not memory**. Packing constraints
-(`sizeof(Pattern) == 20`, `PatternBank == 320 B`) are checked on the **C++/AVR
+(`sizeof(Pattern) == 23`, `PatternBank == 368 B`) are checked on the **C++/AVR
 side only**. Each `it(...)` in `test/Pattern.test.ts` corresponds to a
 `RUN_TEST(...)` in `../test/test_pattern/test_pattern.cpp`.
 
@@ -34,9 +34,10 @@ npm run typecheck # tsc --noEmit
 
 ## State
 
-- [x] `Pattern` — shared content (32 steps + per-step ratchets, no length). The
+- [x] `Pattern` — shared content (36 steps + per-step ratchets, no length). The
       EDIT grid still shows 24 of them until the three-row lot, so `STEP_COUNT`
-      and `GRID_STEPS` are 24 on both sides.
+      and `GRID_STEPS` are 24 on both sides. `MAX_LENGTH` is still 24 too: the
+      steps above 23 are storable, but no length reaches them yet.
 - [x] `PatternBank` — **one shared bank of 16 patterns** (replaces the former 6×16).
 - [x] `SequencerEngine.selectedPattern` and **per-channel** LENGTH; shared pattern editing.
 - [x] Simulator UI — EDIT PATTERN skeleton, TS backend.
