@@ -13,13 +13,28 @@ it is what lets the acceptance suite stay a reliable signal.
     test_subdiv_phase, test_trigger_sequencer, test_ui_controller
 
 Pure C++ domain, no Arduino and no libGravity. MUST be green: a phase is not
-finished while one of these fails. 336 assertions as of 2026-08-25, counted
+finished while one of these fails. 384 assertions as of 2026-08-26, counted
 from the `RUN_TEST` calls and confirmed by the runner's own total.
 
 Lot A added eight of them, on the 32-step pattern: the steps and the ratchets
 above index 23, the fourth step byte, the reach of `clear()`, and two assertions
 that keep the EDIT grid at 24 steps until lot F -- the pattern grew, the grid did
 not. Each of the eight was verified by MUTATION.
+
+Lot B added twenty-four more, on the version 3 persistence codec: the layout of
+the 588-byte image, the twenty-three bytes of content, the twenty-four bytes of a
+template record, the four bits above the last step, and the length bound of 1 to
+36 -- the PATTERN CAPACITY, and not `MAX_LENGTH`, the interface cap that stays at
+24 until lot F. The version 2 format is untouched, and its own tests still assert
+it, the version byte included, which stays at 2.
+
+The TypeScript mirror gained twenty. The gap of four is not a hole in the
+coverage, and it decomposes exactly: FIVE C++ tests have no TypeScript twin --
+`sizeof(Pattern)`, the three on the raw byte accessors, and the mask applied ON
+EMIT -- while ONE TypeScript test has no C++ twin, the one that asserts the four
+bits have no representation at all. The reference model stores two arrays of 36
+entries, so it has no packed byte to address and no bit above the last step to
+mask. ADR 0007 records why that asymmetry is deliberate.
 
 ⚠️ **`onsetCount()` is not what the outputs see.** The engine counts step and
 sub-step crossings, so it reports the onsets of an **inactive** step too, ratchets
@@ -45,6 +60,22 @@ additions to test_paged_screen and test_pattern_screen 7/8 -- the undetected
 mutation there being an equivalent mutant, which ADR 0001 records rather than
 counts as a pass. Their TypeScript mirrors were swept the same way (15/15,
 15/15, 22/22).
+
+The version 3 codec of lot B was swept the same way, and the sweep found a real
+gap. 34 mutants of the codec -- 16 in C++, 18 in TypeScript -- are all detected,
+but only after a first pass returned 194/195. The undetected mutation removed the
+ratchet normalisation on the TypeScript side, and it was NOT an equivalent
+mutant: the C++ codec writes through a raw byte accessor, so an invalid nibble is
+stored and read back, while the TypeScript codec writes through `setRatchet`,
+which refuses the write and LEAVES THE PREVIOUS RATCHET IN PLACE. On a fresh
+pattern the two agree -- and every test started from a fresh pattern. The missing
+assertion, that an invalid nibble must REPLACE a previous ratchet, now exists in
+both languages. The whole series is 196/196.
+
+⚠️ **A mutation score is only worth the assertions that were collected.** Three
+scores announced during lot B were partial, because the collector that walks a
+test file ended a function on the close of a `for` loop. The rule, the defect and
+the corrected figure live in `docs/open-risks.md`, under the method rules.
 
 
 ⚠️ **`npm run typecheck` catches what the TypeScript suite cannot.** vitest does
