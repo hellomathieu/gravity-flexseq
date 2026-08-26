@@ -29,12 +29,17 @@ free. The template model therefore **returns about 120 B** where a resident
 32-step bank would cost 80 B more.
 
 ⚠️ **The table above reads "today" as of this ADR's date, 2026-08-23. Lot A
-changed the first two lines on 2026-08-25**: the pattern is 20 B, and the bank is
+changed the first two lines on 2026-08-25**: the pattern was 20 B, and the bank was
 the middle line — 16 residents, 320 B — because lot B has not moved the templates
 to EEPROM yet. The measured cost of that step was RAM +85 B, not +80: `PagedScreen`
 holds a copy of the pattern by value in its frozen frame, and it grew with it.
-Free RAM is now 534 B. The third line stays the target, and the arithmetic that
-justified the decision does not change.
+Free RAM was 534 B at that date. The third line stays the target, and the
+arithmetic that justified the decision does not change.
+
+⚠️ **The 36-step foundation moved these figures again on 2026-08-26.** The pattern
+is **23 B**, the resident bank is **368 B**, and free RAM is **483 B**. The
+amendment of 2026-08-26 carries the current figures. This paragraph records the
+state at 32 steps.
 
 ## Decision
 
@@ -55,11 +60,17 @@ The information is genuinely absent: a pattern with content up to step 11 and a
 length of 16 carries the same bits as the same pattern with a length of 12.
 Trailing silence stores nothing, so no function can recover it.
 
-The template record therefore holds the length: **21 bytes**, 20 of content plus
-one. `sizeof(Pattern)` stays at 20 — the length is a fact of STORAGE, not of
+The template record therefore holds the length: **24 bytes**, 23 of content plus
+one. `sizeof(Pattern)` stays at **23** — the length is a fact of STORAGE, not of
 content, exactly as it already is for the channel, whose EEPROM record has
 carried its `effectiveLength` since format version 2. Deriving while storing the
 other was the asymmetry that hid the defect.
+
+⚠️ **This paragraph said 21 bytes, 20 of content, and `sizeof(Pattern)` at 20
+until 2026-08-26.** Those were the figures at 32 steps. The rule does not change,
+only the counts. The **instance** record carries no length at all — 23 bytes,
+content only — because the channel that plays it already carries its
+**effective length as channel state**.
 
 Rounding up to a multiple of eight would recover all eight factory patterns, and
 it must still be refused: it is a fit to eight samples that all happen to be
@@ -90,6 +101,10 @@ otherwise lose the user's work.
 
 ⚠️ **The template line was 320 bytes until 2026-08-25**, when the length moved
 into the record: 16 x 21 rather than 16 x 20.
+
+⚠️ **This whole table is SUPERSEDED.** It records the estimate at 32 steps. The
+amendment of 2026-08-26 carries the layout that the firmware targets, and **PRD
+§11.1 is the normative source** for it.
 
 FlexSeq still writes nothing below address 384, so the original's own settings
 survive. That rule does not change.
@@ -125,21 +140,30 @@ The EEPROM allocation becomes:
 |---|---:|
 | 16 template records | 384 |
 | 6 channel instances | 138 |
-| the rest of the state | 64 |
-| **total, from address 384** | **586, up to address 969** |
+| the rest of the state | 66 |
+| **total, from address 384** | **588, up to address 971** |
 
-"The rest of the state" is 54 bytes of channel records, 3 global bytes, 6
+"The rest of the state" is 54 bytes of channel records, **5 global bytes**, 6
 preference bytes and the version byte.
 
 The decision that EEPROM holds both the templates and the instances does not
 change.
 
-**The free space is 53 bytes**, from address 970 to address 1022. Address 1023
+**The free space is 51 bytes**, from address 972 to address 1022. Address 1023
 carries the original firmware's `memCode`, and FlexSeq never writes it. The
 `static_assert` in `include/flexseq/Persistence.h` states that rule.
 
-PRD §11.1 must describe the instance area in addition to the template area. It
-does not describe it today.
+⚠️ **This amendment first counted 586 bytes, a global zone of 3, and an end at
+address 969.** The owner raised the global zone to **5 bytes** the same day.
+`MOD` and `RANGE` are reserved in version 3 from the start, inert until the BPM
+tab exists. The motive is a **format decision**, not arithmetic: an image size is
+part of the format contract, so reserving the two bytes now avoids a second
+layout change and, above all, **a second return to defaults**. PRD §11.1 is the
+normative source and records the decision.
+
+**PRD §11.1 describes the instance area since 2026-08-26.** It also records the
+length bound of a template — 1 to 36, clamped on emit and refused on load — and
+the canonical zeros of bits 36 to 39.
 
 ## Alternatives set aside
 

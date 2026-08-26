@@ -81,9 +81,13 @@ ADR 0006 counts 384 bytes for the same sixteen records. Each record adds one
 length byte, which is storage and not content.
 
 ⚠️ **This ADR asked to watch the EEPROM margin if the format grew again. The
-format grew.** Templates and instances now reach address 969. The free space
-falls from about 150 bytes to **53 bytes**, from address 970 to address 1022.
+format grew.** Templates and instances now reach address **971**. The free space
+falls from about 150 bytes to **51 bytes**, from address **972** to address 1022.
 Address 1023 carries the original firmware's `memCode`.
+
+⚠️ **This paragraph read 969, 53 bytes and 970 until 2026-08-26.** Those figures
+preceded the reservation of `MOD` and `RANGE`, which adds two bytes to the global
+zone. See ADR 0006 and PRD §11.1.
 
 **The unused bits of the fifth pattern byte.** The fifth pattern byte contains
 the data for the final four steps. Bits 36 through 39 do not belong to any step,
@@ -91,12 +95,45 @@ and they are not part of the pattern content.
 
 These four bits are canonical:
 
-- the firmware forces them to zero when it writes a pattern;
-- the firmware masks them when it loads a pattern;
+- the persistence codec forces them to zero when it **emits pattern content**;
+- the persistence codec masks them when it **applies persisted content to a
+  pattern**;
 - content operations ignore them, empty-slot detection included.
 
 A persistence test must inject non-zero values into bits 36 through 39. The test
 must verify that the loaded pattern does not expose them as content.
+
+**Done on 2026-08-26, commit `fc5fbf1`.** The version 3 codec carries the rule.
+`contentByte()` masks the fifth step byte on emit, and `applyContentByte()` masks
+the incoming value on load. Both masks come from `LAST_STEP_BYTE_MASK`, which
+derives from the step count and is pinned by a `static_assert`. Two tests inject
+non-zero values into the four bits, one per direction, and four mutants prove
+that both masks are load-bearing.
+
+**The mask needed a raw byte path, and that is why `Pattern` gained one.**
+`writeStep()` and `readStep()` refuse an index above 35, so a codec built on them
+is canonical **by structure**: any mask added on top would be a second guard, and
+the mutant that removes it would be an equivalent mutant. `Pattern` therefore
+exposes four raw accessors — `stepByte`, `setStepByte`, `ratchetByte`,
+`setRatchetByte` — which check the index and nothing else. They keep
+`sizeof(Pattern)` at 23. The canonical rule then lives in one place, the codec,
+where a mutation can reach it.
+
+**These raw accessors are persistence-oriented primitives, not a second
+canonicalization layer.** They deliberately expose the packed representation
+without imposing the codec's canonical rules; those rules remain the
+responsibility of the persistence codec.
+
+**TypeScript keeps the structural form, and that asymmetry is deliberate.** Its
+`Pattern` stores two arrays of 36 entries, so the four bits have no place to
+exist. A mask there would guard nothing, so the reference model asserts the
+absence instead: `writeStep(36)` returns false, `readStep(36)` returns null, and
+the fifth byte never exceeds `0x0F`. The contract is the observable behaviour,
+not the mechanism.
+
+**Empty-slot detection is still to come.** PRD §5.0 point 10 computes it on the
+36 steps, so the four bits stay outside it by construction. Lot E carries that
+feature.
 
 ## Alternatives set aside
 
