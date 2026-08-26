@@ -13,6 +13,7 @@ import {
   PREFS_OFFSET,
   QUIET_MS,
   TOTAL_SIZE,
+  v3,
   defaultPreferences,
   type Preferences,
   type Storage,
@@ -120,6 +121,57 @@ describe("Persistence — the layout fixed by PRD 11.1", () => {
 
   it("ends below the original firmware's memCode at 1023", () => {
     expect(BASE_ADDRESS + TOTAL_SIZE).toBeLessThanOrEqual(1023);
+  });
+});
+
+describe("Persistence — the version 3 layout, declared but not in service", () => {
+  it("keeps the zones where PRD 11.1 puts them", () => {
+    expect(v3.HEADER_SIZE).toBe(1);
+    expect(v3.TEMPLATES_OFFSET).toBe(1);
+    expect(v3.TEMPLATES_SIZE).toBe(384);
+    expect(v3.INSTANCES_OFFSET).toBe(385);
+    expect(v3.INSTANCES_SIZE).toBe(138);
+    expect(v3.CHANNELS_OFFSET).toBe(523);
+    expect(v3.CHANNELS_SIZE).toBe(54);
+    expect(v3.GLOBAL_OFFSET).toBe(577);
+    expect(v3.GLOBAL_SIZE).toBe(5);
+    expect(v3.PREFS_OFFSET).toBe(582);
+    expect(v3.PREFS_SIZE).toBe(6);
+    expect(v3.TOTAL_SIZE).toBe(588);
+    expect(v3.LAST_ADDRESS).toBe(971);
+  });
+
+  it("is version 3, and leaves version 2 alone", () => {
+    expect(v3.FORMAT_VERSION).toBe(3);
+    expect(FORMAT_VERSION).toBe(2);
+  });
+
+  it("carries thirty-six steps in each record", () => {
+    expect(v3.STEP_BYTES).toBe(5);
+    expect(v3.RATCHET_BYTES).toBe(18);
+    expect(v3.CONTENT_BYTES).toBe(23);
+    expect(v3.LENGTH_BYTES).toBe(1);
+    expect(v3.TEMPLATE_RECORD).toBe(24);
+    expect(v3.INSTANCE_RECORD).toBe(23);
+    expect(v3.TEMPLATE_COUNT).toBe(16);
+    expect(v3.INSTANCE_COUNT).toBe(6);
+    expect(v3.CHANNEL_RECORD).toBe(9);
+    expect(v3.RECORD_STEPS_AT).toBe(0);
+    expect(v3.RECORD_RATCHETS_AT).toBe(5);
+    expect(v3.RECORD_LENGTH_AT).toBe(23);
+  });
+
+  it("reserves MOD and RANGE in the global zone", () => {
+    expect(v3.GLOBAL_TEMPO_LO_AT).toBe(0);
+    expect(v3.GLOBAL_TEMPO_HI_AT).toBe(1);
+    expect(v3.GLOBAL_CLOCK_SOURCE_AT).toBe(2);
+    expect(v3.GLOBAL_MOD_AT).toBe(3);
+    expect(v3.GLOBAL_RANGE_AT).toBe(4);
+  });
+
+  it("leaves the original firmware's memCode alone", () => {
+    expect(BASE_ADDRESS + v3.TOTAL_SIZE).toBeLessThanOrEqual(1023);
+    expect(1022 - v3.LAST_ADDRESS).toBe(51);
   });
 });
 

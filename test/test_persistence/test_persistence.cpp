@@ -136,6 +136,59 @@ void test_the_image_ends_below_the_original_memcode() {
 }
 
 /*
+ * Le format cible, version 3 — declare, pas encore en service
+ */
+
+void test_the_v3_layout_is_the_one_the_prd_fixed() {
+    TEST_ASSERT_EQUAL_UINT16(1, persist::v3::HEADER_SIZE);
+    TEST_ASSERT_EQUAL_UINT16(1, persist::v3::TEMPLATES_OFFSET);
+    TEST_ASSERT_EQUAL_UINT16(384, persist::v3::TEMPLATES_SIZE);
+    TEST_ASSERT_EQUAL_UINT16(385, persist::v3::INSTANCES_OFFSET);
+    TEST_ASSERT_EQUAL_UINT16(138, persist::v3::INSTANCES_SIZE);
+    TEST_ASSERT_EQUAL_UINT16(523, persist::v3::CHANNELS_OFFSET);
+    TEST_ASSERT_EQUAL_UINT16(54, persist::v3::CHANNELS_SIZE);
+    TEST_ASSERT_EQUAL_UINT16(577, persist::v3::GLOBAL_OFFSET);
+    TEST_ASSERT_EQUAL_UINT16(5, persist::v3::GLOBAL_SIZE);
+    TEST_ASSERT_EQUAL_UINT16(582, persist::v3::PREFS_OFFSET);
+    TEST_ASSERT_EQUAL_UINT16(6, persist::v3::PREFS_SIZE);
+    TEST_ASSERT_EQUAL_UINT16(588, persist::v3::TOTAL_SIZE);
+    TEST_ASSERT_EQUAL_UINT16(971, persist::v3::LAST_ADDRESS);
+}
+
+void test_the_v3_format_version_is_three() {
+    TEST_ASSERT_EQUAL_UINT8(3, persist::v3::FORMAT_VERSION);
+    TEST_ASSERT_EQUAL_UINT8(2, persist::FORMAT_VERSION);
+}
+
+void test_the_v3_records_carry_thirty_six_steps() {
+    TEST_ASSERT_EQUAL_UINT8(5, persist::v3::STEP_BYTES);
+    TEST_ASSERT_EQUAL_UINT8(18, persist::v3::RATCHET_BYTES);
+    TEST_ASSERT_EQUAL_UINT8(23, persist::v3::CONTENT_BYTES);
+    TEST_ASSERT_EQUAL_UINT8(1, persist::v3::LENGTH_BYTES);
+    TEST_ASSERT_EQUAL_UINT8(24, persist::v3::TEMPLATE_RECORD);
+    TEST_ASSERT_EQUAL_UINT8(23, persist::v3::INSTANCE_RECORD);
+    TEST_ASSERT_EQUAL_UINT8(16, persist::v3::TEMPLATE_COUNT);
+    TEST_ASSERT_EQUAL_UINT8(6, persist::v3::INSTANCE_COUNT);
+    TEST_ASSERT_EQUAL_UINT8(9, persist::v3::CHANNEL_RECORD);
+    TEST_ASSERT_EQUAL_UINT8(0, persist::v3::RECORD_STEPS_AT);
+    TEST_ASSERT_EQUAL_UINT8(5, persist::v3::RECORD_RATCHETS_AT);
+    TEST_ASSERT_EQUAL_UINT8(23, persist::v3::RECORD_LENGTH_AT);
+}
+
+void test_the_v3_global_zone_reserves_mod_and_range() {
+    TEST_ASSERT_EQUAL_UINT8(0, persist::v3::GLOBAL_TEMPO_LO_AT);
+    TEST_ASSERT_EQUAL_UINT8(1, persist::v3::GLOBAL_TEMPO_HI_AT);
+    TEST_ASSERT_EQUAL_UINT8(2, persist::v3::GLOBAL_CLOCK_SOURCE_AT);
+    TEST_ASSERT_EQUAL_UINT8(3, persist::v3::GLOBAL_MOD_AT);
+    TEST_ASSERT_EQUAL_UINT8(4, persist::v3::GLOBAL_RANGE_AT);
+}
+
+void test_the_v3_image_leaves_the_original_memcode_alone() {
+    TEST_ASSERT_TRUE(persist::BASE_ADDRESS + persist::v3::TOTAL_SIZE <= 1023);
+    TEST_ASSERT_EQUAL_UINT16(51, 1022 - persist::v3::LAST_ADDRESS);
+}
+
+/*
  * Aller-retour
  */
 
@@ -561,6 +614,12 @@ int main() {
 
     RUN_TEST(test_the_layout_is_the_one_the_prd_fixed);
     RUN_TEST(test_the_image_ends_below_the_original_memcode);
+
+    RUN_TEST(test_the_v3_layout_is_the_one_the_prd_fixed);
+    RUN_TEST(test_the_v3_format_version_is_three);
+    RUN_TEST(test_the_v3_records_carry_thirty_six_steps);
+    RUN_TEST(test_the_v3_global_zone_reserves_mod_and_range);
+    RUN_TEST(test_the_v3_image_leaves_the_original_memcode_alone);
 
     RUN_TEST(test_a_round_trip_restores_the_state_byte_for_byte);
     RUN_TEST(test_the_patterns_survive_with_their_ratchets);

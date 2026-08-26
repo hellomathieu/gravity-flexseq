@@ -50,6 +50,85 @@ static_assert(BASE_ADDRESS + TOTAL_SIZE <= EEPROM_SIZE - 1,
               "the image must fit below the original firmware's memCode at 1023");
 static_assert(PREFS_SIZE == sizeof(Preferences), "the prefs zone must match the struct");
 
+namespace v3 {
+
+constexpr uint8_t FORMAT_VERSION = 3;
+
+constexpr uint8_t STEP_BYTES = Pattern::STEP_BYTES;
+constexpr uint8_t RATCHET_BYTES = Pattern::RATCHET_BYTES;
+constexpr uint8_t CONTENT_BYTES = STEP_BYTES + RATCHET_BYTES;
+constexpr uint8_t LENGTH_BYTES = 1;
+
+constexpr uint8_t RECORD_STEPS_AT = 0;
+constexpr uint8_t RECORD_RATCHETS_AT = RECORD_STEPS_AT + STEP_BYTES;
+constexpr uint8_t RECORD_LENGTH_AT = RECORD_RATCHETS_AT + RATCHET_BYTES;
+
+constexpr uint8_t TEMPLATE_RECORD = CONTENT_BYTES + LENGTH_BYTES;
+constexpr uint8_t INSTANCE_RECORD = CONTENT_BYTES;
+constexpr uint8_t TEMPLATE_COUNT = PATTERN_COUNT;
+constexpr uint8_t INSTANCE_COUNT = SequencerEngine::CHANNEL_COUNT;
+
+constexpr uint16_t HEADER_OFFSET = 0;
+constexpr uint16_t HEADER_SIZE = 1;
+
+constexpr uint16_t TEMPLATES_OFFSET = HEADER_OFFSET + HEADER_SIZE;
+constexpr uint16_t TEMPLATES_SIZE = TEMPLATE_COUNT * TEMPLATE_RECORD;
+
+constexpr uint16_t INSTANCES_OFFSET = TEMPLATES_OFFSET + TEMPLATES_SIZE;
+constexpr uint16_t INSTANCES_SIZE = INSTANCE_COUNT * INSTANCE_RECORD;
+
+constexpr uint8_t CHANNEL_RECORD = 9;
+constexpr uint16_t CHANNELS_OFFSET = INSTANCES_OFFSET + INSTANCES_SIZE;
+constexpr uint16_t CHANNELS_SIZE = SequencerEngine::CHANNEL_COUNT * CHANNEL_RECORD;
+
+constexpr uint16_t GLOBAL_OFFSET = CHANNELS_OFFSET + CHANNELS_SIZE;
+constexpr uint16_t GLOBAL_SIZE = 5;
+constexpr uint8_t GLOBAL_TEMPO_LO_AT = 0;
+constexpr uint8_t GLOBAL_TEMPO_HI_AT = 1;
+constexpr uint8_t GLOBAL_CLOCK_SOURCE_AT = 2;
+constexpr uint8_t GLOBAL_MOD_AT = 3;
+constexpr uint8_t GLOBAL_RANGE_AT = 4;
+
+constexpr uint16_t PREFS_OFFSET = GLOBAL_OFFSET + GLOBAL_SIZE;
+constexpr uint16_t PREFS_SIZE = 6;
+
+constexpr uint16_t TOTAL_SIZE = PREFS_OFFSET + PREFS_SIZE;
+constexpr uint16_t LAST_ADDRESS = BASE_ADDRESS + TOTAL_SIZE - 1;
+
+static_assert(STEP_BYTES * 8 >= Pattern::DEFAULT_TOTAL_STEPS,
+              "the step bytes must round up, or the last steps have no storage");
+static_assert(STEP_BYTES * 8 - Pattern::DEFAULT_TOTAL_STEPS == 4,
+              "ADR 0007 makes the four bits above the last step canonical zeros");
+static_assert(RATCHET_BYTES * 2 == Pattern::DEFAULT_TOTAL_STEPS,
+              "ADR 0007 gives one ratchet nibble per step");
+static_assert(CONTENT_BYTES == sizeof(Pattern),
+              "the record content must match the pattern structure");
+static_assert(TEMPLATE_RECORD == CONTENT_BYTES + 1,
+              "ADR 0006 adds one length byte to a template record");
+static_assert(INSTANCE_RECORD == CONTENT_BYTES,
+              "an instance stores content only; its length lives in the channel record");
+static_assert(RECORD_LENGTH_AT == CONTENT_BYTES,
+              "the length byte follows the content, with no gap");
+static_assert(RECORD_LENGTH_AT + LENGTH_BYTES == TEMPLATE_RECORD,
+              "the template record ends after its length byte");
+static_assert(TEMPLATE_COUNT == PATTERN_COUNT,
+              "PRD 11.1 stores sixteen templates");
+static_assert(INSTANCE_COUNT == SequencerEngine::CHANNEL_COUNT,
+              "PRD 11.1 stores one instance per channel");
+static_assert(TOTAL_SIZE == HEADER_SIZE + TEMPLATES_SIZE + INSTANCES_SIZE + CHANNELS_SIZE
+                          + GLOBAL_SIZE + PREFS_SIZE,
+              "the offset chain must leave no gap and no overlap");
+static_assert(TOTAL_SIZE == 588, "PRD 11.1 fixes the version 3 image at 588 bytes");
+static_assert(BASE_ADDRESS + TOTAL_SIZE <= EEPROM_SIZE - 1,
+              "the image must fit below the original firmware's memCode at 1023");
+static_assert(BASE_ADDRESS > ORIGINAL_FIRMWARE_LAST,
+              "FlexSeq must never write over the original firmware's settings");
+static_assert(PREFS_SIZE == sizeof(Preferences), "the prefs zone must match the struct");
+static_assert(Pattern::DEFAULT_TOTAL_STEPS <= 255,
+              "the target length must fit the record's length byte");
+
+}  // namespace v3
+
 }  // namespace persist
 
 class PersistentImage {
