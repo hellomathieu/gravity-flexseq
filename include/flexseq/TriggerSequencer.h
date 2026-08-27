@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #include <flexseq/ChannelMode.h>
-#include <flexseq/PatternBank.h>
+#include <flexseq/Pattern.h>
 #include <flexseq/Prng.h>
 #include <flexseq/SequencerEngine.h>
 
@@ -19,8 +19,8 @@ public:
     // step behind, and the older onsets have lost their musical meaning.
     static constexpr uint8_t MAX_OWED = 6;
 
-    TriggerSequencer(const PatternBank& bank, const SequencerEngine& engine)
-        : bank_(bank), engine_(engine), prng_() {
+    explicit TriggerSequencer(const SequencerEngine& engine)
+        : engine_(engine), prng_() {
         for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
             counts_[ch] = 0;
             owed_[ch] = 0;
@@ -86,11 +86,7 @@ private:
     }
 
     bool activeStep(uint8_t channel) const {
-        const int8_t patternIndex = engine_.getSelectedPattern(channel);
-        if (patternIndex < 0) {
-            return false;
-        }
-        const Pattern* pattern = bank_.getPattern(static_cast<uint8_t>(patternIndex));
+        const Pattern* pattern = engine_.patternForChannel(channel);
         if (pattern == nullptr) {
             return false;
         }
@@ -105,7 +101,6 @@ private:
         return active;
     }
 
-    const PatternBank& bank_;
     const SequencerEngine& engine_;
     Prng prng_;
     uint8_t counts_[SequencerEngine::CHANNEL_COUNT];

@@ -101,7 +101,7 @@ int main(int argc, char** argv) {
     PatternBank bank;
     SequencerEngine engine;
     Transport transport(engine);
-    UiController ui(engine, bank, transport);
+    UiController ui(engine, transport);
     Preferences preferences;
     PersistentImage image(bank, engine, ui, preferences);
     engine.setPatternBank(&bank);

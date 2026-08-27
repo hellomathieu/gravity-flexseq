@@ -29,6 +29,7 @@
 
 import { subdivToTicks, DEFAULT_SUBDIV } from "./subdiv.js";
 import type { PatternBank } from "./PatternBank.js";
+import type { Pattern } from "./Pattern.js";
 import {
   ratchetFitsStep,
   ratchetSpan,
@@ -148,8 +149,8 @@ export class SequencerEngine {
     if (!c) return;
 
     let code = RATCHET_NONE;
-    if (this.bank && c.mode === ChannelMode.SEQ) {
-      const pattern = this.bank.getPattern(c.selectedPattern);
+    if (c.mode === ChannelMode.SEQ) {
+      const pattern = this.patternForChannel(ch);
       if (pattern) code = pattern.getRatchet(c.localStep);
     }
 
@@ -188,6 +189,12 @@ export class SequencerEngine {
    * trois steps tiennent dans la duree d'UN step (ils passent plus vite). Sans
    * banque, la duree de step reste uniforme.
    */
+  patternForChannel(channel: number): Pattern | null {
+    const c = this.channels[channel];
+    if (!c || this.bank === null) return null;
+    return this.bank.getPattern(c.selectedPattern);
+  }
+
   setPatternBank(bank: PatternBank | null): void {
     this.bank = bank;
     for (let ch = 0; ch < this.channels.length; ++ch) this.refreshStepTiming(ch);

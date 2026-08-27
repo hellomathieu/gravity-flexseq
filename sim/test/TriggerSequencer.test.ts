@@ -13,7 +13,8 @@ describe("TriggerSequencer", () => {
   it("triggers only on the onset of an active step", () => {
     const bank = new PatternBank();
     const engine = new SequencerEngine();
-    const trig = new TriggerSequencer(bank, engine);
+    const trig = new TriggerSequencer(engine);
+    engine.setPatternBank(bank);
     for (let ch = 0; ch < CHANNEL_COUNT; ++ch) engine.setChannelMode(ch, ChannelMode.SEQ);
 
     engine.setSelectedPattern(0, 0);
@@ -46,7 +47,8 @@ describe("TriggerSequencer", () => {
   it("does not trigger without a step onset", () => {
     const bank = new PatternBank();
     const engine = new SequencerEngine();
-    const trig = new TriggerSequencer(bank, engine);
+    const trig = new TriggerSequencer(engine);
+    engine.setPatternBank(bank);
     for (let ch = 0; ch < CHANNEL_COUNT; ++ch) engine.setChannelMode(ch, ChannelMode.SEQ);
 
     bank.getPattern(0)!.writeStep(1, true);
@@ -62,7 +64,8 @@ describe("TriggerSequencer", () => {
   it("fires on multiple channels sharing a pattern", () => {
     const bank = new PatternBank();
     const engine = new SequencerEngine();
-    const trig = new TriggerSequencer(bank, engine);
+    const trig = new TriggerSequencer(engine);
+    engine.setPatternBank(bank);
     for (let ch = 0; ch < CHANNEL_COUNT; ++ch) engine.setChannelMode(ch, ChannelMode.SEQ);
 
     engine.setSelectedPattern(0, 0);
@@ -82,7 +85,8 @@ describe("TriggerSequencer", () => {
   it("keeps channels with different patterns independent", () => {
     const bank = new PatternBank();
     const engine = new SequencerEngine();
-    const trig = new TriggerSequencer(bank, engine);
+    const trig = new TriggerSequencer(engine);
+    engine.setPatternBank(bank);
     for (let ch = 0; ch < CHANNEL_COUNT; ++ch) engine.setChannelMode(ch, ChannelMode.SEQ);
 
     engine.setSelectedPattern(0, 0);
@@ -119,7 +123,8 @@ describe("TriggerSequencer — modes (PRD 4.2)", () => {
   function rig(mode: ChannelMode, skipChance = 0) {
     const bank = new PatternBank();
     const engine = new SequencerEngine();
-    const trig = new TriggerSequencer(bank, engine);
+    const trig = new TriggerSequencer(engine);
+    engine.setPatternBank(bank);
     engine.setChannelMode(0, mode);
     engine.setSkipChance(0, skipChance);
     engine.start();
@@ -241,7 +246,8 @@ describe("la dette d onsets", () => {
   it("garde l onset que la sortie n a pas pu emettre", () => {
     const bank = new PatternBank();
     const engine = new SequencerEngine();
-    const trig = new TriggerSequencer(bank, engine);
+    const trig = new TriggerSequencer(engine);
+    engine.setPatternBank(bank);
     for (let ch = 0; ch < CHANNEL_COUNT; ++ch) {
       engine.setChannelMode(ch, ChannelMode.SEQ);
     }
@@ -270,7 +276,8 @@ describe("la dette d onsets", () => {
   it("plafonne la dette a un pas entier", () => {
     const bank = new PatternBank();
     const engine = new SequencerEngine();
-    const trig = new TriggerSequencer(bank, engine);
+    const trig = new TriggerSequencer(engine);
+    engine.setPatternBank(bank);
     for (let ch = 0; ch < CHANNEL_COUNT; ++ch) {
       engine.setChannelMode(ch, ChannelMode.SEQ);
     }

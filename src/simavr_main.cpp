@@ -29,7 +29,7 @@ namespace {
 flexseq::PatternBank patternBank;
 flexseq::SequencerEngine engine;
 flexseq::Transport transport(engine);
-flexseq::TriggerSequencer triggers(patternBank, engine);
+flexseq::TriggerSequencer triggers(engine);
 
 constexpr uint8_t TEST_CHANNEL = 0;
 constexpr uint16_t STEP_TICKS = flexseq::SequencerEngine::TICKS_PER_SIXTEENTH; // 24

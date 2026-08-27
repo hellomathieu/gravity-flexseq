@@ -98,7 +98,7 @@ struct Wired {
     Transport transport;
     UiController ui;
 
-    Wired() : engine(), transport(engine), ui(engine, bank, transport) {
+    Wired() : engine(), transport(engine), ui(engine, transport) {
         for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
             engine.setChannelMode(ch, flexseq::MODE_SEQ);
         }

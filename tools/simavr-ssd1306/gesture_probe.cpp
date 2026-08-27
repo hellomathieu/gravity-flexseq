@@ -368,7 +368,7 @@ static flexseq::SequencerEngine g_expected_engine;
 static const char *buildExpectedBank(flexseq::PatternBank &bank)
 {
     static flexseq::Transport transport(g_expected_engine);
-    static flexseq::UiController ui(g_expected_engine, bank, transport);
+    static flexseq::UiController ui(g_expected_engine, transport);
     static flexseq::Preferences preferences;
     flexseq::PersistentImage image(bank, g_expected_engine, ui, preferences);
     flexseq::PersistenceScheduler scheduler;

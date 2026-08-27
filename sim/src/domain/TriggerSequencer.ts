@@ -5,7 +5,6 @@
  * apres `SequencerEngine.advance()` : c'est le seul moment ou `onsetCount()` est
  * valide, et c'est la que le tirage de RANDOM est consomme, une fois par step.
  */
-import type { PatternBank } from "./PatternBank.js";
 import { ChannelMode, type SequencerEngine } from "./SequencerEngine.js";
 import { Prng } from "./Prng.js";
 
@@ -19,14 +18,12 @@ export const SKIP_DRAW_BOUND = 10;
 export const MAX_OWED = 6;
 
 export class TriggerSequencer {
-  private readonly bank: PatternBank;
   private readonly engine: SequencerEngine;
   private readonly prng = new Prng();
   private counts: number[] = [];
   private owed: number[] = [];
 
-  constructor(bank: PatternBank, engine: SequencerEngine) {
-    this.bank = bank;
+  constructor(engine: SequencerEngine) {
     this.engine = engine;
   }
 
@@ -89,10 +86,7 @@ export class TriggerSequencer {
   }
 
   private activeStep(channel: number): boolean {
-    const patternIndex = this.engine.getSelectedPattern(channel);
-    if (patternIndex < 0) return false;
-
-    const pattern = this.bank.getPattern(patternIndex);
+    const pattern = this.engine.patternForChannel(channel);
     if (!pattern) return false;
 
     const step = this.engine.effectiveStep(channel);

@@ -79,9 +79,8 @@ int8_t indexOfChoice(uint8_t (*choiceAt)(uint8_t), uint8_t count, uint8_t value)
 
 }  // namespace
 
-UiController::UiController(SequencerEngine& engine, PatternBank& bank, Transport& transport)
+UiController::UiController(SequencerEngine& engine, Transport& transport)
     : engine_(engine),
-      bank_(bank),
       transport_(transport),
       level_(LEVEL_TAB_BAR),
       currentTab_(TAB_FIRST_CHANNEL),
@@ -135,11 +134,7 @@ Pattern* UiController::currentPattern() const {
     if (channel < 0) {
         return nullptr;
     }
-    const int8_t index = engine_.getSelectedPattern(static_cast<uint8_t>(channel));
-    if (index < 0) {
-        return nullptr;
-    }
-    return bank_.getPattern(static_cast<uint8_t>(index));
+    return engine_.patternForChannel(static_cast<uint8_t>(channel));
 }
 
 void UiController::handle(Event event, int8_t delta) {

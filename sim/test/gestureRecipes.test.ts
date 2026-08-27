@@ -35,7 +35,7 @@ function rig(activeSteps: readonly number[] = ACTIVE_STEPS) {
   const pattern = bank.getPattern(0)!;
   for (const step of activeSteps) pattern.writeStep(step, true);
   const transport = new Transport(engine);
-  const ui = new UiController(engine, bank, transport);
+  const ui = new UiController(engine, transport);
   const driver = new GestureDriver(ui, bank, engine);
   return { bank, engine, transport, ui, driver, pattern };
 }

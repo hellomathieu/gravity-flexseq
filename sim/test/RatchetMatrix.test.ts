@@ -64,7 +64,7 @@ function rig(subdiv: number, code: number, activeSteps: number[], length = 4) {
   const bank = new PatternBank();
   const engine = new SequencerEngine();
   engine.setPatternBank(bank);
-  const seq = new TriggerSequencer(bank, engine);
+  const seq = new TriggerSequencer(engine);
   engine.setChannelMode(0, ChannelMode.SEQ);
   const pattern = bank.getPattern(0)!;
   for (const step of activeSteps) pattern.writeStep(step, true);
@@ -206,7 +206,7 @@ describe("Le refus a la saisie", () => {
     const engine = new SequencerEngine();
     engine.setPatternBank(bank);
     const transport = new Transport(engine);
-    const ui = new UiController(engine, bank, transport);
+    const ui = new UiController(engine, transport);
     for (let ch = 0; ch < 6; ++ch) engine.setChannelMode(ch, ChannelMode.SEQ);
     engine.setSubdiv(0, subdiv);
     engine.refreshTiming();

@@ -23,8 +23,8 @@ namespace {
 flexseq::PatternBank patternBank;
 flexseq::SequencerEngine engine;
 flexseq::Transport transport(engine);
-flexseq::TriggerSequencer triggers(patternBank, engine);
-flexseq::UiController ui(engine, patternBank, transport);
+flexseq::TriggerSequencer triggers(engine);
+flexseq::UiController ui(engine, transport);
 flexseq::Preferences preferences;
 flexseq::PersistentImage persistentImage(patternBank, engine, ui, preferences);
 flexseq::PersistenceScheduler persistence;

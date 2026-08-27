@@ -55,7 +55,7 @@ struct Rig {
     PersistentImage image;
     PersistenceScheduler scheduler;
 
-    Rig() : engine(), transport(engine), ui(engine, bank, transport), prefs(),
+    Rig() : engine(), transport(engine), ui(engine, transport), prefs(),
             image(bank, engine, ui, prefs) {
         engine.setPatternBank(&bank);
     }

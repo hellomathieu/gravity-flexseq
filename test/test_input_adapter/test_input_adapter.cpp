@@ -39,7 +39,7 @@ struct Rig {
     int position = 0;
     unsigned long now = 0;
 
-    Rig() : engine(), transport(engine), ui(engine, bank, transport) {
+    Rig() : engine(), transport(engine), ui(engine, transport) {
         ArduinoMock::reset();
         engine.setPatternBank(&bank);
         for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {

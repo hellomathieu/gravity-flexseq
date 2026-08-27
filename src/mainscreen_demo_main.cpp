@@ -12,7 +12,7 @@ namespace {
 flexseq::PatternBank patternBank;
 flexseq::SequencerEngine engine;
 flexseq::Transport transport(engine);
-flexseq::UiController ui(engine, patternBank, transport);
+flexseq::UiController ui(engine, transport);
 
 constexpr uint8_t DEMO_TAB = 2;
 constexpr uint8_t DEMO_CURSOR = 2;

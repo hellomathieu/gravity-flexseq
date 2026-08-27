@@ -56,7 +56,7 @@ export class TsReferenceBackend implements SimBackend {
 
   private readonly bank = new PatternBank();
   private readonly engine = new SequencerEngine();
-  private readonly triggers = new TriggerSequencer(this.bank, this.engine);
+  private readonly triggers = new TriggerSequencer(this.engine);
 
   constructor() {
     // Le moteur consulte la banque pour la duree des steps ternaires.

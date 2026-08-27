@@ -29,7 +29,8 @@ static const uint16_t STEP = SequencerEngine::PPQN; // 96 = default ticksPerStep
 void test_triggers_only_on_active_step_onset() {
     PatternBank bank;
     SequencerEngine engine;
-    TriggerSequencer trig(bank, engine);
+    TriggerSequencer trig(engine);
+    engine.setPatternBank(&bank);
     seqMode(engine);
 
     // Channel 0 plays pattern 0 with steps 1 and 3 active, length 4.
@@ -60,7 +61,8 @@ void test_triggers_only_on_active_step_onset() {
 void test_no_trigger_without_a_step_onset() {
     PatternBank bank;
     SequencerEngine engine;
-    TriggerSequencer trig(bank, engine);
+    TriggerSequencer trig(engine);
+    engine.setPatternBank(&bank);
     seqMode(engine);
 
     bank.getPattern(0)->writeStep(1, true);
@@ -75,7 +77,8 @@ void test_no_trigger_without_a_step_onset() {
 void test_shared_pattern_triggers_on_multiple_channels() {
     PatternBank bank;
     SequencerEngine engine;
-    TriggerSequencer trig(bank, engine);
+    TriggerSequencer trig(engine);
+    engine.setPatternBank(&bank);
     seqMode(engine);
 
     // CH0 and CH1 both play pattern 0 (shared), step 1 active.
@@ -96,7 +99,8 @@ void test_shared_pattern_triggers_on_multiple_channels() {
 void test_channels_with_different_patterns_are_independent() {
     PatternBank bank;
     SequencerEngine engine;
-    TriggerSequencer trig(bank, engine);
+    TriggerSequencer trig(engine);
+    engine.setPatternBank(&bank);
     seqMode(engine);
 
     engine.setSelectedPattern(0, 0);
@@ -132,7 +136,8 @@ static uint16_t countTriggers(TriggerSequencer& trig, SequencerEngine& engine,
 void test_clock_triggers_on_every_step_whatever_the_pattern() {
     PatternBank bank;
     SequencerEngine engine;
-    TriggerSequencer trig(bank, engine);
+    TriggerSequencer trig(engine);
+    engine.setPatternBank(&bank);
 
     engine.setEffectiveLength(0, 4);
     engine.start();
@@ -142,7 +147,8 @@ void test_clock_triggers_on_every_step_whatever_the_pattern() {
 void test_random_never_skips_at_zero() {
     PatternBank bank;
     SequencerEngine engine;
-    TriggerSequencer trig(bank, engine);
+    TriggerSequencer trig(engine);
+    engine.setPatternBank(&bank);
 
     engine.setChannelMode(0, MODE_RANDOM);
     engine.setSkipChance(0, 0);
@@ -153,7 +159,8 @@ void test_random_never_skips_at_zero() {
 void test_random_always_skips_at_ten() {
     PatternBank bank;
     SequencerEngine engine;
-    TriggerSequencer trig(bank, engine);
+    TriggerSequencer trig(engine);
+    engine.setPatternBank(&bank);
 
     engine.setChannelMode(0, MODE_RANDOM);
     engine.setSkipChance(0, 10);
@@ -164,7 +171,8 @@ void test_random_always_skips_at_ten() {
 void test_random_at_five_keeps_about_half() {
     PatternBank bank;
     SequencerEngine engine;
-    TriggerSequencer trig(bank, engine);
+    TriggerSequencer trig(engine);
+    engine.setPatternBank(&bank);
 
     engine.setChannelMode(0, MODE_RANDOM);
     engine.setSkipChance(0, 5);
@@ -178,8 +186,10 @@ void test_random_is_reproducible_from_one_run_to_the_next() {
     PatternBank bank;
     SequencerEngine a;
     SequencerEngine b;
-    TriggerSequencer ta(bank, a);
-    TriggerSequencer tb(bank, b);
+    TriggerSequencer ta(a);
+    a.setPatternBank(&bank);
+    TriggerSequencer tb(b);
+    b.setPatternBank(&bank);
 
     a.setChannelMode(0, MODE_RANDOM);
     b.setChannelMode(0, MODE_RANDOM);
@@ -194,8 +204,10 @@ void test_a_different_seed_gives_a_different_run() {
     PatternBank bank;
     SequencerEngine a;
     SequencerEngine b;
-    TriggerSequencer ta(bank, a);
-    TriggerSequencer tb(bank, b);
+    TriggerSequencer ta(a);
+    a.setPatternBank(&bank);
+    TriggerSequencer tb(b);
+    b.setPatternBank(&bank);
     tb.seed(0x1234u);
 
     a.setChannelMode(0, MODE_RANDOM);
@@ -220,8 +232,10 @@ void test_the_draw_is_spent_only_when_a_step_actually_lands() {
     PatternBank bank;
     SequencerEngine withIdle;
     SequencerEngine backToBack;
-    TriggerSequencer ti(bank, withIdle);
-    TriggerSequencer tb(bank, backToBack);
+    TriggerSequencer ti(withIdle);
+    withIdle.setPatternBank(&bank);
+    TriggerSequencer tb(backToBack);
+    backToBack.setPatternBank(&bank);
 
     withIdle.setChannelMode(0, MODE_RANDOM);
     backToBack.setChannelMode(0, MODE_RANDOM);
@@ -246,7 +260,8 @@ void test_the_draw_is_spent_only_when_a_step_actually_lands() {
 void test_counts_hold_still_until_the_next_update() {
     PatternBank bank;
     SequencerEngine engine;
-    TriggerSequencer trig(bank, engine);
+    TriggerSequencer trig(engine);
+    engine.setPatternBank(&bank);
 
     engine.start();
     engine.advance(STEP);
@@ -262,7 +277,8 @@ void test_counts_hold_still_until_the_next_update() {
 void test_an_onset_the_output_could_not_emit_is_not_lost() {
     PatternBank bank;
     SequencerEngine engine;
-    TriggerSequencer trig(bank, engine);
+    TriggerSequencer trig(engine);
+    engine.setPatternBank(&bank);
     seqMode(engine);
     engine.setPatternBank(&bank);
 
@@ -295,7 +311,8 @@ void test_an_onset_the_output_could_not_emit_is_not_lost() {
 void test_the_debt_stops_at_one_whole_step() {
     PatternBank bank;
     SequencerEngine engine;
-    TriggerSequencer trig(bank, engine);
+    TriggerSequencer trig(engine);
+    engine.setPatternBank(&bank);
     seqMode(engine);
     engine.setPatternBank(&bank);
 
@@ -317,7 +334,8 @@ void test_the_debt_stops_at_one_whole_step() {
 void test_an_out_of_range_channel_never_triggers() {
     PatternBank bank;
     SequencerEngine engine;
-    TriggerSequencer trig(bank, engine);
+    TriggerSequencer trig(engine);
+    engine.setPatternBank(&bank);
     engine.start();
     engine.advance(STEP);
     trig.update();

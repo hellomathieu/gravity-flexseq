@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#include <flexseq/PatternBank.h>
+#include <flexseq/Pattern.h>
 #include <flexseq/SequencerEngine.h>
 #include <flexseq/Transport.h>
 
@@ -62,7 +62,7 @@ public:
     static constexpr uint8_t BAR_LENGTH_CHOICE_COUNT = 5;
     static constexpr uint8_t RATCHET_CHOICE_COUNT = 6;
 
-    UiController(SequencerEngine& engine, PatternBank& bank, Transport& transport);
+    UiController(SequencerEngine& engine, Transport& transport);
 
     void handle(Event event, int8_t delta = 0);
 
@@ -104,7 +104,6 @@ private:
     Pattern* currentPattern() const;
 
     SequencerEngine& engine_;
-    PatternBank& bank_;
     Transport& transport_;
 
     Level level_;

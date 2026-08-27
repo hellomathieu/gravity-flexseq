@@ -37,7 +37,7 @@ function rig() {
   }
   engine.setPatternBank(bank);
   const transport = new Transport(engine);
-  const ui = new UiController(engine, bank, transport);
+  const ui = new UiController(engine, transport);
 
   const gotoTab = (tab: number) => {
     for (let guard = 0; guard < TAB_COUNT; guard += 1) {

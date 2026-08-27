@@ -1,5 +1,4 @@
 import { Pattern, ratchetFitsStep, RATCHET_CODES } from "./Pattern.js";
-import type { PatternBank } from "./PatternBank.js";
 import {
   BAR_LENGTHS,
   CHANNEL_COUNT,
@@ -93,7 +92,6 @@ export class UiController {
 
   constructor(
     private readonly engine: SequencerEngine,
-    private readonly bank: PatternBank,
     private readonly transport: Transport,
   ) {}
 
@@ -279,9 +277,7 @@ export class UiController {
   private currentPattern(): Pattern | null {
     const channel = this.selectedChannel;
     if (channel < 0) return null;
-    const index = this.engine.getSelectedPattern(channel);
-    if (index < 0) return null;
-    return this.bank.getPattern(index);
+    return this.engine.patternForChannel(channel);
   }
 
   get mainField(): UiField {

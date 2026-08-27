@@ -71,8 +71,8 @@ struct Rig {
     UiController ui;
     TriggerSequencer seq;
 
-    Rig() : engine(), transport(engine), ui(engine, bank, transport),
-            seq(bank, engine) {
+    Rig() : engine(), transport(engine), ui(engine, transport),
+            seq(engine) {
         engine.setPatternBank(&bank);
         engine.setChannelMode(0, flexseq::MODE_SEQ);
     }

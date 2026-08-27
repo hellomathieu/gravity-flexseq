@@ -28,7 +28,7 @@ SequencerEngine::SequencerEngine()
     }
 }
 
-void SequencerEngine::setPatternBank(const PatternBank* bank) {
+void SequencerEngine::setPatternBank(PatternBank* bank) {
     bank_ = bank;
     for (uint8_t ch = 0; ch < CHANNEL_COUNT; ++ch) {
         refreshStepTiming(ch);
@@ -48,8 +48,8 @@ void SequencerEngine::refreshStepTiming(uint8_t channel, bool resetSubOnset) {
     ChannelState& c = channels_[channel];
 
     uint8_t code = RATCHET_NONE;
-    if (bank_ != nullptr && c.mode == MODE_SEQ) {
-        const Pattern* pattern = bank_->getPattern(c.selectedPattern);
+    if (c.mode == MODE_SEQ) {
+        const Pattern* pattern = patternForChannel(channel);
         if (pattern != nullptr) {
             code = pattern->getRatchet(c.localStep);
         }
@@ -177,6 +177,20 @@ void SequencerEngine::advance(uint16_t ticks) {
             break;
         }
     }
+}
+
+Pattern* SequencerEngine::patternForChannel(uint8_t channel) {
+    if (!validChannel(channel) || bank_ == nullptr) {
+        return nullptr;
+    }
+    return bank_->getPattern(channels_[channel].selectedPattern);
+}
+
+const Pattern* SequencerEngine::patternForChannel(uint8_t channel) const {
+    if (!validChannel(channel) || bank_ == nullptr) {
+        return nullptr;
+    }
+    return bank_->getPattern(channels_[channel].selectedPattern);
 }
 
 int8_t SequencerEngine::getSelectedPattern(uint8_t channel) const {
