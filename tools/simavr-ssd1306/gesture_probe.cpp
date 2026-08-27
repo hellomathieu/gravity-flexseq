@@ -89,6 +89,8 @@ static_assert(SHIFT_BURST_GAP_MS > BUTTON_DEBOUNCE_MS,
 
 #define PATTERN_COUNT 16
 #define PATTERN_BYTES 23
+
+static constexpr size_t OBSERVED_BANK_BYTES = sizeof(flexseq::PatternBank);
 #define STEP_BYTES     5
 #define RATCHET_BYTES 18
 
@@ -320,7 +322,7 @@ static void run_for(avr_t *avr, double ms)
 
 static void read_bank(const avr_t *avr, uint8_t *out)
 {
-    memcpy(out, &avr->data[g_bank_addr], (size_t)PATTERN_COUNT * PATTERN_BYTES);
+    memcpy(out, &avr->data[g_bank_addr], (size_t)OBSERVED_BANK_BYTES);
 }
 
 #define SUPPRESSED_BYTES 2
@@ -383,7 +385,7 @@ static const char *buildExpectedBank(flexseq::PatternBank &bank)
 static uint32_t bankDiffCount(const uint8_t *a, const uint8_t *b, uint32_t *firstOut)
 {
     uint32_t n = 0, first = 0xFFFFFFFFu;
-    for (uint32_t i = 0; i < (uint32_t)(PATTERN_COUNT * PATTERN_BYTES); ++i) {
+    for (uint32_t i = 0; i < (uint32_t)(OBSERVED_BANK_BYTES); ++i) {
         if (a[i] != b[i]) { ++n; if (first == 0xFFFFFFFFu) first = i; }
     }
     if (firstOut) *firstOut = (first == 0xFFFFFFFFu) ? 0 : first;
@@ -566,6 +568,10 @@ static void rotate(avr_t *avr, int detents, int aFirst)
 
 int main(int argc, char **argv)
 {
+    if (argc == 2 && strcmp(argv[1], "--observed-bank-bytes") == 0) {
+        printf("%zu\n", OBSERVED_BANK_BYTES);
+        return 0;
+    }
     if (argc < 3) {
         fprintf(stderr, "usage: %s <firmware.hex> <adresse_patternBank> [duree_boot_ms]\n",
                 argv[0]);
@@ -771,7 +777,7 @@ int main(int argc, char **argv)
 
     run_for(avr, boot_ms);
 
-    static uint8_t bank[PATTERN_COUNT * PATTERN_BYTES];
+    static uint8_t bank[OBSERVED_BANK_BYTES];
     read_bank(avr, bank);
 
     printf("twi_bytes_boot     %u\n", g_twi_bytes);
@@ -871,7 +877,7 @@ int main(int argc, char **argv)
     }
 
     if (diagDh) {
-        static uint8_t vu[PATTERN_COUNT * PATTERN_BYTES];
+        static uint8_t vu[OBSERVED_BANK_BYTES];
         const uint32_t pasActifs = activeStepsInPattern(expectedBytes);
         const int ongletDh = 5;
         int crans = 12;
@@ -930,7 +936,7 @@ int main(int argc, char **argv)
     }
 
     if (diagDd) {
-        static uint8_t vu[PATTERN_COUNT * PATTERN_BYTES];
+        static uint8_t vu[OBSERVED_BANK_BYTES];
         const uint32_t pasActifs = activeStepsInPattern(expectedBytes);
         const int ongletDd = 5;
         double gapMs = 0.0;
@@ -1000,7 +1006,7 @@ int main(int argc, char **argv)
     }
 
     if (diagDb) {
-        static uint8_t vu[PATTERN_COUNT * PATTERN_BYTES];
+        static uint8_t vu[OBSERVED_BANK_BYTES];
         const uint32_t pasActifs = activeStepsInPattern(expectedBytes);
         const int ongletDb = 5;
         uint32_t premier = 0;
@@ -1113,7 +1119,7 @@ int main(int argc, char **argv)
     }
 
     if (recetteR5R7) {
-        static uint8_t vu[PATTERN_COUNT * PATTERN_BYTES];
+        static uint8_t vu[OBSERVED_BANK_BYTES];
         const uint32_t pasActifs = activeStepsInPattern(expectedBytes);
         const int ongletR5 = 5;
         uint32_t premier = 0, marque = 0;
@@ -1189,7 +1195,7 @@ int main(int argc, char **argv)
     }
 
     if (recetteR11) {
-        static uint8_t vu[PATTERN_COUNT * PATTERN_BYTES];
+        static uint8_t vu[OBSERVED_BANK_BYTES];
         const uint32_t pasActifs = activeStepsInPattern(expectedBytes);
         const int ongletR11 = 4;
         const int sortieR11 = 3;
@@ -1283,7 +1289,7 @@ int main(int argc, char **argv)
     }
 
     if (recetteR2) {
-        static uint8_t vu[PATTERN_COUNT * PATTERN_BYTES];
+        static uint8_t vu[OBSERVED_BANK_BYTES];
         const uint32_t pasActifs = activeStepsInPattern(expectedBytes);
         const int ongletR2 = 4;
 
@@ -1447,7 +1453,7 @@ int main(int argc, char **argv)
     }
 
     if (recettesA) {
-        static uint8_t vu[PATTERN_COUNT * PATTERN_BYTES];
+        static uint8_t vu[OBSERVED_BANK_BYTES];
         uint32_t premier = 0, ecarts = 0;
         uint32_t marque = 0;
 
@@ -1602,7 +1608,7 @@ int main(int argc, char **argv)
         return 0;
     }
 
-    static uint8_t bankAfterRotations[PATTERN_COUNT * PATTERN_BYTES];
+    static uint8_t bankAfterRotations[OBSERVED_BANK_BYTES];
     read_bank(avr, bankAfterRotations);
     printf("bank_inchangee     %d\n",
            memcmp(bank, bankAfterRotations, sizeof(bank)) == 0 ? 1 : 0);
@@ -1639,13 +1645,13 @@ int main(int argc, char **argv)
            sigEdit, g_twi_bytes - twiMark, slotsBeforeEdit, tabBandSlotsWithInk(),
            (sigEdit != sigTabBar && sigEdit != sigAfterShort) ? 1 : 0);
 
-    static uint8_t bankBeforeShift[PATTERN_COUNT * PATTERN_BYTES];
+    static uint8_t bankBeforeShift[OBSERVED_BANK_BYTES];
     read_bank(avr, bankBeforeShift);
     printf("ratchet_avant      %02x\n", bankBeforeShift[STEP_BYTES]);
 
     twiMark = g_twi_bytes;
     const double heldMs = skipShift ? 192.0 : shiftRotate(avr, 3, 1, harness::RATCHET_BURST_LIMIT, false);
-    static uint8_t bankAfterShift[PATTERN_COUNT * PATTERN_BYTES];
+    static uint8_t bankAfterShift[OBSERVED_BANK_BYTES];
     read_bank(avr, bankAfterShift);
     printf("shift_maintien_ms  %.1f\n", heldMs);
     printf("ratchet_apres      %02x\n", bankAfterShift[STEP_BYTES]);
@@ -1656,14 +1662,14 @@ int main(int argc, char **argv)
 
     twiMark = g_twi_bytes;
     shiftRotate(avr, 2, 1, harness::RATCHET_BURST_LIMIT, false);
-    static uint8_t bankTriplet[PATTERN_COUNT * PATTERN_BYTES];
+    static uint8_t bankTriplet[OBSERVED_BANK_BYTES];
     read_bank(avr, bankTriplet);
     printf("triolet_pose       %02x twi %u\n",
            bankTriplet[STEP_BYTES] & 0x0F, g_twi_bytes - twiMark);
 
     twiMark = g_twi_bytes;
     shiftRotate(avr, 5, 0, harness::RATCHET_BURST_LIMIT, false);
-    static uint8_t bankNoRatchet[PATTERN_COUNT * PATTERN_BYTES];
+    static uint8_t bankNoRatchet[OBSERVED_BANK_BYTES];
     read_bank(avr, bankNoRatchet);
     printf("triolet_retire     %02x twi %u\n",
            bankNoRatchet[STEP_BYTES] & 0x0F, g_twi_bytes - twiMark);
@@ -1673,14 +1679,14 @@ int main(int argc, char **argv)
     rotate(avr, 1, 1);
     twiMark = g_twi_bytes;
     pressFor(avr, (double)PRESS_MS);
-    static uint8_t bankToggled[PATTERN_COUNT * PATTERN_BYTES];
+    static uint8_t bankToggled[OBSERVED_BANK_BYTES];
     read_bank(avr, bankToggled);
     printf("step1_bascule      %04x twi %u\n",
            low_mask_of(&bankToggled[0]), g_twi_bytes - twiMark);
 
     twiMark = g_twi_bytes;
     pressFor(avr, (double)PRESS_MS);
-    static uint8_t bankRestored[PATTERN_COUNT * PATTERN_BYTES];
+    static uint8_t bankRestored[OBSERVED_BANK_BYTES];
     read_bank(avr, bankRestored);
     printf("step1_rebascule    %04x twi %u\n",
            low_mask_of(&bankRestored[0]), g_twi_bytes - twiMark);
@@ -1699,7 +1705,7 @@ int main(int argc, char **argv)
     printf("fract_demande      %d crans, plafond %d crans par salve\n",
            longDetents, SHIFT_BURST_DETENTS);
     const double heldUp = shiftRotate(avr, longDetents, 1, harness::RATCHET_BURST_LIMIT, true);
-    static uint8_t bankLongUp[PATTERN_COUNT * PATTERN_BYTES];
+    static uint8_t bankLongUp[OBSERVED_BANK_BYTES];
     read_bank(avr, bankLongUp);
     const int burstsUp = g_shift_bursts - burstsBefore;
     printf("fract_salves       %d\n", burstsUp);
@@ -1711,7 +1717,7 @@ int main(int argc, char **argv)
     printf("fract_twi          %u\n", g_twi_bytes - twiMark);
 
     const double heldDown = shiftRotate(avr, longDetents, 0, harness::RATCHET_BURST_LIMIT, true);
-    static uint8_t bankLongDown[PATTERN_COUNT * PATTERN_BYTES];
+    static uint8_t bankLongDown[OBSERVED_BANK_BYTES];
     read_bank(avr, bankLongDown);
     uint32_t suppressedAfter = 0;
     const int readableAfter = readSuppressedCounter(avr, &suppressedAfter);

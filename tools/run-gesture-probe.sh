@@ -191,12 +191,62 @@ fi
 ok "image de rig" "SEQ, steps $RIG_STEPS, subdiv $RIG_SUBDIV, 138 BPM — rig de la couche 1"
 
 ELF="$ROOT/.pio/build/nanoatmega328/firmware.elf"
-BANK_ADDR="$("$NM" "$ELF" | grep -E ' [bB] .*patternBank' | head -1 | awk '{print "0x"$1}')"
-[ -n "$BANK_ADDR" ] || die "symbole patternBank introuvable dans l'ELF"
-ok "symbole patternBank" "$BANK_ADDR"
+AVR_DATA_BASE=$(( 0x800000 ))
+
+BANK_BYTES="$("$BIN" --observed-bank-bytes 2>/dev/null | tr -d '[:space:]')"
+case "$BANK_BYTES" in
+  ''|*[!0-9]*)
+    inval "symbole patternBank" "le harnais n annonce aucune taille de banque observable"
+    exit 1 ;;
+esac
+
+BANK_PATTERN="${BANK_SYMBOL:-11patternBankE$|^patternBank$}"
+bank_rows="$("$NM" -S --defined-only "$ELF" | awk -v pat="$BANK_PATTERN" '$NF ~ pat { print NF, $0 }')"
+if [ -z "$bank_rows" ]; then bank_count=0
+else bank_count="$(printf '%s\n' "$bank_rows" | wc -l | tr -d ' ')"; fi
+
+if [ "$bank_count" -eq 0 ]; then
+  inval "symbole patternBank" "aucun symbole ne correspond a $BANK_PATTERN"
+  exit 1
+fi
+if [ "$bank_count" -gt 1 ]; then
+  inval "symbole patternBank" "$bank_count symboles correspondent : la selection serait arbitraire"
+  printf '%s\n' "$bank_rows" | sed 's/^/      /'
+  exit 1
+fi
+
+bank_nf="$(printf '%s' "$bank_rows" | awk '{print $1}')"
+if [ "$bank_nf" = "4" ]; then
+  bank_vma="$(printf '%s' "$bank_rows" | awk '{print $2}')"
+  bank_size="$(printf '%s' "$bank_rows" | awk '{print $3}')"
+  bank_type="$(printf '%s' "$bank_rows" | awk '{print $4}')"
+else
+  bank_vma="$(printf '%s' "$bank_rows" | awk '{print $2}')"
+  bank_size=""
+  bank_type="$(printf '%s' "$bank_rows" | awk '{print $3}')"
+fi
+
+case "$bank_type" in
+  b|B|d|D) ;;
+  *) inval "symbole patternBank" "type '$bank_type' : ni .bss ni .data, l adresse n est pas une adresse de donnees"
+     exit 1 ;;
+esac
+if [ -z "$bank_size" ]; then
+  inval "symbole patternBank" "st_size absent de la sortie de avr-nm -S : taille non verifiable"
+  exit 1
+fi
+if [ "$(( 0x$bank_size ))" -ne "$BANK_BYTES" ]; then
+  inval "symbole patternBank" "taille $(( 0x$bank_size )) octets au lieu des $BANK_BYTES que le harnais observe"
+  exit 1
+fi
+if [ "$(( 0x$bank_vma ))" -lt "$AVR_DATA_BASE" ]; then
+  inval "symbole patternBank" "VMA 0x$bank_vma sous 0x800000 : ce n est pas l espace de donnees"
+  exit 1
+fi
+BANK_ADDR="$(printf '0x%x' $(( 0x$bank_vma - AVR_DATA_BASE )))"
+ok "symbole patternBank" "unique, type $bank_type, $BANK_BYTES octets, VMA 0x$bank_vma -> RAM $BANK_ADDR"
 
 SUPPRESSED_PATTERN="${SUPPRESSED_SYMBOL:-14suppressedLongE$|^suppressedLong$}"
-AVR_DATA_BASE=$(( 0x800000 ))
 
 resolve_suppressed() {
   SUPPRESSED_ADDR="0"
