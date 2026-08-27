@@ -10,9 +10,14 @@
 # rien ne permette de le rejouer. La liste des mutants est donc du code du depot,
 # et elle grandit lot par lot.
 #
-# TROIS GARDES, chacun ne du meme genre d'erreur :
+# QUATRE GARDES, chacun ne du meme genre d'erreur :
 #   1. un motif ABSENT du code est une ERREUR (sortie 2), jamais un survivant.
 #     Sans cela, un mutant qui ne s'applique plus se lit comme un mutant tue ;
+#   1bis. un motif present PLUSIEURS FOIS est la meme erreur (sortie 2). Le
+#      remplacement ne porte que sur la premiere occurrence, donc un motif
+#      ambigu mute une cible que le mutant ne vise pas : le lot B3.3 a ainsi
+#      mute `templateByte` en croyant muter `factoryTemplateByte`, et la
+#      mutation s'est lue comme non detectee. Exiger exactement une occurrence ;
 #   2. chaque course porte un DELAI MAXIMUM. Un mutant qui retire un garde de
 #      boucle transforme `while` en boucle infinie, et le harnais attendrait
 #      indefiniment. Un depassement compte le mutant comme TUE ;
@@ -90,9 +95,11 @@ MUTANTS = [
     ("cpp: the version byte stays at 1",
      "include/flexseq/Persistence.h",
      "constexpr uint8_t FORMAT_VERSION = 2;", "constexpr uint8_t FORMAT_VERSION = 1;", "cpp"),
-    ("cpp: the channel record is 10 bytes instead of 9",
+    ("cpp: the version 2 channel record is 10 bytes instead of 9",
      "include/flexseq/Persistence.h",
-     "constexpr uint8_t CHANNEL_RECORD = 9;", "constexpr uint8_t CHANNEL_RECORD = 10;", "cpp"),
+     "constexpr uint8_t CHANNEL_RECORD = 9;\nconstexpr uint16_t CHANNELS_OFFSET = PATTERNS_OFFSET + PATTERNS_SIZE;",
+     "constexpr uint8_t CHANNEL_RECORD = 10;\nconstexpr uint16_t CHANNELS_OFFSET = PATTERNS_OFFSET + PATTERNS_SIZE;",
+     "cpp"),
     ("cpp: the offset cap moves one byte too far",
      "include/flexseq/SequencerEngine.h",
      "static constexpr uint8_t MAX_OFFSET = 255;", "static constexpr uint8_t MAX_OFFSET = 254;", "cpp-all"),
@@ -228,8 +235,21 @@ MUTANTS = [
      "src/domain/FactoryPatterns.cpp", "        pattern->clear();\n", "", "cpp-factory"),
     ("cpp: the factory content spills into the B bank",
      "src/domain/FactoryPatterns.cpp",
-     "    for (uint8_t index = 0; index < FACTORY_PATTERN_COUNT; ++index) {",
-     "    for (uint8_t index = 0; index < PATTERN_COUNT; ++index) {", "cpp-factory"),
+     "    for (uint8_t index = 0; index < FACTORY_PATTERN_COUNT; ++index) {\n"
+     "        Pattern* pattern = bank.getPattern(index);\n"
+     "        if (pattern == nullptr) {\n"
+     "            continue;\n"
+     "        }\n"
+     "        pattern->clear();\n"
+     "        pattern->setLowStepMask(factoryStepMask(index));",
+     "    for (uint8_t index = 0; index < PATTERN_COUNT; ++index) {\n"
+     "        Pattern* pattern = bank.getPattern(index);\n"
+     "        if (pattern == nullptr) {\n"
+     "            continue;\n"
+     "        }\n"
+     "        pattern->clear();\n"
+     "        pattern->setLowStepMask(factoryStepMask(index % FACTORY_PATTERN_COUNT));",
+     "cpp-factory"),
     ("cpp: the step mask writes only its low byte",
      "src/domain/Pattern.cpp",
      "    packedSteps[1] = static_cast<uint8_t>((bits >> 8) & 0xFF);\n", "", "cpp-pattern"),
@@ -811,6 +831,44 @@ MUTANTS = [
      'sim/src/domain/Persistence.ts',
      'const V3_MIN_TEMPLATE_LENGTH = 1;',
      'const V3_MIN_TEMPLATE_LENGTH = 0;', 'ts'),
+    ("cpp: the factory record ignores its template index",
+     "src/domain/Persistence.cpp",
+     "    if (index >= TEMPLATE_COUNT) {\n        return 0;\n    }\n    if (offset == RECORD_LENGTH_AT) {",
+     "    if (offset == RECORD_LENGTH_AT) {", "cpp-factory"),
+    ("cpp: the factory record reports its length above offset 22",
+     "src/domain/Persistence.cpp",
+     "    if (offset == RECORD_LENGTH_AT) {\n        return FACTORY_TEMPLATE_LENGTH;",
+     "    if (offset >= RECORD_LENGTH_AT) {\n        return FACTORY_TEMPLATE_LENGTH;", "cpp-factory"),
+    ("cpp: the factory record serialises its mask big-endian",
+     "src/domain/Persistence.cpp",
+     "    const uint8_t shift = static_cast<uint8_t>((offset - RECORD_STEPS_AT) * 8);",
+     "    const uint8_t shift = static_cast<uint8_t>((FACTORY_MASK_BYTES - 1 - (offset - RECORD_STEPS_AT)) * 8);",
+     "cpp-factory"),
+    ("cpp: the factory record declares one step too many",
+     "src/domain/Persistence.cpp",
+     "        return FACTORY_TEMPLATE_LENGTH;", "        return FACTORY_TEMPLATE_LENGTH + 1;", "cpp-factory"),
+    ("cpp: the factory record keeps only the low byte of its mask",
+     "src/domain/Persistence.cpp",
+     "    if (offset >= RECORD_STEPS_AT + FACTORY_MASK_BYTES) {",
+     "    if (offset >= RECORD_STEPS_AT + 1) {", "cpp-factory"),
+    ("ts: the factory record ignores its template index",
+     "sim/src/domain/Persistence.ts",
+     "  if (index < 0 || index >= V3_TEMPLATE_COUNT) return 0;\n", "", "ts-factory"),
+    ("ts: the factory record reports its length above offset 22",
+     "sim/src/domain/Persistence.ts",
+     "  if (offset === V3_RECORD_LENGTH_AT) return V3_FACTORY_TEMPLATE_LENGTH;",
+     "  if (offset >= V3_RECORD_LENGTH_AT) return V3_FACTORY_TEMPLATE_LENGTH;", "ts-factory"),
+    ("ts: the factory record serialises its mask big-endian",
+     "sim/src/domain/Persistence.ts",
+     "  const shift = (offset - V3_RECORD_STEPS_AT) * 8;",
+     "  const shift = (FACTORY_MASK_BYTES - 1 - (offset - V3_RECORD_STEPS_AT)) * 8;", "ts-factory"),
+    ("ts: the factory record declares one step too many",
+     "sim/src/domain/Persistence.ts",
+     "return V3_FACTORY_TEMPLATE_LENGTH;", "return V3_FACTORY_TEMPLATE_LENGTH + 1;", "ts-factory"),
+    ("ts: the factory record keeps only the low byte of its mask",
+     "sim/src/domain/Persistence.ts",
+     "  if (offset >= V3_RECORD_STEPS_AT + FACTORY_MASK_BYTES) return 0;",
+     "  if (offset >= V3_RECORD_STEPS_AT + 1) return 0;", "ts-factory"),
 ]
 
 SUITES = {
@@ -896,10 +954,16 @@ def main():
     for label, rel, old, new, suite in mutants:
         path = os.path.join(ROOT, rel)
         original = open(path).read()
-        if old not in original:
+        seen = original.count(old)
+        if seen == 0:
             print(f"  {ERR}❌ MOTIF ABSENT{Z}  {label}")
             print(f"     {DIM}{rel} a change : ce mutant ne s'applique plus, il ne prouve rien.{Z}")
             print(f"     {DIM}Corriger la liste, jamais l'ignorer.{Z}")
+            return 2
+        if seen > 1:
+            print(f"  {ERR}❌ MOTIF AMBIGU{Z}  {label}")
+            print(f"     {DIM}{rel} contient ce motif {seen} fois ; seule la premiere serait mutee.{Z}")
+            print(f"     {DIM}Elargir le motif jusqu'a ce qu'il ne designe qu'une cible.{Z}")
             return 2
 
         command, cwd = SUITES[suite]
