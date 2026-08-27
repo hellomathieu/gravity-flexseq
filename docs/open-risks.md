@@ -373,3 +373,27 @@ scores announced during lot B -- 66/66, 14/14 and 11/11 -- were therefore
 **partial**. They were not wrong, they were incomplete, and they were presented
 as complete. Re-run with brace counting, the whole set of version 3 assertions
 gives **64/64**. Announce a score only after checking **what** was collected.
+
+**A tool must judge on one criterion, not two.** `run-stack-probe.sh` printed a
+green persistence line and exited 1 at the same time, for four days. The last
+line rebuilt the verdict against the literal `'1'` and overwrote the correct
+value computed above it. The firmware writes version 2, so the criterion was
+false whatever the report showed. Commit `3dc230f` wrote that line when the
+format was version 1; commit `7677755`, titled *the stack probe reads the format
+instead of assuming it*, corrected the display line only. A human read green, an
+automatic caller read red, and neither was wrong. **Compute the verdict once,
+then print it and exit on the same value.** Fixed 2026-08-27, with both red
+paths exercised.
+
+**A search pattern goes ambiguous when a new format doubles a declaration.** The
+version 3 layout declares `FORMAT_VERSION` and `CHANNEL_RECORD` a second time
+since commit `1077e52`. Two tools broke on the same day, and neither said so:
+`run-stack-probe.sh` read `FORMAT_VERSION` over the whole header and held
+`"2\n3"`, and one mutant of `run-mutation-probe.py` mutated version 2 while its
+label named no version. The same shape hit lot B3.3 by hand: a replacement on
+`if (offset == RECORD_LENGTH_AT) {`, which the file holds three times, mutated
+`templateByte` instead of `factoryTemplateByte`, and the mutation read as
+undetected. **A pattern that selects a target must be unique, and the tool must
+refuse the ambiguity instead of taking the first occurrence.**
+`run-mutation-probe.py` now exits 2 on a pattern seen more than once, as it
+already did on an absent one.
