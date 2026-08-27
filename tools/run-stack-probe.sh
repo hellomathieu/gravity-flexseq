@@ -74,12 +74,16 @@ END_HEX="$("$AVR_NM" --radix=x "$ELF" | grep -E " _end$" | head -1 | cut -d' ' -
 END="$(printf '0x%x' $(( 0x$END_HEX - 0x800000 )))"
 printf '  %s✅%s symbole                %s_end %s%s\n' "$C_OK" "$C_0" "$C_DIM" "$END" "$C_0"
 
-IMAGE_SIZE="$(grep -oE 'static_assert\(TOTAL_SIZE == [0-9]+' "$ROOT/include/flexseq/Persistence.h" \
-  | grep -oE '[0-9]+$')"
-FORMAT_VERSION="$(grep -oE 'FORMAT_VERSION = [0-9]+' "$ROOT/include/flexseq/Persistence.h" \
-  | grep -oE '[0-9]+$')"
+ACTIVE_FORMAT="$(sed -n '1,/^namespace v3 {/p' "$ROOT/include/flexseq/Persistence.h")"
+IMAGE_SIZE="$(printf '%s\n' "$ACTIVE_FORMAT" \
+  | grep -oE 'static_assert\(TOTAL_SIZE == [0-9]+' | grep -oE '[0-9]+$')"
+FORMAT_VERSION="$(printf '%s\n' "$ACTIVE_FORMAT" \
+  | grep -oE 'FORMAT_VERSION = [0-9]+' | grep -oE '[0-9]+$')"
 [ -n "$IMAGE_SIZE" ] && [ -n "$FORMAT_VERSION" ] \
   || die "taille d'image ou octet de version introuvables dans include/flexseq/Persistence.h"
+[ "$(printf '%s\n' "$IMAGE_SIZE" | wc -l | tr -d ' ')" = "1" ] \
+  && [ "$(printf '%s\n' "$FORMAT_VERSION" | wc -l | tr -d ' ')" = "1" ] \
+  || die "taille d'image ou octet de version AMBIGUS dans le format actif : lu \"$FORMAT_VERSION\" et \"$IMAGE_SIZE\". Restreindre la lecture a une seule constante, jamais rendre un verdict."
 printf '  %s✅%s format lu              %sversion %s, %s o%s\n' "$C_OK" "$C_0" "$C_DIM" \
   "$FORMAT_VERSION" "$IMAGE_SIZE" "$C_0"
 
@@ -164,6 +168,5 @@ else:
     print(f"{DIM}  EEPROM de la persistance, constatee ci-dessus et non supposee. Restent{Z}")
     print(f"{DIM}  hors mesure les chemins que le firmware n'emprunte pas encore.{Z}")
 
-persisted = version is not None and version[1] == '1'
 sys.exit(0 if (fits_reserve and fits_ram and persisted and (quiet or all_entered)) else 1)
 PY
