@@ -5,6 +5,7 @@
 
 namespace flexseq {
 
+
 SequencerEngine::SequencerEngine()
     : bank_(nullptr),
       phase_(0),
@@ -177,6 +178,20 @@ void SequencerEngine::advance(uint16_t ticks) {
             break;
         }
     }
+}
+
+Pattern* SequencerEngine::instanceForChannel(uint8_t channel) {
+    if (!validChannel(channel)) {
+        return nullptr;
+    }
+    return &instances_[channel];
+}
+
+const Pattern* SequencerEngine::instanceForChannel(uint8_t channel) const {
+    if (!validChannel(channel)) {
+        return nullptr;
+    }
+    return &instances_[channel];
 }
 
 Pattern* SequencerEngine::patternForChannel(uint8_t channel) {

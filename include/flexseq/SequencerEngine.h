@@ -4,11 +4,11 @@
 #include <stdint.h>
 
 #include <flexseq/ChannelMode.h>
+#include <flexseq/Pattern.h>
 #include <flexseq/Subdiv.h>
 
 namespace flexseq {
 
-class Pattern;
 class PatternBank;
 
 // SequencerEngine — FlexSeq temporal core (mirror of the TS reference model).
@@ -49,6 +49,9 @@ public:
 
     Pattern* patternForChannel(uint8_t channel);
     const Pattern* patternForChannel(uint8_t channel) const;
+
+    Pattern* instanceForChannel(uint8_t channel);
+    const Pattern* instanceForChannel(uint8_t channel) const;
 
     // Transport
     uint32_t masterPhase() const;
@@ -156,6 +159,7 @@ private:
     uint8_t stepped_; // bitmask: channels that crossed a step in the last advance()
     uint8_t onsets_[CHANNEL_COUNT];
     ChannelState channels_[CHANNEL_COUNT];
+    Pattern instances_[CHANNEL_COUNT];
 };
 
 }  // namespace flexseq

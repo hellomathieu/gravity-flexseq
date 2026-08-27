@@ -589,3 +589,83 @@ describe("Transport", () => {
     expect(transport.isRunning()).toBe(true);
   });
 });
+
+describe("les instances par canal", () => {
+  it("existent pour les six canaux", () => {
+    const engine = new SequencerEngine();
+    for (let ch = 0; ch < 6; ++ch) expect(engine.instanceForChannel(ch)).not.toBeNull();
+    expect(CHANNEL_COUNT).toBe(6);
+  });
+
+  it("n existent pas pour un canal invalide", () => {
+    const engine = new SequencerEngine();
+    expect(engine.instanceForChannel(6)).toBeNull();
+    expect(engine.instanceForChannel(255)).toBeNull();
+    expect(engine.instanceForChannel(-1)).toBeNull();
+  });
+
+  it("sont six objets distincts", () => {
+    const engine = new SequencerEngine();
+    for (let a = 0; a < 6; ++a) {
+      for (let b = 0; b < 6; ++b) {
+        if (a === b) continue;
+        expect(engine.instanceForChannel(a)).not.toBe(engine.instanceForChannel(b));
+      }
+    }
+  });
+
+  it("ne fuient pas d un canal a l autre", () => {
+    const engine = new SequencerEngine();
+    engine.instanceForChannel(0)!.writeStep(3, true);
+    engine.instanceForChannel(0)!.setRatchet(3, RATCHET_3);
+    for (let ch = 1; ch < 6; ++ch) {
+      const other = engine.instanceForChannel(ch)!;
+      for (let step = 0; step < 36; ++step) {
+        expect(other.readStep(step)).toBe(false);
+        expect(other.getRatchet(step)).toBe(0);
+      }
+    }
+  });
+
+  it("portent chacune son propre contenu", () => {
+    const engine = new SequencerEngine();
+    for (let ch = 0; ch < 6; ++ch) engine.instanceForChannel(ch)!.writeStep(ch, true);
+    for (let ch = 0; ch < 6; ++ch) {
+      for (let step = 0; step < 6; ++step) {
+        expect(engine.instanceForChannel(ch)!.readStep(step)).toBe(step === ch);
+      }
+    }
+  });
+
+  it("sont independantes de la banque", () => {
+    const bank = new PatternBank();
+    const engine = new SequencerEngine();
+    engine.setPatternBank(bank);
+    engine.setSelectedPattern(0, 4);
+
+    engine.instanceForChannel(0)!.writeStep(7, true);
+    expect(bank.getPattern(4)!.readStep(7)).toBe(false);
+
+    bank.getPattern(4)!.writeStep(9, true);
+    expect(engine.instanceForChannel(0)!.readStep(9)).toBe(false);
+  });
+
+  it("restent separees quand deux canaux visent le meme template", () => {
+    const bank = new PatternBank();
+    const engine = new SequencerEngine();
+    engine.setPatternBank(bank);
+    expect(engine.setSelectedPattern(0, 2)).toBe(true);
+    expect(engine.setSelectedPattern(1, 2)).toBe(true);
+    engine.instanceForChannel(0)!.writeStep(5, true);
+    expect(engine.instanceForChannel(1)!.readStep(5)).toBe(false);
+  });
+
+  it("ne sont pas encore la source de patternForChannel", () => {
+    const bank = new PatternBank();
+    const engine = new SequencerEngine();
+    engine.setPatternBank(bank);
+    engine.setSelectedPattern(0, 0);
+    expect(engine.patternForChannel(0)).toBe(bank.getPattern(0));
+    expect(engine.patternForChannel(0)).not.toBe(engine.instanceForChannel(0));
+  });
+});

@@ -627,6 +627,110 @@ void test_switching_to_seq_starts_reading_the_pattern_again() {
     TEST_ASSERT_EQUAL_UINT8(1, e.currentStepTriggers(0));
 }
 
+void test_every_channel_owns_an_instance() {
+    SequencerEngine engine;
+    for (uint8_t ch = 0; ch < 6; ++ch) {
+        TEST_ASSERT_NOT_NULL(engine.instanceForChannel(ch));
+    }
+    TEST_ASSERT_EQUAL_UINT8(6, SequencerEngine::CHANNEL_COUNT);
+}
+
+void test_an_invalid_channel_has_no_instance() {
+    SequencerEngine engine;
+    TEST_ASSERT_NULL(engine.instanceForChannel(6));
+    TEST_ASSERT_NULL(engine.instanceForChannel(255));
+    const SequencerEngine& frozen = engine;
+    TEST_ASSERT_NULL(frozen.instanceForChannel(6));
+}
+
+void test_the_six_instances_are_distinct_objects() {
+    SequencerEngine engine;
+    for (uint8_t a = 0; a < 6; ++a) {
+        for (uint8_t b = 0; b < 6; ++b) {
+            if (a == b) {
+                continue;
+            }
+            TEST_ASSERT_FALSE(engine.instanceForChannel(a) == engine.instanceForChannel(b));
+        }
+    }
+}
+
+void test_the_const_overload_names_the_same_instance() {
+    SequencerEngine engine;
+    const SequencerEngine& frozen = engine;
+    for (uint8_t ch = 0; ch < 6; ++ch) {
+        TEST_ASSERT_TRUE(engine.instanceForChannel(ch) == frozen.instanceForChannel(ch));
+    }
+}
+
+void test_writing_one_instance_leaves_the_five_others_untouched() {
+    SequencerEngine engine;
+    TEST_ASSERT_TRUE(engine.instanceForChannel(0)->writeStep(3, true));
+    TEST_ASSERT_TRUE(engine.instanceForChannel(0)->setRatchet(3, RATCHET_3));
+    for (uint8_t ch = 1; ch < 6; ++ch) {
+        const flexseq::Pattern* other = engine.instanceForChannel(ch);
+        for (uint8_t step = 0; step < 36; ++step) {
+            bool active = true;
+            TEST_ASSERT_TRUE(other->readStep(step, active));
+            TEST_ASSERT_FALSE(active);
+            TEST_ASSERT_EQUAL_UINT8(0, other->getRatchet(step));
+        }
+    }
+}
+
+void test_every_instance_can_carry_its_own_content() {
+    SequencerEngine engine;
+    for (uint8_t ch = 0; ch < 6; ++ch) {
+        TEST_ASSERT_TRUE(engine.instanceForChannel(ch)->writeStep(ch, true));
+    }
+    for (uint8_t ch = 0; ch < 6; ++ch) {
+        for (uint8_t step = 0; step < 6; ++step) {
+            bool active = false;
+            TEST_ASSERT_TRUE(engine.instanceForChannel(ch)->readStep(step, active));
+            TEST_ASSERT_EQUAL_MESSAGE(step == ch, active, "un step a fuite d une instance a l autre");
+        }
+    }
+}
+
+void test_an_instance_is_independent_of_the_bank() {
+    PatternBank bank;
+    SequencerEngine engine;
+    engine.setPatternBank(&bank);
+    engine.setSelectedPattern(0, 4);
+
+    TEST_ASSERT_TRUE(engine.instanceForChannel(0)->writeStep(7, true));
+    bool inBank = true;
+    TEST_ASSERT_TRUE(bank.getPattern(4)->readStep(7, inBank));
+    TEST_ASSERT_FALSE(inBank);
+
+    TEST_ASSERT_TRUE(bank.getPattern(4)->writeStep(9, true));
+    bool inInstance = true;
+    TEST_ASSERT_TRUE(engine.instanceForChannel(0)->readStep(9, inInstance));
+    TEST_ASSERT_FALSE(inInstance);
+}
+
+void test_two_channels_on_one_template_keep_separate_instances() {
+    PatternBank bank;
+    SequencerEngine engine;
+    engine.setPatternBank(&bank);
+    TEST_ASSERT_TRUE(engine.setSelectedPattern(0, 2));
+    TEST_ASSERT_TRUE(engine.setSelectedPattern(1, 2));
+
+    TEST_ASSERT_TRUE(engine.instanceForChannel(0)->writeStep(5, true));
+    bool onOne = true;
+    TEST_ASSERT_TRUE(engine.instanceForChannel(1)->readStep(5, onOne));
+    TEST_ASSERT_FALSE(onOne);
+}
+
+void test_the_instances_do_not_follow_patternForChannel() {
+    PatternBank bank;
+    SequencerEngine engine;
+    engine.setPatternBank(&bank);
+    engine.setSelectedPattern(0, 0);
+    TEST_ASSERT_TRUE(engine.patternForChannel(0) == bank.getPattern(0));
+    TEST_ASSERT_FALSE(engine.patternForChannel(0) == engine.instanceForChannel(0));
+}
+
 int main() {
     UNITY_BEGIN();
 
@@ -687,5 +791,14 @@ int main() {
     RUN_TEST(test_an_offset_equal_to_the_step_is_pulled_back_inside_it);
     RUN_TEST(test_skip_chance_is_bounded_to_ten_tenths);
     RUN_TEST(test_switching_to_seq_starts_reading_the_pattern_again);
+    RUN_TEST(test_every_channel_owns_an_instance);
+    RUN_TEST(test_an_invalid_channel_has_no_instance);
+    RUN_TEST(test_the_six_instances_are_distinct_objects);
+    RUN_TEST(test_the_const_overload_names_the_same_instance);
+    RUN_TEST(test_writing_one_instance_leaves_the_five_others_untouched);
+    RUN_TEST(test_every_instance_can_carry_its_own_content);
+    RUN_TEST(test_an_instance_is_independent_of_the_bank);
+    RUN_TEST(test_two_channels_on_one_template_keep_separate_instances);
+    RUN_TEST(test_the_instances_do_not_follow_patternForChannel);
     return UNITY_END();
 }

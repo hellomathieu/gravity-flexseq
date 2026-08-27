@@ -29,8 +29,9 @@
 
 import { subdivToTicks, DEFAULT_SUBDIV } from "./subdiv.js";
 import type { PatternBank } from "./PatternBank.js";
-import type { Pattern } from "./Pattern.js";
+
 import {
+  Pattern,
   ratchetFitsStep,
   ratchetSpan,
   ratchetTriggers,
@@ -61,6 +62,7 @@ export const CHANNEL_COUNT = 6;
 
 /** Nombre de patterns partages selectionnables par channel (voir PatternBank). */
 export const PATTERN_COUNT = 16;
+
 
 /** Modes de channel du firmware d'origine (PRD 4.2). */
 export enum ChannelMode {
@@ -116,8 +118,10 @@ export class SequencerEngine {
   private bank: PatternBank | null = null;
   private readonly onsets: number[];
   private readonly channels: ChannelState[];
+  private readonly instances: Pattern[];
 
   constructor(channelCount: number = CHANNEL_COUNT) {
+    this.instances = Array.from({ length: channelCount }, () => new Pattern());
     this.channels = Array.from({ length: channelCount }, () => ({
       selectedPattern: 0,
       effectiveLength: DEFAULT_LENGTH,
@@ -189,6 +193,11 @@ export class SequencerEngine {
    * trois steps tiennent dans la duree d'UN step (ils passent plus vite). Sans
    * banque, la duree de step reste uniforme.
    */
+  instanceForChannel(channel: number): Pattern | null {
+    const instance = this.instances[channel];
+    return instance ?? null;
+  }
+
   patternForChannel(channel: number): Pattern | null {
     const c = this.channels[channel];
     if (!c || this.bank === null) return null;
