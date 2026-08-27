@@ -23,15 +23,18 @@ const uint16_t kFactory[FACTORY_PATTERN_COUNT] = {
     0xB733,
 };
 
-uint16_t maskAt(uint8_t index) {
+}  // namespace
+
+uint16_t factoryStepMask(uint8_t index) {
+    if (index >= FACTORY_PATTERN_COUNT) {
+        return 0;
+    }
 #ifdef __AVR__
     return static_cast<uint16_t>(pgm_read_word_near(&kFactory[index]));
 #else
     return kFactory[index];
 #endif
 }
-
-}  // namespace
 
 void loadFactoryPatterns(PatternBank& bank) {
     for (uint8_t index = 0; index < FACTORY_PATTERN_COUNT; ++index) {
@@ -40,7 +43,7 @@ void loadFactoryPatterns(PatternBank& bank) {
             continue;
         }
         pattern->clear();
-        pattern->setLowStepMask(maskAt(index));
+        pattern->setLowStepMask(factoryStepMask(index));
     }
 }
 

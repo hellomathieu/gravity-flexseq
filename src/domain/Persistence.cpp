@@ -64,6 +64,21 @@ bool applyTemplateByte(Pattern& pattern, uint8_t& length, uint8_t offset, uint8_
     return true;
 }
 
+uint8_t factoryTemplateByte(uint8_t index, uint8_t offset) {
+    if (index >= TEMPLATE_COUNT) {
+        return 0;
+    }
+    if (offset == RECORD_LENGTH_AT) {
+        return FACTORY_TEMPLATE_LENGTH;
+    }
+    if (offset >= RECORD_STEPS_AT + FACTORY_MASK_BYTES) {
+        return 0;
+    }
+    const uint16_t mask = factoryStepMask(index);
+    const uint8_t shift = static_cast<uint8_t>((offset - RECORD_STEPS_AT) * 8);
+    return static_cast<uint8_t>((mask >> shift) & 0xFF);
+}
+
 }  // namespace v3
 }  // namespace persist
 

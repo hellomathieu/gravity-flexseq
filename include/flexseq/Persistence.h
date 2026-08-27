@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+#include <flexseq/FactoryPatterns.h>
 #include <flexseq/Pattern.h>
 #include <flexseq/PatternBank.h>
 #include <flexseq/Preferences.h>
@@ -144,11 +145,23 @@ static_assert(MIN_TEMPLATE_LENGTH == 1, "a template plays at least one step");
 static_assert(MAX_TEMPLATE_LENGTH == 36,
               "the format bound is the pattern capacity, never the engine's cap");
 
+constexpr uint8_t FACTORY_TEMPLATE_LENGTH = FACTORY_STEP_COUNT;
+
+static_assert(FACTORY_TEMPLATE_LENGTH >= MIN_TEMPLATE_LENGTH
+                  && FACTORY_TEMPLATE_LENGTH <= MAX_TEMPLATE_LENGTH,
+              "a factory template length must be storable in a template record");
+static_assert(FACTORY_TEMPLATE_LENGTH == 16,
+              "the original firmware plays sixteen steps, and the B slots follow it");
+static_assert(FACTORY_MASK_BYTES <= STEP_BYTES,
+              "the factory mask must fit inside the record's step bytes");
+
 uint8_t contentByte(const Pattern& pattern, uint8_t offset);
 void applyContentByte(Pattern& pattern, uint8_t offset, uint8_t value);
 
 uint8_t templateByte(const Pattern& pattern, uint8_t length, uint8_t offset);
 bool applyTemplateByte(Pattern& pattern, uint8_t& length, uint8_t offset, uint8_t value);
+
+uint8_t factoryTemplateByte(uint8_t index, uint8_t offset);
 
 }  // namespace v3
 

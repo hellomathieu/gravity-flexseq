@@ -1,3 +1,8 @@
+import {
+  FACTORY_MASK_BYTES,
+  FACTORY_STEP_COUNT,
+  factoryStepMask,
+} from "./FactoryPatterns.js";
 import { PATTERN_COUNT, type PatternBank } from "./PatternBank.js";
 import { isValidRatchet, Pattern, RATCHET_NONE } from "./Pattern.js";
 import {
@@ -65,6 +70,8 @@ const V3_TOTAL_SIZE = V3_PREFS_OFFSET + V3_PREFS_SIZE;
 const V3_MIN_TEMPLATE_LENGTH = 1;
 const V3_MAX_TEMPLATE_LENGTH = Pattern.DEFAULT_TOTAL_STEPS;
 
+const V3_FACTORY_TEMPLATE_LENGTH = FACTORY_STEP_COUNT;
+
 export interface TemplateLength {
   value: number;
 }
@@ -121,6 +128,16 @@ function v3ApplyTemplateByte(
   return true;
 }
 
+function v3FactoryTemplateByte(index: number, offset: number): number {
+  if (index < 0 || index >= V3_TEMPLATE_COUNT) return 0;
+  if (offset < 0) return 0;
+  if (offset === V3_RECORD_LENGTH_AT) return V3_FACTORY_TEMPLATE_LENGTH;
+  if (offset >= V3_RECORD_STEPS_AT + FACTORY_MASK_BYTES) return 0;
+  const mask = factoryStepMask(index);
+  const shift = (offset - V3_RECORD_STEPS_AT) * 8;
+  return (mask >> shift) & 0xff;
+}
+
 export const v3 = {
   FORMAT_VERSION: 3,
 
@@ -163,11 +180,13 @@ export const v3 = {
 
   MIN_TEMPLATE_LENGTH: V3_MIN_TEMPLATE_LENGTH,
   MAX_TEMPLATE_LENGTH: V3_MAX_TEMPLATE_LENGTH,
+  FACTORY_TEMPLATE_LENGTH: V3_FACTORY_TEMPLATE_LENGTH,
 
   contentByte: v3ContentByte,
   applyContentByte: v3ApplyContentByte,
   templateByte: v3TemplateByte,
   applyTemplateByte: v3ApplyTemplateByte,
+  factoryTemplateByte: v3FactoryTemplateByte,
 } as const;
 
 export interface Preferences {

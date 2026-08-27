@@ -14,16 +14,22 @@ import type { PatternBank } from "./PatternBank.js";
 
 export const FACTORY_PATTERN_COUNT = 8;
 export const FACTORY_STEP_COUNT = 16;
+export const FACTORY_MASK_BYTES = 2;
 
 const FACTORY: readonly number[] = [
   0x9111, 0x0810, 0x1249, 0xcccc, 0xeeee, 0x5454, 0x7fbf, 0xb733,
 ];
+
+export function factoryStepMask(index: number): number {
+  if (index < 0 || index >= FACTORY_PATTERN_COUNT) return 0;
+  return FACTORY[index] ?? 0;
+}
 
 export function loadFactoryPatterns(bank: PatternBank): void {
   for (let index = 0; index < FACTORY_PATTERN_COUNT; ++index) {
     const pattern = bank.getPattern(index);
     if (!pattern) continue;
     pattern.clear();
-    pattern.setLowStepMask(FACTORY[index] ?? 0);
+    pattern.setLowStepMask(factoryStepMask(index));
   }
 }
