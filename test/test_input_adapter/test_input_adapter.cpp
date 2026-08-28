@@ -128,7 +128,7 @@ void test_a_long_press_on_shift_clears_the_pattern() {
     r.enterEdit();
     r.ui.handle(UiController::EVENT_PRESS);  // le pas 0 devient actif
     bool active = false;
-    r.bank.getPattern(0)->readStep(0, active);
+    r.engine.instanceForChannel(0)->readStep(0, active);
     TEST_ASSERT_TRUE(active);
 
     r.press(SHIFT_BTN_PIN);
@@ -136,7 +136,7 @@ void test_a_long_press_on_shift_clears_the_pattern() {
     r.release(SHIFT_BTN_PIN);
     r.tick(LONG_PRESS_MS + 50);
 
-    r.bank.getPattern(0)->readStep(0, active);
+    r.engine.instanceForChannel(0)->readStep(0, active);
     TEST_ASSERT_FALSE_MESSAGE(active, "l appui long delibere sur SHIFT vide le pattern");
 }
 
@@ -158,7 +158,7 @@ void test_a_rotation_while_shift_is_held_spares_the_pattern() {
     TEST_ASSERT_EQUAL_UINT16_MESSAGE(before + 1, flexseq::input::suppressedLongPresses(),
         "SHIFT maintenu pour tourner n est pas un appui long");
     bool active = false;
-    r.bank.getPattern(0)->readStep(0, active);
+    r.engine.instanceForChannel(0)->readStep(0, active);
     TEST_ASSERT_TRUE_MESSAGE(active, "le pattern ne doit PAS avoir ete vide");
 }
 
