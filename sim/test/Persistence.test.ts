@@ -10,6 +10,7 @@ import {
   PATTERN_STEP_BYTES,
   PersistenceScheduler,
   PersistentImage,
+  PersistentImageV3,
   PREFS_OFFSET,
   QUIET_MS,
   TOTAL_SIZE,
@@ -57,6 +58,43 @@ class FakeEeprom implements Storage {
     if (address < this.lowestWrite) this.lowestWrite = address;
     if (address > this.highestWrite) this.highestWrite = address;
   }
+}
+
+class JournalEeprom implements Storage {
+  cell = new Uint8Array(EEPROM_SIZE).fill(SENTINEL);
+  order: number[] = [];
+
+  read(address: number): number {
+    return this.cell[address]!;
+  }
+
+  write(address: number, value: number): void {
+    this.cell[address] = value;
+    this.order.push(address);
+  }
+}
+
+function rigV3() {
+  const engine = new SequencerEngine();
+  const transport = new Transport(engine);
+  const ui = new UiController(engine, transport);
+  const prefs: Preferences = defaultPreferences();
+  const image = new PersistentImageV3(engine, ui, prefs);
+  const scheduler = new PersistenceScheduler();
+  return { engine, transport, ui, prefs, image, scheduler };
+}
+
+function scanEverything(r: ReturnType<typeof rigV3>): JournalEeprom {
+  const ee = new JournalEeprom();
+  for (let index = 0; index < r.image.size; ++index) {
+    ee.cell[r.image.addressAt(index)] = r.image.byteAt(index) ^ 0xff;
+  }
+  ee.order = [];
+  r.scheduler.markDirty(0);
+  while (r.scheduler.advance(ee, r.image, QUIET_MS)) {
+    // draine le parcours complet
+  }
+  return ee;
 }
 
 function rig() {
@@ -696,5 +734,197 @@ describe("Persistence — format v2, nine bytes per channel", () => {
     expect(loaded.engine.getEffectiveLength(0)).toBe(saved.engine.getEffectiveLength(0));
     expect(loaded.engine.getSkipChance(0)).toBe(saved.engine.getSkipChance(0));
     expect(loaded.image.byteAt(CHANNELS_OFFSET + 7)).toBe(0);
+  });
+});
+
+describe("l'image balayee v3", () => {
+  it("expose 204 octets logiques et la version au dernier index", () => {
+    const r = rigV3();
+    expect(r.image.size).toBe(204);
+    expect(r.image.versionIndex).toBe(203);
+    expect(r.image.size).toBe(PersistentImageV3.SIZE);
+    expect(r.image.versionIndex).toBe(PersistentImageV3.VERSION_INDEX);
+  });
+
+  it("place la version a la premiere adresse et la lit comme 3", () => {
+    const r = rigV3();
+    expect(r.image.addressAt(203)).toBe(384);
+    expect(r.image.byteAt(203)).toBe(3);
+  });
+
+  it("ne mappe jamais un octet logique dans la zone des templates", () => {
+    const r = rigV3();
+    for (let index = 0; index < r.image.size; ++index) {
+      const address = r.image.addressAt(index);
+      expect(address < 385 || address > 768).toBe(true);
+    }
+  });
+
+  it("couvre la version et la zone de donnees, une adresse par index", () => {
+    const r = rigV3();
+    const seen = new Set<number>();
+    for (let index = 0; index < r.image.size; ++index) {
+      const address = r.image.addressAt(index);
+      expect(seen.has(address)).toBe(false);
+      seen.add(address);
+    }
+    expect(seen.has(384)).toBe(true);
+    for (let address = 385; address <= 768; ++address) expect(seen.has(address)).toBe(false);
+    for (let address = 769; address <= 971; ++address) expect(seen.has(address)).toBe(true);
+    expect(seen.has(972)).toBe(false);
+  });
+
+  it("lit MOD et RANGE comme zero", () => {
+    const r = rigV3();
+    expect(r.image.byteAt(192 + 3)).toBe(0);
+    expect(r.image.byteAt(192 + 4)).toBe(0);
+  });
+
+  it("ramene a zero une valeur stockee dans MOD ou RANGE", () => {
+    const r = rigV3();
+    r.image.applyByte(192 + 3, 0x5a);
+    r.image.applyByte(192 + 4, 0xa5);
+    expect(r.image.byteAt(192 + 3)).toBe(0);
+    expect(r.image.byteAt(192 + 4)).toBe(0);
+    expect(r.ui.tempo).toBe(DEFAULT_TEMPO);
+    expect(r.ui.clockSource).toBe(0);
+  });
+
+  it("fait un tour complet sur les six instances", () => {
+    const saved = rigV3();
+    for (let channel = 0; channel < CHANNEL_COUNT; ++channel) {
+      const instance = saved.engine.instanceForChannel(channel)!;
+      instance.writeStep(channel, true);
+      instance.setRatchet(channel, RATCHET_3);
+    }
+    saved.ui.setTempo(143);
+    const ee = scanEverything(saved);
+
+    const loaded = rigV3();
+    expect(loaded.scheduler.load(ee, loaded.image)).toBe(true);
+    expect(loaded.ui.tempo).toBe(143);
+    for (let channel = 0; channel < CHANNEL_COUNT; ++channel) {
+      const instance = loaded.engine.instanceForChannel(channel)!;
+      expect(instance.readStep(channel)).toBe(true);
+      expect(instance.getRatchet(channel)).toBe(RATCHET_3);
+    }
+  });
+
+  it("vide les six instances sans banque", () => {
+    const r = rigV3();
+    for (let channel = 0; channel < CHANNEL_COUNT; ++channel) {
+      r.engine.instanceForChannel(channel)!.writeStep(0, true);
+    }
+    r.image.resetToDefaults();
+    for (let channel = 0; channel < CHANNEL_COUNT; ++channel) {
+      expect(r.engine.instanceForChannel(channel)!.readStep(0)).toBe(false);
+    }
+    expect(r.ui.tempo).toBe(DEFAULT_TEMPO);
+  });
+});
+
+describe("l'ordre des ecritures", () => {
+  it("ecrit les 204 octets logiques quand tous different", () => {
+    const ee = scanEverything(rigV3());
+    expect(ee.order.length).toBe(204);
+  });
+
+  it("ne touche que la version et la zone de donnees", () => {
+    const ee = scanEverything(rigV3());
+    for (const address of ee.order) {
+      expect(address === 384 || (address >= 769 && address <= 971)).toBe(true);
+      expect(address < 385 || address > 768).toBe(true);
+      expect(address).toBeLessThan(972);
+    }
+  });
+
+  it("ecrit la version en DERNIER en v3", () => {
+    const ee = scanEverything(rigV3());
+    expect(ee.order[ee.order.length - 1]).toBe(384);
+    for (let i = 0; i + 1 < ee.order.length; ++i) {
+      expect(ee.order[i]).toBeGreaterThanOrEqual(769);
+    }
+  });
+
+  it("ecrit la version en PREMIER en v2, et ce contrat ne change pas", () => {
+    const ee = new JournalEeprom();
+    const r = rig();
+    for (let index = 0; index < r.image.size; ++index) {
+      ee.cell[r.image.addressAt(index)] = r.image.byteAt(index) ^ 0xff;
+    }
+    ee.order = [];
+    r.scheduler.markDirty(0);
+    while (r.scheduler.advance(ee, r.image, QUIET_MS)) {
+      // draine le parcours complet
+    }
+    expect(ee.order.length).toBe(304);
+    expect(ee.order[0]).toBe(384);
+  });
+});
+
+describe("la disposition de l'image balayee v3", () => {
+  it("compte 204 octets logiques et place la version en dernier", () => {
+    expect(v3.IMAGE_SIZE).toBe(204);
+    expect(v3.IMAGE_VERSION_AT).toBe(203);
+    expect(v3.TOTAL_SIZE).toBe(588);
+    expect(v3.TEMPLATES_SIZE).toBe(384);
+  });
+
+  it("couvre le format entier avec la zone des templates", () => {
+    expect(v3.IMAGE_SIZE + v3.TEMPLATES_SIZE).toBe(v3.TOTAL_SIZE);
+  });
+
+  it("donne a la version le dernier index logique", () => {
+    expect(v3.IMAGE_VERSION_AT).toBe(v3.IMAGE_SIZE - 1);
+  });
+
+  it("enchaine les zones sans trou ni recouvrement", () => {
+    expect(v3.IMAGE_INSTANCES_AT).toBe(0);
+    expect(v3.IMAGE_CHANNELS_AT).toBe(138);
+    expect(v3.IMAGE_GLOBAL_AT).toBe(192);
+    expect(v3.IMAGE_PREFS_AT).toBe(197);
+    expect(v3.IMAGE_CHANNELS_AT - v3.IMAGE_INSTANCES_AT).toBe(v3.INSTANCES_SIZE);
+    expect(v3.IMAGE_GLOBAL_AT - v3.IMAGE_CHANNELS_AT).toBe(v3.CHANNELS_SIZE);
+    expect(v3.IMAGE_PREFS_AT - v3.IMAGE_GLOBAL_AT).toBe(v3.GLOBAL_SIZE);
+    expect(v3.IMAGE_VERSION_AT - v3.IMAGE_PREFS_AT).toBe(v3.PREFS_SIZE);
+  });
+});
+
+describe("le contrat d'image partage par le scheduler", () => {
+  it("expose les metadonnees d'instance derivees des constantes statiques", () => {
+    const r = rig();
+    expect(r.image.size).toBe(PersistentImage.SIZE);
+    expect(r.image.versionIndex).toBe(PersistentImage.VERSION_INDEX);
+    expect(r.image.size).toBe(304);
+    expect(r.image.versionIndex).toBe(0);
+  });
+
+  it("mappe l'index logique v2 sur l'identite que le scheduler inlinait", () => {
+    const r = rig();
+    for (let index = 0; index < r.image.size; ++index) {
+      expect(r.image.addressAt(index)).toBe(384 + index);
+    }
+    expect(r.image.byteAt(r.image.versionIndex)).toBe(2);
+  });
+
+  it("fait lire au scheduler la taille de l'instance et non celle de la classe", () => {
+    const eeprom = new FakeEeprom();
+    const r = rig();
+    const shortened = {
+      size: 4,
+      versionIndex: r.image.versionIndex,
+      addressAt: (index: number) => r.image.addressAt(index),
+      byteAt: (index: number) => r.image.byteAt(index),
+      applyByte: (index: number, value: number) => r.image.applyByte(index, value),
+      resetToDefaults: () => r.image.resetToDefaults(),
+    };
+    r.scheduler.markDirty(0);
+    let calls = 0;
+    while (r.scheduler.advance(eeprom, shortened, QUIET_MS)) {
+      ++calls;
+    }
+    expect(calls).toBe(4);
+    expect(eeprom.writes).toBe(4);
+    expect(eeprom.highestWrite).toBe(384 + 3);
   });
 });

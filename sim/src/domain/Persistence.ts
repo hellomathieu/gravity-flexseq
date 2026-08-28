@@ -67,6 +67,13 @@ const V3_PREFS_OFFSET = V3_GLOBAL_OFFSET + V3_GLOBAL_SIZE;
 const V3_PREFS_SIZE = 6;
 const V3_TOTAL_SIZE = V3_PREFS_OFFSET + V3_PREFS_SIZE;
 
+const V3_IMAGE_INSTANCES_AT = 0;
+const V3_IMAGE_CHANNELS_AT = V3_IMAGE_INSTANCES_AT + V3_INSTANCES_SIZE;
+const V3_IMAGE_GLOBAL_AT = V3_IMAGE_CHANNELS_AT + V3_CHANNELS_SIZE;
+const V3_IMAGE_PREFS_AT = V3_IMAGE_GLOBAL_AT + V3_GLOBAL_SIZE;
+const V3_IMAGE_VERSION_AT = V3_IMAGE_PREFS_AT + V3_PREFS_SIZE;
+const V3_IMAGE_SIZE = V3_IMAGE_VERSION_AT + V3_HEADER_SIZE;
+
 const V3_MIN_TEMPLATE_LENGTH = 1;
 const V3_MAX_TEMPLATE_LENGTH = Pattern.DEFAULT_TOTAL_STEPS;
 
@@ -175,6 +182,13 @@ export const v3 = {
   GLOBAL_MOD_AT: 3,
   GLOBAL_RANGE_AT: 4,
 
+  IMAGE_INSTANCES_AT: V3_IMAGE_INSTANCES_AT,
+  IMAGE_CHANNELS_AT: V3_IMAGE_CHANNELS_AT,
+  IMAGE_GLOBAL_AT: V3_IMAGE_GLOBAL_AT,
+  IMAGE_PREFS_AT: V3_IMAGE_PREFS_AT,
+  IMAGE_VERSION_AT: V3_IMAGE_VERSION_AT,
+  IMAGE_SIZE: V3_IMAGE_SIZE,
+
   TOTAL_SIZE: V3_TOTAL_SIZE,
   LAST_ADDRESS: BASE_ADDRESS + V3_TOTAL_SIZE - 1,
 
@@ -208,8 +222,109 @@ function toSigned16(value: number): number {
   return value >= 0x8000 ? value - 0x10000 : value;
 }
 
-export class PersistentImage {
+function channelRecordByte(engine: SequencerEngine, channel: number, offset: number): number {
+  switch (offset) {
+    case 0: {
+      const selected = engine.getSelectedPattern(channel);
+      return selected < 0 ? 0 : selected;
+    }
+    case 1:
+      return engine.getEffectiveLength(channel);
+    case 2: {
+      const index = SUBDIVS.indexOf(engine.getSubdiv(channel));
+      return index < 0 ? SUBDIVS.indexOf(DEFAULT_SUBDIV) : index;
+    }
+    case 3: {
+      const bar = engine.getBarLength(channel);
+      return bar < 0 ? 0 : bar;
+    }
+    case 4:
+      return engine.getChannelMode(channel);
+    case 5:
+      return engine.getOffset(channel) & 0xff;
+    case 6:
+      return engine.getSkipChance(channel);
+    default:
+      return 0;
+  }
+}
+
+function applyChannelRecordByte(
+  engine: SequencerEngine,
+  channel: number,
+  offset: number,
+  value: number,
+): void {
+  switch (offset) {
+    case 0:
+      engine.setSelectedPattern(channel, value);
+      break;
+    case 1:
+      engine.setEffectiveLength(channel, value);
+      break;
+    case 2:
+      engine.setSubdiv(channel, SUBDIVS[value] ?? DEFAULT_SUBDIV);
+      break;
+    case 3:
+      engine.setBarLength(channel, value);
+      break;
+    case 4:
+      engine.setChannelMode(channel, value as ChannelMode);
+      break;
+    case 5:
+      engine.setOffset(channel, value);
+      break;
+    case 6:
+      engine.setSkipChance(channel, value);
+      break;
+    default:
+      break;
+  }
+}
+
+function prefsRecordByte(prefs: Preferences, rel: number): number {
+  if (rel === 0) return prefs.rotateScreen;
+  if (rel === 1) return prefs.reverseEncoder;
+  const channel = Math.floor((rel - 2) / 2);
+  const offset = prefs.cvCalibration[channel] ?? 0;
+  return (rel - 2) % 2 === 0 ? offset & 0xff : (offset >> 8) & 0xff;
+}
+
+function applyPrefsRecordByte(prefs: Preferences, rel: number, value: number): void {
+  if (rel === 0) {
+    prefs.rotateScreen = value ? 1 : 0;
+    return;
+  }
+  if (rel === 1) {
+    prefs.reverseEncoder = value ? 1 : 0;
+    return;
+  }
+  const channel = Math.floor((rel - 2) / 2);
+  const current = prefs.cvCalibration[channel] ?? 0;
+  const raw = current < 0 ? current + 0x10000 : current;
+  const merged = (rel - 2) % 2 === 0 ? (raw & 0xff00) | value : (raw & 0x00ff) | (value << 8);
+  prefs.cvCalibration[channel] = toSigned16(merged & 0xffff);
+}
+
+export interface ScannedImage {
+  readonly size: number;
+  readonly versionIndex: number;
+  byteAt(index: number): number;
+  applyByte(index: number, value: number): void;
+  addressAt(index: number): number;
+  resetToDefaults(): void;
+}
+
+export class PersistentImage implements ScannedImage {
   static readonly SIZE = TOTAL_SIZE;
+  static readonly VERSION_INDEX = HEADER_OFFSET;
+
+  readonly size = PersistentImage.SIZE;
+  readonly versionIndex = PersistentImage.VERSION_INDEX;
+
+  addressAt(index: number): number {
+    return BASE_ADDRESS + index;
+  }
 
   constructor(
     private readonly bank: PatternBank,
@@ -234,12 +349,7 @@ export class PersistentImage {
       if (rel === 1) return (this.ui.tempo >> 8) & 0xff;
       return this.ui.clockSource;
     }
-    const rel = index - PREFS_OFFSET;
-    if (rel === 0) return this.preferences.rotateScreen;
-    if (rel === 1) return this.preferences.reverseEncoder;
-    const channel = Math.floor((rel - 2) / 2);
-    const offset = this.preferences.cvCalibration[channel] ?? 0;
-    return (rel - 2) % 2 === 0 ? offset & 0xff : (offset >> 8) & 0xff;
+    return prefsRecordByte(this.preferences, index - PREFS_OFFSET);
   }
 
   applyByte(index: number, value: number): void {
@@ -267,20 +377,7 @@ export class PersistentImage {
       this.ui.setClockSource(value);
       return;
     }
-    const rel = index - PREFS_OFFSET;
-    if (rel === 0) {
-      this.preferences.rotateScreen = value ? 1 : 0;
-      return;
-    }
-    if (rel === 1) {
-      this.preferences.reverseEncoder = value ? 1 : 0;
-      return;
-    }
-    const channel = Math.floor((rel - 2) / 2);
-    const current = this.preferences.cvCalibration[channel] ?? 0;
-    const raw = current < 0 ? current + 0x10000 : current;
-    const merged = (rel - 2) % 2 === 0 ? (raw & 0xff00) | value : (raw & 0x00ff) | (value << 8);
-    this.preferences.cvCalibration[channel] = toSigned16(merged & 0xffff);
+    applyPrefsRecordByte(this.preferences, index - PREFS_OFFSET, value);
   }
 
   resetToDefaults(): void {
@@ -343,58 +440,126 @@ export class PersistentImage {
   }
 
   private channelByte(channel: number, offset: number): number {
-    switch (offset) {
-      case 0: {
-        const selected = this.engine.getSelectedPattern(channel);
-        return selected < 0 ? 0 : selected;
-      }
-      case 1:
-        return this.engine.getEffectiveLength(channel);
-      case 2: {
-        const index = SUBDIVS.indexOf(this.engine.getSubdiv(channel));
-        return index < 0 ? SUBDIVS.indexOf(DEFAULT_SUBDIV) : index;
-      }
-      case 3: {
-        const bar = this.engine.getBarLength(channel);
-        return bar < 0 ? 0 : bar;
-      }
-      case 4:
-        return this.engine.getChannelMode(channel);
-      case 5:
-        return this.engine.getOffset(channel) & 0xff;
-      case 6:
-        return this.engine.getSkipChance(channel);
-      default:
-        return 0;
-    }
+    return channelRecordByte(this.engine, channel, offset);
   }
 
   private applyChannelByte(channel: number, offset: number, value: number): void {
-    switch (offset) {
-      case 0:
-        this.engine.setSelectedPattern(channel, value);
-        break;
-      case 1:
-        this.engine.setEffectiveLength(channel, value);
-        break;
-      case 2:
-        this.engine.setSubdiv(channel, SUBDIVS[value] ?? DEFAULT_SUBDIV);
-        break;
-      case 3:
-        this.engine.setBarLength(channel, value);
-        break;
-      case 4:
-        this.engine.setChannelMode(channel, value as ChannelMode);
-        break;
-      case 5:
-        this.engine.setOffset(channel, value);
-        break;
-      case 6:
-        this.engine.setSkipChance(channel, value);
-        break;
-      default:
-        break;
+    applyChannelRecordByte(this.engine, channel, offset, value);
+  }
+}
+
+export class PersistentImageV3 implements ScannedImage {
+  static readonly SIZE = V3_IMAGE_SIZE;
+  static readonly VERSION_INDEX = V3_IMAGE_VERSION_AT;
+
+  readonly size = PersistentImageV3.SIZE;
+  readonly versionIndex = PersistentImageV3.VERSION_INDEX;
+
+  constructor(
+    private readonly engine: SequencerEngine,
+    private readonly ui: UiController,
+    readonly preferences: Preferences,
+  ) {}
+
+  addressAt(index: number): number {
+    let offset: number;
+    if (index === V3_IMAGE_VERSION_AT) {
+      offset = V3_HEADER_OFFSET;
+    } else if (index < V3_IMAGE_CHANNELS_AT) {
+      offset = V3_INSTANCES_OFFSET + (index - V3_IMAGE_INSTANCES_AT);
+    } else if (index < V3_IMAGE_GLOBAL_AT) {
+      offset = V3_CHANNELS_OFFSET + (index - V3_IMAGE_CHANNELS_AT);
+    } else if (index < V3_IMAGE_PREFS_AT) {
+      offset = V3_GLOBAL_OFFSET + (index - V3_IMAGE_GLOBAL_AT);
+    } else {
+      offset = V3_PREFS_OFFSET + (index - V3_IMAGE_PREFS_AT);
     }
+    return BASE_ADDRESS + offset;
+  }
+
+  byteAt(index: number): number {
+    if (index === V3_IMAGE_VERSION_AT) return v3.FORMAT_VERSION;
+    if (index < V3_IMAGE_CHANNELS_AT) {
+      const rel = index - V3_IMAGE_INSTANCES_AT;
+      const instance = this.engine.instanceForChannel(Math.floor(rel / V3_INSTANCE_RECORD));
+      if (instance === null) return 0;
+      return v3ContentByte(instance, rel % V3_INSTANCE_RECORD);
+    }
+    if (index < V3_IMAGE_GLOBAL_AT) {
+      const rel = index - V3_IMAGE_CHANNELS_AT;
+      return channelRecordByte(
+        this.engine,
+        Math.floor(rel / V3_CHANNEL_RECORD),
+        rel % V3_CHANNEL_RECORD,
+      );
+    }
+    if (index < V3_IMAGE_PREFS_AT) {
+      const rel = index - V3_IMAGE_GLOBAL_AT;
+      if (rel === v3.GLOBAL_TEMPO_LO_AT) return this.ui.tempo & 0xff;
+      if (rel === v3.GLOBAL_TEMPO_HI_AT) return (this.ui.tempo >> 8) & 0xff;
+      if (rel === v3.GLOBAL_CLOCK_SOURCE_AT) return this.ui.clockSource;
+      return 0;
+    }
+    return prefsRecordByte(this.preferences, index - V3_IMAGE_PREFS_AT);
+  }
+
+  applyByte(index: number, value: number): void {
+    if (index === V3_IMAGE_VERSION_AT) return;
+    if (index < V3_IMAGE_CHANNELS_AT) {
+      const rel = index - V3_IMAGE_INSTANCES_AT;
+      const instance = this.engine.instanceForChannel(Math.floor(rel / V3_INSTANCE_RECORD));
+      if (instance !== null) {
+        v3ApplyContentByte(instance, rel % V3_INSTANCE_RECORD, value);
+      }
+      return;
+    }
+    if (index < V3_IMAGE_GLOBAL_AT) {
+      const rel = index - V3_IMAGE_CHANNELS_AT;
+      applyChannelRecordByte(
+        this.engine,
+        Math.floor(rel / V3_CHANNEL_RECORD),
+        rel % V3_CHANNEL_RECORD,
+        value,
+      );
+      return;
+    }
+    if (index < V3_IMAGE_PREFS_AT) {
+      const rel = index - V3_IMAGE_GLOBAL_AT;
+      if (rel === v3.GLOBAL_TEMPO_LO_AT) {
+        this.ui.setTempo((this.ui.tempo & 0xff00) | value);
+        return;
+      }
+      if (rel === v3.GLOBAL_TEMPO_HI_AT) {
+        this.ui.setTempo((this.ui.tempo & 0x00ff) | (value << 8));
+        return;
+      }
+      if (rel === v3.GLOBAL_CLOCK_SOURCE_AT) {
+        this.ui.setClockSource(value);
+      }
+      return;
+    }
+    applyPrefsRecordByte(this.preferences, index - V3_IMAGE_PREFS_AT, value);
+  }
+
+  resetToDefaults(): void {
+    for (let channel = 0; channel < CHANNEL_COUNT; ++channel) {
+      this.engine.instanceForChannel(channel)?.clear();
+      this.engine.setSelectedPattern(channel, 0);
+      this.engine.setEffectiveLength(channel, DEFAULT_LENGTH);
+      this.engine.setSubdiv(channel, DEFAULT_SUBDIV);
+      this.engine.setBarLength(channel, DEFAULT_BAR_LENGTH);
+      this.engine.setChannelMode(channel, DEFAULT_CHANNEL_MODE);
+      this.engine.setOffset(channel, 0);
+      this.engine.setSkipChance(channel, 0);
+    }
+    this.ui.setTempo(DEFAULT_TEMPO);
+    this.ui.setClockSource(0);
+    const fresh = defaultPreferences();
+    this.preferences.rotateScreen = fresh.rotateScreen;
+    this.preferences.reverseEncoder = fresh.reverseEncoder;
+    this.preferences.cvCalibration[0] = fresh.cvCalibration[0];
+    this.preferences.cvCalibration[1] = fresh.cvCalibration[1];
+    this.engine.refreshTiming();
   }
 }
 
@@ -427,14 +592,14 @@ export class PersistenceScheduler {
     return this.dirtyFlag && nowMs - this.lastChangeMs >= QUIET_MS;
   }
 
-  advance(storage: Storage, image: PersistentImage, nowMs: number): boolean {
+  advance(storage: Storage, image: ScannedImage, nowMs: number): boolean {
     if (!this.writingFlag) {
       if (!this.quietElapsed(nowMs)) return false;
       this.writingFlag = true;
       this.cursorIndex = 0;
     }
-    while (this.cursorIndex < PersistentImage.SIZE) {
-      const address = BASE_ADDRESS + this.cursorIndex;
+    while (this.cursorIndex < image.size) {
+      const address = image.addressAt(this.cursorIndex);
       const wanted = image.byteAt(this.cursorIndex);
       ++this.cursorIndex;
       if (storage.read(address) !== wanted) {
@@ -447,13 +612,15 @@ export class PersistenceScheduler {
     return false;
   }
 
-  load(storage: Storage, image: PersistentImage): boolean {
-    if (storage.read(BASE_ADDRESS + HEADER_OFFSET) !== FORMAT_VERSION) {
+  load(storage: Storage, image: ScannedImage): boolean {
+    if (storage.read(image.addressAt(image.versionIndex))
+        !== image.byteAt(image.versionIndex)) {
       image.resetToDefaults();
       return false;
     }
-    for (let index = HEADER_SIZE; index < PersistentImage.SIZE; ++index) {
-      image.applyByte(index, storage.read(BASE_ADDRESS + index));
+    for (let index = 0; index < image.size; ++index) {
+      if (index === image.versionIndex) continue;
+      image.applyByte(index, storage.read(image.addressAt(index)));
     }
     return true;
   }
