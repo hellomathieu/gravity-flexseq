@@ -1025,6 +1025,94 @@ void test_the_v2_scan_still_writes_the_version_first() {
         "le contrat v2 ecrit la version en PREMIER, et il ne change pas");
 }
 
+uint32_t instanceStepMask(const Pattern& pattern) {
+    uint32_t mask = 0;
+    for (uint8_t step = 0; step < 36; ++step) {
+        bool active = false;
+        pattern.readStep(step, active);
+        if (active) {
+            mask |= (static_cast<uint32_t>(1) << step);
+        }
+    }
+    return mask;
+}
+
+void test_the_first_boot_seeds_the_templates_and_fills_the_instances_from_a1() {
+    journal.reset();
+    RigV3 r;
+    const bool restored = flexseq::bootstrap(journal, r.image, r.scheduler, 0);
+
+    TEST_ASSERT_FALSE_MESSAGE(restored, "une EEPROM vierge ne peut pas etre restauree");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0x11, journal.cell[385],
+        "l octet bas du masque de A1 doit etre seme");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0x91, journal.cell[386],
+        "l octet haut du masque de A1 doit etre seme");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(16, journal.cell[385 + 23],
+        "la longueur du record de template d usine vaut 16");
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(384, journal.count,
+        "le semis ecrit les seize records de vingt-quatre octets");
+
+    for (uint8_t channel = 0; channel < SequencerEngine::CHANNEL_COUNT; ++channel) {
+        TEST_ASSERT_EQUAL_INT8(0, r.engine.getSelectedPattern(channel));
+        TEST_ASSERT_EQUAL_UINT32_MESSAGE(0x9111,
+            instanceStepMask(*r.engine.instanceForChannel(channel)),
+            "le CONTENU de l instance doit etre celui de A1, pas seulement son index");
+    }
+}
+
+void test_a_nominal_boot_restores_the_instances_and_never_overwrites_them() {
+    eeprom.reset();
+    RigV3 saved;
+    for (uint8_t channel = 0; channel < SequencerEngine::CHANNEL_COUNT; ++channel) {
+        saved.engine.instanceForChannel(channel)->writeStep(
+            static_cast<uint8_t>(30 + channel), true);
+    }
+    saved.scheduler.markDirty(0);
+    finishWriteV3(saved, eeprom, persist::QUIET_MS);
+
+    RigV3 loaded;
+    const bool restored = flexseq::bootstrap(eeprom, loaded.image, loaded.scheduler, 0);
+
+    TEST_ASSERT_TRUE_MESSAGE(restored, "une image v3 valide doit etre restauree");
+    for (uint8_t channel = 0; channel < SequencerEngine::CHANNEL_COUNT; ++channel) {
+        const uint32_t mask = instanceStepMask(*loaded.engine.instanceForChannel(channel));
+        TEST_ASSERT_EQUAL_UINT32_MESSAGE(
+            static_cast<uint32_t>(1) << (30 + channel), mask,
+            "l instance restauree ne doit JAMAIS etre ecrasee par un template");
+    }
+}
+
+void test_a_valid_version_two_image_is_refused_without_migration() {
+    eeprom.reset();
+    Rig legacy;
+    legacy.scheduler.markDirty(0);
+    finishWrite(legacy, eeprom, persist::QUIET_MS);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(2, eeprom.cell[384],
+        "le rig v2 doit avoir ecrit une image valide");
+
+    RigV3 r;
+    const bool restored = flexseq::bootstrap(eeprom, r.image, r.scheduler, 0);
+    TEST_ASSERT_FALSE_MESSAGE(restored, "aucune migration de v2 vers v3 : QB2");
+    for (uint8_t channel = 0; channel < SequencerEngine::CHANNEL_COUNT; ++channel) {
+        TEST_ASSERT_EQUAL_UINT32(0x9111,
+            instanceStepMask(*r.engine.instanceForChannel(channel)));
+    }
+}
+
+void test_every_unknown_version_byte_falls_back_to_the_defaults() {
+    const uint8_t versions[3] = { 0xFF, 1, 4 };
+    for (uint8_t index = 0; index < 3; ++index) {
+        eeprom.reset();
+        eeprom.cell[384] = versions[index];
+        RigV3 r;
+        TEST_ASSERT_FALSE_MESSAGE(
+            flexseq::bootstrap(eeprom, r.image, r.scheduler, 0),
+            "une version inconnue doit etre refusee");
+        TEST_ASSERT_EQUAL_UINT32(0x9111,
+            instanceStepMask(*r.engine.instanceForChannel(0)));
+    }
+}
+
 void test_the_v3_logical_image_is_two_hundred_and_four_bytes() {
     TEST_ASSERT_EQUAL_UINT16(204, flexseq::PersistentImageV3::SIZE);
     TEST_ASSERT_EQUAL_UINT16(203, flexseq::PersistentImageV3::VERSION_INDEX);
@@ -1136,6 +1224,11 @@ void test_the_v2_version_sits_at_the_first_logical_index() {
 
 int main() {
     UNITY_BEGIN();
+
+    RUN_TEST(test_the_first_boot_seeds_the_templates_and_fills_the_instances_from_a1);
+    RUN_TEST(test_a_nominal_boot_restores_the_instances_and_never_overwrites_them);
+    RUN_TEST(test_a_valid_version_two_image_is_refused_without_migration);
+    RUN_TEST(test_every_unknown_version_byte_falls_back_to_the_defaults);
 
     RUN_TEST(test_the_v3_scan_visits_and_writes_the_two_hundred_and_four_logical_bytes);
     RUN_TEST(test_the_v3_scan_touches_only_the_version_and_the_data_zone);

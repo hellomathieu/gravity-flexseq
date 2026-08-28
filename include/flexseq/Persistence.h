@@ -163,6 +163,11 @@ bool applyTemplateByte(Pattern& pattern, uint8_t& length, uint8_t offset, uint8_
 
 uint8_t factoryTemplateByte(uint8_t index, uint8_t offset);
 
+constexpr uint16_t templateAddress(uint8_t index, uint8_t offset) {
+    return static_cast<uint16_t>(BASE_ADDRESS + TEMPLATES_OFFSET
+                                 + index * TEMPLATE_RECORD + offset);
+}
+
 constexpr uint16_t IMAGE_INSTANCES_AT = 0;
 constexpr uint16_t IMAGE_CHANNELS_AT = IMAGE_INSTANCES_AT + INSTANCES_SIZE;
 constexpr uint16_t IMAGE_GLOBAL_AT = IMAGE_CHANNELS_AT + CHANNELS_SIZE;
@@ -220,6 +225,33 @@ public:
     uint8_t byteAt(uint16_t index) const;
     void applyByte(uint16_t index, uint8_t value);
     void resetToDefaults();
+
+    template <typename Storage>
+    void seedFactoryTemplates(Storage& storage) const {
+        for (uint8_t index = 0; index < persist::v3::TEMPLATE_COUNT; ++index) {
+            for (uint8_t offset = 0; offset < persist::v3::TEMPLATE_RECORD; ++offset) {
+                storage.write(persist::v3::templateAddress(index, offset),
+                              persist::v3::factoryTemplateByte(index, offset));
+            }
+        }
+    }
+
+    template <typename Storage>
+    void loadTemplatesIntoInstances(Storage& storage) {
+        for (uint8_t channel = 0; channel < SequencerEngine::CHANNEL_COUNT; ++channel) {
+            Pattern* instance = engine_.instanceForChannel(channel);
+            const int8_t selected = engine_.getSelectedPattern(channel);
+            if (instance == nullptr || selected < 0) {
+                continue;
+            }
+            for (uint8_t offset = 0; offset < persist::v3::CONTENT_BYTES; ++offset) {
+                persist::v3::applyContentByte(
+                    *instance, offset,
+                    storage.read(persist::v3::templateAddress(
+                        static_cast<uint8_t>(selected), offset)));
+            }
+        }
+    }
 
 private:
     SequencerEngine& engine_;
@@ -294,6 +326,18 @@ private:
     bool dirty_;
     bool writing_;
 };
+
+template <typename Storage>
+bool bootstrap(Storage& storage, PersistentImageV3& image,
+               PersistenceScheduler& scheduler, uint32_t nowMs) {
+    if (scheduler.load(storage, image)) {
+        return true;
+    }
+    image.seedFactoryTemplates(storage);
+    image.loadTemplatesIntoInstances(storage);
+    scheduler.markDirty(nowMs);
+    return false;
+}
 
 }  // namespace flexseq
 

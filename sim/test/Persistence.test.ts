@@ -11,6 +11,7 @@ import {
   PersistenceScheduler,
   PersistentImage,
   PersistentImageV3,
+  bootstrap,
   PREFS_OFFSET,
   QUIET_MS,
   TOTAL_SIZE,
@@ -734,6 +735,78 @@ describe("Persistence — format v2, nine bytes per channel", () => {
     expect(loaded.engine.getEffectiveLength(0)).toBe(saved.engine.getEffectiveLength(0));
     expect(loaded.engine.getSkipChance(0)).toBe(saved.engine.getSkipChance(0));
     expect(loaded.image.byteAt(CHANNELS_OFFSET + 7)).toBe(0);
+  });
+});
+
+function instanceStepMask(pattern: Pattern): number {
+  let mask = 0;
+  for (let step = 0; step < 36; ++step) {
+    if (pattern.readStep(step)) mask |= 1 << step;
+  }
+  return mask;
+}
+
+describe("le demarrage v3", () => {
+  it("seme les templates et remplit les six instances depuis A1", () => {
+    const ee = new JournalEeprom();
+    const r = rigV3();
+    const restored = bootstrap(ee, r.image, r.scheduler, 0);
+
+    expect(restored).toBe(false);
+    expect(ee.cell[385]).toBe(0x11);
+    expect(ee.cell[386]).toBe(0x91);
+    expect(ee.cell[385 + 23]).toBe(16);
+    expect(ee.order.length).toBe(384);
+    for (let channel = 0; channel < CHANNEL_COUNT; ++channel) {
+      expect(r.engine.getSelectedPattern(channel)).toBe(0);
+      expect(instanceStepMask(r.engine.instanceForChannel(channel)!)).toBe(0x9111);
+    }
+  });
+
+  it("restaure les instances et ne les ecrase JAMAIS au demarrage nominal", () => {
+    const ee = new FakeEeprom();
+    const saved = rigV3();
+    for (let channel = 0; channel < CHANNEL_COUNT; ++channel) {
+      saved.engine.instanceForChannel(channel)!.writeStep(30 + channel, true);
+    }
+    saved.scheduler.markDirty(0);
+    while (saved.scheduler.advance(ee, saved.image, QUIET_MS)) {
+      // draine le parcours complet
+    }
+
+    const loaded = rigV3();
+    expect(bootstrap(ee, loaded.image, loaded.scheduler, 0)).toBe(true);
+    for (let channel = 0; channel < CHANNEL_COUNT; ++channel) {
+      expect(instanceStepMask(loaded.engine.instanceForChannel(channel)!)).toBe(
+        1 << (30 + channel),
+      );
+    }
+  });
+
+  it("refuse une image v2 valide, sans migration", () => {
+    const ee = new FakeEeprom();
+    const legacy = rig();
+    legacy.scheduler.markDirty(0);
+    while (legacy.scheduler.advance(ee, legacy.image, QUIET_MS)) {
+      // draine le parcours complet
+    }
+    expect(ee.cell[384]).toBe(2);
+
+    const r = rigV3();
+    expect(bootstrap(ee, r.image, r.scheduler, 0)).toBe(false);
+    for (let channel = 0; channel < CHANNEL_COUNT; ++channel) {
+      expect(instanceStepMask(r.engine.instanceForChannel(channel)!)).toBe(0x9111);
+    }
+  });
+
+  it("retombe sur les defauts pour toute version inconnue", () => {
+    for (const version of [0xff, 1, 4]) {
+      const ee = new FakeEeprom();
+      ee.cell[384] = version;
+      const r = rigV3();
+      expect(bootstrap(ee, r.image, r.scheduler, 0)).toBe(false);
+      expect(instanceStepMask(r.engine.instanceForChannel(0)!)).toBe(0x9111);
+    }
   });
 });
 

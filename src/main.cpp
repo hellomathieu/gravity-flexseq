@@ -3,7 +3,6 @@
 
 #include <flexseq/CvSampler.h>
 #include <flexseq/EepromStorage.h>
-#include <flexseq/FactoryPatterns.h>
 #if FLEXSEQ_ENCODER_PROBE
 #include <flexseq/EncoderProbe.h>
 #endif
@@ -26,7 +25,7 @@ flexseq::Transport transport(engine);
 flexseq::TriggerSequencer triggers(engine);
 flexseq::UiController ui(engine, transport);
 flexseq::Preferences preferences;
-flexseq::PersistentImage persistentImage(patternBank, engine, ui, preferences);
+flexseq::PersistentImageV3 persistentImage(engine, ui, preferences);
 flexseq::PersistenceScheduler persistence;
 flexseq::EepromStorage eeprom;
 // "CH1  120BPM" : le channel et le tempo, reecrits a chaque image.
@@ -173,28 +172,9 @@ void setup() {
     // Persistance : on relit l'image, et si l'octet de version ne repond pas on
     // repart des defauts EN LES ECRIVANT — le format est ainsi materialise des
     // le premier demarrage, pas a la premiere edition. Voir PRD 11.1.
-    if (!persistence.load(eeprom, persistentImage)) {
-        // Premier demarrage, ou format inconnu. L'original livre A1..A8 avec du
-        // contenu et B1..B8 vides (Gravity.ino:83-98) : sans cela la regle qui
-        // gele A1..A8 gelerait huit emplacements vides.
-        flexseq::loadFactoryPatterns(patternBank);
-        persistence.markDirty(millis());
-    }
+    flexseq::bootstrap(eeprom, persistentImage, persistence, millis());
 
     flexseq::probe::instanceBase = engine.instanceForChannel(0);
-
-    for (uint8_t ch = 0; ch < flexseq::SequencerEngine::CHANNEL_COUNT; ++ch) {
-        flexseq::Pattern* instance = engine.instanceForChannel(ch);
-        const int8_t selectedTemplate = engine.getSelectedPattern(ch);
-        if (instance == nullptr || selectedTemplate < 0) {
-            continue;
-        }
-        const flexseq::Pattern* source =
-            patternBank.getPattern(static_cast<uint8_t>(selectedTemplate));
-        if (source != nullptr) {
-            *instance = *source;
-        }
-    }
 
     // Drive the master phase from the unified 96-PPQN output clock (internal
     // and external sources both surface here).

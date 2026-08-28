@@ -74,6 +74,10 @@ const V3_IMAGE_PREFS_AT = V3_IMAGE_GLOBAL_AT + V3_GLOBAL_SIZE;
 const V3_IMAGE_VERSION_AT = V3_IMAGE_PREFS_AT + V3_PREFS_SIZE;
 const V3_IMAGE_SIZE = V3_IMAGE_VERSION_AT + V3_HEADER_SIZE;
 
+function v3TemplateAddress(index: number, offset: number): number {
+  return BASE_ADDRESS + V3_TEMPLATES_OFFSET + index * V3_TEMPLATE_RECORD + offset;
+}
+
 const V3_MIN_TEMPLATE_LENGTH = 1;
 const V3_MAX_TEMPLATE_LENGTH = Pattern.DEFAULT_TOTAL_STEPS;
 
@@ -541,6 +545,25 @@ export class PersistentImageV3 implements ScannedImage {
     applyPrefsRecordByte(this.preferences, index - V3_IMAGE_PREFS_AT, value);
   }
 
+  seedFactoryTemplates(storage: Storage): void {
+    for (let index = 0; index < V3_TEMPLATE_COUNT; ++index) {
+      for (let offset = 0; offset < V3_TEMPLATE_RECORD; ++offset) {
+        storage.write(v3TemplateAddress(index, offset), v3FactoryTemplateByte(index, offset));
+      }
+    }
+  }
+
+  loadTemplatesIntoInstances(storage: Storage): void {
+    for (let channel = 0; channel < CHANNEL_COUNT; ++channel) {
+      const instance = this.engine.instanceForChannel(channel);
+      const selected = this.engine.getSelectedPattern(channel);
+      if (instance === null || selected < 0) continue;
+      for (let offset = 0; offset < V3_CONTENT_BYTES; ++offset) {
+        v3ApplyContentByte(instance, offset, storage.read(v3TemplateAddress(selected, offset)));
+      }
+    }
+  }
+
   resetToDefaults(): void {
     for (let channel = 0; channel < CHANNEL_COUNT; ++channel) {
       this.engine.instanceForChannel(channel)?.clear();
@@ -624,4 +647,17 @@ export class PersistenceScheduler {
     }
     return true;
   }
+}
+
+export function bootstrap(
+  storage: Storage,
+  image: PersistentImageV3,
+  scheduler: PersistenceScheduler,
+  nowMs: number,
+): boolean {
+  if (scheduler.load(storage, image)) return true;
+  image.seedFactoryTemplates(storage);
+  image.loadTemplatesIntoInstances(storage);
+  scheduler.markDirty(nowMs);
+  return false;
 }
