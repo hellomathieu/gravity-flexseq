@@ -1,6 +1,6 @@
 # Open risks and watch items
 
-**Last review: 2026-08-26.** Twenty-four open lines, twenty-seven closed or accepted.
+**Last review: 2026-08-28.** Twenty-seven open lines, twenty-seven closed or accepted.
 
 ## What this document is, and is not
 
@@ -19,7 +19,7 @@ either closed without anyone noting it, or accepted without anyone saying so.
 
 ## What is still open
 
-Twenty-four lines, and each one states **what it is waiting for and from whom**. A line
+Twenty-seven lines, and each one states **what it is waiting for and from whom**. A line
 that waits for nothing from nobody no longer belongs here: it is in the table
 below.
 
@@ -51,6 +51,9 @@ below.
 | 43 | **The fourth witness of the gesture probe rests on a symbol that the build does not promise to keep.** `suppressedLong` is an internal counter of libGravity long presses that FlexSeq's own guard **absorbs**, and `run-gesture-probe.sh` reads it to separate "no long press fired" from "a long press fired and was swallowed" -- a distinction no behavioural witness can make. Measured 2026-08-25 on the production binary: the exported accessor `flexseq::input::suppressedLongPresses()` is **absent from the ELF**, removed by `--gc-sections` for want of a caller, and the whole image holds exactly **eight** references to the counter, all inside the two functions that increment it. **Nothing reads it.** Neither C++ nor the build guarantees that a non-`volatile` object with internal linkage and no reads survives LTO, so its presence today is an outcome of this toolchain, not a property. Observed stable over three builds, two of them from clean: same `firmware.hex` md5, same address, a **2-byte** object in SRAM at `0x0220` | **instrumentation, not firmware.** No functional behaviour of the module depends on this counter | **nothing to do on the firmware, and no fix is proposed.** The probe resolves the symbol by name on **every run** and never hardcodes its address; the validity conditions are the ones established during FRACT -- a single matching symbol, size exactly 2, type `.bss` or `.data`, the address converted by `VMA - 0x800000` and bounded by `avr->ioend` and `avr->ramend`, a readable flag distinct from the value, and a non-negative delta. If any of them fails, the witness is **unavailable**: the criterion is `INVALID`, never a firmware `FAIL`. The day the symbol disappears, the probe says so instead of concluding. Details and measurements: `docs/gesture-injection.md` |
 | 44 | **A SHIFT burst of more than six detents is not reliable on the LENGTH field, and the mechanism is NOT identified** | **measured 2026-08-25 (D-h, D-i), scope limited, one contradiction open** | on the LENGTH field of a channel tab, a single burst applies **exactly** its detents up to **6**, and becomes erratic from **7**: measured 3, 5, 7, 5, 1 and 4 applied for 7 to 12 requested. The threshold is bracketed to one detent. The loss is **not** the cursor displacement -- the selection frame stays on LENGTH in all fourteen courses -- and it is **not** a timing effect: 6 detents slowed to a 654 ms hold stay exact, 8 detents accelerated to a 222 ms hold stay wrong with the **same** deficit as at 462 ms. The I2C traffic shows the events are emitted, and it is highest on the course that loses nothing. **Do not read a cause into this.** No buffer, no queue size and no firmware component is named by any measurement. ⚠️ **The limit is NOT universal, and a verified contradiction says so**: on the SUBDIV field, a burst of **7** (the `rig` phase) and a burst of **8** (recipe R11) apply **all** their detents -- their literal expectations, 6 ticks and 4 ticks, are reachable in no other way, `kSubdivChoices` placing `/1` at index 8. The two measurements stand as they are; nothing in the campaign settles which field property separates them. What is safe today is a burst of **6 detents or fewer**; what is proven unreliable is a burst above 6 **on LENGTH**. It blocks the restore leg of R5, which targets LENGTH. ⚠️ **R7 targets SUBDIV, not LENGTH** -- `rotate(avr, 2, 1)` selects field index 2 -- so this line says nothing about it: the upper boundary on SUBDIV is unmeasured, and R7 stays unvalidated for want of a measurement, not through a proven defect. See `WORKPLAN.md` |
 | 45 | **The Flash cost of the version 3 persistence codec is unknown, and the measurement required to decide lot S has not yet been made.** The codec is declared and tested, but no firmware path calls it, so the linker removes it entirely: RAM +0 and Flash +0 were measured on 2026-08-26, and its mangled symbols are absent from the ELF | low | `WORKPLAN.md` planned the decision on lot S -- the Flash savings campaign -- after the Flash measurement of lot B2. That measurement cannot be made before the version 3 path is activated; this is a **planning dependency, not a technical failure**. The next opportunity is **lot B4b**, which activates the path. The current margin is 2064 bytes under the 95 % guard |
+| 47 | **The gesture probe's bank witness loses the structural size check that lot B4a gave it.** Lot B4a made the resolution strict: one symbol, a data type, and `st_size` EXACTLY the size the harness announces, or `INVALID`. Lot B4b.4 replaces the observed object: the six instances are a PRIVATE member of `SequencerEngine`, so the ELF holds no symbol for them, and the probe reaches them through a 2-byte instrumentation pointer, `flexseq::probe::instanceBase`. `st_size` therefore proves the symbol is the pointer, and says **nothing** about the 138 bytes that are read at the address it holds | **medium.** Instrumentation, not firmware; but a witness that proves less than it appears to is the failure this document exists to prevent | **accepted on 2026-08-27, with a replacement guarantee.** The structural check becomes a BEHAVIOURAL one: if the pointer is wrong, or names a representation that is not the instances, the factory-content check must fail, because the expected bytes will not be there. A counter-proof must show that `st_size == 2` alone does not pass the witness. Exporting a size beside the pointer was examined and REFUSED: the firmware could expose a pointer and a wrong size together, so it would grow the instrumentation interface without restoring the guarantee. See also line 43, and the method rule on a write-only symbol |
+| 48 | **The gesture probe's instrumentation pointer ships in the production firmware.** `probe::instanceBase` costs **2 bytes of RAM and 18 bytes of Flash**, measured 2026-08-28 by a counter-build with a control. No functional path reads it: `setup()` writes it once. It exists because `instances_` is private, so no other symbol makes the six channel instances observable from outside. The pointer is therefore a test dependency inside production code. **Waits for** the instrumentation cleanup, before the final firmware. |
+| 49 | **Two assertions of the input-adapter suite still read the shared bank, and the suite is RED.** `test_a_long_press_on_shift_clears_the_pattern` and `test_a_rotation_while_shift_is_held_spares_the_pattern` toggle a step through the UI, then read `bank.getPattern(0)`. Since lot B4b.4 the UI writes the channel instance, so the bank stays empty and both assertions fail. The firmware is not at fault: the oracles are stale, exactly like the gesture probe's oracles that lot B4b.4.5 repaired. The suite lives in `env:native_adapter`, which `run-cpp-tests.sh` does not run, so a green C++ run hid it for the whole of lot B4b.4. **Waits for** the two assertions to read the channel instance. |
 | 46 | **The eight frozen templates could leave the EEPROM, and that would return 192 bytes.** `A1` to `A8` carry the original's factory content and PRD §5.0 point 1 freezes them: their content can never change. A record that cannot change does not need a writable store -- it could be served from the PROGMEM table that already holds it, 16 bytes for the eight masks. The template zone would fall from **384 to 192 bytes** and the version 3 image from **588 to 396** | **an opportunity, not a risk** | **do not reopen this now.** The freeze itself is **not implemented**: the rule `index < 8` exists nowhere in the code, and the only `index < 8` in the tree picks the letter `A` or `B` on the main screen. Turning an unwritten interface decision into a storage decision would be premature. Two conditions make it decidable: the freeze implemented, and confirmed **definitive**. It would then reopen **PRD §11.1** and **ADR 0006**, both normative on the 16 x 24 layout. Decision of 2026-08-26: the sixteen templates stay persisted |
 
 ## What is closed or accepted
@@ -373,6 +376,42 @@ scores announced during lot B -- 66/66, 14/14 and 11/11 -- were therefore
 **partial**. They were not wrong, they were incomplete, and they were presented
 as complete. Re-run with brace counting, the whole set of version 3 assertions
 gives **64/64**. Announce a score only after checking **what** was collected.
+
+**An instrumentation symbol that is only WRITTEN does not survive the link.**
+Measured 2026-08-27, on the pointer that lot B4b.4 adds so the gesture probe can
+find the six pattern instances. The pointer is a global in a named namespace, and
+`setup()` writes it. That was believed to be enough, because the object is not
+merely unread like `suppressedLong` (line 43): it receives a value. **It is not
+enough.** Without `volatile` the symbol is ABSENT from the ELF and RAM does not
+move by a single byte -- the link removes the store together with the object,
+because no read makes the store observable. With `volatile` the symbol is
+present, 2 bytes, type `b`. **The instrumentation therefore depends on one
+keyword**, and a future edit that removes it removes the witness without any
+error. Test the ELF for the symbol, never the source for the write.
+
+Its full cost was measured on 2026-08-28, by a counter-build **with a control**:
+one copy of the tree left intact, one copy without the pointer, each built in its
+own build directory. The intact copy reproduces the repository footprint to the
+byte, so the delta is the instrumentation and nothing else: **RAM +2 bytes, Flash
++18 bytes**, and the Flash cost sits entirely inside `main`. An earlier figure of
+14 bytes of Flash carried no control and is not reproducible today. **A counter-
+build without a control measures the harness as much as the subject.**
+
+**A counter-proof that matches a source pattern goes stale in silence.**
+Two mutants of the gesture probe aimed at a line that the burst policy refactor
+removed on 2026-08-25. The SELFTEST could therefore not run for two days, and
+nobody knew, because no routine run calls it. The guard did its work: an absent
+pattern exits 2 and is **never** a detected mutation -- without it the two
+mutants would have reported success while testing nothing. Two lessons follow.
+Check every source pattern against the current code before you trust a score.
+And re-target a stale pattern rather than delete the mutant: the criterion of
+detection must not move when the point of injection does.
+
+**A suite in another environment is not run by the script you reach for.**
+`run-cpp-tests.sh` runs `env:native`. The input-adapter suite lives in
+`env:native_adapter` and only `run-all-tests.sh` runs both. Lot B4b.4 was
+validated for eight sub-steps on the narrower script, and line 49 stayed red the
+whole time. **A green suite is not a green repository.**
 
 **A tool must judge on one criterion, not two.** `run-stack-probe.sh` printed a
 green persistence line and exited 1 at the same time, for four days. The last
