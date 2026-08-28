@@ -77,7 +77,7 @@ struct Rig {
         engine.setChannelMode(0, flexseq::MODE_SEQ);
     }
 
-    Pattern* pattern() { return bank.getPattern(0); }
+    Pattern* pattern() { return engine.instanceForChannel(0); }
 
     void useSubdiv(int16_t subdiv) {
         engine.setSubdiv(0, subdiv);

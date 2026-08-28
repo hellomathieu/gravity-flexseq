@@ -36,6 +36,11 @@ production simule, et verifie leur effet.
                                  deplacent l'attente de R11
   R11_CRANS_SUBDIV=<n>           crans pour atteindre x24 depuis /1 (defaut 8)
   SKIP_SHIFT=1                   n'injecte pas le geste SHIFT (classe 1)
+  INSTANCE_BASE_FORCE=<adr>      force la base du tampon observe (0 = pointeur nul)
+  INSTANCE_CHANNEL_FORCE=<n>     force le canal lu par les accesseurs gardes
+  TEMPLATE_MUTATE=<offset>       change un octet de la zone des templates entre
+                                 les deux lectures du parcours instances
+  R11_STEP_ROTATIONS=<n>         crans de deplacement du curseur dans R11 (defaut 5)
   SKIP_EDIT=1                    n'entre pas dans EDIT (classe 2)
   EXPECT_RATCHET_APRES=<hh>      change l'attente du ratchet (classe 3)
 
@@ -56,8 +61,10 @@ Codes de sortie :
 
   0    tous les criteres verts
   1    au moins un critere rouge, ou une etape du harnais en echec
-  3    controle de la banque en echec (classe 2) : aucun verdict sur le firmware
   4    salve de SHIFT refusee AVANT injection : le geste n'etait pas valide
+  5    oracle indecidable : aucun verdict sur le firmware. Couvre le symbole
+       d'instrumentation absent ou ambigu, un pointeur d'instances illisible,
+       un acces hors bornes, et le controle d'usine en echec (ancien code 3)
   127  un outil manque
 USAGE
   exit 0
@@ -84,6 +91,41 @@ bad() {
 inval() {
   printf '  %s⛔%s %-22s %sINVALID — %s%s\n' "$C_ERR" "$C_0" "$1" "$C_DIM" "$2" "$C_0"
   INVAL_COUNT=$((INVAL_COUNT + 1))
+}
+
+pointeur_sain() {
+  local lisible echecs fautes
+  lisible="$(grep -E '^instances_pointeur ' "$1" 2>/dev/null | awk '{print $5}')"
+  echecs="$(grep -E '^instances_acces ' "$1" 2>/dev/null | awk '{print $5}')"
+  fautes="$(grep -E '^instances_acces ' "$1" 2>/dev/null | awk '{print $7}')"
+  [ "${lisible:-}" = "1" ] && [ "${echecs:-1}" = "0" ] && [ "${fautes:-1}" = "0" ]
+}
+
+garde_pointeur() {
+  local journal="$1" etiquette="$2"
+  pointeur_sain "$journal" && return 0
+  inval "$etiquette" "pointeur d instances illisible ou acces hors bornes : aucun verdict sur ce parcours"
+  return 1
+}
+
+verdict_invalid_exit() {
+  printf '  %s⛔ VERDICT : INVALID — 0 defaut du firmware, %d critere(s) non decidable(s).%s\n' \
+    "$C_ERR" "$INVAL_COUNT" "$C_0"
+  printf '  %s   Un prerequis ou un temoin necessaire manque : aucun verdict sur le firmware.%s\n' \
+    "$C_DIM" "$C_0"
+  exit 5
+}
+
+dieinval() {
+  local journal="$1" contexte="$2" lisible base
+  lisible="$(grep -E '^instances_pointeur ' "$journal" 2>/dev/null | awk '{print $5}')"
+  base="$(grep -E '^instances_pointeur ' "$journal" 2>/dev/null | awk '{print $3}')"
+  if [ "${lisible:-1}" = "0" ]; then
+    inval "temoin du pointeur" "$contexte — cause : pointeur d instances illisible (base ${base:-?})"
+  else
+    inval "controle d usine" "$contexte"
+  fi
+  verdict_invalid_exit
 }
 
 if command -v pio >/dev/null 2>&1; then PIO="pio"
@@ -136,7 +178,8 @@ R11_CADENCE_X24_ATTENDUE=4
 R11_NIBBLE_1_ATTENDU="02"
 R11_NIBBLE_TRIOLET_ATTENDU="07"
 R11_NIBBLE_ZERO="00"
-R11_OFFSET_ATTENDU=7
+R11_CANAL_ATTENDU=3
+R11_OCTET_ATTENDU=7
 R11_CODES_REFUSES="03 04 06"
 TAB_COUNT_ECRAN=8
 R8_MASK_ATTENDU="0229"
@@ -189,30 +232,34 @@ if ! "$GEN" --mode seq --steps "$RIG_STEPS" --subdiv "$RIG_SUBDIV" --tempo 138 \
   cat "$LOG"; die "generation du rig de recette en echec"
 fi
 ok "image de rig" "SEQ, steps $RIG_STEPS, subdiv $RIG_SUBDIV, 138 BPM — rig de la couche 1"
+if ! "$GEN" --mode seq --per-channel --tempo 138 > "$WORK/perchannel.bin" 2>"$LOG"; then
+  cat "$LOG"; die "generation de l'image differenciee en echec"
+fi
+ok "image differenciee" "SEQ, un template par canal, C0 a C5 vers les templates 0 a 5"
 
 ELF="$ROOT/.pio/build/nanoatmega328/firmware.elf"
 AVR_DATA_BASE=$(( 0x800000 ))
 
-BANK_BYTES="$("$BIN" --observed-bank-bytes 2>/dev/null | tr -d '[:space:]')"
+BANK_BYTES="$("$BIN" --observed-instance-bytes 2>/dev/null | tr -d '[:space:]')"
 case "$BANK_BYTES" in
   ''|*[!0-9]*)
-    inval "symbole patternBank" "le harnais n annonce aucune taille de banque observable"
+    inval "symbole des instances" "le harnais n annonce aucune taille d instances observable"
     exit 1 ;;
 esac
 
-BANK_PATTERN="${BANK_SYMBOL:-11patternBankE$|^patternBank$}"
+BANK_PATTERN="${BANK_SYMBOL:-12instanceBaseE$|^instanceBase$}"
 bank_rows="$("$NM" -S --defined-only "$ELF" | awk -v pat="$BANK_PATTERN" '$NF ~ pat { print NF, $0 }')"
 if [ -z "$bank_rows" ]; then bank_count=0
 else bank_count="$(printf '%s\n' "$bank_rows" | wc -l | tr -d ' ')"; fi
 
 if [ "$bank_count" -eq 0 ]; then
-  inval "symbole patternBank" "aucun symbole ne correspond a $BANK_PATTERN"
-  exit 1
+  inval "symbole des instances" "aucun symbole ne correspond a $BANK_PATTERN"
+  verdict_invalid_exit
 fi
 if [ "$bank_count" -gt 1 ]; then
-  inval "symbole patternBank" "$bank_count symboles correspondent : la selection serait arbitraire"
+  inval "symbole des instances" "$bank_count symboles correspondent : la selection serait arbitraire"
   printf '%s\n' "$bank_rows" | sed 's/^/      /'
-  exit 1
+  verdict_invalid_exit
 fi
 
 bank_nf="$(printf '%s' "$bank_rows" | awk '{print $1}')"
@@ -228,23 +275,67 @@ fi
 
 case "$bank_type" in
   b|B|d|D) ;;
-  *) inval "symbole patternBank" "type '$bank_type' : ni .bss ni .data, l adresse n est pas une adresse de donnees"
-     exit 1 ;;
+  *) inval "symbole des instances" "type '$bank_type' : ni .bss ni .data, l adresse n est pas une adresse de donnees"
+     verdict_invalid_exit ;;
 esac
 if [ -z "$bank_size" ]; then
-  inval "symbole patternBank" "st_size absent de la sortie de avr-nm -S : taille non verifiable"
-  exit 1
+  inval "symbole des instances" "st_size absent de la sortie de avr-nm -S : taille non verifiable"
+  verdict_invalid_exit
 fi
-if [ "$(( 0x$bank_size ))" -ne "$BANK_BYTES" ]; then
-  inval "symbole patternBank" "taille $(( 0x$bank_size )) octets au lieu des $BANK_BYTES que le harnais observe"
-  exit 1
+if [ "$(( 0x$bank_size ))" -ne 2 ]; then
+  inval "symbole des instances" "taille $(( 0x$bank_size )) octets : ce n est pas le pointeur d instrumentation, qui en fait 2"
+  verdict_invalid_exit
 fi
 if [ "$(( 0x$bank_vma ))" -lt "$AVR_DATA_BASE" ]; then
-  inval "symbole patternBank" "VMA 0x$bank_vma sous 0x800000 : ce n est pas l espace de donnees"
-  exit 1
+  inval "symbole des instances" "VMA 0x$bank_vma sous 0x800000 : ce n est pas l espace de donnees"
+  verdict_invalid_exit
 fi
 BANK_ADDR="$(printf '0x%x' $(( 0x$bank_vma - AVR_DATA_BASE )))"
-ok "symbole patternBank" "unique, type $bank_type, $BANK_BYTES octets, VMA 0x$bank_vma -> RAM $BANK_ADDR"
+ok "symbole des instances" "pointeur unique, type $bank_type, 2 octets, VMA 0x$bank_vma -> RAM $BANK_ADDR ; $BANK_BYTES octets observes a l adresse pointee"
+
+TEMPLATE_PATTERN="${TEMPLATE_SYMBOL:-11patternBankE$|^patternBank$}"
+TEMPLATE_ADDR=0
+TEMPLATE_WHY=""
+tpl_type=""
+tpl_vma=""
+tpl_rows="$("$NM" -S --defined-only "$ELF" | awk -v pat="$TEMPLATE_PATTERN" '$NF ~ pat { print NF, $0 }')"
+if [ -z "$tpl_rows" ]; then
+  TEMPLATE_WHY="aucun symbole ne correspond a $TEMPLATE_PATTERN"
+elif [ "$(printf '%s\n' "$tpl_rows" | wc -l | tr -d ' ')" -gt 1 ]; then
+  TEMPLATE_WHY="plusieurs symboles correspondent : la selection serait arbitraire"
+else
+  tpl_nf="$(printf '%s' "$tpl_rows" | awk '{print $1}')"
+  if [ "$tpl_nf" = "4" ]; then
+    tpl_vma="$(printf '%s' "$tpl_rows" | awk '{print $2}')"
+    tpl_size="$(printf '%s' "$tpl_rows" | awk '{print $3}')"
+    tpl_type="$(printf '%s' "$tpl_rows" | awk '{print $4}')"
+  else
+    tpl_vma="$(printf '%s' "$tpl_rows" | awk '{print $2}')"
+    tpl_size=""
+    tpl_type="$(printf '%s' "$tpl_rows" | awk '{print $3}')"
+  fi
+  case "$tpl_type" in
+    b|B|d|D) ;;
+    *) TEMPLATE_WHY="type '$tpl_type' : ni .bss ni .data" ;;
+  esac
+  if [ -z "$TEMPLATE_WHY" ] && [ -z "$tpl_size" ]; then
+    TEMPLATE_WHY="st_size absent : taille non verifiable"
+  fi
+  if [ -z "$TEMPLATE_WHY" ] && [ "$(( 0x$tpl_size ))" -ne 368 ]; then
+    TEMPLATE_WHY="taille $(( 0x$tpl_size )) octets au lieu des 368 de la banque"
+  fi
+  if [ -z "$TEMPLATE_WHY" ] && [ "$(( 0x$tpl_vma ))" -lt "$AVR_DATA_BASE" ]; then
+    TEMPLATE_WHY="VMA 0x$tpl_vma sous 0x800000 : ce n est pas l espace de donnees"
+  fi
+  if [ -z "$TEMPLATE_WHY" ]; then
+    TEMPLATE_ADDR="$(printf '0x%x' $(( 0x$tpl_vma - AVR_DATA_BASE )))"
+  fi
+fi
+if [ "$TEMPLATE_ADDR" = "0" ]; then
+  ok "symbole de la banque" "absent ou non verifiable ($TEMPLATE_WHY) : seuls les criteres de template deviendront non decidables"
+else
+  ok "symbole de la banque" "unique, type $tpl_type, 368 octets, VMA 0x$tpl_vma -> RAM $TEMPLATE_ADDR, resolu independamment du pointeur d instances"
+fi
 
 SUPPRESSED_PATTERN="${SUPPRESSED_SYMBOL:-14suppressedLongE$|^suppressedLong$}"
 
@@ -322,9 +413,20 @@ if [ -n "${SELFTEST:-}" ]; then
   }
 
   progress "mutant 1 : aucun fractionnement"
-  sed 's/const int burst = left < SHIFT_BURST_DETENTS ? left : SHIFT_BURST_DETENTS;/const int burst = left;/' \
-    "$SRC" > "$WORK/m1.cpp"
-  cmp -s "$SRC" "$WORK/m1.cpp" && die "mutant 1 : motif absent du code source" 2
+  python3 - "$SRC" "$WORK/m1.cpp" <<'MUTANT1'
+import sys
+src, dst = sys.argv[1], sys.argv[2]
+s = open(src).read()
+a = """        count = burst::split(request.detents, verdict.effectiveLimit,
+                             plan, burst::MAX_BURSTS);"""
+if s.count(a) != 1:
+    sys.exit(2)
+b = """        plan[0] = request.detents;
+        count = 1;"""
+open(dst, "w").write(s.replace(a, b, 1))
+MUTANT1
+  [ $? = 0 ] || die "mutant 1 : motif absent du code source" 2
+  cmp -s "$SRC" "$WORK/m1.cpp" && die "mutant 1 : mutation non appliquee" 2
   if build_mutant "$WORK/m1.cpp" "$WORK/m1" > "$LOG" 2>&1; then
     "$WORK/m1" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$BANK_ADDR" "$BOOT_MS" \
       "" 384 structure "$SUPPRESSED_ADDR" > "$WORK/m1.log" 2>&1
@@ -353,14 +455,19 @@ if [ -n "${SELFTEST:-}" ]; then
 import sys
 src, dst = sys.argv[1], sys.argv[2]
 s = open(src).read()
-a = "        const int burst = left < SHIFT_BURST_DETENTS ? left : SHIFT_BURST_DETENTS;"
+a = """        count = burst::split(request.detents, verdict.effectiveLimit,
+                             plan, burst::MAX_BURSTS);"""
 b = """    if (detents < 1 || detents > SHIFT_BURST_DETENTS
-        || SHIFT_HOLD_MS(detents) >= SHIFT_HOLD_CEILING_MS) {"""
-if a not in s or b not in s:
+        || SHIFT_HOLD_MS(detents) >= SHIFT_HOLD_CEILING_MS
+        || holdPlanned >= (double)SHIFT_HOLD_CEILING_MS) {"""
+if s.count(a) != 1 or s.count(b) != 1:
     sys.exit(2)
-open(dst, "w").write(s.replace(a, "        const int burst = left;", 1).replace(b, "    if (0) {", 1))
+single = """        plan[0] = request.detents;
+        count = 1;"""
+open(dst, "w").write(s.replace(a, single, 1).replace(b, "    if (0) {", 1))
 MUTANT3
   [ $? = 0 ] || die "mutant 3 : motif absent du code source" 2
+  cmp -s "$SRC" "$WORK/m3.cpp" && die "mutant 3 : mutation non appliquee" 2
   if build_mutant "$WORK/m3.cpp" "$WORK/m3" > "$LOG" 2>&1; then
     "$WORK/m3" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$BANK_ADDR" "$BOOT_MS" \
       "" 384 structure "$SUPPRESSED_ADDR" > "$WORK/m3.log" 2>&1
@@ -486,7 +593,7 @@ MUTANT3
   progress "b : classe 3 -> FAIL"
   expect_verdict "b. classe 3 -> FAIL" FAIL 1 1 "*" EXPECT_RATCHET_APRES=05
   WITNESS_INVAL="$(grep '⛔' "$WORK/class.log" \
-    | grep -cE 'temoin I2C|maintien de SHIFT|entree dans EDIT|temoin patternBank|controle d usine|echantillons' | tr -d ' ')"
+    | grep -cE 'temoin I2C|maintien de SHIFT|entree dans EDIT|temoin du pointeur|temoin des instances|controle d usine|echantillons' | tr -d ' ')"
   if [ "$WITNESS_INVAL" = "0" ] && grep -q '❌ trois crans sous SHIFT' "$WORK/class.log" \
      && ! grep -q '⛔ trois crans sous SHIFT' "$WORK/class.log"; then
     ok "b. le defaut est a la racine" "aucun temoin necessaire INVALID : le FAIL est decidable"
@@ -505,10 +612,10 @@ MUTANT3
     selfbad "P2.6.0 controle de l image" "la sonde rend 0 alors que l image injectee ne correspond pas a l attendu"
   else
     IMG_RC=$?
-    if [ "$IMG_RC" = "3" ] && grep -q '^controle_usine     0' "$WORK/img.log"; then
-      ok "P2.6.0 controle de l image" "un octet altere cote machine rend le controle rouge, sortie 3, aucun verdict firmware"
+    if [ "$IMG_RC" = "5" ] && grep -q '^controle_usine     0' "$WORK/img.log"; then
+      ok "P2.6.0 controle de l image" "un octet altere cote machine rend le controle rouge, sortie 5, aucun verdict firmware"
     else
-      selfbad "P2.6.0 controle de l image" "sortie $IMG_RC au lieu de 3"
+      selfbad "P2.6.0 controle de l image" "sortie $IMG_RC au lieu de 5"
     fi
   fi
 
@@ -612,6 +719,64 @@ MUTANT3
     selfbad "d. l aval ne devient pas FAIL" "le defaut aval a ete impute au firmware"
   fi
 
+  progress "f : pointeur d instances nul -> INVALID"
+  expect_verdict "f. pointeur nul -> INVALID" INVALID 5 0 "+" INSTANCE_BASE_FORCE=0
+  if grep -q '⛔ temoin du pointeur' "$WORK/class.log"; then
+    ok "f. la cause est nommee" "le temoin du pointeur rend INVALID, aucun defaut impute au firmware"
+  else
+    selfbad "f. la cause est nommee" "aucun ⛔ sur le temoin du pointeur : la cause n est pas attribuee"
+  fi
+
+  progress "g : pointeur hors RAM -> INVALID"
+  expect_verdict "g. pointeur hors RAM -> INVALID" INVALID 5 0 "+" INSTANCE_BASE_FORCE=0x1FFF
+  if grep -q '⛔ temoin du pointeur' "$WORK/class.log"; then
+    ok "g. la cause est nommee" "base hors RAM : INVALID, aucun defaut impute au firmware"
+  else
+    selfbad "g. la cause est nommee" "aucun ⛔ sur le temoin du pointeur"
+  fi
+
+  progress "h : canal invalide -> INVALID"
+  expect_verdict "h. canal invalide -> INVALID" INVALID 5 0 "+" INSTANCE_CHANNEL_FORCE=6
+  if grep -q '⛔ temoin du pointeur' "$WORK/class.log"; then
+    ok "h. la cause est nommee" "acces hors bornes comptes : INVALID, aucun defaut impute au firmware"
+  else
+    selfbad "h. la cause est nommee" "aucun ⛔ sur le temoin du pointeur"
+  fi
+
+  printf '\n%s--- CONTRE-EPREUVE DE L ORACLE PAR CANAL ---%s\n' "$C_B" "$C_0"
+
+  progress "j : l oracle lit l instance 0 partout -> FAIL"
+  expect_verdict "j. oracle sur l instance 0 -> FAIL" FAIL 1 "+" "*" INSTANCE_CHANNEL_FORCE=0
+  if grep -qE '❌ instances : six (masques|comptes)' "$WORK/class.log"; then
+    ok "j. les criteres par canal ont des dents" "masques ou comptes rouges : lire l instance 0 ne passe plus"
+  else
+    selfbad "j. les criteres par canal ont des dents" "aucun critere par canal n a rougi"
+  fi
+
+  progress "k : le geste R11 vise un autre step actif -> FAIL"
+  expect_verdict "k. rang R11 deplace -> FAIL" FAIL 1 "+" "*" R11_STEP_ROTATIONS=9
+  if grep -q 'octet 9' "$WORK/class.log"; then
+    ok "k. l octet dans l instance est verifie" "la sonde lit l octet 9 et le refuse : l attente de rang a des dents"
+  else
+    selfbad "k. l octet dans l instance est verifie" "l octet lu n a pas ete rapporte"
+  fi
+
+  progress "l : un octet du template change -> FAIL"
+  expect_verdict "l. template modifie -> FAIL" FAIL 1 "+" "*" TEMPLATE_MUTATE=0
+  if grep -q '❌ instances : template inchange' "$WORK/class.log"; then
+    ok "l. la non-modification du template a des dents" "un seul octet change dans la banque suffit a rougir"
+  else
+    selfbad "l. la non-modification du template a des dents" "le critere de template n a pas rougi"
+  fi
+
+  progress "i : symbole d instrumentation absent -> INVALID"
+  expect_verdict "i. symbole absent -> INVALID" INVALID 5 0 "+" BANK_SYMBOL=aucun_symbole_de_ce_nom
+  if grep -q '⛔ symbole des instances' "$WORK/class.log"; then
+    ok "i. la cause est nommee" "symbole absent : INVALID et code 5, jamais le code d un defaut firmware"
+  else
+    selfbad "i. la cause est nommee" "aucun ⛔ sur le symbole des instances"
+  fi
+
   if [ "$BAD_COUNT" = "$SELFTEST_BAD_AT_ENTRY" ] && [ "$INVAL_COUNT" = "$SELFTEST_INVAL_AT_ENTRY" ]; then
     ok "e. SELFTEST etanche" "BAD_COUNT et INVAL_COUNT inchanges ($BAD_COUNT / $INVAL_COUNT) : SELF_FAILED ne les alimente pas"
   else
@@ -636,7 +801,7 @@ RC=$?
 if [ "$RC" != "0" ]; then
   cat "$LOG"
   case "$RC" in
-    3) die "INVALID (classe 2) : controle de la banque en echec, aucun verdict sur le firmware" 3 ;;
+    3) dieinval "$LOG" "controle de la banque en echec, aucun verdict sur le firmware" ;;
     4) die "INVALID (classe 2) : salve de SHIFT refusee avant injection, le geste n etait pas valide" 4 ;;
     *) die "le harnais s'est termine anormalement (code $RC)" ;;
   esac
@@ -709,15 +874,38 @@ if [ "$CRAN_LINES" -eq "$CRAN_EXPECTED" ]; then
 fi
 
 printf '\n%s--- PRECONDITIONS DE L INSTRUMENT ---%s\n' "$C_B" "$C_0"
-grep -E '^bank_inchangee|^controle_source|^controle_usine|^entree_edit' "$LOG" | sed 's/^/  /'
+grep -E '^instances_pointeur|^instances_acces|^bank_inchangee|^controle_source|^controle_usine|^entree_edit' "$LOG" | sed 's/^/  /'
 printf '\n'
+
+PTR_BASE="$(grep -E '^instances_pointeur ' "$LOG" | awk '{print $3}')"
+PTR_LISIBLE="$(grep -E '^instances_pointeur ' "$LOG" | awk '{print $5}')"
+PTR_FORCE="$(grep -E '^instances_pointeur ' "$LOG" | awk '{print $7}')"
+ACC_LECTURES="$(grep -E '^instances_acces ' "$LOG" | awk '{print $3}')"
+ACC_ECHECS="$(grep -E '^instances_acces ' "$LOG" | awk '{print $5}')"
+ACC_FAUTES="$(grep -E '^instances_acces ' "$LOG" | awk '{print $7}')"
+if [ -z "$PTR_LISIBLE" ] || [ -z "$ACC_ECHECS" ] || [ -z "$ACC_FAUTES" ]; then
+  inval "temoin du pointeur" "la sonde ne publie pas l etat du pointeur d instances : decidabilite non evaluable"
+  W_PTR=0
+elif [ "$PTR_LISIBLE" != "1" ]; then
+  inval "temoin du pointeur" "base $PTR_BASE illisible (nulle ou hors RAM) : les 138 octets observes ne viennent pas des instances"
+  W_PTR=0
+elif [ "${ACC_ECHECS}" != "0" ]; then
+  inval "temoin du pointeur" "$ACC_ECHECS lecture(s) sur $ACC_LECTURES ont echoue : le tampon observe est partiellement nul"
+  W_PTR=0
+elif [ "${ACC_FAUTES}" != "0" ]; then
+  inval "temoin du pointeur" "$ACC_FAUTES acces hors bornes (canal force $PTR_FORCE) : l oracle ne sait pas quel canal il lit"
+  W_PTR=0
+else
+  ok "temoin du pointeur" "base $PTR_BASE lisible, $ACC_LECTURES lectures, 0 echec, 0 acces hors bornes"
+  W_PTR=1
+fi
 
 BANK_OK="$(grep -E '^bank_inchangee ' "$LOG" | awk '{print $2}')"
 if [ "$BANK_OK" = "1" ]; then
-  ok "temoin patternBank" "banque inchangee par les rotations seules"
+  ok "temoin des instances" "banque inchangee par les rotations seules"
   W_BANK=1
 else
-  inval "temoin patternBank" "banque modifiee par les seules rotations : l instrument n est pas sain"
+  inval "temoin des instances" "banque modifiee par les seules rotations : l instrument n est pas sain"
   W_BANK=0
 fi
 
@@ -832,7 +1020,7 @@ else
   W_SHIFT_HOLD=0
 fi
 
-W_P23=$(( W_SHIFT_TWI * W_SHIFT_HOLD * W_BANK * W_FACTORY * W_EDIT ))
+W_P23=$(( W_SHIFT_TWI * W_SHIFT_HOLD * W_PTR * W_BANK * W_FACTORY * W_EDIT ))
 P23_OK=0
 if [ "$W_P23" != "1" ]; then
   inval "trois crans sous SHIFT" "temoins amont invalides : l effet n est pas attribuable au firmware"
@@ -882,7 +1070,7 @@ else
   inval "temoin I2C" "au moins un geste sans trafic —$A_TWI_DETAIL"
 fi
 
-W_A=$(( A_TWI_OK * W_BANK * W_FACTORY * W_EDIT * P23_OK ))
+W_A=$(( A_TWI_OK * W_PTR * W_BANK * W_FACTORY * W_EDIT * P23_OK ))
 if [ "$W_A" != "1" ]; then
   inval "triolet pose" "temoins amont invalides (dont l etat laisse par P2.3) : l effet n est pas attribuable au firmware"
   inval "triolet retire" "temoins amont invalides : l effet n est pas attribuable au firmware"
@@ -991,7 +1179,7 @@ else
   inval "temoin 2 : compteur" "$F_SUPP appuis longs absorbes ($F_BEFORE -> $F_AFTER) : le maintien injecte a franchi le seuil"
 fi
 
-W_FRACT=$(( W_FRACT_TWI * W_ENCSW * W_SALVES * W_SPLIT * W_BANK * W_FACTORY * W_EDIT ))
+W_FRACT=$(( W_FRACT_TWI * W_ENCSW * W_SALVES * W_SPLIT * W_PTR * W_BANK * W_FACTORY * W_EDIT ))
 if [ "$W_FRACT" != "1" ]; then
   inval "temoin 1 : pattern" "temoins amont invalides : l effet n est pas attribuable au firmware"
   inval "retour a l usine" "temoins amont invalides : l effet n est pas attribuable au firmware"
@@ -1016,7 +1204,7 @@ RC=$?
 if [ "$RC" != "0" ]; then
   cat "$LOG2"
   case "$RC" in
-    3) die "INVALID (classe 2) : controle de la banque en echec, aucun verdict sur le firmware" 3 ;;
+    3) dieinval "$LOG2" "controle de la banque en echec, aucun verdict sur le firmware" ;;
     4) die "INVALID (classe 2) : salve de SHIFT refusee avant injection, le geste n etait pas valide" 4 ;;
     *) die "la phase temporelle s'est terminee anormalement (code $RC)" ;;
   esac
@@ -1088,6 +1276,7 @@ else
   W_B_TWI=0
 fi
 
+garde_pointeur "$LOG2" "B : temoin du pointeur" || W_B_IMAGE=0
 W_B=$(( W_B_INIT * W_B_TWI * W_SALVES_B * W_FACTORY * W_B_IMAGE ))
 if [ "$W_B" != "1" ]; then
   inval "LENGTH 16 -> 19" "temoins amont invalides : l effet n est pas attribuable au firmware"
@@ -1135,7 +1324,7 @@ RC=$?
 if [ "$RC" != "0" ]; then
   cat "$LOG3"
   case "$RC" in
-    3) die "INVALID (classe 2) : controle de la banque en echec sur le rig, aucun verdict sur le firmware" 3 ;;
+    3) dieinval "$LOG3" "controle de la banque en echec sur le rig, aucun verdict sur le firmware" ;;
     4) die "INVALID (classe 2) : salve de SHIFT refusee avant injection, le geste n etait pas valide" 4 ;;
     *) die "la phase rig s'est terminee anormalement (code $RC)" ;;
   esac
@@ -1206,7 +1395,7 @@ RC=$?
 if [ "$RC" != "0" ]; then
   cat "$LOG4"
   case "$RC" in
-    3) die "INVALID (classe 2) : controle de la banque en echec sur les recettes A, aucun verdict sur le firmware" 3 ;;
+    3) dieinval "$LOG4" "controle de la banque en echec sur les recettes A, aucun verdict sur le firmware" ;;
     4) die "INVALID (classe 2) : salve de SHIFT refusee avant injection, le geste n etait pas valide" 4 ;;
     *) die "la phase des recettes A s'est terminee anormalement (code $RC)" ;;
   esac
@@ -1287,6 +1476,7 @@ else
   W_A2_SALVES=0
 fi
 
+garde_pointeur "$LOG4" "A2 : temoin du pointeur" || W_A2_IMG=0
 W_A2=$(( W_A2_IMG * W_A2_EDIT * W_A2_BASE * W_A2_SALVES * W_FACTORY ))
 R8_OK=0
 R9_OK=0
@@ -1370,7 +1560,7 @@ RC=$?
 if [ "$RC" != "0" ]; then
   cat "$LOG5"
   case "$RC" in
-    3) die "INVALID (classe 2) : controle de la banque en echec sur les recettes B, aucun verdict sur le firmware" 3 ;;
+    3) dieinval "$LOG5" "controle de la banque en echec sur les recettes B, aucun verdict sur le firmware" ;;
     4) die "INVALID (classe 2) : salve de SHIFT refusee avant injection, le geste n etait pas valide" 4 ;;
     *) die "la phase des recettes B s'est terminee anormalement (code $RC)" ;;
   esac
@@ -1452,6 +1642,7 @@ else
   ok "R1 : echantillons" "6 onglets, chaque geste avec trafic, au moins $B_DIST_MIN distances et $B_RET_MIN retenues par sortie"
   W_R1_ECH=1
 fi
+garde_pointeur "$LOG5" "B3 : temoin du pointeur" || W_B3_IMG=0
 if [ "$W_R1_ECH" != "1" ] || [ "$W_B3_IMG" != "1" ]; then
   inval "R1 : navigation" "echantillons ou image invalides"
   W_R1_NAV=0
@@ -1558,7 +1749,7 @@ RC=$?
 if [ "$RC" != "0" ]; then
   cat "$LOG6"
   case "$RC" in
-    3) die "INVALID (classe 2) : controle de la banque en echec sur R2, aucun verdict sur le firmware" 3 ;;
+    3) dieinval "$LOG6" "controle de la banque en echec sur R2, aucun verdict sur le firmware" ;;
     4) die "INVALID (classe 2) : salve de SHIFT refusee avant injection, le geste n etait pas valide" 4 ;;
     *) die "la phase R2 s'est terminee anormalement (code $RC)" ;;
   esac
@@ -1625,6 +1816,7 @@ else
   W_R2_BASE=0
 fi
 
+garde_pointeur "$LOG6" "R2 : temoin du pointeur" || W_R2_IMG=0
 W_R2=$(( W_R2_IMG * W_R2_ECH * W_R2_BASE * R1_OK ))
 if [ "$W_R2" != "1" ]; then
   inval "R2 : une rotation touche LENGTH" "temoins amont invalides (dont R1) : l effet n est pas attribuable"
@@ -1710,7 +1902,7 @@ RC=$?
 if [ "$RC" != "0" ]; then
   cat "$LOG7"
   case "$RC" in
-    3) die "INVALID (classe 2) : controle de la banque en echec sur R11, aucun verdict sur le firmware" 3 ;;
+    3) dieinval "$LOG7" "controle de la banque en echec sur R11, aucun verdict sur le firmware" ;;
     4) die "INVALID (classe 2) : salve de SHIFT refusee avant injection, le geste n etait pas valide" 4 ;;
     *) die "la phase R11 s'est terminee anormalement (code $RC)" ;;
   esac
@@ -1779,6 +1971,7 @@ else
   W_R11_EDIT=0
 fi
 
+garde_pointeur "$LOG7" "R11 : temoin du pointeur" || W_R11_IMG=0
 W_R11=$(( W_R11_IMG * W_R11_ECH * W_R11_BASE * W_R11_EDIT ))
 
 D_CAD="$(d2 x24 3)"
@@ -1802,19 +1995,21 @@ if [ "$W_R11" != "1" ]; then
   inval "R11 : cadence restauree" "temoins amont invalides"
 else
   N1="$(d2 cran1 3)"; O1="$(d2 cran1 5)"; E1="$(d2 cran1 7)"; P1="$(d2 cran1 9)"
+  C1="$(d2 cran1 13)"; B1="$(d2 cran1 15)"
   if [ "$N1" = "${EXPECT_R11_NIBBLE_1:-$R11_NIBBLE_1_ATTENDU}" ] && [ "$E1" = "1" ] \
-     && [ "$P1" = "$R11_OFFSET_ATTENDU" ]; then
-    ok "R11 : premier cran" "nibble $N1 (octet 0x$O1), 1 seul ecart, a l offset $P1"
+     && [ "$C1" = "$R11_CANAL_ATTENDU" ] && [ "$B1" = "$R11_OCTET_ATTENDU" ]; then
+    ok "R11 : premier cran" "nibble $N1 (octet 0x$O1), 1 seul ecart, canal $C1 octet $B1 (offset $P1)"
   else
-    bad "R11 : premier cran" "nibble $N1 (attendu ${EXPECT_R11_NIBBLE_1:-$R11_NIBBLE_1_ATTENDU}), $E1 ecart(s), offset $P1"
+    bad "R11 : premier cran" "nibble $N1 (attendu ${EXPECT_R11_NIBBLE_1:-$R11_NIBBLE_1_ATTENDU}), $E1 ecart(s), canal ${C1:-?} octet ${B1:-?} (offset $P1)"
   fi
 
   N2="$(d2 cran2 3)"; O2="$(d2 cran2 5)"; E2="$(d2 cran2 7)"; P2="$(d2 cran2 9)"
+  C2="$(d2 cran2 13)"; B2="$(d2 cran2 15)"
   if [ "$N2" = "${EXPECT_R11_NIBBLE_TRIOLET:-$R11_NIBBLE_TRIOLET_ATTENDU}" ] && [ "$E2" = "1" ] \
-     && [ "$P2" = "$R11_OFFSET_ATTENDU" ]; then
-    ok "R11 : le triolet est retenu" "nibble $N2 (octet 0x$O2) : R3, R4 et R6 sautes en un seul cran"
+     && [ "$C2" = "$R11_CANAL_ATTENDU" ] && [ "$B2" = "$R11_OCTET_ATTENDU" ]; then
+    ok "R11 : le triolet est retenu" "nibble $N2 (octet 0x$O2) : R3, R4 et R6 sautes en un seul cran, canal $C2 octet $B2"
   else
-    bad "R11 : le triolet est retenu" "nibble $N2 (attendu ${EXPECT_R11_NIBBLE_TRIOLET:-$R11_NIBBLE_TRIOLET_ATTENDU}), $E2 ecart(s), offset $P2"
+    bad "R11 : le triolet est retenu" "nibble $N2 (attendu ${EXPECT_R11_NIBBLE_TRIOLET:-$R11_NIBBLE_TRIOLET_ATTENDU}), $E2 ecart(s), canal ${C2:-?} octet ${B2:-?} (offset $P2)"
   fi
 
   N3="$(d2 cran3 3)"; E3="$(d2 cran3 7)"; T3="$(d2 cran3 11)"
@@ -1850,6 +2045,106 @@ else
   else
     bad "R11 : cadence restauree" "cadence $CF (attendu $R11_CADENCE_BASE), $EF ecart(s)"
   fi
+fi
+
+INST_MASQUES_ATTENDUS="0001 0006 0038 03c0 7c00 84a5"
+INST_ACTIFS_ATTENDUS="1 2 3 4 5 6"
+INST_SELECTION_ATTENDUE="0 1 2 3 4 5"
+INST_CANAL_ATTENDU=3
+INST_OCTET_ATTENDU=0
+
+LOG8="$WORK/log8"
+progress "parcours instances (separation template/instance)"
+"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$BANK_ADDR" "$BOOT_MS" \
+     "$WORK/perchannel.bin" 384 instances "$SUPPRESSED_ADDR" "$TEMPLATE_ADDR" > "$LOG8" 2>&1
+RC=$?
+if [ "$RC" != "0" ]; then
+  cat "$LOG8"
+  case "$RC" in
+    3) dieinval "$LOG8" "controle de la banque en echec sur le parcours instances, aucun verdict sur le firmware" ;;
+    *) die "le parcours instances s'est termine anormalement (code $RC)" ;;
+  esac
+fi
+
+printf '\n%s--- PARCOURS INSTANCES : SEPARATION TEMPLATE / INSTANCE ---%s\n' "$C_B" "$C_0"
+grep -E '^controle_source|^controle_usine|^inst_' "$LOG8" | sed 's/^/  /'
+printf '\n'
+
+I_SRC="$(grep -E '^controle_source ' "$LOG8" | awk '{print $2}')"
+I_CTRL="$(grep -E '^controle_usine ' "$LOG8" | awk '{print $2}')"
+I_MASQUES="$(grep -E '^inst_masques ' "$LOG8" | sed 's/^inst_masques *//' | tr -s ' ')"
+I_ACTIFS="$(grep -E '^inst_actifs ' "$LOG8" | sed 's/^inst_actifs *//' | tr -s ' ')"
+I_SELECTION="$(grep -E '^inst_selection ' "$LOG8" | sed 's/^inst_selection *//' | tr -s ' ')"
+I_ECARTS="$(grep -E '^inst_edit ' "$LOG8" | awk '{print $5}')"
+I_CANAL="$(grep -E '^inst_edit ' "$LOG8" | awk '{print $9}')"
+I_OCTET="$(grep -E '^inst_edit ' "$LOG8" | awk '{print $11}')"
+I_TWI="$(grep -E '^inst_edit ' "$LOG8" | awk '{print $13}')"
+I_TPL_ECARTS="$(grep -E '^inst_templates ' "$LOG8" | awk '{print $3}')"
+I_TPL_LISIBLE="$(grep -E '^inst_templates ' "$LOG8" | awk '{print $7}')"
+I_ONGLET="$(grep -E '^inst_nav_edit ' "$LOG8" | awk '{print $3}')"
+I_ONGLET_VISE="$(grep -E '^inst_nav_edit ' "$LOG8" | awk '{print $5}')"
+I_BARRE="$(grep -E '^inst_nav_edit ' "$LOG8" | awk '{print $7}')"
+I_EDIT_CRENEAUX="$(grep -E '^inst_nav_edit ' "$LOG8" | awk '{print $8}')"
+
+garde_pointeur "$LOG8" "instances : temoin du pointeur" && W_INST_PTR=1 || W_INST_PTR=0
+if [ "$I_SRC" = "image" ] && [ "$I_CTRL" = "1" ]; then
+  ok "instances : image differenciee" "image lue, six instances conformes a leur template octet pour octet"
+  W_INST_IMG=1
+else
+  inval "instances : image differenciee" "source ${I_SRC:-rien}, controle d usine ${I_CTRL:-rien} : l instrument n est pas sain"
+  W_INST_IMG=0
+fi
+W_INST=$(( W_INST_PTR * W_INST_IMG ))
+
+if [ "$W_INST" != "1" ]; then
+  inval "instances : six selections" "temoins amont invalides"
+  inval "instances : six masques distincts" "temoins amont invalides"
+  inval "instances : six comptes distincts" "temoins amont invalides"
+  inval "instances : edition du canal 3" "temoins amont invalides"
+else
+  if [ "$I_SELECTION" = "$INST_SELECTION_ATTENDUE" ]; then
+    ok "instances : six selections" "selectedPattern $I_SELECTION : chaque canal vise son propre template"
+  else
+    bad "instances : six selections" "selectedPattern '$I_SELECTION' au lieu de '$INST_SELECTION_ATTENDUE'"
+  fi
+
+  if [ "$I_MASQUES" = "$INST_MASQUES_ATTENDUS" ]; then
+    ok "instances : six masques distincts" "$I_MASQUES : aucune instance n est confondable avec une autre"
+  else
+    bad "instances : six masques distincts" "masques '$I_MASQUES' au lieu de '$INST_MASQUES_ATTENDUS'"
+  fi
+
+  if [ "$I_ACTIFS" = "$INST_ACTIFS_ATTENDUS" ]; then
+    ok "instances : six comptes distincts" "$I_ACTIFS steps actifs : activeStepsInInstance mesure bien le canal demande"
+  else
+    bad "instances : six comptes distincts" "comptes '$I_ACTIFS' au lieu de '$INST_ACTIFS_ATTENDUS'"
+  fi
+
+  if [ "$I_ONGLET" = "$I_ONGLET_VISE" ] && [ "${I_BARRE:-0}" = "$TAB_SLOTS" ] \
+     && [ "${I_EDIT_CRENEAUX:-$TAB_SLOTS}" -lt "$TAB_SLOTS" ] 2>/dev/null; then
+    ok "instances : navigation atteinte" "onglet $I_ONGLET vise $I_ONGLET_VISE, creneaux $I_BARRE -> $I_EDIT_CRENEAUX : la barre est bien quittee pour EDIT"
+  else
+    inval "instances : navigation atteinte" "onglet ${I_ONGLET:-?} au lieu de ${I_ONGLET_VISE:-?}, creneaux ${I_BARRE:-?} -> ${I_EDIT_CRENEAUX:-?} : le canal edite n est pas attribuable"
+  fi
+
+  if [ "${I_TWI:-0}" -eq 0 ] 2>/dev/null; then
+    inval "instances : edition du canal 3" "aucun trafic : le geste d edition n a pas ete injecte"
+  elif [ "$I_ECARTS" = "1" ] && [ "$I_CANAL" = "$INST_CANAL_ATTENDU" ] \
+       && [ "$I_OCTET" = "$INST_OCTET_ATTENDU" ]; then
+    ok "instances : edition du canal 3" "1 seul octet change, canal $I_CANAL octet $I_OCTET : les cinq autres instances sont intactes"
+  else
+    bad "instances : edition du canal 3" "$I_ECARTS ecart(s), canal ${I_CANAL:-?} octet ${I_OCTET:-?} (attendu 1 ecart, canal $INST_CANAL_ATTENDU octet $INST_OCTET_ATTENDU)"
+  fi
+fi
+
+if [ "$TEMPLATE_ADDR" = "0" ] || [ "${I_TPL_LISIBLE:-0}" != "1" ]; then
+  inval "instances : template inchange" "la zone des templates n est pas observable ($TEMPLATE_WHY) : ce critere seul devient non decidable"
+elif [ "$W_INST" != "1" ]; then
+  inval "instances : template inchange" "temoins amont invalides"
+elif [ "$I_TPL_ECARTS" = "0" ]; then
+  ok "instances : template inchange" "les 368 octets de la banque sont stricement identiques apres l edition"
+else
+  bad "instances : template inchange" "$I_TPL_ECARTS octet(s) de la banque modifie(s) : l edition a touche le template partage"
 fi
 
 printf '\n'

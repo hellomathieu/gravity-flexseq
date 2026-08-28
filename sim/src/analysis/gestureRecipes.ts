@@ -104,7 +104,7 @@ export class GestureDriver {
     const channel = this.ui.selectedChannel;
     if (channel < 0) return { applied: false, reason: 'aucun channel selectionne' };
 
-    const pattern = this.bank.getPattern(this.engine.getSelectedPattern(channel));
+    const pattern = this.engine.patternForChannel(channel);
     if (pattern === null) return { applied: false, reason: 'pattern introuvable' };
 
     const targetIndex = RATCHET_CODES.indexOf(code);

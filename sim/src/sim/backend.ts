@@ -69,7 +69,7 @@ export class TsReferenceBackend implements SimBackend {
   }
 
   private patternOf(channel: number) {
-    return this.bank.getPattern(this.engine.getSelectedPattern(channel));
+    return this.engine.patternForChannel(channel);
   }
 
   // --- selection & edition ----------------------------------------------

@@ -301,7 +301,7 @@ describe("SequencerEngine — ratchets", () => {
 
   it("un ratchet emet N declenchements SANS changer la duree du step", () => {
     const { bank, e } = rig();
-    bank.getPattern(0)!.setRatchet(1, RATCHET_3);
+    e.instanceForChannel(0)!.setRatchet(1, RATCHET_3);
     e.start();
 
     e.advance(96); // -> step 1
@@ -320,7 +320,7 @@ describe("SequencerEngine — ratchets", () => {
   it("un ratchet ne change pas la duree totale du pattern", () => {
     const { bank, e } = rig();
     e.setEffectiveLength(0, 4);
-    bank.getPattern(0)!.setRatchet(0, RATCHET_6);
+    e.instanceForChannel(0)!.setRatchet(0, RATCHET_6);
     e.start();
     e.advance(96 * 4);
     expect(e.effectiveStep(0)).toBe(0); // boucle complete
@@ -328,7 +328,7 @@ describe("SequencerEngine — ratchets", () => {
 
   it("compte tous les declenchements d'un advance groupe", () => {
     const { bank, e } = rig();
-    bank.getPattern(0)!.setRatchet(1, RATCHET_4);
+    e.instanceForChannel(0)!.setRatchet(1, RATCHET_4);
     e.start();
     e.advance(96);
     e.advance(96); // tout le step ratchet en une passe
@@ -337,7 +337,7 @@ describe("SequencerEngine — ratchets", () => {
 
   it("le triolet etire le step sur DEUX unites", () => {
     const { bank, e } = rig();
-    bank.getPattern(0)!.setRatchet(1, RATCHET_TRIPLET);
+    e.instanceForChannel(0)!.setRatchet(1, RATCHET_TRIPLET);
     e.start();
     e.advance(96); // -> step 1
     expect(e.currentStepTicks(0)).toBe(192);
@@ -352,8 +352,6 @@ describe("SequencerEngine — ratchets", () => {
 
   it("le triolet decale la suite du pattern", () => {
     const plainBank = new PatternBank();
-    const tripletBank = new PatternBank();
-    tripletBank.getPattern(0)!.setRatchet(0, RATCHET_TRIPLET);
 
     const plain = new SequencerEngine();
     const stretched = new SequencerEngine();
@@ -362,7 +360,9 @@ describe("SequencerEngine — ratchets", () => {
       stretched.setChannelMode(ch, ChannelMode.SEQ);
     }
     plain.setPatternBank(plainBank);
-    stretched.setPatternBank(tripletBank);
+    stretched.setPatternBank(plainBank);
+    stretched.instanceForChannel(0)!.setRatchet(0, RATCHET_TRIPLET);
+    stretched.refreshTiming();
     plain.start();
     stretched.start();
     plain.advance(96 * 3);
@@ -375,22 +375,20 @@ describe("SequencerEngine — ratchets", () => {
   // au moins MIN_SLOT_TICKS.
   it("joue le ratchet meme quand le sous-slot n'est pas un tick entier", () => {
     const { bank, e } = rig();
-    bank.getPattern(0)!.setRatchet(0, RATCHET_3);
+    e.instanceForChannel(0)!.setRatchet(0, RATCHET_3);
     expect(e.setSubdiv(0, -3)).toBe(true); // 32 ticks : un tiers = 10,67
     expect(e.currentStepTriggers(0)).toBe(3);
   });
 
   it("refuse le ratchet quand la tranche tomberait sous deux ticks", () => {
     const { bank, e } = rig();
-    bank.getPattern(0)!.setRatchet(0, RATCHET_6);
+    e.instanceForChannel(0)!.setRatchet(0, RATCHET_6);
     expect(e.setSubdiv(0, -12)).toBe(true); // 8 ticks : un sixieme = 1,33
     expect(e.currentStepTriggers(0)).toBe(1);
   });
 
-  it("sans banque, tous les steps sont simples", () => {
-    const bank = new PatternBank();
-    bank.getPattern(0)!.setRatchet(0, RATCHET_6);
-    const e = new SequencerEngine(); // pas de setPatternBank
+  it("un moteur neuf joue des steps simples", () => {
+    const e = new SequencerEngine();
     e.start();
     expect(e.currentStepTriggers(0)).toBe(1);
     e.advance(96);
@@ -399,7 +397,7 @@ describe("SequencerEngine — ratchets", () => {
 
   it("les ratchets ne decalent pas masterPhase", () => {
     const { bank, e } = rig();
-    bank.getPattern(0)!.setRatchet(0, RATCHET_TRIPLET);
+    e.instanceForChannel(0)!.setRatchet(0, RATCHET_TRIPLET);
     e.start();
     e.advance(192);
     expect(e.masterPhase).toBe(192);
@@ -501,11 +499,10 @@ describe("SequencerEngine — modes de channel (PRD 4.2)", () => {
 
   it("CLOCK et RANDOM ignorent les ratchets", () => {
     const bank = new PatternBank();
-    bank.getPattern(0)!.setRatchet(0, RATCHET_4);
-    bank.getPattern(0)!.setRatchet(1, RATCHET_TRIPLET);
-
     const e = new SequencerEngine();
     e.setPatternBank(bank);
+    e.instanceForChannel(0)!.setRatchet(0, RATCHET_4);
+    e.instanceForChannel(0)!.setRatchet(1, RATCHET_TRIPLET);
     e.setChannelMode(1, ChannelMode.RANDOM);
     e.start();
 
@@ -565,9 +562,9 @@ describe("SequencerEngine — modes de channel (PRD 4.2)", () => {
 
   it("repasser en SEQ relit le pattern", () => {
     const bank = new PatternBank();
-    bank.getPattern(0)!.setRatchet(0, RATCHET_4);
     const e = new SequencerEngine();
     e.setPatternBank(bank);
+    e.instanceForChannel(0)!.setRatchet(0, RATCHET_4);
     expect(e.currentStepTriggers(0)).toBe(1);
     e.setChannelMode(0, ChannelMode.SEQ);
     expect(e.currentStepTriggers(0)).toBe(4);
@@ -660,12 +657,12 @@ describe("les instances par canal", () => {
     expect(engine.instanceForChannel(1)!.readStep(5)).toBe(false);
   });
 
-  it("ne sont pas encore la source de patternForChannel", () => {
+  it("sont la source de patternForChannel", () => {
     const bank = new PatternBank();
     const engine = new SequencerEngine();
     engine.setPatternBank(bank);
     engine.setSelectedPattern(0, 0);
-    expect(engine.patternForChannel(0)).toBe(bank.getPattern(0));
-    expect(engine.patternForChannel(0)).not.toBe(engine.instanceForChannel(0));
+    expect(engine.patternForChannel(0)).toBe(engine.instanceForChannel(0));
+    expect(engine.patternForChannel(0)).not.toBe(bank.getPattern(0));
   });
 });

@@ -94,7 +94,7 @@ void beginEditFrame(uint8_t channel) {
     flexseq::PatternScreenModel model;
     model.title = uiTitle;
     model.titleWidth = 0;  // PagedScreen la mesure une fois par image
-    model.pattern = patternBank.getPattern(static_cast<uint8_t>(selected));
+    model.pattern = engine.patternForChannel(channel);
     model.length = engine.getEffectiveLength(channel);
     model.cursor = static_cast<int8_t>(ui.stepCursor());
     model.playhead = engine.effectiveStep(channel);
@@ -143,6 +143,12 @@ void beginUiFrame() {
 
 }  // namespace
 
+namespace flexseq {
+namespace probe {
+Pattern* volatile instanceBase = nullptr;
+}  // namespace probe
+}  // namespace flexseq
+
 void setup() {
     gravity.Init();
 
@@ -173,6 +179,21 @@ void setup() {
         // gele A1..A8 gelerait huit emplacements vides.
         flexseq::loadFactoryPatterns(patternBank);
         persistence.markDirty(millis());
+    }
+
+    flexseq::probe::instanceBase = engine.instanceForChannel(0);
+
+    for (uint8_t ch = 0; ch < flexseq::SequencerEngine::CHANNEL_COUNT; ++ch) {
+        flexseq::Pattern* instance = engine.instanceForChannel(ch);
+        const int8_t selectedTemplate = engine.getSelectedPattern(ch);
+        if (instance == nullptr || selectedTemplate < 0) {
+            continue;
+        }
+        const flexseq::Pattern* source =
+            patternBank.getPattern(static_cast<uint8_t>(selectedTemplate));
+        if (source != nullptr) {
+            *instance = *source;
+        }
     }
 
     // Drive the master phase from the unified 96-PPQN output clock (internal

@@ -195,17 +195,11 @@ const Pattern* SequencerEngine::instanceForChannel(uint8_t channel) const {
 }
 
 Pattern* SequencerEngine::patternForChannel(uint8_t channel) {
-    if (!validChannel(channel) || bank_ == nullptr) {
-        return nullptr;
-    }
-    return bank_->getPattern(channels_[channel].selectedPattern);
+    return instanceForChannel(channel);
 }
 
 const Pattern* SequencerEngine::patternForChannel(uint8_t channel) const {
-    if (!validChannel(channel) || bank_ == nullptr) {
-        return nullptr;
-    }
-    return bank_->getPattern(channels_[channel].selectedPattern);
+    return instanceForChannel(channel);
 }
 
 int8_t SequencerEngine::getSelectedPattern(uint8_t channel) const {

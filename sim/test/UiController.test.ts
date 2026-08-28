@@ -368,28 +368,28 @@ describe("UiController — EDIT PATTERN", () => {
   });
 
   it("press toggles the step under the cursor", () => {
-    const { ui, bank, enterEdit } = rig();
+    const { ui, bank, enterEdit, engine } = rig();
     enterEdit();
     for (let i = 0; i < 7; ++i) ui.handle(UiEvent.Rotate, 1);
-    expect(bank.getPattern(0)!.readStep(7)).toBe(false);
+    expect(engine.instanceForChannel(0)!.readStep(7)).toBe(false);
     ui.handle(UiEvent.Press);
-    expect(bank.getPattern(0)!.readStep(7)).toBe(true);
+    expect(engine.instanceForChannel(0)!.readStep(7)).toBe(true);
     ui.handle(UiEvent.Press);
-    expect(bank.getPattern(0)!.readStep(7)).toBe(false);
+    expect(engine.instanceForChannel(0)!.readStep(7)).toBe(false);
   });
 
   it("shift rotate sets the ratchet of an active step and clamps", () => {
-    const { ui, bank, enterEdit } = rig();
+    const { ui, bank, enterEdit, engine } = rig();
     enterEdit();
     ui.handle(UiEvent.Press);
     ui.handle(UiEvent.ShiftRotate, 1);
-    expect(bank.getPattern(0)!.getRatchet(0)).toBe(RATCHET_2);
+    expect(engine.instanceForChannel(0)!.getRatchet(0)).toBe(RATCHET_2);
     ui.handle(UiEvent.ShiftRotate, 1);
-    expect(bank.getPattern(0)!.getRatchet(0)).toBe(RATCHET_3);
+    expect(engine.instanceForChannel(0)!.getRatchet(0)).toBe(RATCHET_3);
     for (let i = 0; i < RATCHET_CODES.length + 3; i += 1) ui.handle(UiEvent.ShiftRotate, 1);
-    expect(bank.getPattern(0)!.getRatchet(0)).toBe(RATCHET_TRIPLET);
+    expect(engine.instanceForChannel(0)!.getRatchet(0)).toBe(RATCHET_TRIPLET);
     for (let i = 0; i < RATCHET_CODES.length + 3; i += 1) ui.handle(UiEvent.ShiftRotate, -1);
-    expect(bank.getPattern(0)!.getRatchet(0)).toBe(RATCHET_NONE);
+    expect(engine.instanceForChannel(0)!.getRatchet(0)).toBe(RATCHET_NONE);
   });
 
   it("a ratchet edit takes effect on the current step immediately", () => {
@@ -399,26 +399,26 @@ describe("UiController — EDIT PATTERN", () => {
     engine.start();
     expect(engine.currentStepTicks(0)).toBe(PPQN);
     for (let i = 0; i < 5; ++i) ui.handle(UiEvent.ShiftRotate, 5);
-    expect(bank.getPattern(0)!.getRatchet(0)).toBe(RATCHET_TRIPLET);
+    expect(engine.instanceForChannel(0)!.getRatchet(0)).toBe(RATCHET_TRIPLET);
     expect(engine.currentStepTicks(0)).toBe(2 * PPQN);
   });
 
   it("shift rotate in edit no longer changes channel", () => {
-    const { ui, bank, enterEdit } = rig();
+    const { ui, bank, enterEdit, engine } = rig();
     enterEdit();
     ui.handle(UiEvent.Press);
     ui.handle(UiEvent.ShiftRotate, 1);
     expect(ui.selectedChannel).toBe(0);
     expect(ui.level).toBe(UiLevel.Edit);
-    expect(bank.getPattern(0)!.getRatchet(0)).toBe(RATCHET_2);
+    expect(engine.instanceForChannel(0)!.getRatchet(0)).toBe(RATCHET_2);
   });
 
   it("shift rotate on an inactive step does nothing", () => {
-    const { ui, bank, enterEdit } = rig();
+    const { ui, bank, enterEdit, engine } = rig();
     enterEdit();
-    expect(bank.getPattern(0)!.readStep(0)).toBe(false);
+    expect(engine.instanceForChannel(0)!.readStep(0)).toBe(false);
     ui.handle(UiEvent.ShiftRotate, 1);
-    expect(bank.getPattern(0)!.getRatchet(0)).toBe(RATCHET_NONE);
+    expect(engine.instanceForChannel(0)!.getRatchet(0)).toBe(RATCHET_NONE);
   });
 
   it("the grid follows the pattern of the channel selected in edit", () => {
@@ -427,12 +427,12 @@ describe("UiController — EDIT PATTERN", () => {
     gotoTab(TAB_FIRST_CHANNEL + 1);
     enterEdit();
     ui.handle(UiEvent.Press);
-    expect(bank.getPattern(5)!.readStep(0)).toBe(true);
-    expect(bank.getPattern(0)!.readStep(0)).toBe(false);
+    expect(engine.instanceForChannel(1)!.readStep(0)).toBe(true);
+    expect(engine.instanceForChannel(0)!.readStep(0)).toBe(false);
   });
 
   it("shift long press clears the pattern steps and ratchets", () => {
-    const { ui, bank, enterEdit } = rig();
+    const { ui, bank, enterEdit, engine } = rig();
     enterEdit();
     ui.handle(UiEvent.Press);
     ui.handle(UiEvent.ShiftRotate, 3);
@@ -440,8 +440,8 @@ describe("UiController — EDIT PATTERN", () => {
     ui.handle(UiEvent.Press);
     ui.handle(UiEvent.ShiftLongPress);
     for (let step = 0; step < STEP_COUNT; step += 1) {
-      expect(bank.getPattern(0)!.readStep(step)).toBe(false);
-      expect(bank.getPattern(0)!.getRatchet(step)).toBe(RATCHET_NONE);
+      expect(engine.instanceForChannel(0)!.readStep(step)).toBe(false);
+      expect(engine.instanceForChannel(0)!.getRatchet(step)).toBe(RATCHET_NONE);
     }
   });
 
@@ -516,13 +516,13 @@ describe("UiController — PLAY and the gesture left free", () => {
   });
 
   it("shift press is deliberately free and changes nothing", () => {
-    const { ui, bank, enterEdit } = rig();
+    const { ui, bank, enterEdit, engine } = rig();
     enterEdit();
     for (let i = 0; i < 3; ++i) ui.handle(UiEvent.Rotate, 1);
     ui.handle(UiEvent.ShiftPress);
     expect(ui.level).toBe(UiLevel.Edit);
     expect(ui.stepCursor).toBe(3);
-    expect(bank.getPattern(0)!.readStep(3)).toBe(false);
+    expect(engine.instanceForChannel(0)!.readStep(3)).toBe(false);
   });
 });
 

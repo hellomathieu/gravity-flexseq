@@ -50,6 +50,30 @@ OK, ERR, DIM, B, Z = ("\033[32m", "\033[31m", "\033[2m", "\033[1m", "\033[0m") i
 
 # (etiquette, chemin relatif, motif, remplacement, suite)
 MUTANTS = [
+    ("cpp: the play path reads the shared template instead of the channel instance",
+     "src/domain/SequencerEngine.cpp",
+     "const Pattern* SequencerEngine::patternForChannel(uint8_t channel) const {\n"
+     "    return instanceForChannel(channel);\n}",
+     "const Pattern* SequencerEngine::patternForChannel(uint8_t channel) const {\n"
+     "    if (!validChannel(channel) || bank_ == nullptr) {\n"
+     "        return nullptr;\n    }\n"
+     "    return bank_->getPattern(channels_[channel].selectedPattern);\n}", "cpp-all"),
+    ("cpp: the edit path writes into the shared template instead of the instance",
+     "src/domain/SequencerEngine.cpp",
+     "Pattern* SequencerEngine::patternForChannel(uint8_t channel) {\n"
+     "    return instanceForChannel(channel);\n}",
+     "Pattern* SequencerEngine::patternForChannel(uint8_t channel) {\n"
+     "    if (!validChannel(channel) || bank_ == nullptr) {\n"
+     "        return nullptr;\n    }\n"
+     "    return bank_->getPattern(channels_[channel].selectedPattern);\n}", "cpp-all"),
+    ("ts: the play path reads the shared template instead of the channel instance",
+     "sim/src/domain/SequencerEngine.ts",
+     "  patternForChannel(channel: number): Pattern | null {\n"
+     "    return this.instanceForChannel(channel);\n  }",
+     "  patternForChannel(channel: number): Pattern | null {\n"
+     "    const c = this.channels[channel];\n"
+     "    if (!c || !this.bank) return null;\n"
+     "    return this.bank.getPattern(c.selectedPattern);\n  }", "ts-instances"),
     ("cpp: channel byte 4 stops reporting the mode",
      "src/domain/Persistence.cpp",
      "        case 4:\n            return static_cast<uint8_t>(engine_.getChannelMode(channel));",
@@ -895,6 +919,9 @@ SUITES = {
                      os.path.join(ROOT, "sim")),
     "ts-gestures": (["npx", "vitest", "run", "test/gestureRecipes.test.ts"],
                     os.path.join(ROOT, "sim")),
+    "ts-instances": (["npx", "vitest", "run", "test/TriggerSequencer.test.ts",
+                      "test/SequencerEngine.test.ts", "test/UiController.test.ts"],
+                     os.path.join(ROOT, "sim")),
     "ts-ratchet": (["npx", "vitest", "run", "test/RatchetMatrix.test.ts"],
                    os.path.join(ROOT, "sim")),
     "cpp-ui": (["./tools/run-cpp-tests.sh", "test_ui_controller"], ROOT),

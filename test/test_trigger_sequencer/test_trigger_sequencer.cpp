@@ -36,8 +36,8 @@ void test_triggers_only_on_active_step_onset() {
     // Channel 0 plays pattern 0 with steps 1 and 3 active, length 4.
     engine.setSelectedPattern(0, 0);
     engine.setEffectiveLength(0, 4);
-    bank.getPattern(0)->writeStep(1, true);
-    bank.getPattern(0)->writeStep(3, true);
+    engine.instanceForChannel(0)->writeStep(1, true);
+    engine.instanceForChannel(0)->writeStep(3, true);
 
     engine.start();
 
@@ -65,35 +65,13 @@ void test_no_trigger_without_a_step_onset() {
     engine.setPatternBank(&bank);
     seqMode(engine);
 
-    bank.getPattern(0)->writeStep(1, true);
+    engine.instanceForChannel(0)->writeStep(1, true);
     engine.setEffectiveLength(0, 4);
     engine.start();
 
     engine.advance(STEP - 1); // no boundary crossed
     trig.update();
     TEST_ASSERT_FALSE(trig.triggered(0));
-}
-
-void test_shared_pattern_triggers_on_multiple_channels() {
-    PatternBank bank;
-    SequencerEngine engine;
-    TriggerSequencer trig(engine);
-    engine.setPatternBank(&bank);
-    seqMode(engine);
-
-    // CH0 and CH1 both play pattern 0 (shared), step 1 active.
-    engine.setSelectedPattern(0, 0);
-    engine.setSelectedPattern(1, 0);
-    engine.setEffectiveLength(0, 4);
-    engine.setEffectiveLength(1, 4);
-    bank.getPattern(0)->writeStep(1, true);
-
-    engine.start();
-    engine.advance(STEP); // both step onto step 1 (active)
-    trig.update();
-
-    TEST_ASSERT_TRUE(trig.triggered(0));
-    TEST_ASSERT_TRUE(trig.triggered(1));
 }
 
 void test_channels_with_different_patterns_are_independent() {
@@ -107,7 +85,7 @@ void test_channels_with_different_patterns_are_independent() {
     engine.setSelectedPattern(1, 1);
     engine.setEffectiveLength(0, 4);
     engine.setEffectiveLength(1, 4);
-    bank.getPattern(0)->writeStep(1, true); // only pattern 0 has step 1
+    engine.instanceForChannel(0)->writeStep(1, true);
 
     engine.start();
     engine.advance(STEP); // both onto step 1
@@ -283,8 +261,8 @@ void test_an_onset_the_output_could_not_emit_is_not_lost() {
     engine.setPatternBank(&bank);
 
     engine.setSelectedPattern(0, 0);
-    bank.getPattern(0)->writeStep(0, true);
-    bank.getPattern(0)->setRatchet(0, flexseq::RATCHET_6);
+    engine.instanceForChannel(0)->writeStep(0, true);
+    engine.instanceForChannel(0)->setRatchet(0, flexseq::RATCHET_6);
     engine.setSubdiv(0, -8);
     engine.start();
 
@@ -318,8 +296,8 @@ void test_the_debt_stops_at_one_whole_step() {
 
     engine.setSelectedPattern(0, 0);
     for (uint8_t i = 0; i < Pattern::DEFAULT_TOTAL_STEPS; ++i) {
-        bank.getPattern(0)->writeStep(i, true);
-        bank.getPattern(0)->setRatchet(i, flexseq::RATCHET_6);
+        engine.instanceForChannel(0)->writeStep(i, true);
+        engine.instanceForChannel(0)->setRatchet(i, flexseq::RATCHET_6);
     }
     engine.setSubdiv(0, -8);
     engine.start();
@@ -382,7 +360,6 @@ int main() {
     UNITY_BEGIN();
     RUN_TEST(test_triggers_only_on_active_step_onset);
     RUN_TEST(test_no_trigger_without_a_step_onset);
-    RUN_TEST(test_shared_pattern_triggers_on_multiple_channels);
     RUN_TEST(test_channels_with_different_patterns_are_independent);
     RUN_TEST(test_clock_triggers_on_every_step_whatever_the_pattern);
     RUN_TEST(test_random_never_skips_at_zero);

@@ -35,16 +35,7 @@ describe("TsReferenceBackend — dimensions & edition", () => {
   });
 });
 
-describe("TsReferenceBackend — shared patterns", () => {
-  it("shares content when two channels select the same pattern", () => {
-    const b = new TsReferenceBackend();
-    b.setSelectedPattern(0, 0); // CH1 -> A1
-    b.setSelectedPattern(1, 0); // CH2 -> A1 (meme pattern)
-
-    b.toggleStep(0, 5); // edite A1 depuis CH1
-    expect(b.view(1)[5]!.kind).toBe("active"); // visible sur CH2
-  });
-
+describe("TsReferenceBackend — instances par canal", () => {
   it("keeps channels independent when they select different patterns", () => {
     const b = new TsReferenceBackend();
     b.setSelectedPattern(0, 0); // A1
@@ -55,7 +46,7 @@ describe("TsReferenceBackend — shared patterns", () => {
     expect(b.view(1)[5]!.kind).toBe("inactive");
   });
 
-  it("shared content, but length stays per-channel", () => {
+  it("garde une longueur par canal, et un contenu par canal", () => {
     const b = new TsReferenceBackend();
     b.setSelectedPattern(0, 0);
     b.setSelectedPattern(1, 0); // meme pattern A1
@@ -63,7 +54,8 @@ describe("TsReferenceBackend — shared patterns", () => {
     b.setLength(1, 8);
 
     b.toggleStep(0, 3);
-    expect(b.view(1)[3]!.kind).toBe("active"); // contenu partage
+    expect(b.view(0)[3]!.kind).toBe("active");
+    expect(b.view(1)[3]!.kind).toBe("inactive");
     expect(b.getLength(0)).toBe(16);
     expect(b.getLength(1)).toBe(8); // longueur distincte
     expect(b.view(1)[10]!.kind).toBe("beyond"); // au-dela des 8 steps de CH2

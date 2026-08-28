@@ -411,13 +411,13 @@ void test_press_toggles_the_step_under_the_cursor() {
         r.ui.handle(UiController::EVENT_ROTATE, 1);
     }
     bool active = true;
-    r.bank.getPattern(0)->readStep(7, active);
+    r.engine.instanceForChannel(0)->readStep(7, active);
     TEST_ASSERT_FALSE(active);
     r.ui.handle(UiController::EVENT_PRESS);
-    r.bank.getPattern(0)->readStep(7, active);
+    r.engine.instanceForChannel(0)->readStep(7, active);
     TEST_ASSERT_TRUE(active);
     r.ui.handle(UiController::EVENT_PRESS);
-    r.bank.getPattern(0)->readStep(7, active);
+    r.engine.instanceForChannel(0)->readStep(7, active);
     TEST_ASSERT_FALSE(active);
 }
 
@@ -426,17 +426,17 @@ void test_shift_rotate_sets_the_ratchet_of_an_active_step_and_clamps() {
     r.enterEdit();
     r.ui.handle(UiController::EVENT_PRESS);  // le pas 0 devient actif
     r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
-    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_2, r.bank.getPattern(0)->getRatchet(0));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_2, r.engine.instanceForChannel(0)->getRatchet(0));
     r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
-    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_3, r.bank.getPattern(0)->getRatchet(0));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_3, r.engine.instanceForChannel(0)->getRatchet(0));
     for (uint8_t i = 0; i < UiController::RATCHET_CHOICE_COUNT + 3; ++i) {
         r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
     }
-    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_TRIPLET, r.bank.getPattern(0)->getRatchet(0));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_TRIPLET, r.engine.instanceForChannel(0)->getRatchet(0));
     for (uint8_t i = 0; i < UiController::RATCHET_CHOICE_COUNT + 3; ++i) {
         r.ui.handle(UiController::EVENT_SHIFT_ROTATE, -1);
     }
-    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, r.bank.getPattern(0)->getRatchet(0));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, r.engine.instanceForChannel(0)->getRatchet(0));
 }
 
 void test_a_ratchet_edit_takes_effect_on_the_current_step_immediately() {
@@ -448,7 +448,7 @@ void test_a_ratchet_edit_takes_effect_on_the_current_step_immediately() {
     for (uint8_t i = 0; i < 5; ++i) {
         r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 5);
     }
-    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_TRIPLET, r.bank.getPattern(0)->getRatchet(0));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_TRIPLET, r.engine.instanceForChannel(0)->getRatchet(0));
     TEST_ASSERT_EQUAL_UINT16(2 * SequencerEngine::PPQN, r.engine.currentStepTicks(0));
 }
 
@@ -460,17 +460,17 @@ void test_shift_rotate_in_edit_no_longer_changes_channel() {
     TEST_ASSERT_EQUAL_INT8_MESSAGE(0, r.ui.selectedChannel(),
         "rien dans l original ne change de channel depuis l editeur");
     TEST_ASSERT_EQUAL(UiController::LEVEL_EDIT, r.ui.level());
-    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_2, r.bank.getPattern(0)->getRatchet(0));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_2, r.engine.instanceForChannel(0)->getRatchet(0));
 }
 
 void test_shift_rotate_on_an_inactive_step_does_nothing() {
     Rig r;
     r.enterEdit();
     bool active = true;
-    r.bank.getPattern(0)->readStep(0, active);
+    r.engine.instanceForChannel(0)->readStep(0, active);
     TEST_ASSERT_FALSE(active);
     r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(flexseq::RATCHET_NONE, r.bank.getPattern(0)->getRatchet(0),
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(flexseq::RATCHET_NONE, r.engine.instanceForChannel(0)->getRatchet(0),
         "le geste ne regle le ratchet que sur un pas actif");
 }
 
@@ -481,9 +481,9 @@ void test_the_grid_follows_the_pattern_of_the_channel_selected_in_edit() {
     r.enterEdit();
     r.ui.handle(UiController::EVENT_PRESS);
     bool active = false;
-    r.bank.getPattern(5)->readStep(0, active);
+    r.engine.instanceForChannel(1)->readStep(0, active);
     TEST_ASSERT_TRUE(active);
-    r.bank.getPattern(0)->readStep(0, active);
+    r.engine.instanceForChannel(0)->readStep(0, active);
     TEST_ASSERT_FALSE(active);
 }
 
@@ -497,9 +497,9 @@ void test_shift_long_press_clears_the_pattern_steps_and_ratchets() {
     r.ui.handle(UiController::EVENT_SHIFT_LONG_PRESS);
     for (uint8_t step = 0; step < UiController::STEP_COUNT; ++step) {
         bool active = true;
-        r.bank.getPattern(0)->readStep(step, active);
+        r.engine.instanceForChannel(0)->readStep(step, active);
         TEST_ASSERT_FALSE(active);
-        TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, r.bank.getPattern(0)->getRatchet(step));
+        TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, r.engine.instanceForChannel(0)->getRatchet(step));
     }
 }
 
@@ -624,7 +624,7 @@ void test_shift_press_is_deliberately_free_and_changes_nothing() {
     TEST_ASSERT_EQUAL(UiController::LEVEL_EDIT, r.ui.level());
     TEST_ASSERT_EQUAL_UINT8(3, r.ui.stepCursor());
     bool active = true;
-    r.bank.getPattern(0)->readStep(3, active);
+    r.engine.instanceForChannel(0)->readStep(3, active);
     TEST_ASSERT_FALSE(active);
 }
 

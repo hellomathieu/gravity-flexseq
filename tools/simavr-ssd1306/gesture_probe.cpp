@@ -27,6 +27,7 @@ static const uint8_t DIAGNOSTIC_MEASURES_THE_POLICY = burst::NO_EMPIRICAL_LIMIT;
 #include <flexseq/FactoryPatterns.h>
 #include <flexseq/Persistence.h>
 #include <flexseq/Transport.h>
+#include <flexseq/UiController.h>
 
 namespace ms = flexseq::mainscreen;
 namespace scr = flexseq::screen;
@@ -90,13 +91,158 @@ static_assert(SHIFT_BURST_GAP_MS > BUTTON_DEBOUNCE_MS,
 #define PATTERN_COUNT 16
 #define PATTERN_BYTES 23
 
-static constexpr size_t OBSERVED_BANK_BYTES = sizeof(flexseq::PatternBank);
+static constexpr uint8_t OBSERVED_CHANNEL_COUNT =
+    flexseq::SequencerEngine::CHANNEL_COUNT;
+static constexpr size_t OBSERVED_INSTANCE_BYTES =
+    (size_t)OBSERVED_CHANNEL_COUNT * sizeof(flexseq::Pattern);
 #define STEP_BYTES     5
 #define RATCHET_BYTES 18
+
+static constexpr size_t OBSERVED_TEMPLATE_BYTES =
+    (size_t)PATTERN_COUNT * sizeof(flexseq::Pattern);
+
+static constexpr int8_t NO_CHANNEL = -1;
+static constexpr size_t OUT_OF_BUFFER = (size_t)-1;
+
+static_assert(sizeof(flexseq::Pattern) == PATTERN_BYTES,
+              "the pattern record must be 23 bytes");
+static_assert(STEP_BYTES + RATCHET_BYTES == PATTERN_BYTES,
+              "the step bytes plus the ratchet bytes must fill the record");
+static_assert(OBSERVED_CHANNEL_COUNT == 6,
+              "the probe observes six channel instances");
+static_assert(OBSERVED_INSTANCE_BYTES == 138,
+              "the observed buffer must be 138 bytes");
+static_assert(OBSERVED_TEMPLATE_BYTES == 368,
+              "the observed template zone must be 368 bytes");
+static_assert(OBSERVED_TEMPLATE_BYTES
+                  == (size_t)PATTERN_COUNT * PATTERN_BYTES,
+              "the template zone must hold one record per template");
+static_assert(OBSERVED_TEMPLATE_BYTES != OBSERVED_INSTANCE_BYTES,
+              "the two observed domains must not share a size");
+static_assert(OBSERVED_INSTANCE_BYTES
+                  == (size_t)OBSERVED_CHANNEL_COUNT * PATTERN_BYTES,
+              "the observed buffer must hold one record per channel");
+static_assert(flexseq::UiController::TAB_FIRST_CHANNEL == 1,
+              "the first channel tab must be tab 1");
+static_assert((size_t)flexseq::UiController::TAB_FIRST_CHANNEL
+                  + OBSERVED_CHANNEL_COUNT
+              <= (size_t)flexseq::UiController::TAB_COUNT,
+              "the channel tabs must fit in the tab bar");
+
+static constexpr int8_t channelOfTab(int tab)
+{
+    return (tab < (int)flexseq::UiController::TAB_FIRST_CHANNEL
+            || tab - (int)flexseq::UiController::TAB_FIRST_CHANNEL
+                   >= (int)OBSERVED_CHANNEL_COUNT)
+        ? NO_CHANNEL
+        : (int8_t)(tab - (int)flexseq::UiController::TAB_FIRST_CHANNEL);
+}
+
+static constexpr size_t instanceOffset(int8_t channel, size_t byteInRecord)
+{
+    return (channel < 0
+            || channel >= (int8_t)OBSERVED_CHANNEL_COUNT
+            || byteInRecord >= (size_t)PATTERN_BYTES)
+        ? OUT_OF_BUFFER
+        : (size_t)channel * PATTERN_BYTES + byteInRecord;
+}
+
+static_assert(channelOfTab(0) == NO_CHANNEL,
+              "the clock tab carries no channel");
+static_assert(channelOfTab(1) == 0, "tab 1 is channel 0");
+static_assert(channelOfTab(3) == 2, "tab 3 is channel 2");
+static_assert(channelOfTab(4) == 3, "tab 4 is channel 3");
+static_assert(channelOfTab(5) == 4, "tab 5 is channel 4");
+static_assert(channelOfTab(6) == 5, "tab 6 is channel 5");
+static_assert(channelOfTab(7) == NO_CHANNEL,
+              "the settings tab carries no channel");
+static_assert(channelOfTab(8) == NO_CHANNEL,
+              "a tab above the tab bar carries no channel");
+static_assert(channelOfTab(-1) == NO_CHANNEL,
+              "a negative tab carries no channel");
+
+static_assert(instanceOffset(0, 0) == 0, "channel 0 starts at byte 0");
+static_assert(instanceOffset(0, 5) == 5,
+              "the first ratchet byte of channel 0 is byte 5");
+static_assert(instanceOffset(3, 7) == 76,
+              "the third ratchet byte of channel 3 is byte 76");
+static_assert(instanceOffset(5, 22) == 137,
+              "the last byte of channel 5 is byte 137");
+static_assert(instanceOffset(6, 0) == (size_t)-1,
+              "the first channel above the count is out of the buffer");
+static_assert(instanceOffset(6, 22) == (size_t)-1,
+              "no byte of a channel above the count is in the buffer");
+static_assert(instanceOffset(7, 0) == (size_t)-1,
+              "a channel well above the count is out of the buffer");
+static_assert(instanceOffset(NO_CHANNEL, 0) == (size_t)-1,
+              "no channel is out of the buffer");
+static_assert(instanceOffset(-2, 0) == (size_t)-1,
+              "a negative channel is out of the buffer");
+static_assert(instanceOffset(3, 23) == (size_t)-1,
+              "a byte above the record is out of the buffer");
+static_assert(instanceOffset(5, 22) < OBSERVED_INSTANCE_BYTES,
+              "the last byte of the last channel is inside the buffer");
+static_assert(instanceOffset(6, 0) >= OBSERVED_INSTANCE_BYTES,
+              "an out-of-buffer offset must fail the caller bound test");
+
+static constexpr int8_t channelOfOffset(size_t offset)
+{
+    return (offset >= OBSERVED_INSTANCE_BYTES)
+        ? NO_CHANNEL
+        : (int8_t)(offset / PATTERN_BYTES);
+}
+
+static constexpr size_t byteOfOffset(size_t offset)
+{
+    return (offset >= OBSERVED_INSTANCE_BYTES)
+        ? OUT_OF_BUFFER
+        : offset % PATTERN_BYTES;
+}
+
+static_assert(channelOfOffset(0) == 0, "byte 0 belongs to channel 0");
+static_assert(byteOfOffset(0) == 0, "byte 0 is the first byte of its record");
+static_assert(channelOfOffset(7) == 0, "byte 7 belongs to channel 0");
+static_assert(byteOfOffset(7) == 7, "byte 7 is byte 7 of its record");
+static_assert(channelOfOffset(76) == 3, "byte 76 belongs to channel 3");
+static_assert(byteOfOffset(76) == 7, "byte 76 is byte 7 of its record");
+static_assert(channelOfOffset(137) == 5, "byte 137 belongs to channel 5");
+static_assert(byteOfOffset(137) == 22, "byte 137 is byte 22 of its record");
+static_assert(channelOfOffset(138) == NO_CHANNEL,
+              "byte 138 is outside the buffer");
+static_assert(byteOfOffset(138) == (size_t)-1,
+              "byte 138 has no rank inside a record");
+static_assert(instanceOffset(channelOfOffset(76), byteOfOffset(76)) == 76,
+              "the decomposition must invert the composition");
+
+static const uint8_t *instanceOf(const uint8_t *buffer, int8_t channel)
+{
+    if (buffer == NULL) return NULL;
+    const size_t offset = instanceOffset(channel, 0);
+    if (offset >= OBSERVED_INSTANCE_BYTES) return NULL;
+    return buffer + offset;
+}
+
+static uint8_t *mutableInstanceOf(uint8_t *buffer, int8_t channel)
+{
+    if (buffer == NULL) return NULL;
+    const size_t offset = instanceOffset(channel, 0);
+    if (offset >= OBSERVED_INSTANCE_BYTES) return NULL;
+    return buffer + offset;
+}
 
 static avr_t *g_avr;
 static uint32_t g_twi_bytes;
 static uint16_t g_bank_addr;
+static uint16_t g_template_addr;
+static uint32_t g_template_reads;
+static uint32_t g_template_faults;
+static long g_base_force = -1;
+static long g_channel_force = -1;
+static uint32_t g_bank_reads;
+static uint32_t g_bank_read_faults;
+static uint32_t g_instance_faults;
+static uint16_t g_base_seen;
+
 static avr_irq_t *g_enc_a;
 static avr_irq_t *g_enc_b;
 static avr_irq_t *g_enc_sw;
@@ -204,6 +350,15 @@ static uint32_t activeStepsInPattern(const uint8_t *bank)
         }
     }
     return n;
+}
+
+static int8_t observedChannel(int8_t channel);
+
+static uint32_t activeStepsInInstance(const uint8_t *buffer, int8_t channel)
+{
+    const uint8_t *instance = instanceOf(buffer, observedChannel(channel));
+    if (instance == NULL) { ++g_instance_faults; return 0; }
+    return activeStepsInPattern(instance);
 }
 
 static uint32_t periodOverOnsets(const outline_t *l, uint32_t from, uint32_t to,
@@ -320,9 +475,89 @@ static void run_for(avr_t *avr, double ms)
     }
 }
 
+static uint16_t instance_base(const avr_t *avr)
+{
+    if (g_base_force >= 0) return (uint16_t)(g_base_force & 0xFFFF);
+    const uint16_t lo = avr->data[g_bank_addr];
+    const uint16_t hi = avr->data[g_bank_addr + 1];
+    return (uint16_t)(lo | (hi << 8));
+}
+
+static int baseIsReadable(const avr_t *avr, uint16_t base)
+{
+    if (base == 0) return 0;
+    if ((uint32_t)base + OBSERVED_INSTANCE_BYTES > (uint32_t)avr->ramend) return 0;
+    return 1;
+}
+
 static void read_bank(const avr_t *avr, uint8_t *out)
 {
-    memcpy(out, &avr->data[g_bank_addr], (size_t)OBSERVED_BANK_BYTES);
+    const uint16_t base = instance_base(avr);
+    g_base_seen = base;
+    ++g_bank_reads;
+    if (!baseIsReadable(avr, base)) {
+        ++g_bank_read_faults;
+        memset(out, 0, (size_t)OBSERVED_INSTANCE_BYTES);
+        return;
+    }
+    memcpy(out, &avr->data[base], (size_t)OBSERVED_INSTANCE_BYTES);
+}
+
+static void reportInstanceAccess(void)
+{
+    printf("instances_acces    lectures %u echecs %u fautes %u\n",
+           g_bank_reads, g_bank_read_faults, g_instance_faults);
+    printf("templates_acces    lectures %u echecs %u\n",
+           g_template_reads, g_template_faults);
+}
+
+static int templateZoneIsReadable(const avr_t *avr)
+{
+    if (g_template_addr == 0) return 0;
+    if ((uint32_t)g_template_addr + OBSERVED_TEMPLATE_BYTES
+        > (uint32_t)avr->ramend) {
+        return 0;
+    }
+    return 1;
+}
+
+static long g_template_mutate = -1;
+
+static int mutateTemplateZone(avr_t *avr)
+{
+    if (g_template_mutate < 0) return 0;
+    if (g_template_addr == 0) return 0;
+    if ((uint32_t)g_template_mutate >= (uint32_t)OBSERVED_TEMPLATE_BYTES) return 0;
+    const uint16_t at = (uint16_t)(g_template_addr + (uint16_t)g_template_mutate);
+    avr->data[at] = (uint8_t)(avr->data[at] ^ 0x01);
+    return 1;
+}
+
+static void read_templates(const avr_t *avr, uint8_t *out)
+{
+    ++g_template_reads;
+    if (!templateZoneIsReadable(avr)) {
+        ++g_template_faults;
+        memset(out, 0, (size_t)OBSERVED_TEMPLATE_BYTES);
+        return;
+    }
+    memcpy(out, &avr->data[g_template_addr], (size_t)OBSERVED_TEMPLATE_BYTES);
+}
+
+static uint32_t templateDiffCount(const uint8_t *a, const uint8_t *b,
+                                  uint32_t *firstOut)
+{
+    uint32_t n = 0, first = 0xFFFFFFFFu;
+    for (uint32_t i = 0; i < (uint32_t)OBSERVED_TEMPLATE_BYTES; ++i) {
+        if (a[i] != b[i]) { ++n; if (first == 0xFFFFFFFFu) first = i; }
+    }
+    if (firstOut) *firstOut = (first == 0xFFFFFFFFu) ? 0 : first;
+    return n;
+}
+
+static int8_t observedChannel(int8_t channel)
+{
+    return (g_channel_force >= 0) ? (int8_t)g_channel_force : channel;
 }
 
 #define SUPPRESSED_BYTES 2
@@ -382,10 +617,26 @@ static const char *buildExpectedBank(flexseq::PatternBank &bank)
     return "image";
 }
 
+static void buildExpectedInstances(const flexseq::PatternBank &bank, uint8_t *out)
+{
+    for (uint8_t ch = 0; ch < OBSERVED_CHANNEL_COUNT; ++ch) {
+        uint8_t *slot = mutableInstanceOf(out, (int8_t)ch);
+        if (slot == NULL) continue;
+        const int8_t selected = g_expected_engine.getSelectedPattern(ch);
+        const flexseq::Pattern *source =
+            bank.getPattern(selected < 0 ? 0 : (uint8_t)selected);
+        if (source == NULL) {
+            memset(slot, 0, PATTERN_BYTES);
+            continue;
+        }
+        memcpy(slot, reinterpret_cast<const uint8_t *>(source), PATTERN_BYTES);
+    }
+}
+
 static uint32_t bankDiffCount(const uint8_t *a, const uint8_t *b, uint32_t *firstOut)
 {
     uint32_t n = 0, first = 0xFFFFFFFFu;
-    for (uint32_t i = 0; i < (uint32_t)(OBSERVED_BANK_BYTES); ++i) {
+    for (uint32_t i = 0; i < (uint32_t)(OBSERVED_INSTANCE_BYTES); ++i) {
         if (a[i] != b[i]) { ++n; if (first == 0xFFFFFFFFu) first = i; }
     }
     if (firstOut) *firstOut = (first == 0xFFFFFFFFu) ? 0 : first;
@@ -395,6 +646,23 @@ static uint32_t bankDiffCount(const uint8_t *a, const uint8_t *b, uint32_t *firs
 static uint16_t low_mask_of(const uint8_t *pattern)
 {
     return (uint16_t)(pattern[0] | ((uint16_t)pattern[1] << 8));
+}
+
+static uint16_t lowMaskOfInstance(const uint8_t *buffer, int8_t channel)
+{
+    const uint8_t *instance = instanceOf(buffer, observedChannel(channel));
+    if (instance == NULL) { ++g_instance_faults; return 0; }
+    return low_mask_of(instance);
+}
+
+static uint8_t byteOfInstance(const uint8_t *buffer, int8_t channel, size_t rank)
+{
+    const size_t offset = instanceOffset(observedChannel(channel), rank);
+    if (buffer == NULL || offset >= OBSERVED_INSTANCE_BYTES) {
+        ++g_instance_faults;
+        return 0;
+    }
+    return buffer[offset];
 }
 
 static uint32_t g_pin_writes = 0;
@@ -566,10 +834,17 @@ static void rotate(avr_t *avr, int detents, int aFirst)
     run_for(avr, FRAME_SETTLE_MS);
 }
 
+static void alignTab(avr_t *avr, int tab)
+{
+    constexpr int tabs = (int)flexseq::UiController::TAB_COUNT;
+    const int steps = ((tab - selectedTab()) % tabs + tabs) % tabs;
+    if (steps > 0) rotate(avr, steps, 1);
+}
+
 int main(int argc, char **argv)
 {
-    if (argc == 2 && strcmp(argv[1], "--observed-bank-bytes") == 0) {
-        printf("%zu\n", OBSERVED_BANK_BYTES);
+    if (argc == 2 && strcmp(argv[1], "--observed-instance-bytes") == 0) {
+        printf("%zu\n", OBSERVED_INSTANCE_BYTES);
         return 0;
     }
     if (argc < 3) {
@@ -580,6 +855,15 @@ int main(int argc, char **argv)
     const char *fw = argv[1];
     const long bank_symbol = strtol(argv[2], NULL, 0);
     g_bank_addr = (uint16_t)(bank_symbol & 0xFFFF);
+    {
+        const char *forced = getenv("INSTANCE_BASE_FORCE");
+        if (forced != NULL) g_base_force = strtol(forced, NULL, 0);
+        const char *forcedChan = getenv("INSTANCE_CHANNEL_FORCE");
+        if (forcedChan != NULL) g_channel_force = strtol(forcedChan, NULL, 0);
+        const char *tplMutate = getenv("TEMPLATE_MUTATE");
+        if (tplMutate != NULL) g_template_mutate = strtol(tplMutate, NULL, 0);
+    }
+    atexit(reportInstanceAccess);
     const double boot_ms = (argc > 3) ? atof(argv[3]) : 1200.0;
     const char *ee_path = (argc > 4 && argv[4][0]) ? argv[4] : NULL;
     const uint16_t ee_base = (argc > 5) ? (uint16_t)strtol(argv[5], NULL, 0) : 384;
@@ -597,6 +881,10 @@ int main(int argc, char **argv)
     const int diagDd = strcmp(phase, "diagDd") == 0;
     const int diagDh = strcmp(phase, "diagDh") == 0;
     const int policycheck = strcmp(phase, "policycheck") == 0;
+    const int parcoursInstances = strcmp(phase, "instances") == 0;
+    if (argc > 8) {
+        g_template_addr = (uint16_t)(strtol(argv[8], NULL, 0) & 0xFFFF);
+    }
 
     {
         const char *e = getenv("DE_ENTRY_MS");
@@ -777,13 +1065,15 @@ int main(int argc, char **argv)
 
     run_for(avr, boot_ms);
 
-    static uint8_t bank[OBSERVED_BANK_BYTES];
+    static uint8_t bank[OBSERVED_INSTANCE_BYTES];
     read_bank(avr, bank);
 
+    printf("instances_pointeur base 0x%04x lisible %d canal_force %ld\n",
+           g_base_seen, baseIsReadable(avr, g_base_seen), g_channel_force);
     printf("twi_bytes_boot     %u\n", g_twi_bytes);
     printf("bank_low_masks    ");
-    for (int p = 0; p < PATTERN_COUNT; ++p) {
-        printf(" %04x", low_mask_of(&bank[p * PATTERN_BYTES]));
+    for (uint8_t p = 0; p < OBSERVED_CHANNEL_COUNT; ++p) {
+        printf(" %04x", lowMaskOfInstance(bank, (int8_t)p));
     }
     printf("\n");
     printf("bank_ratchets_a1  ");
@@ -822,10 +1112,13 @@ int main(int argc, char **argv)
 
     static flexseq::PatternBank expectedBank;
     const char *expectedSource = buildExpectedBank(expectedBank);
-    const uint8_t *expectedBytes = reinterpret_cast<const uint8_t *>(&expectedBank);
+    static uint8_t expectedBytes[OBSERVED_INSTANCE_BYTES];
+    buildExpectedInstances(expectedBank, expectedBytes);
     const int controlOk =
         sizeof(flexseq::PatternBank) == (size_t)(PATTERN_COUNT * PATTERN_BYTES)
-        && memcmp(expectedBytes, bank, sizeof(flexseq::PatternBank)) == 0;
+        && OBSERVED_INSTANCE_BYTES
+               == (size_t)(flexseq::SequencerEngine::CHANNEL_COUNT * PATTERN_BYTES)
+        && memcmp(expectedBytes, bank, OBSERVED_INSTANCE_BYTES) == 0;
     printf("controle_source    %s\n", expectedSource);
     printf("image_lue          masque %04x subdiv %d length %u mode %d\n",
            low_mask_of(expectedBytes),
@@ -877,9 +1170,10 @@ int main(int argc, char **argv)
     }
 
     if (diagDh) {
-        static uint8_t vu[OBSERVED_BANK_BYTES];
-        const uint32_t pasActifs = activeStepsInPattern(expectedBytes);
-        const int ongletDh = 5;
+        static uint8_t vu[OBSERVED_INSTANCE_BYTES];
+        constexpr int ongletDh = 5;
+        constexpr int8_t canalDh = channelOfTab(ongletDh);
+        static_assert(canalDh == 4, "tab 5 drives channel 4");
         int crans = 12;
         {
             const char *c = getenv("DH_CRANS");
@@ -895,9 +1189,7 @@ int main(int argc, char **argv)
         run_for(avr, 1000.0);
         rotate(avr, 1, 1);
         {
-            const int courant = selectedTab();
-            const int pas = ((ongletDh - courant) % 8 + 8) % 8;
-            if (pas > 0) rotate(avr, pas, 1);
+            alignTab(avr, ongletDh);
         }
         pressFor(avr, (double)PRESS_MS);
         rotate(avr, 1, 1);
@@ -910,7 +1202,8 @@ int main(int argc, char **argv)
             printf("dh_avant_OUT%d pgcd %u periode3 %u distances %u retenues %u onsets %u\n",
                    o + 1,
                    gapGcdInWindow(&g_out[o], depart, g_ticks, &k, &g, &d),
-                   periodOverOnsets(&g_out[o], depart, g_ticks, pasActifs, &on), g, k, on);
+                   periodOverOnsets(&g_out[o], depart, g_ticks,
+                                    activeStepsInInstance(expectedBytes, (int8_t)o), &on), g, k, on);
         }
 
         const uint32_t m = g_twi_bytes;
@@ -930,15 +1223,18 @@ int main(int argc, char **argv)
             printf("dh_apres_OUT%d pgcd %u periode3 %u distances %u retenues %u onsets %u\n",
                    o + 1,
                    gapGcdInWindow(&g_out[o], depart, g_ticks, &k, &g, &d),
-                   periodOverOnsets(&g_out[o], depart, g_ticks, pasActifs, &on), g, k, on);
+                   periodOverOnsets(&g_out[o], depart, g_ticks,
+                                    activeStepsInInstance(expectedBytes, (int8_t)o), &on), g, k, on);
         }
         return 0;
     }
 
     if (diagDd) {
-        static uint8_t vu[OBSERVED_BANK_BYTES];
-        const uint32_t pasActifs = activeStepsInPattern(expectedBytes);
-        const int ongletDd = 5;
+        static uint8_t vu[OBSERVED_INSTANCE_BYTES];
+        constexpr int ongletDd = 5;
+        constexpr int8_t canalDd = channelOfTab(ongletDd);
+        static_assert(canalDd == 4, "tab 5 drives channel 4");
+        const uint32_t pasActifs = activeStepsInInstance(expectedBytes, canalDd);
         double gapMs = 0.0;
         {
             const char *g = getenv("DB_GAP_MS");
@@ -955,9 +1251,7 @@ int main(int argc, char **argv)
         run_for(avr, 1000.0);
         rotate(avr, 1, 1);
         {
-            const int courant = selectedTab();
-            const int pas = ((ongletDd - courant) % 8 + 8) % 8;
-            if (pas > 0) rotate(avr, pas, 1);
+            alignTab(avr, ongletDd);
         }
         pressFor(avr, (double)PRESS_MS);
         rotate(avr, 1, 1);
@@ -967,8 +1261,8 @@ int main(int argc, char **argv)
         {
             uint32_t k = 0, g = 0, d = 0, on = 0;
             printf("dd_base            pgcd %u periode3 %u distances %u retenues %u onsets %u\n",
-                   gapGcdInWindow(&g_out[4], depart, g_ticks, &k, &g, &d),
-                   periodOverOnsets(&g_out[4], depart, g_ticks, pasActifs, &on), g, k, on);
+                   gapGcdInWindow(&g_out[canalDd], depart, g_ticks, &k, &g, &d),
+                   periodOverOnsets(&g_out[canalDd], depart, g_ticks, pasActifs, &on), g, k, on);
         }
         printChampInk("avant");
 
@@ -1000,24 +1294,24 @@ int main(int argc, char **argv)
             printf("dd_final_OUT%d pgcd %u periode3 %u distances %u retenues %u onsets %u\n",
                    o + 1,
                    gapGcdInWindow(&g_out[o], depart, g_ticks, &k, &g, &d),
-                   periodOverOnsets(&g_out[o], depart, g_ticks, pasActifs, &on), g, k, on);
+                   periodOverOnsets(&g_out[o], depart, g_ticks,
+                                    activeStepsInInstance(expectedBytes, (int8_t)o), &on), g, k, on);
         }
         return 0;
     }
 
     if (diagDb) {
-        static uint8_t vu[OBSERVED_BANK_BYTES];
-        const uint32_t pasActifs = activeStepsInPattern(expectedBytes);
-        const int ongletDb = 5;
+        static uint8_t vu[OBSERVED_INSTANCE_BYTES];
+        constexpr int ongletDb = 5;
+        constexpr int8_t canalDb = channelOfTab(ongletDb);
+        static_assert(canalDb == 4, "tab 5 drives channel 4");
         uint32_t premier = 0;
 
         playPress(avr);
         run_for(avr, 1000.0);
         rotate(avr, 1, 1);
         {
-            const int courant = selectedTab();
-            const int pas = ((ongletDb - courant) % 8 + 8) % 8;
-            if (pas > 0) rotate(avr, pas, 1);
+            alignTab(avr, ongletDb);
         }
         pressFor(avr, (double)PRESS_MS);
         rotate(avr, 1, 1);
@@ -1058,7 +1352,9 @@ int main(int argc, char **argv)
                 const uint32_t pgcd = gapGcdInWindow(&g_out[o], depart, g_ticks,
                                                      &kept, &gaps, &dropped);
                 const uint32_t per = periodOverOnsets(&g_out[o], depart, g_ticks,
-                                                      pasActifs, &onsets);
+                                                      activeStepsInInstance(
+                                                          expectedBytes, (int8_t)o),
+                                                      &onsets);
                 printf("dbg_%s_OUT%d pgcd %u periode3 %u distances %u retenues %u onsets %u\n",
                        salves[i].nom, o + 1, pgcd, per, gaps, kept, onsets);
             }
@@ -1067,9 +1363,12 @@ int main(int argc, char **argv)
     }
 
     if (diagDa) {
-        const uint32_t pasActifs = activeStepsInPattern(expectedBytes);
-        const int ongletDiag = 5;
-        const int sortieDiag = 4;
+        constexpr int ongletDiag = 5;
+        constexpr int8_t canalDiag = channelOfTab(ongletDiag);
+        constexpr int sortieDiag = canalDiag;
+        static_assert(canalDiag == 4, "tab 5 drives channel 4");
+        static_assert(sortieDiag == 4, "channel 4 is output 5");
+        const uint32_t pasActifs = activeStepsInInstance(expectedBytes, canalDiag);
 
         playPress(avr);
         run_for(avr, 1000.0);
@@ -1085,9 +1384,7 @@ int main(int argc, char **argv)
         for (int etape = 0; etape <= 3; ++etape) {
             uint32_t twiGeste = 0;
             if (etape == 0) {
-                const int courant = selectedTab();
-                const int pas = ((ongletDiag - courant) % 8 + 8) % 8;
-                if (pas > 0) rotate(avr, pas, 1);
+                alignTab(avr, ongletDiag);
                 printChampInk("barre");
                 const uint32_t m = g_twi_bytes;
                 pressFor(avr, (double)PRESS_MS);
@@ -1119,9 +1416,11 @@ int main(int argc, char **argv)
     }
 
     if (recetteR5R7) {
-        static uint8_t vu[OBSERVED_BANK_BYTES];
-        const uint32_t pasActifs = activeStepsInPattern(expectedBytes);
-        const int ongletR5 = 5;
+        static uint8_t vu[OBSERVED_INSTANCE_BYTES];
+        constexpr int ongletR5 = 5;
+        constexpr int8_t canalR5 = channelOfTab(ongletR5);
+        static_assert(canalR5 == 4, "tab 5 drives channel 4");
+        const uint32_t pasActifs = activeStepsInInstance(expectedBytes, canalR5);
         uint32_t premier = 0, marque = 0;
 
         playPress(avr);
@@ -1140,9 +1439,7 @@ int main(int argc, char **argv)
             uint32_t twiGeste = 0;
 
             if (etape == 1) {
-                const int courant = selectedTab();
-                const int pas = ((ongletR5 - courant) % 8 + 8) % 8;
-                if (pas > 0) rotate(avr, pas, 1);
+                alignTab(avr, ongletR5);
                 marque = g_twi_bytes;
                 pressFor(avr, (double)PRESS_MS);
                 rotate(avr, 1, 1);
@@ -1155,9 +1452,7 @@ int main(int argc, char **argv)
                 twiGeste = g_twi_bytes - marque;
             } else if (etape == 3) {
                 pressFor(avr, (double)LONG_PRESS_MS);
-                const int courant = selectedTab();
-                const int pas = ((ongletR5 - courant) % 8 + 8) % 8;
-                if (pas > 0) rotate(avr, pas, 1);
+                alignTab(avr, ongletR5);
                 marque = g_twi_bytes;
                 pressFor(avr, (double)PRESS_MS);
                 rotate(avr, 2, 1);
@@ -1185,7 +1480,9 @@ int main(int argc, char **argv)
                 const uint32_t pas = gapGcdInWindow(&g_out[o], depart, g_ticks,
                                                     &kept, &gaps, &dropped);
                 const uint32_t per = periodOverOnsets(&g_out[o], depart, g_ticks,
-                                                      pasActifs, &onsets);
+                                                      activeStepsInInstance(
+                                                          expectedBytes, (int8_t)o),
+                                                      &onsets);
                 printf("rE_%s_OUT%d pas %u periode %u distances %u retenues %u onsets %u\n",
                        nom, o + 1, pas, per, gaps, kept, onsets);
             }
@@ -1195,11 +1492,17 @@ int main(int argc, char **argv)
     }
 
     if (recetteR11) {
-        static uint8_t vu[OBSERVED_BANK_BYTES];
-        const uint32_t pasActifs = activeStepsInPattern(expectedBytes);
-        const int ongletR11 = 4;
-        const int sortieR11 = 3;
-        const int offsetR11 = STEP_BYTES + 2;
+        static uint8_t vu[OBSERVED_INSTANCE_BYTES];
+        constexpr int ongletR11 = 4;
+        constexpr int8_t canalR11 = channelOfTab(ongletR11);
+        constexpr int sortieR11 = canalR11;
+        constexpr size_t rangR11 = STEP_BYTES + 2;
+        constexpr size_t offsetR11 = instanceOffset(canalR11, rangR11);
+        static_assert(canalR11 == 3, "tab 4 drives channel 3");
+        static_assert(sortieR11 == 3, "channel 3 is output 4");
+        static_assert(rangR11 == 7, "the ratchet of step 5 is byte 7 of the record");
+        static_assert(offsetR11 == 76, "channel 3 byte 7 is buffer byte 76");
+        const uint32_t pasActifs = activeStepsInInstance(expectedBytes, canalR11);
         uint32_t premier = 0, ecarts = 0, kept = 0, gaps = 0, dropped = 0, marque = 0;
 
         playPress(avr);
@@ -1218,9 +1521,7 @@ int main(int argc, char **argv)
         printf("rD_base            cadence %u distances %u retenues %u ecarts %u\n",
                cad, gaps, kept, ecarts);
 
-        int courant = selectedTab();
-        int pas = ((ongletR11 - courant) % 8 + 8) % 8;
-        if (pas > 0) rotate(avr, pas, 1);
+        alignTab(avr, ongletR11);
         marque = g_twi_bytes;
         pressFor(avr, (double)PRESS_MS);
         rotate(avr, 2, 1);
@@ -1247,16 +1548,28 @@ int main(int argc, char **argv)
         printf("rD_nav_edit        creneaux %d %d twi %u\n",
                creneauxAvant, tabBandSlotsWithInk(), g_twi_bytes - marque);
 
-        rotate(avr, 5, 1);
+        {
+            int rotations = 5;
+            const char *r = getenv("R11_STEP_ROTATIONS");
+            if (r != NULL) rotations = atoi(r);
+            if (rotations < 1 || rotations > 24) {
+                fprintf(stderr, "R11_STEP_ROTATIONS hors bornes 1..24\n");
+                return 2;
+            }
+            rotate(avr, rotations, 1);
+        }
 
         for (int cran = 1; cran <= 3; ++cran) {
             marque = g_twi_bytes;
             if (!skipBGeste) shiftRotate(avr, 1, 1, harness::RATCHET_BURST_LIMIT, false);
             read_bank(avr, vu);
             ecarts = bankDiffCount(vu, expectedBytes, &premier);
-            printf("rD_cran%d           nibble %02x octet %02x ecarts %u premier %u twi %u\n",
-                   cran, (unsigned)(vu[offsetR11] >> 4), (unsigned)vu[offsetR11],
-                   ecarts, premier, g_twi_bytes - marque);
+            printf("rD_cran%d           nibble %02x octet %02x ecarts %u premier %u twi %u"
+                   " canal %d octet_instance %u\n",
+                   cran, (unsigned)(byteOfInstance(vu, canalR11, rangR11) >> 4),
+                   (unsigned)byteOfInstance(vu, canalR11, rangR11),
+                   ecarts, premier, g_twi_bytes - marque,
+                   (int)channelOfOffset(premier), (unsigned)byteOfOffset(premier));
         }
 
         marque = g_twi_bytes;
@@ -1264,14 +1577,13 @@ int main(int argc, char **argv)
         read_bank(avr, vu);
         ecarts = bankDiffCount(vu, expectedBytes, &premier);
         printf("rD_retour          nibble %02x octet %02x ecarts %u twi %u\n",
-               (unsigned)(vu[offsetR11] >> 4), (unsigned)vu[offsetR11],
+               (unsigned)(byteOfInstance(vu, canalR11, rangR11) >> 4),
+                   (unsigned)byteOfInstance(vu, canalR11, rangR11),
                ecarts, g_twi_bytes - marque);
 
         pressFor(avr, (double)LONG_PRESS_MS);
         pressFor(avr, (double)LONG_PRESS_MS);
-        courant = selectedTab();
-        pas = ((ongletR11 - courant) % 8 + 8) % 8;
-        if (pas > 0) rotate(avr, pas, 1);
+        alignTab(avr, ongletR11);
         marque = g_twi_bytes;
         pressFor(avr, (double)PRESS_MS);
         rotate(avr, 2, 1);
@@ -1289,9 +1601,11 @@ int main(int argc, char **argv)
     }
 
     if (recetteR2) {
-        static uint8_t vu[OBSERVED_BANK_BYTES];
-        const uint32_t pasActifs = activeStepsInPattern(expectedBytes);
-        const int ongletR2 = 4;
+        static uint8_t vu[OBSERVED_INSTANCE_BYTES];
+        constexpr int ongletR2 = 4;
+        constexpr int8_t canalR2 = channelOfTab(ongletR2);
+        static_assert(canalR2 == 3, "tab 4 drives channel 3");
+        const uint32_t pasActifs = activeStepsInInstance(expectedBytes, canalR2);
 
         playPress(avr);
         run_for(avr, 1000.0);
@@ -1309,9 +1623,7 @@ int main(int argc, char **argv)
             uint32_t twiGeste = 0;
 
             if (etape == 1 || etape == 3) {
-                const int courant = selectedTab();
-                const int pas = ((ongletR2 - courant) % 8 + 8) % 8;
-                if (pas > 0) rotate(avr, pas, 1);
+                alignTab(avr, ongletR2);
                 marque = g_twi_bytes;
                 pressFor(avr, (double)PRESS_MS);
                 const int rotations = (etape == 1) ? 1 : r2Rotations;
@@ -1342,7 +1654,9 @@ int main(int argc, char **argv)
                 const uint32_t pas = gapGcdInWindow(&g_out[o], depart, g_ticks,
                                                     &kept, &gaps, &dropped);
                 const uint32_t per = periodOverOnsets(&g_out[o], depart, g_ticks,
-                                                      pasActifs, &onsets);
+                                                      activeStepsInInstance(
+                                                          expectedBytes, (int8_t)o),
+                                                      &onsets);
                 printf("rC_%s_OUT%d pas %u periode %u distances %u retenues %u onsets %u\n",
                        nom, o + 1, pas, per, gaps, kept, onsets);
             }
@@ -1361,7 +1675,10 @@ int main(int argc, char **argv)
         playPress(avr);
         run_for(avr, 1000.0);
 
-        const uint32_t pasActifs = activeStepsInPattern(expectedBytes);
+        constexpr int cibleR13 = 3;
+        constexpr int8_t canalR13 = channelOfTab(cibleR13);
+        static_assert(canalR13 == 2, "tab 3 drives channel 2");
+        const uint32_t pasActifs = activeStepsInInstance(expectedBytes, canalR13);
         printf("rB_steps_actifs    %u\n", pasActifs);
 
         uint32_t marque = g_twi_bytes;
@@ -1370,9 +1687,7 @@ int main(int argc, char **argv)
                selectedTab(), g_twi_bytes - marque);
 
         for (int k = 1; k <= 6; ++k) {
-            const int courant = selectedTab();
-            const int pas = ((k - courant) % 8 + 8) % 8;
-            if (pas > 0) rotate(avr, pas, 1);
+            alignTab(avr, k);
             const int surBarre = selectedTab();
             marque = g_twi_bytes;
             pressFor(avr, (double)PRESS_MS);
@@ -1409,10 +1724,7 @@ int main(int argc, char **argv)
                    k, selectedTab(), tabBandSlotsWithInk(), g_twi_bytes - marque);
         }
 
-        const int cibleR13 = 3;
-        const int courant13 = selectedTab();
-        const int pas13 = ((cibleR13 - courant13) % 8 + 8) % 8;
-        if (pas13 > 0) rotate(avr, pas13, 1);
+        alignTab(avr, cibleR13);
         marque = g_twi_bytes;
         pressFor(avr, (double)PRESS_MS);
         printf("rB_r13_nav         onglet %d twi %u\n", selectedTab(), g_twi_bytes - marque);
@@ -1436,15 +1748,15 @@ int main(int argc, char **argv)
             for (int o = 0; o < OUT_COUNT; ++o) {
                 uint32_t onsets = 0;
                 const uint32_t p = periodOverOnsets(&g_out[o], depart, g_ticks,
-                                                    pasActifs, &onsets);
+                                                    activeStepsInInstance(
+                                                        expectedBytes, (int8_t)o),
+                                                    &onsets);
                 printf(" %u", p);
                 if (onsets < minOnsets) minOnsets = onsets;
             }
             printf(" onsets %u\n", minOnsets);
             if (etape == 0) {
-                const int c2 = selectedTab();
-                const int p2 = ((cibleR13 - c2) % 8 + 8) % 8;
-                if (p2 > 0) rotate(avr, p2, 1);
+                alignTab(avr, cibleR13);
                 pressFor(avr, (double)PRESS_MS);
                 rotate(avr, 1, 1);
             }
@@ -1452,14 +1764,99 @@ int main(int argc, char **argv)
         return 0;
     }
 
+    if (parcoursInstances) {
+        static uint8_t avant[OBSERVED_INSTANCE_BYTES];
+        static uint8_t apres[OBSERVED_INSTANCE_BYTES];
+        static uint8_t tplAvant[OBSERVED_TEMPLATE_BYTES];
+        static uint8_t tplApres[OBSERVED_TEMPLATE_BYTES];
+        constexpr int ongletInstances = 4;
+        constexpr int8_t canalInstances = channelOfTab(ongletInstances);
+        constexpr size_t rangInstances = 0;
+        static_assert(canalInstances == 3, "tab 4 drives channel 3");
+        static_assert(instanceOffset(canalInstances, rangInstances) == 69,
+                      "channel 3 byte 0 is buffer byte 69");
+
+        playPress(avr);
+        run_for(avr, 1000.0);
+
+        read_bank(avr, avant);
+        read_templates(avr, tplAvant);
+
+        printf("inst_zone          templates 0x%04x lisible %d octets %zu"
+               " instances %zu\n",
+               g_template_addr, templateZoneIsReadable(avr),
+               OBSERVED_TEMPLATE_BYTES, OBSERVED_INSTANCE_BYTES);
+
+        printf("inst_masques      ");
+        for (uint8_t c = 0; c < OBSERVED_CHANNEL_COUNT; ++c) {
+            printf(" %04x", lowMaskOfInstance(avant, (int8_t)c));
+        }
+        printf("\n");
+
+        printf("inst_actifs       ");
+        for (uint8_t c = 0; c < OBSERVED_CHANNEL_COUNT; ++c) {
+            printf(" %u", activeStepsInInstance(avant, (int8_t)c));
+        }
+        printf("\n");
+
+        printf("inst_selection    ");
+        for (uint8_t c = 0; c < OBSERVED_CHANNEL_COUNT; ++c) {
+            printf(" %d", (int)g_expected_engine.getSelectedPattern(c));
+        }
+        printf("\n");
+
+        uint32_t marque = g_twi_bytes;
+        alignTab(avr, ongletInstances);
+        const int ongletAligne = selectedTab();
+        const int creneauxBarre = tabBandSlotsWithInk();
+        pressFor(avr, (double)PRESS_MS);
+        rotate(avr, 4, 1);
+        pressFor(avr, (double)PRESS_MS);
+        printf("inst_nav_edit      onglet_aligne %d vise %d creneaux %d %d twi %u\n",
+               ongletAligne, ongletInstances, creneauxBarre,
+               tabBandSlotsWithInk(), g_twi_bytes - marque);
+
+        marque = g_twi_bytes;
+        pressFor(avr, (double)PRESS_MS);
+        const int mute = mutateTemplateZone(avr);
+        read_bank(avr, apres);
+        read_templates(avr, tplApres);
+        if (mute) printf("inst_mutation      octet %ld de la zone des templates\n",
+                         g_template_mutate);
+
+        uint32_t premier = 0;
+        const uint32_t ecarts = bankDiffCount(avant, apres, &premier);
+        printf("inst_edit          canal_vise %d ecarts %u premier %u"
+               " canal %d octet_instance %u twi %u\n",
+               (int)canalInstances, ecarts, premier,
+               (int)channelOfOffset(premier), (unsigned)byteOfOffset(premier),
+               g_twi_bytes - marque);
+
+        uint32_t premierTpl = 0;
+        const uint32_t ecartsTpl = templateDiffCount(tplAvant, tplApres, &premierTpl);
+        printf("inst_templates     ecarts %u premier %u lisible %d\n",
+               ecartsTpl, premierTpl, templateZoneIsReadable(avr));
+        return 0;
+    }
+
     if (recettesA) {
-        static uint8_t vu[OBSERVED_BANK_BYTES];
+        static uint8_t vu[OBSERVED_INSTANCE_BYTES];
+        constexpr int ongletA = 1;
+        constexpr int8_t canalA = channelOfTab(ongletA);
+        static_assert(canalA == 0, "tab 1 drives channel 0");
+        static_assert(instanceOffset(canalA, 0) == 0,
+                      "channel 0 starts at buffer byte 0");
+        static_assert(instanceOffset(canalA, STEP_BYTES + 2) == 7,
+                      "the ratchet of step 5 is buffer byte 7 on channel 0");
+        static_assert(instanceOffset(canalA, STEP_BYTES + 4) == 9,
+                      "the ratchet of step 9 is buffer byte 9 on channel 0");
         uint32_t premier = 0, ecarts = 0;
         uint32_t marque = 0;
 
         const int creneauxAvant = tabBandSlotsWithInk();
         marque = g_twi_bytes;
         if (!skipEdit) {
+            alignTab(avr, ongletA);
             pressFor(avr, (double)PRESS_MS);
             rotate(avr, 4, 1);
             pressFor(avr, (double)PRESS_MS);
@@ -1470,35 +1867,41 @@ int main(int argc, char **argv)
         read_bank(avr, vu);
         ecarts = bankDiffCount(vu, expectedBytes, &premier);
         printf("rA_base            masque %04x octet6 %02x octet8 %02x ecarts %u\n",
-               low_mask_of(&vu[0]), vu[STEP_BYTES + 2], vu[STEP_BYTES + 4], ecarts);
+               lowMaskOfInstance(vu, canalA), byteOfInstance(vu, canalA, STEP_BYTES + 2), byteOfInstance(vu, canalA, STEP_BYTES + 4), ecarts);
 
         rotate(avr, 3, 1);
         marque = g_twi_bytes;
         pressFor(avr, (double)PRESS_MS);
         read_bank(avr, vu);
         ecarts = bankDiffCount(vu, expectedBytes, &premier);
-        printf("rA_r8_pose         masque %04x ecarts %u premier %u twi %u\n",
-               low_mask_of(&vu[0]), ecarts, premier, g_twi_bytes - marque);
+        printf("rA_r8_pose         masque %04x ecarts %u premier %u twi %u"
+               " canal %d octet_instance %u\n",
+               lowMaskOfInstance(vu, canalA), ecarts, premier,
+               g_twi_bytes - marque,
+               (int)channelOfOffset(premier), (unsigned)byteOfOffset(premier));
         marque = g_twi_bytes;
         pressFor(avr, (double)PRESS_MS);
         read_bank(avr, vu);
         ecarts = bankDiffCount(vu, expectedBytes, &premier);
         printf("rA_r8_retour       masque %04x ecarts %u twi %u\n",
-               low_mask_of(&vu[0]), ecarts, g_twi_bytes - marque);
+               lowMaskOfInstance(vu, canalA), ecarts, g_twi_bytes - marque);
 
         rotate(avr, 2, 1);
         marque = g_twi_bytes;
         shiftRotate(avr, 4, 1, harness::STEP_BURST_LIMIT, false);
         read_bank(avr, vu);
         ecarts = bankDiffCount(vu, expectedBytes, &premier);
-        printf("rA_r9_pose         octet6 %02x ecarts %u premier %u twi %u\n",
-               vu[STEP_BYTES + 2], ecarts, premier, g_twi_bytes - marque);
+        printf("rA_r9_pose         octet6 %02x ecarts %u premier %u twi %u"
+               " canal %d octet_instance %u\n",
+               byteOfInstance(vu, canalA, STEP_BYTES + 2), ecarts, premier,
+               g_twi_bytes - marque,
+               (int)channelOfOffset(premier), (unsigned)byteOfOffset(premier));
         marque = g_twi_bytes;
         shiftRotate(avr, 4, 0, harness::RATCHET_BURST_LIMIT, false);
         read_bank(avr, vu);
         ecarts = bankDiffCount(vu, expectedBytes, &premier);
         printf("rA_r9_retour       octet6 %02x ecarts %u twi %u\n",
-               vu[STEP_BYTES + 2], ecarts, g_twi_bytes - marque);
+               byteOfInstance(vu, canalA, STEP_BYTES + 2), ecarts, g_twi_bytes - marque);
 
         const int versR10 = (r10Step - 5 + 24) % 24;
         rotate(avr, versR10 == 0 ? 24 : versR10, 1);
@@ -1507,7 +1910,7 @@ int main(int argc, char **argv)
         read_bank(avr, vu);
         ecarts = bankDiffCount(vu, expectedBytes, &premier);
         printf("rA_r10             cible %d rotations %d octet6 %02x ecarts %u twi %u\n",
-               r10Step, versR10 == 0 ? 24 : versR10, vu[STEP_BYTES + 2], ecarts,
+               r10Step, versR10 == 0 ? 24 : versR10, byteOfInstance(vu, canalA, STEP_BYTES + 2), ecarts,
                g_twi_bytes - marque);
 
         rotate(avr, (9 - r10Step + 24) % 24, 1);
@@ -1515,14 +1918,17 @@ int main(int argc, char **argv)
         shiftRotate(avr, 5, 1, harness::RATCHET_BURST_LIMIT, false);
         read_bank(avr, vu);
         ecarts = bankDiffCount(vu, expectedBytes, &premier);
-        printf("rA_r12_pose        octet8 %02x ecarts %u premier %u twi %u\n",
-               vu[STEP_BYTES + 4], ecarts, premier, g_twi_bytes - marque);
+        printf("rA_r12_pose        octet8 %02x ecarts %u premier %u twi %u"
+               " canal %d octet_instance %u\n",
+               byteOfInstance(vu, canalA, STEP_BYTES + 4), ecarts, premier,
+               g_twi_bytes - marque,
+               (int)channelOfOffset(premier), (unsigned)byteOfOffset(premier));
         marque = g_twi_bytes;
         shiftRotate(avr, 5, 0, harness::RATCHET_BURST_LIMIT, false);
         read_bank(avr, vu);
         ecarts = bankDiffCount(vu, expectedBytes, &premier);
         printf("rA_r12_retour      octet8 %02x ecarts %u twi %u\n",
-               vu[STEP_BYTES + 4], ecarts, g_twi_bytes - marque);
+               byteOfInstance(vu, canalA, STEP_BYTES + 4), ecarts, g_twi_bytes - marque);
         return 0;
     }
 
@@ -1608,7 +2014,7 @@ int main(int argc, char **argv)
         return 0;
     }
 
-    static uint8_t bankAfterRotations[OBSERVED_BANK_BYTES];
+    static uint8_t bankAfterRotations[OBSERVED_INSTANCE_BYTES];
     read_bank(avr, bankAfterRotations);
     printf("bank_inchangee     %d\n",
            memcmp(bank, bankAfterRotations, sizeof(bank)) == 0 ? 1 : 0);
@@ -1633,9 +2039,18 @@ int main(int argc, char **argv)
     printf("appui_900ms        signature %08x, twi %u\n",
            screenSignature(), g_twi_bytes - twiMark);
 
+    constexpr int ongletPrincipal = 1;
+    constexpr int8_t canalPrincipal = channelOfTab(ongletPrincipal);
+    static_assert(canalPrincipal == 0, "tab 1 drives channel 0");
+    static_assert(instanceOffset(canalPrincipal, 0) == 0,
+                  "channel 0 starts at buffer byte 0");
+    static_assert(instanceOffset(canalPrincipal, STEP_BYTES) == 5,
+                  "the ratchet of step 0 is buffer byte 5 on channel 0");
+
     const int slotsBeforeEdit = tabBandSlotsWithInk();
     twiMark = g_twi_bytes;
     if (!skipEdit) {
+        alignTab(avr, ongletPrincipal);
         pressFor(avr, (double)PRESS_MS);
         rotate(avr, 4, 1);
         pressFor(avr, (double)PRESS_MS);
@@ -1645,53 +2060,54 @@ int main(int argc, char **argv)
            sigEdit, g_twi_bytes - twiMark, slotsBeforeEdit, tabBandSlotsWithInk(),
            (sigEdit != sigTabBar && sigEdit != sigAfterShort) ? 1 : 0);
 
-    static uint8_t bankBeforeShift[OBSERVED_BANK_BYTES];
+    static uint8_t bankBeforeShift[OBSERVED_INSTANCE_BYTES];
     read_bank(avr, bankBeforeShift);
-    printf("ratchet_avant      %02x\n", bankBeforeShift[STEP_BYTES]);
+    printf("ratchet_avant      %02x\n", byteOfInstance(bankBeforeShift, canalPrincipal, STEP_BYTES));
 
     twiMark = g_twi_bytes;
     const double heldMs = skipShift ? 192.0 : shiftRotate(avr, 3, 1, harness::RATCHET_BURST_LIMIT, false);
-    static uint8_t bankAfterShift[OBSERVED_BANK_BYTES];
+    static uint8_t bankAfterShift[OBSERVED_INSTANCE_BYTES];
     read_bank(avr, bankAfterShift);
     printf("shift_maintien_ms  %.1f\n", heldMs);
-    printf("ratchet_apres      %02x\n", bankAfterShift[STEP_BYTES]);
+    printf("ratchet_apres      %02x\n", byteOfInstance(bankAfterShift, canalPrincipal, STEP_BYTES));
     printf("shift_twi          %u\n", g_twi_bytes - twiMark);
     printf("masques_intacts    %d\n",
-           memcmp(bankBeforeShift, bankAfterShift, STEP_BYTES) == 0
-           && low_mask_of(&bankAfterShift[0]) == 0x9111 ? 1 : 0);
+           memcmp(instanceOf(bankBeforeShift, canalPrincipal),
+                  instanceOf(bankAfterShift, canalPrincipal), STEP_BYTES) == 0
+           && lowMaskOfInstance(bankAfterShift, canalPrincipal) == 0x9111 ? 1 : 0);
 
     twiMark = g_twi_bytes;
     shiftRotate(avr, 2, 1, harness::RATCHET_BURST_LIMIT, false);
-    static uint8_t bankTriplet[OBSERVED_BANK_BYTES];
+    static uint8_t bankTriplet[OBSERVED_INSTANCE_BYTES];
     read_bank(avr, bankTriplet);
     printf("triolet_pose       %02x twi %u\n",
-           bankTriplet[STEP_BYTES] & 0x0F, g_twi_bytes - twiMark);
+           byteOfInstance(bankTriplet, canalPrincipal, STEP_BYTES) & 0x0F, g_twi_bytes - twiMark);
 
     twiMark = g_twi_bytes;
     shiftRotate(avr, 5, 0, harness::RATCHET_BURST_LIMIT, false);
-    static uint8_t bankNoRatchet[OBSERVED_BANK_BYTES];
+    static uint8_t bankNoRatchet[OBSERVED_INSTANCE_BYTES];
     read_bank(avr, bankNoRatchet);
     printf("triolet_retire     %02x twi %u\n",
-           bankNoRatchet[STEP_BYTES] & 0x0F, g_twi_bytes - twiMark);
+           byteOfInstance(bankNoRatchet, canalPrincipal, STEP_BYTES) & 0x0F, g_twi_bytes - twiMark);
     printf("banque_restauree   %d\n",
-           memcmp(expectedBytes, bankNoRatchet, sizeof(flexseq::PatternBank)) == 0 ? 1 : 0);
+           memcmp(expectedBytes, bankNoRatchet, OBSERVED_INSTANCE_BYTES) == 0 ? 1 : 0);
 
     rotate(avr, 1, 1);
     twiMark = g_twi_bytes;
     pressFor(avr, (double)PRESS_MS);
-    static uint8_t bankToggled[OBSERVED_BANK_BYTES];
+    static uint8_t bankToggled[OBSERVED_INSTANCE_BYTES];
     read_bank(avr, bankToggled);
     printf("step1_bascule      %04x twi %u\n",
-           low_mask_of(&bankToggled[0]), g_twi_bytes - twiMark);
+           lowMaskOfInstance(bankToggled, canalPrincipal), g_twi_bytes - twiMark);
 
     twiMark = g_twi_bytes;
     pressFor(avr, (double)PRESS_MS);
-    static uint8_t bankRestored[OBSERVED_BANK_BYTES];
+    static uint8_t bankRestored[OBSERVED_INSTANCE_BYTES];
     read_bank(avr, bankRestored);
     printf("step1_rebascule    %04x twi %u\n",
-           low_mask_of(&bankRestored[0]), g_twi_bytes - twiMark);
+           lowMaskOfInstance(bankRestored, canalPrincipal), g_twi_bytes - twiMark);
     printf("banque_finale      %d\n",
-           memcmp(expectedBytes, bankRestored, sizeof(flexseq::PatternBank)) == 0 ? 1 : 0);
+           memcmp(expectedBytes, bankRestored, OBSERVED_INSTANCE_BYTES) == 0 ? 1 : 0);
 
     rotate(avr, 1, 0);
 
@@ -1705,25 +2121,26 @@ int main(int argc, char **argv)
     printf("fract_demande      %d crans, plafond %d crans par salve\n",
            longDetents, SHIFT_BURST_DETENTS);
     const double heldUp = shiftRotate(avr, longDetents, 1, harness::RATCHET_BURST_LIMIT, true);
-    static uint8_t bankLongUp[OBSERVED_BANK_BYTES];
+    static uint8_t bankLongUp[OBSERVED_INSTANCE_BYTES];
     read_bank(avr, bankLongUp);
     const int burstsUp = g_shift_bursts - burstsBefore;
     printf("fract_salves       %d\n", burstsUp);
     printf("fract_maintien_up  %.1f\n", heldUp);
-    printf("fract_ratchet      %02x\n", bankLongUp[STEP_BYTES] & 0x0F);
+    printf("fract_ratchet      %02x\n", byteOfInstance(bankLongUp, canalPrincipal, STEP_BYTES) & 0x0F);
     printf("fract_masques      %d\n",
-           memcmp(bankRestored, bankLongUp, STEP_BYTES) == 0
-           && low_mask_of(&bankLongUp[0]) == 0x9111 ? 1 : 0);
+           memcmp(instanceOf(bankRestored, canalPrincipal),
+                  instanceOf(bankLongUp, canalPrincipal), STEP_BYTES) == 0
+           && lowMaskOfInstance(bankLongUp, canalPrincipal) == 0x9111 ? 1 : 0);
     printf("fract_twi          %u\n", g_twi_bytes - twiMark);
 
     const double heldDown = shiftRotate(avr, longDetents, 0, harness::RATCHET_BURST_LIMIT, true);
-    static uint8_t bankLongDown[OBSERVED_BANK_BYTES];
+    static uint8_t bankLongDown[OBSERVED_INSTANCE_BYTES];
     read_bank(avr, bankLongDown);
     uint32_t suppressedAfter = 0;
     const int readableAfter = readSuppressedCounter(avr, &suppressedAfter);
     printf("fract_maintien_max %.1f\n", heldDown > heldUp ? heldDown : heldUp);
     printf("fract_retour       %d\n",
-           memcmp(expectedBytes, bankLongDown, sizeof(flexseq::PatternBank)) == 0 ? 1 : 0);
+           memcmp(expectedBytes, bankLongDown, OBSERVED_INSTANCE_BYTES) == 0 ? 1 : 0);
     printf("fract_enc_sw       %u\n", g_enc_sw_lows - encSwLowsBefore);
     printf("fract_compteur     lisible %d avant %ld apres %ld\n",
            (readableBefore && readableAfter) ? 1 : 0,

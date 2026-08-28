@@ -19,8 +19,8 @@ describe("TriggerSequencer", () => {
 
     engine.setSelectedPattern(0, 0);
     engine.setEffectiveLength(0, 4);
-    bank.getPattern(0)!.writeStep(1, true);
-    bank.getPattern(0)!.writeStep(3, true);
+    engine.instanceForChannel(0)!.writeStep(1, true);
+    engine.instanceForChannel(0)!.writeStep(3, true);
     engine.start();
 
     engine.advance(STEP); // onto step 1 (active)
@@ -51,7 +51,7 @@ describe("TriggerSequencer", () => {
     engine.setPatternBank(bank);
     for (let ch = 0; ch < CHANNEL_COUNT; ++ch) engine.setChannelMode(ch, ChannelMode.SEQ);
 
-    bank.getPattern(0)!.writeStep(1, true);
+    engine.instanceForChannel(0)!.writeStep(1, true);
     engine.setEffectiveLength(0, 4);
     engine.start();
 
@@ -59,27 +59,6 @@ describe("TriggerSequencer", () => {
 
     trig.update();
     expect(trig.triggered(0)).toBe(false);
-  });
-
-  it("fires on multiple channels sharing a pattern", () => {
-    const bank = new PatternBank();
-    const engine = new SequencerEngine();
-    const trig = new TriggerSequencer(engine);
-    engine.setPatternBank(bank);
-    for (let ch = 0; ch < CHANNEL_COUNT; ++ch) engine.setChannelMode(ch, ChannelMode.SEQ);
-
-    engine.setSelectedPattern(0, 0);
-    engine.setSelectedPattern(1, 0);
-    engine.setEffectiveLength(0, 4);
-    engine.setEffectiveLength(1, 4);
-    bank.getPattern(0)!.writeStep(1, true);
-    engine.start();
-
-    engine.advance(STEP); // both onto step 1 (active)
-
-    trig.update();
-    expect(trig.triggered(0)).toBe(true);
-    expect(trig.triggered(1)).toBe(true);
   });
 
   it("keeps channels with different patterns independent", () => {
@@ -93,7 +72,7 @@ describe("TriggerSequencer", () => {
     engine.setSelectedPattern(1, 1);
     engine.setEffectiveLength(0, 4);
     engine.setEffectiveLength(1, 4);
-    bank.getPattern(0)!.writeStep(1, true);
+    engine.instanceForChannel(0)!.writeStep(1, true);
     engine.start();
 
     engine.advance(STEP);
@@ -253,8 +232,8 @@ describe("la dette d onsets", () => {
     }
     engine.setPatternBank(bank);
     engine.setSelectedPattern(0, 0);
-    bank.getPattern(0)!.writeStep(0, true);
-    bank.getPattern(0)!.setRatchet(0, RATCHET_6);
+    engine.instanceForChannel(0)!.writeStep(0, true);
+    engine.instanceForChannel(0)!.setRatchet(0, RATCHET_6);
     engine.setSubdiv(0, -8);
     engine.start();
 
@@ -286,8 +265,8 @@ describe("la dette d onsets", () => {
     // TOUS les pas actifs : l onset de frontiere appartient au pas SUIVANT,
     // donc un motif a un seul pas actif tarit apres le premier pas.
     for (let i = 0; i < TOTAL_STEPS; ++i) {
-      bank.getPattern(0)!.writeStep(i, true);
-      bank.getPattern(0)!.setRatchet(i, RATCHET_6);
+      engine.instanceForChannel(0)!.writeStep(i, true);
+      engine.instanceForChannel(0)!.setRatchet(i, RATCHET_6);
     }
     engine.setSubdiv(0, -8);
     engine.start();

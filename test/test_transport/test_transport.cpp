@@ -113,11 +113,7 @@ struct Wired {
 // la seule chose qui le fait.
 void test_play_realigns_channels_that_a_triplet_had_pulled_apart() {
     Wired w;
-    // Le triolet va dans un pattern que SEUL le channel 0 selectionne : sur le
-    // pattern 0, que les six channels partagent par defaut, ils s'etireraient
-    // tous pareil et rien ne deriverait.
-    w.bank.getPattern(1)->setRatchet(0, flexseq::RATCHET_TRIPLET);
-    w.engine.setSelectedPattern(0, 1);
+    w.engine.instanceForChannel(0)->setRatchet(0, flexseq::RATCHET_TRIPLET);
     w.engine.refreshTiming();
     w.engine.start();
 

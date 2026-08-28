@@ -306,7 +306,7 @@ void test_ratchet_fires_n_onsets_inside_one_step_duration() {
     allSeq(e);
     e.setPatternBank(&bank);
     e.setSelectedPattern(0, 0);
-    bank.getPattern(0)->setRatchet(1, RATCHET_3);
+    e.instanceForChannel(0)->setRatchet(1, RATCHET_3);
     e.start();
 
     e.advance(96); // -> step 1, the ratchet step
@@ -331,7 +331,7 @@ void test_ratchet_step_keeps_the_pattern_duration() {
     e.setPatternBank(&bank);
     e.setSelectedPattern(0, 0);
     e.setEffectiveLength(0, 4);
-    bank.getPattern(0)->setRatchet(0, RATCHET_6);
+    e.instanceForChannel(0)->setRatchet(0, RATCHET_6);
     e.start();
     e.advance(96 * 4); // four plain step durations
     TEST_ASSERT_EQUAL_INT8(0, e.effectiveStep(0)); // full loop, back to start
@@ -343,7 +343,7 @@ void test_ratchet_counts_all_onsets_in_a_batched_advance() {
     allSeq(e);
     e.setPatternBank(&bank);
     e.setSelectedPattern(0, 0);
-    bank.getPattern(0)->setRatchet(1, RATCHET_4);
+    e.instanceForChannel(0)->setRatchet(1, RATCHET_4);
     e.start();
     e.advance(96);       // -> step 1 (ratchet 4)
     e.advance(96);       // whole ratchet step in one drain: 3 sub + 1 step onset
@@ -356,7 +356,7 @@ void test_triplet_stretches_the_step_to_two_units() {
     allSeq(e);
     e.setPatternBank(&bank);
     e.setSelectedPattern(0, 0);
-    bank.getPattern(0)->setRatchet(1, RATCHET_TRIPLET);
+    e.instanceForChannel(0)->setRatchet(1, RATCHET_TRIPLET);
     e.start();
 
     e.advance(96); // -> step 1, the triplet
@@ -381,9 +381,8 @@ void test_triplet_pushes_the_rest_of_the_pattern_later() {
     plain.setPatternBank(&bank);
     withTriplet.setPatternBank(&bank);
 
-    PatternBank tripletBank;
-    tripletBank.getPattern(0)->setRatchet(0, RATCHET_TRIPLET);
-    withTriplet.setPatternBank(&tripletBank);
+    withTriplet.instanceForChannel(0)->setRatchet(0, RATCHET_TRIPLET);
+    withTriplet.refreshTiming();
 
     plain.start();
     withTriplet.start();
@@ -403,7 +402,7 @@ void test_a_ratchet_plays_when_its_slot_is_not_a_whole_tick() {
     allSeq(e);
     e.setPatternBank(&bank);
     e.setSelectedPattern(0, 0);
-    bank.getPattern(0)->setRatchet(0, RATCHET_3);
+    e.instanceForChannel(0)->setRatchet(0, RATCHET_3);
     TEST_ASSERT_TRUE(e.setSubdiv(0, -3));
     TEST_ASSERT_EQUAL_UINT8(3, e.currentStepTriggers(0));
 }
@@ -416,15 +415,13 @@ void test_a_ratchet_is_refused_when_its_slot_falls_under_two_ticks() {
     allSeq(e);
     e.setPatternBank(&bank);
     e.setSelectedPattern(0, 0);
-    bank.getPattern(0)->setRatchet(0, RATCHET_6);
+    e.instanceForChannel(0)->setRatchet(0, RATCHET_6);
     TEST_ASSERT_TRUE(e.setSubdiv(0, -12));
     TEST_ASSERT_EQUAL_UINT8(1, e.currentStepTriggers(0));
 }
 
-void test_without_bank_every_step_is_plain() {
-    PatternBank bank;
-    bank.getPattern(0)->setRatchet(0, RATCHET_6);
-    SequencerEngine e; // no setPatternBank
+void test_a_new_engine_plays_plain_steps() {
+    SequencerEngine e;
     allSeq(e);
     e.start();
     TEST_ASSERT_EQUAL_UINT8(1, e.currentStepTriggers(0));
@@ -437,7 +434,7 @@ void test_ratchets_do_not_shift_masterphase() {
     SequencerEngine e;
     allSeq(e);
     e.setPatternBank(&bank);
-    bank.getPattern(0)->setRatchet(0, RATCHET_TRIPLET);
+    e.instanceForChannel(0)->setRatchet(0, RATCHET_TRIPLET);
     e.start();
     e.advance(192);
     TEST_ASSERT_EQUAL_UINT32(192, e.masterPhase());
@@ -551,11 +548,10 @@ void test_clock_counts_every_offset_crossing_in_a_batched_advance() {
 
 void test_clock_and_random_ignore_ratchets() {
     PatternBank bank;
-    bank.getPattern(0)->setRatchet(0, RATCHET_4);
-    bank.getPattern(0)->setRatchet(1, RATCHET_TRIPLET);
-
     SequencerEngine e;
     e.setPatternBank(&bank);
+    e.instanceForChannel(0)->setRatchet(0, RATCHET_4);
+    e.instanceForChannel(0)->setRatchet(1, RATCHET_TRIPLET);
     e.setChannelMode(1, MODE_RANDOM);
     e.start();
 
@@ -617,9 +613,9 @@ void test_skip_chance_is_bounded_to_ten_tenths() {
 
 void test_switching_to_seq_starts_reading_the_pattern_again() {
     PatternBank bank;
-    bank.getPattern(0)->setRatchet(0, RATCHET_4);
     SequencerEngine e;
     e.setPatternBank(&bank);
+    e.instanceForChannel(0)->setRatchet(0, RATCHET_4);
     TEST_ASSERT_EQUAL_UINT8(1, e.currentStepTriggers(0));
     e.setChannelMode(0, MODE_SEQ);
     TEST_ASSERT_EQUAL_UINT8(4, e.currentStepTriggers(0));
@@ -722,13 +718,15 @@ void test_two_channels_on_one_template_keep_separate_instances() {
     TEST_ASSERT_FALSE(onOne);
 }
 
-void test_the_instances_do_not_follow_patternForChannel() {
+void test_the_channel_plays_its_own_instance() {
     PatternBank bank;
     SequencerEngine engine;
     engine.setPatternBank(&bank);
-    engine.setSelectedPattern(0, 0);
-    TEST_ASSERT_TRUE(engine.patternForChannel(0) == bank.getPattern(0));
-    TEST_ASSERT_FALSE(engine.patternForChannel(0) == engine.instanceForChannel(0));
+    for (uint8_t ch = 0; ch < 6; ++ch) {
+        TEST_ASSERT_TRUE(engine.setSelectedPattern(ch, 0));
+        TEST_ASSERT_TRUE(engine.patternForChannel(ch) == engine.instanceForChannel(ch));
+        TEST_ASSERT_FALSE(engine.patternForChannel(ch) == bank.getPattern(0));
+    }
 }
 
 int main() {
@@ -772,7 +770,7 @@ int main() {
     RUN_TEST(test_triplet_pushes_the_rest_of_the_pattern_later);
     RUN_TEST(test_a_ratchet_plays_when_its_slot_is_not_a_whole_tick);
     RUN_TEST(test_a_ratchet_is_refused_when_its_slot_falls_under_two_ticks);
-    RUN_TEST(test_without_bank_every_step_is_plain);
+    RUN_TEST(test_a_new_engine_plays_plain_steps);
     RUN_TEST(test_ratchets_do_not_shift_masterphase);
 
     RUN_TEST(test_bar_length_defaults_and_accepts_the_allowed_set);
@@ -799,6 +797,6 @@ int main() {
     RUN_TEST(test_every_instance_can_carry_its_own_content);
     RUN_TEST(test_an_instance_is_independent_of_the_bank);
     RUN_TEST(test_two_channels_on_one_template_keep_separate_instances);
-    RUN_TEST(test_the_instances_do_not_follow_patternForChannel);
+    RUN_TEST(test_the_channel_plays_its_own_instance);
     return UNITY_END();
 }

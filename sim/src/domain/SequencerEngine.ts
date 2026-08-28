@@ -199,9 +199,7 @@ export class SequencerEngine {
   }
 
   patternForChannel(channel: number): Pattern | null {
-    const c = this.channels[channel];
-    if (!c || this.bank === null) return null;
-    return this.bank.getPattern(c.selectedPattern);
+    return this.instanceForChannel(channel);
   }
 
   setPatternBank(bank: PatternBank | null): void {
