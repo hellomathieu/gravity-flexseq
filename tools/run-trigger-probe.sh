@@ -161,7 +161,7 @@ for MODE in clock seq ratchet; do
     GEN_ARGS="--mode seq --ratchet $RATCHET_STEP:$RATCHET_CODE"
     [ -n "${RATCHET_MUTATE:-}" ] && GEN_ARGS="$GEN_ARGS,$RATCHET_MUTATE"
   fi
-  if ! "$GEN" $GEN_ARGS --steps "$IMAGE_STEPS" --tempo "$TEMPO" \
+  if ! "$GEN" $GEN_ARGS --format 3 --steps "$IMAGE_STEPS" --tempo "$TEMPO" \
        > "$(dirname "$BIN")/ee-$MODE.bin" 2>"$LOG"; then
     cat "$LOG"; die "generation de l'image $MODE en echec"
   fi

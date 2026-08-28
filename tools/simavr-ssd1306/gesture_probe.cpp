@@ -234,8 +234,6 @@ static avr_t *g_avr;
 static uint32_t g_twi_bytes;
 static uint16_t g_bank_addr;
 static uint16_t g_template_addr;
-static uint32_t g_template_reads;
-static uint32_t g_template_faults;
 static long g_base_force = -1;
 static long g_channel_force = -1;
 static uint32_t g_bank_reads;
@@ -507,8 +505,6 @@ static void reportInstanceAccess(void)
 {
     printf("instances_acces    lectures %u echecs %u fautes %u\n",
            g_bank_reads, g_bank_read_faults, g_instance_faults);
-    printf("templates_acces    lectures %u echecs %u\n",
-           g_template_reads, g_template_faults);
 }
 
 static int templateZoneIsReadable(const avr_t *avr)
@@ -523,37 +519,8 @@ static int templateZoneIsReadable(const avr_t *avr)
 
 static long g_template_mutate = -1;
 
-static int mutateTemplateZone(avr_t *avr)
-{
-    if (g_template_mutate < 0) return 0;
-    if (g_template_addr == 0) return 0;
-    if ((uint32_t)g_template_mutate >= (uint32_t)OBSERVED_TEMPLATE_BYTES) return 0;
-    const uint16_t at = (uint16_t)(g_template_addr + (uint16_t)g_template_mutate);
-    avr->data[at] = (uint8_t)(avr->data[at] ^ 0x01);
-    return 1;
-}
 
-static void read_templates(const avr_t *avr, uint8_t *out)
-{
-    ++g_template_reads;
-    if (!templateZoneIsReadable(avr)) {
-        ++g_template_faults;
-        memset(out, 0, (size_t)OBSERVED_TEMPLATE_BYTES);
-        return;
-    }
-    memcpy(out, &avr->data[g_template_addr], (size_t)OBSERVED_TEMPLATE_BYTES);
-}
 
-static uint32_t templateDiffCount(const uint8_t *a, const uint8_t *b,
-                                  uint32_t *firstOut)
-{
-    uint32_t n = 0, first = 0xFFFFFFFFu;
-    for (uint32_t i = 0; i < (uint32_t)OBSERVED_TEMPLATE_BYTES; ++i) {
-        if (a[i] != b[i]) { ++n; if (first == 0xFFFFFFFFu) first = i; }
-    }
-    if (firstOut) *firstOut = (first == 0xFFFFFFFFu) ? 0 : first;
-    return n;
-}
 
 static int8_t observedChannel(int8_t channel)
 {
@@ -585,46 +552,165 @@ static int readSuppressedCounter(const avr_t *avr, uint32_t *out)
 
 static uint8_t g_image[1024];
 static uint8_t g_image_ref[1024];
+/* L'image que le JUMEAU doit lire. Elle vaut g_image_ref, sauf pour le parcours
+ * bootstrap, ou le scenario simule est une image corrompue : le jumeau doit
+ * alors prendre le meme repli que le firmware. g_image_ref garde sa semantique
+ * d'image de reference fournie, sur laquelle repose IMAGE_MUTATE. */
+static uint8_t g_expected_image[1024];
 static size_t g_image_bytes;
 static uint16_t g_image_base = 384;
+
+static const uint16_t EE_TEMPLATES_AT = 1;
+static const uint16_t EE_TEMPLATE_RECORD = 24;
+static const uint16_t EE_TEMPLATE_COUNT = 16;
+static const uint16_t EE_TEMPLATES_BYTES = 384;
+static const uint16_t EE_CONTENT_BYTES = 23;
+static const uint8_t EE_TEMPLATE_LENGTH = 16;
+
+static const uint16_t EE_FACTORY_MASKS[EE_TEMPLATE_COUNT] = {
+    0x9111, 0x0810, 0x1249, 0xCCCC, 0xEEEE, 0x5454, 0x7FBF, 0xB733,
+    0, 0, 0, 0, 0, 0, 0, 0,
+};
+
+static const uint16_t EE_VERSION_AT = 0;
+static const uint8_t BOOTSTRAP_BROKEN_VERSION = 0xFC;
+static const uint16_t BOOTSTRAP_BROKEN_TEMPLATE_AT = 0;
+static const uint8_t BOOTSTRAP_BROKEN_TEMPLATE_VALUE = 0x5A;
+static const uint8_t EE_EXPECTED_VERSION = 3;
+static const uint16_t EE_A1_LOW_MASK = 0x9111;
+static const double BOOTSTRAP_SLICE_MS = 250.0;
+static const double BOOTSTRAP_CEILING_MS = 10000.0;
+
+static int eepromTemplatesReadable(void)
+{
+    return g_image_bytes >= (size_t)(EE_TEMPLATES_AT + EE_TEMPLATES_BYTES);
+}
+
+static uint8_t eepromExpectedTemplateByte(uint16_t index, uint16_t offset)
+{
+    if (offset == EE_CONTENT_BYTES) return EE_TEMPLATE_LENGTH;
+    if (offset == 0) return (uint8_t)(EE_FACTORY_MASKS[index] & 0xFF);
+    if (offset == 1) return (uint8_t)((EE_FACTORY_MASKS[index] >> 8) & 0xFF);
+    return 0;
+}
+
+static uint32_t eepromTemplateFactoryDiff(uint32_t *firstOut)
+{
+    uint32_t n = 0, first = 0xFFFFFFFFu;
+    for (uint16_t index = 0; index < EE_TEMPLATE_COUNT; ++index) {
+        for (uint16_t offset = 0; offset < EE_TEMPLATE_RECORD; ++offset) {
+            const uint32_t at = (uint32_t)EE_TEMPLATES_AT
+                + (uint32_t)index * EE_TEMPLATE_RECORD + offset;
+            if (g_image[at] != eepromExpectedTemplateByte(index, offset)) {
+                ++n;
+                if (first == 0xFFFFFFFFu) first = at;
+            }
+        }
+    }
+    if (firstOut) *firstOut = (first == 0xFFFFFFFFu) ? 0 : first;
+    return n;
+}
+
+/* L'EEPROM simulee n'est PAS g_image : AVR_IOCTL_EEPROM_SET copie le tampon
+ * dans le modele. Toute lecture d'apres execution passe donc par un GET, comme
+ * stack_probe.c le fait deja. Lire g_image ici comparerait deux tampons que le
+ * firmware ne touche jamais, et le temoin serait vert quoi qu'il arrive. */
+static int readSimulatedEeprom(avr_t *avr, uint8_t *out, uint32_t bytes)
+{
+    avr_eeprom_desc_t ee;
+    ee.ee = out;
+    ee.offset = g_image_base;
+    ee.size = bytes;
+    return avr_ioctl(avr, AVR_IOCTL_EEPROM_GET, &ee) == 0;
+}
+
+/* TEMPLATE_MUTATE visait la copie RAM de patternBank, que la v3 ne remplit plus.
+ * Il vise maintenant la zone EEPROM des templates, cible du temoin B. L'EEPROM
+ * simulee ne s'ecrit pas directement : GET, inversion, SET. */
+static int mutateEepromTemplates(avr_t *avr)
+{
+    if (g_template_mutate < 0) return 0;
+    if ((uint32_t)g_template_mutate >= (uint32_t)EE_TEMPLATES_BYTES) return 0;
+    static uint8_t buffer[sizeof(g_image)];
+    if (!readSimulatedEeprom(avr, buffer, (uint32_t)g_image_bytes)) return 0;
+    const uint32_t at = (uint32_t)EE_TEMPLATES_AT + (uint32_t)g_template_mutate;
+    buffer[at] = (uint8_t)(buffer[at] ^ 0xFF);
+    avr_eeprom_desc_t ee;
+    ee.ee = buffer;
+    ee.offset = g_image_base;
+    ee.size = (uint32_t)g_image_bytes;
+    return avr_ioctl(avr, AVR_IOCTL_EEPROM_SET, &ee) == 0;
+}
+
+static uint32_t eepromTemplateDrift(const uint8_t *apres, uint32_t *firstOut)
+{
+    uint32_t n = 0, first = 0xFFFFFFFFu;
+    for (uint32_t at = EE_TEMPLATES_AT;
+         at < (uint32_t)(EE_TEMPLATES_AT + EE_TEMPLATES_BYTES); ++at) {
+        if (apres[at] != g_image_ref[at]) {
+            ++n;
+            if (first == 0xFFFFFFFFu) first = at;
+        }
+    }
+    if (firstOut) *firstOut = (first == 0xFFFFFFFFu) ? 0 : first;
+    return n;
+}
 
 struct ImageStorage {
     uint8_t read(uint16_t address) const
     {
         const uint32_t index = (uint32_t)address - (uint32_t)g_image_base;
         if (g_image_bytes == 0 || index >= (uint32_t)g_image_bytes) return 0xFF;
-        return g_image_ref[index];
+        return g_expected_image[index];
     }
     void write(uint16_t, uint8_t) {}
 };
 
 static flexseq::SequencerEngine g_expected_engine;
 
-static const char *buildExpectedBank(flexseq::PatternBank &bank)
+/* Le jumeau de simulation. Il predit l'etat RAM que le firmware devrait avoir,
+ * en rejouant le contrat v3 sur l'image de REFERENCE, celle fournie a la machine
+ * avant toute corruption. Il n'est pas un oracle du format : les oracles
+ * independants sont les attentes litterales de run-eeprom-image-check.sh, des
+ * temoins EEPROM et du parcours bootstrap. */
+static const char *buildExpectedState()
 {
     static flexseq::Transport transport(g_expected_engine);
     static flexseq::UiController ui(g_expected_engine, transport);
     static flexseq::Preferences preferences;
-    flexseq::PersistentImage image(bank, g_expected_engine, ui, preferences);
+    flexseq::PersistentImageV3 image(g_expected_engine, ui, preferences);
     flexseq::PersistenceScheduler scheduler;
-    g_expected_engine.setPatternBank(&bank);
 
     ImageStorage storage;
-    if (!scheduler.load(storage, image)) {
-        flexseq::loadFactoryPatterns(bank);
-        return "usine";
+    if (scheduler.load(storage, image)) {
+        return "image";
     }
-    return "image";
+    /* Repli de bootstrap(), reproduit SANS ecrire. bootstrap() seme d'abord les
+     * templates depuis la table PROGMEM, puis les relit ; le jumeau compose donc
+     * directement factoryTemplateByte() et applyContentByte(). Lire ImageStorage
+     * ici rendrait 0xFF sur un parcours sans image EEPROM, comme "structure".
+     * load() a deja remis les defauts, donc selectedPattern vaut 0 : les six
+     * canaux prennent A1. Ce chemin n'est pas un oracle du contenu d'usine ; les
+     * oracles litteraux sont les temoins EEPROM et le parcours bootstrap. */
+    for (uint8_t ch = 0; ch < OBSERVED_CHANNEL_COUNT; ++ch) {
+        flexseq::Pattern *instance = g_expected_engine.instanceForChannel(ch);
+        const int8_t selected = g_expected_engine.getSelectedPattern(ch);
+        if (instance == NULL || selected < 0) continue;
+        for (uint8_t offset = 0; offset < flexseq::persist::v3::CONTENT_BYTES; ++offset) {
+            flexseq::persist::v3::applyContentByte(
+                *instance, offset,
+                flexseq::persist::v3::factoryTemplateByte((uint8_t)selected, offset));
+        }
+    }
+    return "usine";
 }
 
-static void buildExpectedInstances(const flexseq::PatternBank &bank, uint8_t *out)
+static void buildExpectedInstances(uint8_t *out)
 {
     for (uint8_t ch = 0; ch < OBSERVED_CHANNEL_COUNT; ++ch) {
         uint8_t *slot = mutableInstanceOf(out, (int8_t)ch);
         if (slot == NULL) continue;
-        const int8_t selected = g_expected_engine.getSelectedPattern(ch);
-        const flexseq::Pattern *source =
-            bank.getPattern(selected < 0 ? 0 : (uint8_t)selected);
+        const flexseq::Pattern *source = g_expected_engine.instanceForChannel(ch);
         if (source == NULL) {
             memset(slot, 0, PATTERN_BYTES);
             continue;
@@ -882,6 +968,7 @@ int main(int argc, char **argv)
     const int diagDh = strcmp(phase, "diagDh") == 0;
     const int policycheck = strcmp(phase, "policycheck") == 0;
     const int parcoursInstances = strcmp(phase, "instances") == 0;
+    const int parcoursBootstrap = strcmp(phase, "bootstrap") == 0;
     if (argc > 8) {
         g_template_addr = (uint16_t)(strtol(argv[8], NULL, 0) & 0xFFFF);
     }
@@ -999,6 +1086,7 @@ int main(int argc, char **argv)
         g_image_bytes = en;
         g_image_base = ee_base;
         memcpy(g_image_ref, g_image, en);
+        memcpy(g_expected_image, g_image, en);
 
         const char *mutateText = getenv("IMAGE_MUTATE");
         if (mutateText != NULL) {
@@ -1010,6 +1098,24 @@ int main(int argc, char **argv)
             g_image[index] = (uint8_t)(g_image[index] ^ 0xFF);
             printf("image_mutee        octet %ld inverse dans la copie donnee a la machine,"
                    " l attendu garde l image d origine\n", index);
+        }
+
+        if (parcoursBootstrap) {
+            if (en <= (size_t)(EE_TEMPLATES_AT + BOOTSTRAP_BROKEN_TEMPLATE_AT)) {
+                fprintf(stderr, "image trop courte pour le parcours bootstrap : %zu\n", en);
+                return 2;
+            }
+            g_image[EE_VERSION_AT] = BOOTSTRAP_BROKEN_VERSION;
+            g_image[EE_TEMPLATES_AT + BOOTSTRAP_BROKEN_TEMPLATE_AT] =
+                BOOTSTRAP_BROKEN_TEMPLATE_VALUE;
+            g_expected_image[EE_VERSION_AT] = BOOTSTRAP_BROKEN_VERSION;
+            g_expected_image[EE_TEMPLATES_AT + BOOTSTRAP_BROKEN_TEMPLATE_AT] =
+                BOOTSTRAP_BROKEN_TEMPLATE_VALUE;
+            printf("boot_corruption    version %u a l offset %u, template %u a l offset %u\n",
+                   BOOTSTRAP_BROKEN_VERSION, EE_VERSION_AT,
+                   BOOTSTRAP_BROKEN_TEMPLATE_VALUE,
+                   EE_TEMPLATES_AT + BOOTSTRAP_BROKEN_TEMPLATE_AT);
+            printf("attendu_bootstrap  meme corruption appliquee au scenario du jumeau\n");
         }
 
         avr_eeprom_desc_t ee = { .ee = g_image, .offset = ee_base, .size = (uint32_t)en };
@@ -1110,16 +1216,20 @@ int main(int argc, char **argv)
         previous = now;
     }
 
-    static flexseq::PatternBank expectedBank;
-    const char *expectedSource = buildExpectedBank(expectedBank);
+    const char *expectedSource = buildExpectedState();
     static uint8_t expectedBytes[OBSERVED_INSTANCE_BYTES];
-    buildExpectedInstances(expectedBank, expectedBytes);
+    buildExpectedInstances(expectedBytes);
     const int controlOk =
-        sizeof(flexseq::PatternBank) == (size_t)(PATTERN_COUNT * PATTERN_BYTES)
+        sizeof(flexseq::Pattern) == (size_t)PATTERN_BYTES
         && OBSERVED_INSTANCE_BYTES
                == (size_t)(flexseq::SequencerEngine::CHANNEL_COUNT * PATTERN_BYTES)
         && memcmp(expectedBytes, bank, OBSERVED_INSTANCE_BYTES) == 0;
     printf("controle_source    %s\n", expectedSource);
+    printf("inst_attendus     ");
+    for (uint8_t ch = 0; ch < OBSERVED_CHANNEL_COUNT; ++ch) {
+        printf(" %04x", lowMaskOfInstance(expectedBytes, (int8_t)ch));
+    }
+    printf("\n");
     printf("image_lue          masque %04x subdiv %d length %u mode %d\n",
            low_mask_of(expectedBytes),
            (int)g_expected_engine.getSubdiv(0),
@@ -1127,8 +1237,11 @@ int main(int argc, char **argv)
            (int)g_expected_engine.getChannelMode(0));
     printf("controle_usine     %d\n", controlOk);
     if (!controlOk) {
-        printf("controle_detail    taille native %zu, attendue %d\n",
-               sizeof(flexseq::PatternBank), PATTERN_COUNT * PATTERN_BYTES);
+        printf("controle_detail    Pattern %zu octets, attendu %d ; zone d instances"
+               " %zu octets, attendue %d\n",
+               sizeof(flexseq::Pattern), PATTERN_BYTES,
+               OBSERVED_INSTANCE_BYTES,
+               (int)(flexseq::SequencerEngine::CHANNEL_COUNT * PATTERN_BYTES));
         return 3;
     }
 
@@ -1764,11 +1877,63 @@ int main(int argc, char **argv)
         return 0;
     }
 
+    if (parcoursBootstrap) {
+        static uint8_t apres[sizeof(g_image)];
+        static uint8_t instances[OBSERVED_INSTANCE_BYTES];
+
+        run_for(avr, boot_ms);
+
+        const int luApresSetup = readSimulatedEeprom(avr, apres, (uint32_t)g_image_bytes);
+        const uint16_t reparAt = EE_TEMPLATES_AT + BOOTSTRAP_BROKEN_TEMPLATE_AT;
+        printf("boot_repare        lu %d octet %u valeur %u attendu %u\n",
+               luApresSetup, reparAt,
+               luApresSetup ? apres[reparAt] : 0,
+               eepromExpectedTemplateByte(0, BOOTSTRAP_BROKEN_TEMPLATE_AT));
+
+        uint32_t usinePremier = 0;
+        uint32_t usineEcarts = 0;
+        if (luApresSetup) {
+            for (uint16_t index = 0; index < EE_TEMPLATE_COUNT; ++index) {
+                for (uint16_t offset = 0; offset < EE_TEMPLATE_RECORD; ++offset) {
+                    const uint32_t at = (uint32_t)EE_TEMPLATES_AT
+                        + (uint32_t)index * EE_TEMPLATE_RECORD + offset;
+                    if (apres[at] != eepromExpectedTemplateByte(index, offset)) {
+                        ++usineEcarts;
+                        if (usineEcarts == 1) usinePremier = at;
+                    }
+                }
+            }
+        }
+        printf("boot_semis         lu %d ecarts %u premier %u\n",
+               luApresSetup, usineEcarts, usinePremier);
+
+        read_bank(avr, instances);
+        printf("boot_instances    ");
+        for (uint8_t c = 0; c < OBSERVED_CHANNEL_COUNT; ++c) {
+            printf(" %04x", lowMaskOfInstance(instances, (int8_t)c));
+        }
+        printf(" attendu %04x\n", EE_A1_LOW_MASK);
+
+        double attendu = 0.0;
+        int versionVue = 0;
+        uint8_t versionLue = 0;
+        while (attendu < BOOTSTRAP_CEILING_MS) {
+            run_for(avr, BOOTSTRAP_SLICE_MS);
+            attendu += BOOTSTRAP_SLICE_MS;
+            if (!readSimulatedEeprom(avr, apres, (uint32_t)g_image_bytes)) {
+                continue;
+            }
+            versionLue = apres[EE_VERSION_AT];
+            if (versionLue == EE_EXPECTED_VERSION) { versionVue = 1; break; }
+        }
+        printf("boot_version       vue %d valeur %u attendu %u attente_ms %.0f plafond_ms %.0f\n",
+               versionVue, versionLue, EE_EXPECTED_VERSION, attendu, BOOTSTRAP_CEILING_MS);
+        return 0;
+    }
+
     if (parcoursInstances) {
         static uint8_t avant[OBSERVED_INSTANCE_BYTES];
         static uint8_t apres[OBSERVED_INSTANCE_BYTES];
-        static uint8_t tplAvant[OBSERVED_TEMPLATE_BYTES];
-        static uint8_t tplApres[OBSERVED_TEMPLATE_BYTES];
         constexpr int ongletInstances = 4;
         constexpr int8_t canalInstances = channelOfTab(ongletInstances);
         constexpr size_t rangInstances = 0;
@@ -1780,12 +1945,14 @@ int main(int argc, char **argv)
         run_for(avr, 1000.0);
 
         read_bank(avr, avant);
-        read_templates(avr, tplAvant);
 
-        printf("inst_zone          templates 0x%04x lisible %d octets %zu"
+        uint32_t eepromUsinePremier = 0;
+        const uint32_t eepromUsineEcarts = eepromTemplateFactoryDiff(&eepromUsinePremier);
+
+        printf("inst_zone          templates_eeprom %u lisible %d octets %u"
                " instances %zu\n",
-               g_template_addr, templateZoneIsReadable(avr),
-               OBSERVED_TEMPLATE_BYTES, OBSERVED_INSTANCE_BYTES);
+               EE_TEMPLATES_AT, eepromTemplatesReadable(),
+               EE_TEMPLATES_BYTES, OBSERVED_INSTANCE_BYTES);
 
         printf("inst_masques      ");
         for (uint8_t c = 0; c < OBSERVED_CHANNEL_COUNT; ++c) {
@@ -1818,10 +1985,9 @@ int main(int argc, char **argv)
 
         marque = g_twi_bytes;
         pressFor(avr, (double)PRESS_MS);
-        const int mute = mutateTemplateZone(avr);
+        const int mute = mutateEepromTemplates(avr);
         read_bank(avr, apres);
-        read_templates(avr, tplApres);
-        if (mute) printf("inst_mutation      octet %ld de la zone des templates\n",
+        if (mute) printf("inst_mutation      octet %ld de la zone EEPROM des templates\n",
                          g_template_mutate);
 
         uint32_t premier = 0;
@@ -1832,10 +1998,17 @@ int main(int argc, char **argv)
                (int)channelOfOffset(premier), (unsigned)byteOfOffset(premier),
                g_twi_bytes - marque);
 
-        uint32_t premierTpl = 0;
-        const uint32_t ecartsTpl = templateDiffCount(tplAvant, tplApres, &premierTpl);
-        printf("inst_templates     ecarts %u premier %u lisible %d\n",
-               ecartsTpl, premierTpl, templateZoneIsReadable(avr));
+        printf("inst_tpl_usine     ecarts %u premier %u lisible %d\n",
+               eepromUsineEcarts, eepromUsinePremier, eepromTemplatesReadable());
+
+        static uint8_t eepromApres[sizeof(g_image)];
+        const int eepromLu = eepromTemplatesReadable()
+            && readSimulatedEeprom(avr, eepromApres, (uint32_t)g_image_bytes);
+        uint32_t eepromDerivePremier = 0;
+        const uint32_t eepromDeriveEcarts =
+            eepromLu ? eepromTemplateDrift(eepromApres, &eepromDerivePremier) : 0;
+        printf("inst_tpl_eeprom    ecarts %u premier %u lu %d\n",
+               eepromDeriveEcarts, eepromDerivePremier, eepromLu);
         return 0;
     }
 

@@ -109,7 +109,7 @@ else
   printf '\n'; cat "$LOG"; die "compilation du generateur en echec"
 fi
 
-GEN_ARGS="--mode $MODE --steps $STEPS --tempo $TEMPO --subdiv $SUBDIV"
+GEN_ARGS="--mode $MODE --steps $STEPS --tempo $TEMPO --subdiv $SUBDIV --format 3"
 [ -n "$RATCHETS" ] && GEN_ARGS="$GEN_ARGS --ratchet $RATCHETS"
 if ! "$GEN" $GEN_ARGS > "$WORK/image.bin" 2>"$LOG"; then
   cat "$LOG"; die "generation de l'image EEPROM en echec"

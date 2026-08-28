@@ -38,7 +38,7 @@ production simule, et verifie leur effet.
   SKIP_SHIFT=1                   n'injecte pas le geste SHIFT (classe 1)
   INSTANCE_BASE_FORCE=<adr>      force la base du tampon observe (0 = pointeur nul)
   INSTANCE_CHANNEL_FORCE=<n>     force le canal lu par les accesseurs gardes
-  TEMPLATE_MUTATE=<offset>       change un octet de la zone des templates entre
+  TEMPLATE_MUTATE=<offset>       change un octet de la zone EEPROM des templates entre
                                  les deux lectures du parcours instances
   R11_STEP_ROTATIONS=<n>         crans de deplacement du curseur dans R11 (defaut 5)
   SKIP_EDIT=1                    n'entre pas dans EDIT (classe 2)
@@ -223,16 +223,16 @@ else
   printf '\n'; cat "$LOG"; die "compilation du generateur en echec"
 fi
 if ! "$GEN" --mode seq --steps "$TIMING_STEPS" --subdiv "$TIMING_SUBDIV" --tempo 138 \
-     > "$WORK/image.bin" 2>"$LOG"; then
+     --format 3 > "$WORK/image.bin" 2>"$LOG"; then
   cat "$LOG"; die "generation de l'image de mesure temporelle en echec"
 fi
 ok "image de mesure" "SEQ, steps $TIMING_STEPS, subdiv $TIMING_SUBDIV, 138 BPM — phases P2.1 a P2.5"
 if ! "$GEN" --mode seq --steps "$RIG_STEPS" --subdiv "$RIG_SUBDIV" --tempo 138 \
-     > "$WORK/rig.bin" 2>"$LOG"; then
+     --format 3 > "$WORK/rig.bin" 2>"$LOG"; then
   cat "$LOG"; die "generation du rig de recette en echec"
 fi
 ok "image de rig" "SEQ, steps $RIG_STEPS, subdiv $RIG_SUBDIV, 138 BPM — rig de la couche 1"
-if ! "$GEN" --mode seq --per-channel --tempo 138 > "$WORK/perchannel.bin" 2>"$LOG"; then
+if ! "$GEN" --mode seq --per-channel --tempo 138 --format 3 > "$WORK/perchannel.bin" 2>"$LOG"; then
   cat "$LOG"; die "generation de l'image differenciee en echec"
 fi
 ok "image differenciee" "SEQ, un template par canal, C0 a C5 vers les templates 0 a 5"
@@ -334,7 +334,7 @@ fi
 if [ "$TEMPLATE_ADDR" = "0" ]; then
   ok "symbole de la banque" "absent ou non verifiable ($TEMPLATE_WHY) : seuls les criteres de template deviendront non decidables"
 else
-  ok "symbole de la banque" "unique, type $tpl_type, 368 octets, VMA 0x$tpl_vma -> RAM $TEMPLATE_ADDR, resolu independamment du pointeur d instances"
+  ok "symbole de la banque" "unique, type $tpl_type, 368 octets, VMA 0x$tpl_vma -> RAM $TEMPLATE_ADDR ; INERTE depuis la v3, retrait en B4b.7, resolu independamment du pointeur d instances"
 fi
 
 SUPPRESSED_PATTERN="${SUPPRESSED_SYMBOL:-14suppressedLongE$|^suppressedLong$}"
@@ -874,7 +874,7 @@ if [ "$CRAN_LINES" -eq "$CRAN_EXPECTED" ]; then
 fi
 
 printf '\n%s--- PRECONDITIONS DE L INSTRUMENT ---%s\n' "$C_B" "$C_0"
-grep -E '^instances_pointeur|^instances_acces|^bank_inchangee|^controle_source|^controle_usine|^entree_edit' "$LOG" | sed 's/^/  /'
+grep -E '^instances_pointeur|^instances_acces|^bank_inchangee|^controle_source|^inst_attendus|^controle_usine|^entree_edit' "$LOG" | sed 's/^/  /'
 printf '\n'
 
 PTR_BASE="$(grep -E '^instances_pointeur ' "$LOG" | awk '{print $3}')"
@@ -1331,7 +1331,7 @@ if [ "$RC" != "0" ]; then
 fi
 
 printf '\n%s--- RIG DE LA COUCHE 1 (P2.6.1) ---%s\n' "$C_B" "$C_0"
-grep -E '^controle_source|^image_lue|^controle_usine|^rig_' "$LOG3" | sed 's/^/  /'
+grep -E '^controle_source|^inst_attendus|^image_lue|^controle_usine|^rig_' "$LOG3" | sed 's/^/  /'
 printf '\n'
 
 RIG_SRC="$(grep -E '^controle_source ' "$LOG3" | awk '{print $2}')"
@@ -1402,7 +1402,7 @@ if [ "$RC" != "0" ]; then
 fi
 
 printf '\n%s--- RECETTES DE VERIFICATION A : R8 R9 R10 R12 (P2.6.2) ---%s\n' "$C_B" "$C_0"
-grep -E '^controle_source|^image_lue|^controle_usine|^rA_' "$LOG4" | sed 's/^/  /'
+grep -E '^controle_source|^inst_attendus|^image_lue|^controle_usine|^rA_' "$LOG4" | sed 's/^/  /'
 printf '\n'
 
 a2() { grep -E "^$1 " "$LOG4" | head -1 | awk "{print \$$2}"; }
@@ -1567,7 +1567,7 @@ if [ "$RC" != "0" ]; then
 fi
 
 printf '\n%s--- RECETTES DE VERIFICATION B : R1 et R13 (P2.6.3) ---%s\n' "$C_B" "$C_0"
-grep -E '^controle_source|^image_lue|^controle_usine|^rB_' "$LOG5" | sed 's/^/  /'
+grep -E '^controle_source|^inst_attendus|^image_lue|^controle_usine|^rB_' "$LOG5" | sed 's/^/  /'
 printf '\n'
 
 B_SRC="$(grep -E '^controle_source ' "$LOG5" | awk '{print $2}')"
@@ -1756,7 +1756,7 @@ if [ "$RC" != "0" ]; then
 fi
 
 printf '\n%s--- RECETTE R2 : LA DISTANCE ET LE CHAMP (P2.6.4) ---%s\n' "$C_B" "$C_0"
-grep -E '^controle_source|^image_lue|^controle_usine|^rC_' "$LOG6" | sed 's/^/  /'
+grep -E '^controle_source|^inst_attendus|^image_lue|^controle_usine|^rC_' "$LOG6" | sed 's/^/  /'
 printf '\n'
 
 c2()  { grep -E "^rC_$1 " "$LOG6" | head -1 | awk "{print \$$2}"; }
@@ -1909,7 +1909,7 @@ if [ "$RC" != "0" ]; then
 fi
 
 printf '\n%s--- RECETTE R11 : LES CODES REFUSES A x24 (P2.6.5) ---%s\n' "$C_B" "$C_0"
-grep -E '^controle_source|^image_lue|^controle_usine|^rD_' "$LOG7" | sed 's/^/  /'
+grep -E '^controle_source|^inst_attendus|^image_lue|^controle_usine|^rD_' "$LOG7" | sed 's/^/  /'
 printf '\n'
 
 d2() { grep -E "^rD_$1 " "$LOG7" | head -1 | awk "{print \$$2}"; }
@@ -2048,7 +2048,9 @@ else
 fi
 
 INST_MASQUES_ATTENDUS="0001 0006 0038 03c0 7c00 84a5"
-INST_ACTIFS_ATTENDUS="1 2 3 4 5 6"
+# Depuis 5.c.3 chaque instance --format 3 --per-channel porte un step de plus,
+# le marqueur 18 + c. Les comptes sont ecrits en litteral, jamais derives.
+INST_ACTIFS_ATTENDUS="2 3 4 5 6 7"
 INST_SELECTION_ATTENDUE="0 1 2 3 4 5"
 INST_CANAL_ATTENDU=3
 INST_OCTET_ATTENDU=0
@@ -2067,7 +2069,7 @@ if [ "$RC" != "0" ]; then
 fi
 
 printf '\n%s--- PARCOURS INSTANCES : SEPARATION TEMPLATE / INSTANCE ---%s\n' "$C_B" "$C_0"
-grep -E '^controle_source|^controle_usine|^inst_' "$LOG8" | sed 's/^/  /'
+grep -E '^controle_source|^inst_attendus|^controle_usine|^inst_' "$LOG8" | sed 's/^/  /'
 printf '\n'
 
 I_SRC="$(grep -E '^controle_source ' "$LOG8" | awk '{print $2}')"
@@ -2079,8 +2081,12 @@ I_ECARTS="$(grep -E '^inst_edit ' "$LOG8" | awk '{print $5}')"
 I_CANAL="$(grep -E '^inst_edit ' "$LOG8" | awk '{print $9}')"
 I_OCTET="$(grep -E '^inst_edit ' "$LOG8" | awk '{print $11}')"
 I_TWI="$(grep -E '^inst_edit ' "$LOG8" | awk '{print $13}')"
-I_TPL_ECARTS="$(grep -E '^inst_templates ' "$LOG8" | awk '{print $3}')"
-I_TPL_LISIBLE="$(grep -E '^inst_templates ' "$LOG8" | awk '{print $7}')"
+I_EE_USINE="$(grep -E '^inst_tpl_usine ' "$LOG8" | awk '{print $3}')"
+I_EE_USINE_OU="$(grep -E '^inst_tpl_usine ' "$LOG8" | awk '{print $5}')"
+I_EE_LISIBLE="$(grep -E '^inst_tpl_usine ' "$LOG8" | awk '{print $7}')"
+I_EE_DERIVE="$(grep -E '^inst_tpl_eeprom ' "$LOG8" | awk '{print $3}')"
+I_EE_DERIVE_OU="$(grep -E '^inst_tpl_eeprom ' "$LOG8" | awk '{print $5}')"
+I_EE_LU="$(grep -E '^inst_tpl_eeprom ' "$LOG8" | awk '{print $7}')"
 I_ONGLET="$(grep -E '^inst_nav_edit ' "$LOG8" | awk '{print $3}')"
 I_ONGLET_VISE="$(grep -E '^inst_nav_edit ' "$LOG8" | awk '{print $5}')"
 I_BARRE="$(grep -E '^inst_nav_edit ' "$LOG8" | awk '{print $7}')"
@@ -2137,14 +2143,89 @@ else
   fi
 fi
 
-if [ "$TEMPLATE_ADDR" = "0" ] || [ "${I_TPL_LISIBLE:-0}" != "1" ]; then
-  inval "instances : template inchange" "la zone des templates n est pas observable ($TEMPLATE_WHY) : ce critere seul devient non decidable"
-elif [ "$W_INST" != "1" ]; then
-  inval "instances : template inchange" "temoins amont invalides"
-elif [ "$I_TPL_ECARTS" = "0" ]; then
-  ok "instances : template inchange" "les 368 octets de la banque sont stricement identiques apres l edition"
+if [ -z "${I_EE_LISIBLE:-}" ] || [ "${I_EE_LISIBLE:-0}" != "1" ]; then
+  inval "instances : templates d usine" "la zone EEPROM des templates n est pas lisible : critere non decidable"
+elif [ "$I_EE_USINE" = "0" ]; then
+  ok "instances : templates d usine" "les 384 octets EEPROM portent A1..A8 puis huit records vides, longueur 16"
 else
-  bad "instances : template inchange" "$I_TPL_ECARTS octet(s) de la banque modifie(s) : l edition a touche le template partage"
+  bad "instances : templates d usine" "$I_EE_USINE octet(s) hors attendu, premier a l offset ${I_EE_USINE_OU:-?} de l image"
+fi
+
+if [ "${I_EE_LU:-0}" != "1" ]; then
+  inval "instances : templates EEPROM stables" "l EEPROM simulee n a pas pu etre relue par AVR_IOCTL_EEPROM_GET"
+elif [ "$W_INST" != "1" ]; then
+  inval "instances : templates EEPROM stables" "temoins amont invalides"
+elif [ "$I_EE_DERIVE" = "0" ]; then
+  ok "instances : templates EEPROM stables" "les 384 octets RELUS de l EEPROM simulee sont identiques a l image fournie"
+else
+  bad "instances : templates EEPROM stables" "$I_EE_DERIVE octet(s) EEPROM modifie(s), premier a l offset ${I_EE_DERIVE_OU:-?} : l edition a touche un template"
+fi
+
+printf '\n'
+
+LOG9="$WORK/log9"
+progress "parcours bootstrap (semis du firmware au premier demarrage)"
+"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$BANK_ADDR" "$BOOT_MS" \
+     "$WORK/perchannel.bin" 384 bootstrap "$SUPPRESSED_ADDR" "$TEMPLATE_ADDR" > "$LOG9" 2>&1
+RC=$?
+if [ "$RC" != "0" ]; then
+  cat "$LOG9"
+  die "le parcours bootstrap s'est termine anormalement (code $RC)"
+fi
+
+printf '\n%s--- PARCOURS BOOTSTRAP : LE FIRMWARE SEME SES TEMPLATES ---%s\n' "$C_B" "$C_0"
+grep -E '^boot_|^attendu_bootstrap|^controle_source|^inst_attendus' "$LOG9" | sed 's/^/  /'
+printf '\n'
+
+B_REP_LU="$(grep -E '^boot_repare ' "$LOG9" | awk '{print $3}')"
+B_REP_VAL="$(grep -E '^boot_repare ' "$LOG9" | awk '{print $7}')"
+B_REP_ATT="$(grep -E '^boot_repare ' "$LOG9" | awk '{print $9}')"
+B_SEM_LU="$(grep -E '^boot_semis ' "$LOG9" | awk '{print $3}')"
+B_SEM_ECARTS="$(grep -E '^boot_semis ' "$LOG9" | awk '{print $5}')"
+B_SEM_PREM="$(grep -E '^boot_semis ' "$LOG9" | awk '{print $7}')"
+B_INST="$(grep -E '^boot_instances ' "$LOG9" | sed 's/^boot_instances *//' | sed 's/ attendu.*//' | tr -s ' ')"
+B_INST_ATT="$(grep -E '^boot_instances ' "$LOG9" | awk '{print $NF}')"
+B_VER_VUE="$(grep -E '^boot_version ' "$LOG9" | awk '{print $3}')"
+B_VER_VAL="$(grep -E '^boot_version ' "$LOG9" | awk '{print $5}')"
+B_VER_ATT="$(grep -E '^boot_version ' "$LOG9" | awk '{print $7}')"
+B_ATTENTE="$(grep -E '^boot_version ' "$LOG9" | awk '{print $9}')"
+B_PLAFOND="$(grep -E '^boot_version ' "$LOG9" | awk '{print $11}')"
+
+if [ "${B_REP_LU:-0}" != "1" ]; then
+  inval "bootstrap : octet repare" "l EEPROM simulee n a pas pu etre relue apres le demarrage"
+elif [ "$B_REP_VAL" = "$B_REP_ATT" ]; then
+  ok "bootstrap : octet repare" "l octet de template corrompu vaut de nouveau $B_REP_ATT : SEUL le semis du firmware a pu le reparer"
+else
+  bad "bootstrap : octet repare" "l octet corrompu vaut $B_REP_VAL au lieu de $B_REP_ATT : le semis n a pas eu lieu"
+fi
+
+if [ "${B_SEM_LU:-0}" != "1" ]; then
+  inval "bootstrap : semis complet" "EEPROM simulee non relue"
+elif [ "$B_SEM_ECARTS" = "0" ]; then
+  ok "bootstrap : semis complet" "les 384 octets de templates portent A1..A8 puis huit records vides"
+else
+  bad "bootstrap : semis complet" "$B_SEM_ECARTS octet(s) hors attendu, premier a l offset ${B_SEM_PREM:-?}"
+fi
+
+B_INST_ATTENDU="$(printf '%s %s %s %s %s %s' "$B_INST_ATT" "$B_INST_ATT" "$B_INST_ATT" "$B_INST_ATT" "$B_INST_ATT" "$B_INST_ATT")"
+if [ "$(echo $B_INST)" = "$(echo $B_INST_ATTENDU)" ]; then
+  ok "bootstrap : six instances sur A1" "les six masques valent $B_INST_ATT, et non ceux de l image differenciee"
+else
+  bad "bootstrap : six instances sur A1" "masques $B_INST au lieu de six fois $B_INST_ATT"
+fi
+
+if [ "${B_VER_VUE:-0}" != "1" ]; then
+  bad "bootstrap : version ecrite" "la version relue vaut ${B_VER_VAL:-?} au lieu de ${B_VER_ATT:-3} apres ${B_ATTENTE:-?} ms"
+elif [ "$B_VER_VAL" = "$B_VER_ATT" ]; then
+  ok "bootstrap : version ecrite" "l octet de version vaut $B_VER_ATT, releve par AVR_IOCTL_EEPROM_GET"
+else
+  bad "bootstrap : version ecrite" "version $B_VER_VAL au lieu de $B_VER_ATT"
+fi
+
+if [ "${B_VER_VUE:-0}" = "1" ] && [ "${B_ATTENTE:-0}" -lt "${B_PLAFOND:-0}" ] 2>/dev/null; then
+  ok "bootstrap : plafond non atteint" "balayage termine apres ${B_ATTENTE} ms, garde-fou a ${B_PLAFOND} ms"
+else
+  bad "bootstrap : plafond non atteint" "le garde-fou de ${B_PLAFOND:-?} ms a ete atteint : le balayage n a pas abouti"
 fi
 
 printf '\n'
