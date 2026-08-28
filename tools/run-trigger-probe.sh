@@ -127,6 +127,11 @@ else
   printf '\n'; tail -30 "$LOG"; die "build du firmware en echec"
 fi
 
+. "$ROOT/tools/active-format.sh"
+flexseq_resolve_active_format "$ROOT" "$ROOT/.pio/build/nanoatmega328/firmware.elf" \
+  "$(dirname "$BIN")" || exit $?
+flexseq_report_active_format "$C_OK" "$C_DIM" "$C_0"
+
 # --- 3. Images EEPROM -------------------------------------------------------
 # Fabriquees par le code du domaine, donc le format n'est decrit qu'une fois.
 progress "generateur d'image EEPROM"
@@ -161,7 +166,7 @@ for MODE in clock seq ratchet; do
     GEN_ARGS="--mode seq --ratchet $RATCHET_STEP:$RATCHET_CODE"
     [ -n "${RATCHET_MUTATE:-}" ] && GEN_ARGS="$GEN_ARGS,$RATCHET_MUTATE"
   fi
-  if ! "$GEN" $GEN_ARGS --format 3 --steps "$IMAGE_STEPS" --tempo "$TEMPO" \
+  if ! "$GEN" $GEN_ARGS --format "$FLEXSEQ_FORMAT_VERSION" --steps "$IMAGE_STEPS" --tempo "$TEMPO" \
        > "$(dirname "$BIN")/ee-$MODE.bin" 2>"$LOG"; then
     cat "$LOG"; die "generation de l'image $MODE en echec"
   fi

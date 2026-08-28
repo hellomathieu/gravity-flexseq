@@ -39,6 +39,9 @@
 # desormais identifiee par ses symboles dans firmware.elf, et les constantes
 # viennent du COMPILATEUR via tools/persistence-format.cpp, qui inclut l'en-tete
 # normatif. Deux images liees, ou aucune, arretent le script sans verdict.
+# La resolution vit dans tools/active-format.sh, partagee par les quatre sondes :
+# quatre copies donneraient quatre facons de diverger. FLEXSEQ_FORMAT_FORCE=2 y
+# est le levier de contre-epreuve.
 #
 # Le nombre d'octets non vierges est une MESURE, pas un critere : rien
 # n'etablit aujourd'hui combien d'octets un semis d'usine laisse non vierges.
@@ -87,38 +90,15 @@ END_HEX="$("$AVR_NM" --radix=x "$ELF" | grep -E " _end$" | head -1 | cut -d' ' -
 END="$(printf '0x%x' $(( 0x$END_HEX - 0x800000 )))"
 printf '  %s✅%s symbole                %s_end %s%s\n' "$C_OK" "$C_0" "$C_DIM" "$END" "$C_0"
 
-DEMANGLED="$("$AVR_NM" --demangle "$ELF")"
-V3_HITS="$(printf '%s\n' "$DEMANGLED" | grep -c 'flexseq::PersistentImageV3::')"
-V2_HITS="$(printf '%s\n' "$DEMANGLED" | grep -c 'flexseq::PersistentImage::')"
-case "$V3_HITS:$V2_HITS" in
-  0:0) die "format actif INDECIDABLE : le binaire ne porte aucun symbole d'image de persistance. Ne pas rendre de verdict sur une supposition." ;;
-  0:*) ACTIVE_MAJOR=2 ;;
-  *:0) ACTIVE_MAJOR=3 ;;
-  *)   die "format actif AMBIGU : le binaire lie les deux images (v3 $V3_HITS symboles, v2 $V2_HITS). Ne pas rendre de verdict." ;;
-esac
-
-FMT_BIN="$(dirname "$BIN")/persistence_format"
-if ! c++ -std=c++17 -I"$ROOT/include" -DACTIVE_FORMAT_V"$ACTIVE_MAJOR"=1 \
-     -o "$FMT_BIN" "$ROOT/tools/persistence-format.cpp" > "$LOG" 2>&1; then
-  printf '\n'; cat "$LOG"; die "compilation de tools/persistence-format.cpp en echec"
-fi
-FMT_OUT="$("$FMT_BIN")" || die "tools/persistence-format.cpp n'a rien rendu"
-field() { printf '%s\n' "$FMT_OUT" | sed -n "s/^$1=//p"; }
-FORMAT_VERSION="$(field FORMAT_VERSION)"
-IMAGE_SIZE="$(field IMAGE_SIZE)"
-SCAN_SIZE="$(field SCAN_SIZE)"
-VERSION_OFFSET="$(field VERSION_OFFSET)"
-BASE_ADDRESS="$(field BASE_ADDRESS)"
-for name in FORMAT_VERSION IMAGE_SIZE SCAN_SIZE VERSION_OFFSET BASE_ADDRESS; do
-  eval "value=\$$name"
-  case "$value" in
-    ''|*[!0-9]*) die "constante $name absente ou non numerique dans la sortie du format actif : \"$value\"" ;;
-  esac
-done
-[ "$FORMAT_VERSION" = "$ACTIVE_MAJOR" ] \
-  || die "le format compile annonce la version $FORMAT_VERSION la ou le binaire lie la v$ACTIVE_MAJOR. Ne pas rendre de verdict."
-printf '  %s✅%s format actif           %sversion %s, %s o physiques, %s balayes — lu sur firmware.elf%s\n' \
-  "$C_OK" "$C_0" "$C_DIM" "$FORMAT_VERSION" "$IMAGE_SIZE" "$SCAN_SIZE" "$C_0"
+. "$ROOT/tools/active-format.sh"
+FMT_WORK="$(dirname "$BIN")"
+flexseq_resolve_active_format "$ROOT" "$ELF" "$FMT_WORK" || exit $?
+FORMAT_VERSION="$FLEXSEQ_FORMAT_VERSION"
+IMAGE_SIZE="$FLEXSEQ_IMAGE_SIZE"
+SCAN_SIZE="$FLEXSEQ_SCAN_SIZE"
+VERSION_OFFSET="$FLEXSEQ_VERSION_OFFSET"
+BASE_ADDRESS="$FLEXSEQ_BASE_ADDRESS"
+flexseq_report_active_format "$C_OK" "$C_DIM" "$C_0"
 
 progress "compilation du harnais"
 if cc -O2 -Wall -DIMAGE_SIZE="$IMAGE_SIZE" -DVERSION_OFFSET="$VERSION_OFFSET" \

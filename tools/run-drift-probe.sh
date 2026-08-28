@@ -100,6 +100,11 @@ else
   printf '\n'; tail -30 "$LOG"; die "build du firmware en echec"
 fi
 
+. "$ROOT/tools/active-format.sh"
+flexseq_resolve_active_format "$ROOT" "$ROOT/.pio/build/nanoatmega328/firmware.elf" \
+  "$WORK" || exit $?
+flexseq_report_active_format "$C_OK" "$C_DIM" "$C_0"
+
 progress "generateur d'image EEPROM"
 GEN="$WORK/eeprom-image"
 if c++ -std=gnu++11 -I"$ROOT/include" -o "$GEN" "$ROOT/tools/eeprom-image.cpp" \
@@ -109,7 +114,7 @@ else
   printf '\n'; cat "$LOG"; die "compilation du generateur en echec"
 fi
 
-GEN_ARGS="--mode $MODE --steps $STEPS --tempo $TEMPO --subdiv $SUBDIV --format 3"
+GEN_ARGS="--mode $MODE --steps $STEPS --tempo $TEMPO --subdiv $SUBDIV --format $FLEXSEQ_FORMAT_VERSION"
 [ -n "$RATCHETS" ] && GEN_ARGS="$GEN_ARGS --ratchet $RATCHETS"
 if ! "$GEN" $GEN_ARGS > "$WORK/image.bin" 2>"$LOG"; then
   cat "$LOG"; die "generation de l'image EEPROM en echec"

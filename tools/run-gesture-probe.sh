@@ -214,6 +214,11 @@ else
   printf '\n'; tail -30 "$LOG"; die "build du firmware en echec"
 fi
 
+. "$ROOT/tools/active-format.sh"
+flexseq_resolve_active_format "$ROOT" "$ROOT/.pio/build/nanoatmega328/firmware.elf" \
+  "$WORK" || exit $?
+flexseq_report_active_format "$C_OK" "$C_DIM" "$C_0"
+
 progress "generateur d'image EEPROM"
 GEN="$WORK/eeprom-image"
 if c++ -std=gnu++11 -I"$ROOT/include" -o "$GEN" "$ROOT/tools/eeprom-image.cpp" \
@@ -223,16 +228,16 @@ else
   printf '\n'; cat "$LOG"; die "compilation du generateur en echec"
 fi
 if ! "$GEN" --mode seq --steps "$TIMING_STEPS" --subdiv "$TIMING_SUBDIV" --tempo 138 \
-     --format 3 > "$WORK/image.bin" 2>"$LOG"; then
+     --format "$FLEXSEQ_FORMAT_VERSION" > "$WORK/image.bin" 2>"$LOG"; then
   cat "$LOG"; die "generation de l'image de mesure temporelle en echec"
 fi
 ok "image de mesure" "SEQ, steps $TIMING_STEPS, subdiv $TIMING_SUBDIV, 138 BPM — phases P2.1 a P2.5"
 if ! "$GEN" --mode seq --steps "$RIG_STEPS" --subdiv "$RIG_SUBDIV" --tempo 138 \
-     --format 3 > "$WORK/rig.bin" 2>"$LOG"; then
+     --format "$FLEXSEQ_FORMAT_VERSION" > "$WORK/rig.bin" 2>"$LOG"; then
   cat "$LOG"; die "generation du rig de recette en echec"
 fi
 ok "image de rig" "SEQ, steps $RIG_STEPS, subdiv $RIG_SUBDIV, 138 BPM — rig de la couche 1"
-if ! "$GEN" --mode seq --per-channel --tempo 138 --format 3 > "$WORK/perchannel.bin" 2>"$LOG"; then
+if ! "$GEN" --mode seq --per-channel --tempo 138 --format "$FLEXSEQ_FORMAT_VERSION" > "$WORK/perchannel.bin" 2>"$LOG"; then
   cat "$LOG"; die "generation de l'image differenciee en echec"
 fi
 ok "image differenciee" "SEQ, un template par canal, C0 a C5 vers les templates 0 a 5"
