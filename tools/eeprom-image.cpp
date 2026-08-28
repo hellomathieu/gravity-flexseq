@@ -12,9 +12,12 @@ void usage() {
     std::fprintf(stderr,
         "usage: eeprom-image --mode clock|seq [--steps 0,3,4,9,15] [--tempo 120]\n"
         "                    [--ratchet 0:6,3:2] [--subdiv -8] [--per-channel]\n"
+        "                    [--format 2|3]\n"
         "writes the persistent image to stdout, one byte per byte, no header\n"
         "--per-channel gives each channel its own template, and refuses\n"
-        "--steps and --ratchet\n");
+        "--steps and --ratchet\n"
+        "--format picks the EEPROM layout. It defaults to 2, the format the\n"
+        "firmware reads today. Format 3 is not emitted yet.\n");
 }
 
 struct PerChannelTemplate {
@@ -98,6 +101,82 @@ bool parseRatchets(const char* list, uint8_t* steps, uint8_t* codes, int& count)
 
 }  // namespace
 
+constexpr uint8_t INSTANCE_MARKER_FIRST_STEP = 18;
+
+int emitVersionThree(SequencerEngine& engine, UiController& ui,
+                     Preferences& preferences, PatternBank& bank, bool perChannel) {
+    for (uint8_t channel = 0; channel < SequencerEngine::CHANNEL_COUNT; ++channel) {
+        Pattern* instance = engine.instanceForChannel(channel);
+        const int8_t selected = engine.getSelectedPattern(channel);
+        if (instance == nullptr || selected < 0) {
+            std::fprintf(stderr, "eeprom-image: channel %u has no instance\n", channel);
+            return 2;
+        }
+        const Pattern* source = bank.getPattern(static_cast<uint8_t>(selected));
+        if (source != nullptr) {
+            *instance = *source;
+        }
+        if (perChannel) {
+            const uint8_t marker =
+                static_cast<uint8_t>(INSTANCE_MARKER_FIRST_STEP + channel);
+            if (!instance->writeStep(marker, true)) {
+                std::fprintf(stderr, "eeprom-image: step %u refused on channel %u\n",
+                             marker, channel);
+                return 2;
+            }
+        }
+    }
+
+    PersistentImageV3 image(engine, ui, preferences);
+    uint8_t physical[persist::v3::TOTAL_SIZE];
+    bool covered[persist::v3::TOTAL_SIZE];
+    for (uint16_t offset = 0; offset < persist::v3::TOTAL_SIZE; ++offset) {
+        physical[offset] = 0;
+        covered[offset] = false;
+    }
+
+    for (uint8_t index = 0; index < persist::v3::TEMPLATE_COUNT; ++index) {
+        for (uint8_t offset = 0; offset < persist::v3::TEMPLATE_RECORD; ++offset) {
+            const uint16_t at = static_cast<uint16_t>(
+                persist::v3::TEMPLATES_OFFSET + index * persist::v3::TEMPLATE_RECORD + offset);
+            if (covered[at]) {
+                std::fprintf(stderr, "eeprom-image: template offset %u written twice\n", at);
+                return 2;
+            }
+            physical[at] = persist::v3::factoryTemplateByte(index, offset);
+            covered[at] = true;
+        }
+    }
+
+    for (uint16_t index = 0; index < PersistentImageV3::SIZE; ++index) {
+        const uint16_t address = image.addressAt(index);
+        if (address < persist::BASE_ADDRESS
+            || address >= persist::BASE_ADDRESS + persist::v3::TOTAL_SIZE) {
+            std::fprintf(stderr, "eeprom-image: logical %u maps outside the format\n", index);
+            return 2;
+        }
+        const uint16_t at = static_cast<uint16_t>(address - persist::BASE_ADDRESS);
+        if (covered[at]) {
+            std::fprintf(stderr, "eeprom-image: offset %u written twice\n", at);
+            return 2;
+        }
+        physical[at] = image.byteAt(index);
+        covered[at] = true;
+    }
+
+    for (uint16_t offset = 0; offset < persist::v3::TOTAL_SIZE; ++offset) {
+        if (!covered[offset]) {
+            std::fprintf(stderr, "eeprom-image: offset %u never written\n", offset);
+            return 2;
+        }
+    }
+
+    for (uint16_t offset = 0; offset < persist::v3::TOTAL_SIZE; ++offset) {
+        std::putchar(physical[offset]);
+    }
+    return 0;
+}
+
 int main(int argc, char** argv) {
     const char* mode = nullptr;
     const char* stepList = nullptr;
@@ -105,6 +184,7 @@ int main(int argc, char** argv) {
     const char* subdivText = nullptr;
     uint16_t tempo = UiController::DEFAULT_TEMPO;
     bool perChannel = false;
+    uint8_t format = persist::FORMAT_VERSION;
 
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--mode") == 0 && i + 1 < argc) {
@@ -119,6 +199,8 @@ int main(int argc, char** argv) {
             tempo = static_cast<uint16_t>(std::atoi(argv[++i]));
         } else if (std::strcmp(argv[i], "--per-channel") == 0) {
             perChannel = true;
+        } else if (std::strcmp(argv[i], "--format") == 0 && i + 1 < argc) {
+            format = static_cast<uint8_t>(std::atoi(argv[++i]));
         } else {
             usage();
             return 2;
@@ -126,6 +208,10 @@ int main(int argc, char** argv) {
     }
     if (mode == nullptr) {
         usage();
+        return 2;
+    }
+    if (format != persist::FORMAT_VERSION && format != persist::v3::FORMAT_VERSION) {
+        std::fprintf(stderr, "eeprom-image: --format accepts 2 or 3\n");
         return 2;
     }
     if (perChannel && (stepList != nullptr || ratchetList != nullptr)) {
@@ -211,6 +297,10 @@ int main(int argc, char** argv) {
     if (!ui.setTempo(tempo)) {
         std::fprintf(stderr, "eeprom-image: tempo refused: %u\n", tempo);
         return 2;
+    }
+
+    if (format == persist::v3::FORMAT_VERSION) {
+        return emitVersionThree(engine, ui, preferences, bank, perChannel);
     }
 
     for (uint16_t index = 0; index < PersistentImage::SIZE; ++index) {

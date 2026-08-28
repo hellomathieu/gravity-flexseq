@@ -38,6 +38,7 @@ cpp_status="skip"
 ts_status="skip"
 tc_status="skip"
 lib_status="skip"
+img_status="skip"
 ad_status="skip"
 
 if [ "$RUN_CPP" = "1" ]; then
@@ -91,6 +92,18 @@ if [ "$RUN_CPP" = "1" ]; then
   echo
 fi
 
+if [ "$RUN_CPP" = "1" ]; then
+  echo "=========================================="
+  echo "  Image EEPROM du generateur (octets emis)"
+  echo "=========================================="
+  if "$REPO_ROOT/tools/run-eeprom-image-check.sh"; then
+    img_status="OK"
+  else
+    img_status="ECHEC"
+  fi
+  echo
+fi
+
 if [ "$RUN_LIB" = "1" ]; then
   echo "=========================================="
   echo "  Caracterisation libGravity"
@@ -106,6 +119,7 @@ fi
 echo "=================== RECAP ==================="
 printf "  C++ acceptation (native)   : %s\n" "$cpp_status"
 printf "  Adaptateur d'entrees       : %s\n" "$ad_status"
+printf "  Image EEPROM generee       : %s\n" "$img_status"
 printf "  TypeScript (sim/)          : %s\n" "$ts_status"
 printf "  Typage TypeScript          : %s\n" "$tc_status"
 printf "  libGravity caracterisation : %s\n" "$lib_status"
@@ -114,7 +128,7 @@ echo "============================================"
 # Code de sortie : erreur si l'une des suites lancees a echoue.
 if [ "$cpp_status" = "ECHEC" ] || [ "$ad_status" = "ECHEC" ] \
    || [ "$ts_status" = "ECHEC" ] || [ "$tc_status" = "ECHEC" ] \
-   || [ "$lib_status" = "ECHEC" ]; then
+   || [ "$img_status" = "ECHEC" ] || [ "$lib_status" = "ECHEC" ]; then
   exit 1
 fi
 exit 0
