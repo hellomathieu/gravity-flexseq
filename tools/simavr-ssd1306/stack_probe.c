@@ -29,6 +29,15 @@
 #ifndef IMAGE_SIZE
 #error "IMAGE_SIZE must come from include/flexseq/Persistence.h"
 #endif
+#ifndef VERSION_OFFSET
+#error "VERSION_OFFSET must come from include/flexseq/Persistence.h"
+#endif
+#ifndef BASE_ADDRESS
+#error "BASE_ADDRESS must come from include/flexseq/Persistence.h"
+#endif
+#if VERSION_OFFSET >= IMAGE_SIZE
+#error "the version byte must sit inside the image that is read back"
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -196,15 +205,16 @@ int main(int argc, char** argv)
      * constate plutot que de le supposer : sans cette lecture, la mesure de pile
      * pourrait ne jamais avoir emprunte ce chemin. */
     uint8_t image[IMAGE_SIZE];
-    avr_eeprom_desc_t ee = { .ee = image, .offset = 384, .size = sizeof(image) };
+    avr_eeprom_desc_t ee = { .ee = image, .offset = BASE_ADDRESS, .size = sizeof(image) };
     int ee_ok = avr_ioctl(avr, AVR_IOCTL_EEPROM_GET, &ee) == 0;
     printf("\n=== PERSISTANCE ===\n");
     if (ee_ok) {
         int written = 0;
         for (size_t i = 0; i < sizeof(image); ++i)
             if (image[i] != 0xFF) ++written;
-        printf("  octet de version a 384 : %u   (%d octets non vierges sur %zu lus)\n",
-               image[0], written, sizeof(image));
+        printf("  octet de version a %u : %u   (%d octets non vierges sur %zu lus)\n",
+               (unsigned)(BASE_ADDRESS + VERSION_OFFSET), image[VERSION_OFFSET],
+               written, sizeof(image));
     } else {
         printf("  EEPROM simulee illisible\n");
     }

@@ -27,8 +27,21 @@
 #      mesure est incomplete en silence, ce qui etait exactement le defaut d'avant ;
 #   2. le pic tient dans RAM_RESERVE, le garde-fou du projet ;
 #   3. le pic tient dans la RAM libre — condition absolue : au-dela, la pile
-#      ecrase .bss.
-# Sortie 0 si les trois passent, 1 sinon, 127 si un outil manque.
+#      ecrase .bss ;
+#   4. l'ecriture EEPROM de la persistance a EU LIEU pendant la mesure : l'octet
+#      de version relu vaut celui du format ACTIF, a l'adresse de ce format.
+# Sortie 0 si les quatre passent, 1 sinon, 127 si un outil manque.
+#
+# LE FORMAT ACTIF EST LU SUR LE BINAIRE, JAMAIS DEVINE SUR LE FICHIER. La version
+# precedente decoupait Persistence.h avant `namespace v3 {` et prenait les
+# constantes qui restaient : elle a donc attendu la v2 apres l'activation de la
+# v3, et rendu un rouge qui ne disait rien du firmware. L'image liee est
+# desormais identifiee par ses symboles dans firmware.elf, et les constantes
+# viennent du COMPILATEUR via tools/persistence-format.cpp, qui inclut l'en-tete
+# normatif. Deux images liees, ou aucune, arretent le script sans verdict.
+#
+# Le nombre d'octets non vierges est une MESURE, pas un critere : rien
+# n'etablit aujourd'hui combien d'octets un semis d'usine laisse non vierges.
 #
 # Reglages : RAM_RESERVE (defaut 256), DURATION (defaut 8 s), QUIET=1 pour
 # mesurer sans injection (utile pour attribuer l'ecart aux ISR).
@@ -74,21 +87,42 @@ END_HEX="$("$AVR_NM" --radix=x "$ELF" | grep -E " _end$" | head -1 | cut -d' ' -
 END="$(printf '0x%x' $(( 0x$END_HEX - 0x800000 )))"
 printf '  %s✅%s symbole                %s_end %s%s\n' "$C_OK" "$C_0" "$C_DIM" "$END" "$C_0"
 
-ACTIVE_FORMAT="$(sed -n '1,/^namespace v3 {/p' "$ROOT/include/flexseq/Persistence.h")"
-IMAGE_SIZE="$(printf '%s\n' "$ACTIVE_FORMAT" \
-  | grep -oE 'static_assert\(TOTAL_SIZE == [0-9]+' | grep -oE '[0-9]+$')"
-FORMAT_VERSION="$(printf '%s\n' "$ACTIVE_FORMAT" \
-  | grep -oE 'FORMAT_VERSION = [0-9]+' | grep -oE '[0-9]+$')"
-[ -n "$IMAGE_SIZE" ] && [ -n "$FORMAT_VERSION" ] \
-  || die "taille d'image ou octet de version introuvables dans include/flexseq/Persistence.h"
-[ "$(printf '%s\n' "$IMAGE_SIZE" | wc -l | tr -d ' ')" = "1" ] \
-  && [ "$(printf '%s\n' "$FORMAT_VERSION" | wc -l | tr -d ' ')" = "1" ] \
-  || die "taille d'image ou octet de version AMBIGUS dans le format actif : lu \"$FORMAT_VERSION\" et \"$IMAGE_SIZE\". Restreindre la lecture a une seule constante, jamais rendre un verdict."
-printf '  %s✅%s format lu              %sversion %s, %s o%s\n' "$C_OK" "$C_0" "$C_DIM" \
-  "$FORMAT_VERSION" "$IMAGE_SIZE" "$C_0"
+DEMANGLED="$("$AVR_NM" --demangle "$ELF")"
+V3_HITS="$(printf '%s\n' "$DEMANGLED" | grep -c 'flexseq::PersistentImageV3::')"
+V2_HITS="$(printf '%s\n' "$DEMANGLED" | grep -c 'flexseq::PersistentImage::')"
+case "$V3_HITS:$V2_HITS" in
+  0:0) die "format actif INDECIDABLE : le binaire ne porte aucun symbole d'image de persistance. Ne pas rendre de verdict sur une supposition." ;;
+  0:*) ACTIVE_MAJOR=2 ;;
+  *:0) ACTIVE_MAJOR=3 ;;
+  *)   die "format actif AMBIGU : le binaire lie les deux images (v3 $V3_HITS symboles, v2 $V2_HITS). Ne pas rendre de verdict." ;;
+esac
+
+FMT_BIN="$(dirname "$BIN")/persistence_format"
+if ! c++ -std=c++17 -I"$ROOT/include" -DACTIVE_FORMAT_V"$ACTIVE_MAJOR"=1 \
+     -o "$FMT_BIN" "$ROOT/tools/persistence-format.cpp" > "$LOG" 2>&1; then
+  printf '\n'; cat "$LOG"; die "compilation de tools/persistence-format.cpp en echec"
+fi
+FMT_OUT="$("$FMT_BIN")" || die "tools/persistence-format.cpp n'a rien rendu"
+field() { printf '%s\n' "$FMT_OUT" | sed -n "s/^$1=//p"; }
+FORMAT_VERSION="$(field FORMAT_VERSION)"
+IMAGE_SIZE="$(field IMAGE_SIZE)"
+SCAN_SIZE="$(field SCAN_SIZE)"
+VERSION_OFFSET="$(field VERSION_OFFSET)"
+BASE_ADDRESS="$(field BASE_ADDRESS)"
+for name in FORMAT_VERSION IMAGE_SIZE SCAN_SIZE VERSION_OFFSET BASE_ADDRESS; do
+  eval "value=\$$name"
+  case "$value" in
+    ''|*[!0-9]*) die "constante $name absente ou non numerique dans la sortie du format actif : \"$value\"" ;;
+  esac
+done
+[ "$FORMAT_VERSION" = "$ACTIVE_MAJOR" ] \
+  || die "le format compile annonce la version $FORMAT_VERSION la ou le binaire lie la v$ACTIVE_MAJOR. Ne pas rendre de verdict."
+printf '  %s✅%s format actif           %sversion %s, %s o physiques, %s balayes — lu sur firmware.elf%s\n' \
+  "$C_OK" "$C_0" "$C_DIM" "$FORMAT_VERSION" "$IMAGE_SIZE" "$SCAN_SIZE" "$C_0"
 
 progress "compilation du harnais"
-if cc -O2 -Wall -DIMAGE_SIZE="$IMAGE_SIZE" -I"$PREFIX/include/simavr" -I"$PREFIX/include" \
+if cc -O2 -Wall -DIMAGE_SIZE="$IMAGE_SIZE" -DVERSION_OFFSET="$VERSION_OFFSET" \
+     -DBASE_ADDRESS="$BASE_ADDRESS" -I"$PREFIX/include/simavr" -I"$PREFIX/include" \
      "$ROOT/tools/simavr-ssd1306/stack_probe.c" -o "$BIN" \
      -L"$PREFIX/lib" -lsimavrparts -lsimavr -lelf > "$LOG" 2>&1; then
   printf '  %s✅%s harnais compile        %s%s%s\n' "$C_OK" "$C_0" "$C_DIM" "$PREFIX" "$C_0"
@@ -103,7 +137,8 @@ printf '  %s✅%s simulation             %s%s s%s%s\n' "$C_OK" "$C_0" "$C_DIM" "
   "${QUIET:+, sans injection}" "$C_0"
 
 RAM_RESERVE="$RAM_RESERVE" QUIET="${QUIET:-}" FORMAT_VERSION="$FORMAT_VERSION" \
-  IMAGE_SIZE="$IMAGE_SIZE" python3 - "$LOG" <<'PY'
+  IMAGE_SIZE="$IMAGE_SIZE" SCAN_SIZE="$SCAN_SIZE" \
+  VERSION_ADDRESS="$((BASE_ADDRESS + VERSION_OFFSET))" python3 - "$LOG" <<'PY'
 import os, re, sys
 
 txt = open(sys.argv[1], errors='replace').read()
@@ -114,7 +149,7 @@ reserve = int(os.environ["RAM_RESERVE"])
 quiet = bool(os.environ.get("QUIET"))
 
 m = re.search(r"pic (\d+) o sur (\d+) libres, marge (\d+)", txt)
-version = re.search(r"octet de version a 384 : (\d+)", txt)
+version = re.search(r"octet de version a (\d+) : (\d+)", txt)
 written = re.search(r"\((\d+) octets non vierges sur (\d+) lus\)", txt)
 if not m:
     print(f"  {mark(False)} sortie du harnais illisible"); print(txt); sys.exit(1)
@@ -142,13 +177,19 @@ print(f"  {mark(fits_reserve)} Pic de pile        {peak:4d} o   "
 print(f"  {mark(fits_ram)} Marge              {margin:4d} o   "
       f"{DIM}— RAM libre {free} o apres .data + .bss{Z}")
 expected_version = os.environ["FORMAT_VERSION"]
+expected_address = os.environ["VERSION_ADDRESS"]
 expected_size = os.environ["IMAGE_SIZE"]
-persisted = (version is not None and version[1] == expected_version
-             and written is not None and written[2] == expected_size)
+scan_size = os.environ["SCAN_SIZE"]
+read_back = written is not None and written[2] == expected_size
+persisted = (version is not None and version[1] == expected_address
+             and version[2] == expected_version and read_back)
 print(f"  {mark(persisted)} Persistance         "
-      f"octet de version {version[1] if version else 'ABSENT'} a 384, "
-      f"{written[1] if written else '?'}/{written[2] if written else '?'} octets ecrits"
+      f"octet de version {version[2] if version else 'ABSENT'} "
+      f"a {version[1] if version else '?'}, attendu {expected_version} a {expected_address}"
       f"{DIM}  (constate, pas suppose){Z}")
+print(f"  {DIM}   octets non vierges  {written[1] if written else '?'} sur "
+      f"{written[2] if written else '?'} relus — mesure, sans attente ;"
+      f" {scan_size} o sont balayes{Z}")
 print(f"{B}==================================================================={Z}")
 
 if not fits_ram:
