@@ -163,6 +163,18 @@ bool applyTemplateByte(Pattern& pattern, uint8_t& length, uint8_t offset, uint8_
 
 uint8_t factoryTemplateByte(uint8_t index, uint8_t offset);
 
+constexpr uint16_t IMAGE_INSTANCES_AT = 0;
+constexpr uint16_t IMAGE_CHANNELS_AT = IMAGE_INSTANCES_AT + INSTANCES_SIZE;
+constexpr uint16_t IMAGE_GLOBAL_AT = IMAGE_CHANNELS_AT + CHANNELS_SIZE;
+constexpr uint16_t IMAGE_PREFS_AT = IMAGE_GLOBAL_AT + GLOBAL_SIZE;
+constexpr uint16_t IMAGE_VERSION_AT = IMAGE_PREFS_AT + PREFS_SIZE;
+constexpr uint16_t IMAGE_SIZE = IMAGE_VERSION_AT + HEADER_SIZE;
+
+static_assert(IMAGE_SIZE + TEMPLATES_SIZE == TOTAL_SIZE,
+              "the scanned image plus the template zone must cover the whole format");
+static_assert(IMAGE_VERSION_AT == IMAGE_SIZE - 1,
+              "the version must hold the last logical index, so the scan writes it last");
+
 }  // namespace v3
 
 }  // namespace persist
@@ -170,10 +182,15 @@ uint8_t factoryTemplateByte(uint8_t index, uint8_t offset);
 class PersistentImage {
 public:
     static constexpr uint16_t SIZE = persist::TOTAL_SIZE;
+    static constexpr uint16_t VERSION_INDEX = persist::HEADER_OFFSET;
 
     PersistentImage(PatternBank& bank, SequencerEngine& engine, UiController& ui,
                     Preferences& preferences)
         : bank_(bank), engine_(engine), ui_(ui), prefs_(preferences) {}
+
+    uint16_t addressAt(uint16_t index) const {
+        return static_cast<uint16_t>(persist::BASE_ADDRESS + index);
+    }
 
     uint8_t byteAt(uint16_t index) const;
     void applyByte(uint16_t index, uint8_t value);
@@ -186,6 +203,25 @@ private:
     void applyChannelByte(uint8_t channel, uint8_t offset, uint8_t value);
 
     PatternBank& bank_;
+    SequencerEngine& engine_;
+    UiController& ui_;
+    Preferences& prefs_;
+};
+
+class PersistentImageV3 {
+public:
+    static constexpr uint16_t SIZE = persist::v3::IMAGE_SIZE;
+    static constexpr uint16_t VERSION_INDEX = persist::v3::IMAGE_VERSION_AT;
+
+    PersistentImageV3(SequencerEngine& engine, UiController& ui, Preferences& preferences)
+        : engine_(engine), ui_(ui), prefs_(preferences) {}
+
+    uint16_t addressAt(uint16_t index) const;
+    uint8_t byteAt(uint16_t index) const;
+    void applyByte(uint16_t index, uint8_t value);
+    void resetToDefaults();
+
+private:
     SequencerEngine& engine_;
     UiController& ui_;
     Preferences& prefs_;
@@ -213,8 +249,8 @@ public:
         return dirty_ && static_cast<uint32_t>(nowMs - lastChangeMs_) >= QUIET_MS;
     }
 
-    template <typename Storage>
-    bool advance(Storage& storage, const PersistentImage& image, uint32_t nowMs) {
+    template <typename Storage, typename Image>
+    bool advance(Storage& storage, const Image& image, uint32_t nowMs) {
         if (!writing_) {
             if (!quietElapsed(nowMs)) {
                 return false;
@@ -222,8 +258,8 @@ public:
             writing_ = true;
             cursor_ = 0;
         }
-        while (cursor_ < PersistentImage::SIZE) {
-            const uint16_t address = static_cast<uint16_t>(persist::BASE_ADDRESS + cursor_);
+        while (cursor_ < Image::SIZE) {
+            const uint16_t address = image.addressAt(cursor_);
             const uint8_t wanted = image.byteAt(cursor_);
             ++cursor_;
             if (storage.read(address) != wanted) {
@@ -236,16 +272,18 @@ public:
         return false;
     }
 
-    template <typename Storage>
-    bool load(Storage& storage, PersistentImage& image) {
-        if (storage.read(persist::BASE_ADDRESS + persist::HEADER_OFFSET)
-            != persist::FORMAT_VERSION) {
+    template <typename Storage, typename Image>
+    bool load(Storage& storage, Image& image) {
+        if (storage.read(image.addressAt(Image::VERSION_INDEX))
+            != image.byteAt(Image::VERSION_INDEX)) {
             image.resetToDefaults();
             return false;
         }
-        for (uint16_t index = persist::HEADER_SIZE; index < PersistentImage::SIZE; ++index) {
-            image.applyByte(index,
-                            storage.read(static_cast<uint16_t>(persist::BASE_ADDRESS + index)));
+        for (uint16_t index = 0; index < Image::SIZE; ++index) {
+            if (index == Image::VERSION_INDEX) {
+                continue;
+            }
+            image.applyByte(index, storage.read(image.addressAt(index)));
         }
         return true;
     }

@@ -8,6 +8,7 @@ using flexseq::PatternBank;
 using flexseq::Pattern;
 using flexseq::PersistenceScheduler;
 using flexseq::PersistentImage;
+using flexseq::PersistentImageV3;
 using flexseq::Preferences;
 using flexseq::SequencerEngine;
 using flexseq::Transport;
@@ -904,8 +905,254 @@ void test_a_stored_cv_target_is_ignored_without_disturbing_the_record() {
     TEST_ASSERT_EQUAL_UINT8(0, loaded.image.byteAt(persist::CHANNELS_OFFSET + 7));
 }
 
+struct RigV3 {
+    SequencerEngine engine;
+    Transport transport;
+    UiController ui;
+    Preferences prefs;
+    PersistentImageV3 image;
+    PersistenceScheduler scheduler;
+
+    RigV3() : engine(), transport(engine), ui(engine, transport), prefs(),
+              image(engine, ui, prefs) {}
+};
+
+uint16_t finishWriteV3(RigV3& r, FakeEeprom& ee, uint32_t nowMs) {
+    uint16_t calls = 0;
+    while (r.scheduler.advance(ee, r.image, nowMs)) {
+        ++calls;
+    }
+    return calls;
+}
+
+struct JournalEeprom {
+    uint8_t cell[persist::EEPROM_SIZE];
+    uint16_t order[persist::EEPROM_SIZE];
+    uint16_t count;
+    bool overflowed;
+
+    JournalEeprom() { reset(); }
+
+    void reset() {
+        memset(cell, SENTINEL, sizeof(cell));
+        count = 0;
+        overflowed = false;
+    }
+
+    uint8_t read(uint16_t address) const { return cell[address]; }
+
+    void write(uint16_t address, uint8_t value) {
+        cell[address] = value;
+        if (count < persist::EEPROM_SIZE) {
+            order[count++] = address;
+        } else {
+            overflowed = true;
+        }
+    }
+};
+
+JournalEeprom journal;
+
+void test_the_v3_scan_visits_and_writes_the_two_hundred_and_four_logical_bytes() {
+    journal.reset();
+    RigV3 r;
+    for (uint16_t index = 0; index < flexseq::PersistentImageV3::SIZE; ++index) {
+        journal.cell[r.image.addressAt(index)] = static_cast<uint8_t>(~r.image.byteAt(index));
+    }
+    journal.count = 0;
+    r.scheduler.markDirty(0);
+    while (r.scheduler.advance(journal, r.image, persist::QUIET_MS)) {
+    }
+    TEST_ASSERT_FALSE(journal.overflowed);
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(204, journal.count,
+        "le parcours doit ecrire les 204 octets logiques quand tous different");
+}
+
+void test_the_v3_scan_touches_only_the_version_and_the_data_zone() {
+    journal.reset();
+    RigV3 r;
+    for (uint16_t index = 0; index < flexseq::PersistentImageV3::SIZE; ++index) {
+        journal.cell[r.image.addressAt(index)] = static_cast<uint8_t>(~r.image.byteAt(index));
+    }
+    journal.count = 0;
+    r.scheduler.markDirty(0);
+    while (r.scheduler.advance(journal, r.image, persist::QUIET_MS)) {
+    }
+    for (uint16_t i = 0; i < journal.count; ++i) {
+        const uint16_t address = journal.order[i];
+        const bool isVersion = (address == 384);
+        const bool isData = (address >= 769 && address <= 971);
+        TEST_ASSERT_TRUE_MESSAGE(isVersion || isData,
+            "une ecriture est tombee hors de la version et de la zone de donnees");
+        TEST_ASSERT_TRUE_MESSAGE(address < 385 || address > 768,
+            "une ecriture est tombee dans la zone des templates");
+        TEST_ASSERT_TRUE_MESSAGE(address < 972,
+            "une ecriture a depasse la fin du format");
+    }
+}
+
+void test_the_v3_version_byte_is_the_last_address_written() {
+    journal.reset();
+    RigV3 r;
+    for (uint16_t index = 0; index < flexseq::PersistentImageV3::SIZE; ++index) {
+        journal.cell[r.image.addressAt(index)] = static_cast<uint8_t>(~r.image.byteAt(index));
+    }
+    journal.count = 0;
+    r.scheduler.markDirty(0);
+    while (r.scheduler.advance(journal, r.image, persist::QUIET_MS)) {
+    }
+    TEST_ASSERT_EQUAL_UINT16(204, journal.count);
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(384, journal.order[journal.count - 1],
+        "la version doit etre le dernier octet ecrit");
+    for (uint16_t i = 0; i + 1 < journal.count; ++i) {
+        TEST_ASSERT_TRUE_MESSAGE(journal.order[i] >= 769,
+            "un octet de donnees doit preceder la version");
+    }
+}
+
+void test_the_v2_scan_still_writes_the_version_first() {
+    journal.reset();
+    Rig r;
+    for (uint16_t index = 0; index < flexseq::PersistentImage::SIZE; ++index) {
+        journal.cell[r.image.addressAt(index)] = static_cast<uint8_t>(~r.image.byteAt(index));
+    }
+    journal.count = 0;
+    r.scheduler.markDirty(0);
+    while (r.scheduler.advance(journal, r.image, persist::QUIET_MS)) {
+    }
+    TEST_ASSERT_EQUAL_UINT16(304, journal.count);
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(384, journal.order[0],
+        "le contrat v2 ecrit la version en PREMIER, et il ne change pas");
+}
+
+void test_the_v3_logical_image_is_two_hundred_and_four_bytes() {
+    TEST_ASSERT_EQUAL_UINT16(204, flexseq::PersistentImageV3::SIZE);
+    TEST_ASSERT_EQUAL_UINT16(203, flexseq::PersistentImageV3::VERSION_INDEX);
+    TEST_ASSERT_EQUAL_UINT16(588, persist::v3::TOTAL_SIZE);
+    TEST_ASSERT_EQUAL_UINT16(384, persist::v3::TEMPLATES_SIZE);
+}
+
+void test_the_v3_version_holds_the_last_logical_index_at_the_first_address() {
+    RigV3 r;
+    TEST_ASSERT_EQUAL_UINT16(384, r.image.addressAt(203));
+    TEST_ASSERT_EQUAL_UINT8(3, r.image.byteAt(203));
+}
+
+void test_the_v3_mapping_never_lands_in_the_template_zone() {
+    RigV3 r;
+    for (uint16_t index = 0; index < flexseq::PersistentImageV3::SIZE; ++index) {
+        const uint16_t address = r.image.addressAt(index);
+        TEST_ASSERT_TRUE_MESSAGE(address < 385 || address > 768,
+            "un octet logique est mappe dans la zone des templates");
+    }
+}
+
+void test_the_v3_mapping_covers_the_version_and_the_data_zone_exactly() {
+    RigV3 r;
+    bool seen[1024];
+    memset(seen, 0, sizeof(seen));
+    for (uint16_t index = 0; index < flexseq::PersistentImageV3::SIZE; ++index) {
+        const uint16_t address = r.image.addressAt(index);
+        TEST_ASSERT_FALSE_MESSAGE(seen[address], "deux index logiques visent la meme adresse");
+        seen[address] = true;
+    }
+    TEST_ASSERT_TRUE(seen[384]);
+    for (uint16_t address = 385; address <= 768; ++address) {
+        TEST_ASSERT_FALSE(seen[address]);
+    }
+    for (uint16_t address = 769; address <= 971; ++address) {
+        TEST_ASSERT_TRUE(seen[address]);
+    }
+    TEST_ASSERT_FALSE(seen[972]);
+}
+
+void test_the_v3_global_zone_reads_mod_and_range_as_zero() {
+    RigV3 r;
+    TEST_ASSERT_EQUAL_UINT8(0, r.image.byteAt(192 + 3));
+    TEST_ASSERT_EQUAL_UINT8(0, r.image.byteAt(192 + 4));
+}
+
+void test_a_stored_mod_or_range_is_normalised_back_to_zero() {
+    RigV3 r;
+    r.image.applyByte(192 + 3, 0x5A);
+    r.image.applyByte(192 + 4, 0xA5);
+    TEST_ASSERT_EQUAL_UINT8(0, r.image.byteAt(192 + 3));
+    TEST_ASSERT_EQUAL_UINT8(0, r.image.byteAt(192 + 4));
+    TEST_ASSERT_EQUAL_UINT16(UiController::DEFAULT_TEMPO, r.ui.tempo());
+    TEST_ASSERT_EQUAL_UINT8(0, r.ui.clockSource());
+}
+
+void test_the_v3_image_round_trips_the_six_instances() {
+    eeprom.reset();
+    RigV3 saved;
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        Pattern* instance = saved.engine.instanceForChannel(ch);
+        instance->writeStep(static_cast<uint8_t>(ch), true);
+        instance->setRatchet(static_cast<uint8_t>(ch), flexseq::RATCHET_3);
+    }
+    saved.ui.setTempo(143);
+    saved.scheduler.markDirty(0);
+    finishWriteV3(saved, eeprom, persist::QUIET_MS);
+
+    RigV3 loaded;
+    TEST_ASSERT_TRUE(loaded.scheduler.load(eeprom, loaded.image));
+    TEST_ASSERT_EQUAL_UINT16(143, loaded.ui.tempo());
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        const Pattern* instance = loaded.engine.instanceForChannel(ch);
+        bool active = false;
+        instance->readStep(static_cast<uint8_t>(ch), active);
+        TEST_ASSERT_TRUE_MESSAGE(active, "un step d instance n a pas survecu au tour complet");
+        TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_3, instance->getRatchet(static_cast<uint8_t>(ch)));
+    }
+}
+
+void test_the_v3_reset_clears_the_six_instances_without_a_bank() {
+    RigV3 r;
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        r.engine.instanceForChannel(ch)->writeStep(0, true);
+    }
+    r.image.resetToDefaults();
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        bool active = true;
+        r.engine.instanceForChannel(ch)->readStep(0, active);
+        TEST_ASSERT_FALSE_MESSAGE(active, "une instance n a pas ete videe");
+    }
+    TEST_ASSERT_EQUAL_UINT16(UiController::DEFAULT_TEMPO, r.ui.tempo());
+}
+
+void test_the_v2_mapping_is_the_identity_the_scheduler_used_to_inline() {
+    Rig r;
+    for (uint16_t index = 0; index < flexseq::PersistentImage::SIZE; ++index) {
+        TEST_ASSERT_EQUAL_UINT16(384 + index, r.image.addressAt(index));
+    }
+}
+
+void test_the_v2_version_sits_at_the_first_logical_index() {
+    TEST_ASSERT_EQUAL_UINT16(0, flexseq::PersistentImage::VERSION_INDEX);
+    Rig r;
+    TEST_ASSERT_EQUAL_UINT16(384, r.image.addressAt(flexseq::PersistentImage::VERSION_INDEX));
+    TEST_ASSERT_EQUAL_UINT8(2, r.image.byteAt(flexseq::PersistentImage::VERSION_INDEX));
+}
+
 int main() {
     UNITY_BEGIN();
+
+    RUN_TEST(test_the_v3_scan_visits_and_writes_the_two_hundred_and_four_logical_bytes);
+    RUN_TEST(test_the_v3_scan_touches_only_the_version_and_the_data_zone);
+    RUN_TEST(test_the_v3_version_byte_is_the_last_address_written);
+    RUN_TEST(test_the_v2_scan_still_writes_the_version_first);
+
+    RUN_TEST(test_the_v3_logical_image_is_two_hundred_and_four_bytes);
+    RUN_TEST(test_the_v3_version_holds_the_last_logical_index_at_the_first_address);
+    RUN_TEST(test_the_v3_mapping_never_lands_in_the_template_zone);
+    RUN_TEST(test_the_v3_mapping_covers_the_version_and_the_data_zone_exactly);
+    RUN_TEST(test_the_v3_global_zone_reads_mod_and_range_as_zero);
+    RUN_TEST(test_a_stored_mod_or_range_is_normalised_back_to_zero);
+    RUN_TEST(test_the_v3_image_round_trips_the_six_instances);
+    RUN_TEST(test_the_v3_reset_clears_the_six_instances_without_a_bank);
+
+    RUN_TEST(test_the_v2_mapping_is_the_identity_the_scheduler_used_to_inline);
+    RUN_TEST(test_the_v2_version_sits_at_the_first_logical_index);
 
     RUN_TEST(test_the_layout_is_the_one_the_prd_fixed);
     RUN_TEST(test_the_image_ends_below_the_original_memcode);
