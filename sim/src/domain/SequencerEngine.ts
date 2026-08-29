@@ -55,6 +55,11 @@ export const MIN_LENGTH = 1;
 export const MAX_LENGTH = 24;
 export const DEFAULT_LENGTH = 16;
 
+/** ADR 0009 : plafond d'une longueur venue du stockage, la capacite du Pattern. */
+export const MAX_STORED_LENGTH = Pattern.DEFAULT_TOTAL_STEPS;
+/** ADR 0009 : contribution du Length CV, nulle tant que le CV n'existe pas. */
+export const LENGTH_CV_OFFSET = 0;
+
 /** masterPhase est un uint32 : il boucle a 2^32 ticks. */
 const PHASE_MODULO = 0x1_0000_0000;
 
@@ -93,6 +98,7 @@ export const MAX_SKIP_CHANCE = 10;
 
 interface ChannelState {
   selectedPattern: number; // index 0..15 dans la banque partagee
+  baseLength: number;
   effectiveLength: number;
   subdiv: number; // valeur SUBDIV (libGravity) ; determine ticksPerStep
   ticksPerStep: number;
@@ -124,6 +130,7 @@ export class SequencerEngine {
     this.instances = Array.from({ length: channelCount }, () => new Pattern());
     this.channels = Array.from({ length: channelCount }, () => ({
       selectedPattern: 0,
+      baseLength: DEFAULT_LENGTH,
       effectiveLength: DEFAULT_LENGTH,
       subdiv: DEFAULT_SUBDIV,
       ticksPerStep: subdivToTicks(DEFAULT_SUBDIV),
@@ -372,22 +379,53 @@ export class SequencerEngine {
   }
 
   /**
-   * Definit effectiveLength (1..24). Rejette sans mutation si invalide.
-   * Phase locale LISSEE : localStep est conserve, et n'est replie sur la
-   * nouvelle longueur que s'il tombe hors bornes (pas de saut sinon).
+   * Definit baseLength par l'entree MANUELLE (1..24). Rejette sans mutation
+   * si invalide. Phase locale LISSEE : localStep est conserve, et n'est replie
+   * sur la nouvelle longueur que s'il tombe hors bornes (pas de saut sinon).
    */
-  setEffectiveLength(channel: number, length: number): boolean {
+  setBaseLength(channel: number, length: number): boolean {
     const c = this.channel(channel);
     if (!c) return false;
     if (!Number.isInteger(length) || length < MIN_LENGTH || length > MAX_LENGTH) {
       return false;
     }
-    c.effectiveLength = length;
-    if (c.localStep >= length) {
-      c.localStep %= length;
+    c.baseLength = length;
+    this.refreshEffectiveLength(channel);
+    return true;
+  }
+
+  /**
+   * Definit baseLength depuis le STOCKAGE (1..36). ADR 0009 : une longueur
+   * venue d'un modele peut depasser le plafond d'interface ; seule
+   * effectiveLength est ecretee.
+   */
+  setBaseLengthFromStorage(channel: number, length: number): boolean {
+    const c = this.channel(channel);
+    if (!c) return false;
+    if (!Number.isInteger(length) || length < MIN_LENGTH || length > MAX_STORED_LENGTH) {
+      return false;
+    }
+    c.baseLength = length;
+    this.refreshEffectiveLength(channel);
+    return true;
+  }
+
+  getBaseLength(channel: number): number {
+    return this.channel(channel)?.baseLength ?? 0;
+  }
+
+  /** ADR 0009 : l'unique ecrivain de effectiveLength. */
+  private refreshEffectiveLength(channel: number): void {
+    const c = this.channel(channel);
+    if (!c) return;
+    let wanted = c.baseLength + LENGTH_CV_OFFSET;
+    if (wanted < MIN_LENGTH) wanted = MIN_LENGTH;
+    if (wanted > MAX_LENGTH) wanted = MAX_LENGTH;
+    c.effectiveLength = wanted;
+    if (c.localStep >= c.effectiveLength) {
+      c.localStep %= c.effectiveLength;
       this.refreshStepTiming(channel);
     }
-    return true;
   }
 
   getTicksPerStep(channel: number): number {

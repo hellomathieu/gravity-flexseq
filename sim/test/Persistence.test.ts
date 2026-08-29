@@ -128,7 +128,7 @@ function fillDistinctState(r: Rig): void {
   }
   for (let ch = 0; ch < CHANNEL_COUNT; ++ch) {
     r.engine.setSelectedPattern(ch, 15 - ch);
-    r.engine.setEffectiveLength(ch, 24 - ch * 3);
+    r.engine.setBaseLength(ch, 24 - ch * 3);
     r.engine.setSubdiv(ch, subdivAt(ch * 3));
     r.engine.setBarLength(ch, ch % 2 === 0 ? 3 : 6);
   }
@@ -439,6 +439,21 @@ describe("Persistence — round trip", () => {
     expect(loaded.ui.clockSource).toBe(4);
     expect(loaded.prefs.cvCalibration[0]).toBe(-26);
     expect(loaded.prefs.cvCalibration[1]).toBe(300);
+  });
+
+  it("keeps a base length above the interface ceiling (ADR 0009)", () => {
+    const eeprom = new FakeEeprom();
+    const saved = rig();
+    expect(saved.engine.setBaseLengthFromStorage(0, 36)).toBe(true);
+    expect(saved.engine.getBaseLength(0)).toBe(36);
+    expect(saved.engine.getEffectiveLength(0)).toBe(24);
+    saved.scheduler.markDirty(0);
+    finishWrite(saved, eeprom, QUIET_MS);
+
+    const loaded = rig();
+    expect(loaded.scheduler.load(eeprom, loaded.image)).toBe(true);
+    expect(loaded.engine.getBaseLength(0)).toBe(36);
+    expect(loaded.engine.getEffectiveLength(0)).toBe(24);
   });
 
   it("keeps the patterns with their ratchets", () => {

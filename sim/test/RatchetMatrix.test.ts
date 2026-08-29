@@ -69,7 +69,7 @@ function rig(subdiv: number, code: number, activeSteps: number[], length = 4) {
   const pattern = engine.instanceForChannel(0)!;
   for (const step of activeSteps) pattern.writeStep(step, true);
   if (code !== RATCHET_NONE) pattern.setRatchet(0, code);
-  engine.setEffectiveLength(0, length);
+  engine.setBaseLength(0, length);
   engine.setSubdiv(0, subdiv);
   engine.refreshTiming();
   return { bank, engine, seq, pattern };

@@ -87,7 +87,7 @@ export class TsReferenceBackend implements SimBackend {
   }
 
   setLength(channel: number, length: number): boolean {
-    return this.engine.setEffectiveLength(channel, length);
+    return this.engine.setBaseLength(channel, length);
   }
 
   getSubdiv(channel: number): number {

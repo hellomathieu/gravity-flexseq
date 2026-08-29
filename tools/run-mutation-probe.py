@@ -73,6 +73,25 @@ MUTANTS = [
      "    if (!validChannel(channel) || bank_ == nullptr) {\n"
      "        return nullptr;\n    }\n"
      "    return bank_->getPattern(channels_[channel].selectedPattern);\n}", "cpp-all"),
+    ("ts: the effective length derivation never runs (ADR 0009)",
+     "sim/src/domain/SequencerEngine.ts",
+     "    c.baseLength = length;\n"
+     "    this.refreshEffectiveLength(channel);\n"
+     "    return true;\n  }\n\n  /**\n   * Definit baseLength depuis le STOCKAGE",
+     "    c.baseLength = length;\n"
+     "    return true;\n  }\n\n  /**\n   * Definit baseLength depuis le STOCKAGE", "ts-all"),
+    ("ts: the stored bound falls back to the interface ceiling (ADR 0009)",
+     "sim/src/domain/SequencerEngine.ts",
+     "export const MAX_STORED_LENGTH = Pattern.DEFAULT_TOTAL_STEPS;",
+     "export const MAX_STORED_LENGTH = MAX_LENGTH;", "ts-all"),
+    ("cpp: the stored bound falls back to the interface ceiling (ADR 0009)",
+     "include/flexseq/SequencerEngine.h",
+     "    static constexpr uint8_t MAX_STORED_LENGTH = Pattern::DEFAULT_TOTAL_STEPS;",
+     "    static constexpr uint8_t MAX_STORED_LENGTH = MAX_LENGTH;", "cpp-all"),
+    ("cpp: the channel record restores the base through the manual entry point (ADR 0009)",
+     "src/domain/Persistence.cpp",
+     "        case 1: engine.setBaseLengthFromStorage(channel, value); break;",
+     "        case 1: engine.setBaseLength(channel, value); break;", "cpp-all"),
     ("ts: the play path reads the shared template instead of the channel instance",
      "sim/src/domain/SequencerEngine.ts",
      "  patternForChannel(channel: number): Pattern | null {\n"

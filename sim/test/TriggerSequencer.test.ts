@@ -18,7 +18,7 @@ describe("TriggerSequencer", () => {
     for (let ch = 0; ch < CHANNEL_COUNT; ++ch) engine.setChannelMode(ch, ChannelMode.SEQ);
 
     engine.setSelectedPattern(0, 0);
-    engine.setEffectiveLength(0, 4);
+    engine.setBaseLength(0, 4);
     engine.instanceForChannel(0)!.writeStep(1, true);
     engine.instanceForChannel(0)!.writeStep(3, true);
     engine.start();
@@ -52,7 +52,7 @@ describe("TriggerSequencer", () => {
     for (let ch = 0; ch < CHANNEL_COUNT; ++ch) engine.setChannelMode(ch, ChannelMode.SEQ);
 
     engine.instanceForChannel(0)!.writeStep(1, true);
-    engine.setEffectiveLength(0, 4);
+    engine.setBaseLength(0, 4);
     engine.start();
 
     engine.advance(STEP - 1); // no boundary
@@ -70,8 +70,8 @@ describe("TriggerSequencer", () => {
 
     engine.setSelectedPattern(0, 0);
     engine.setSelectedPattern(1, 1);
-    engine.setEffectiveLength(0, 4);
-    engine.setEffectiveLength(1, 4);
+    engine.setBaseLength(0, 4);
+    engine.setBaseLength(1, 4);
     engine.instanceForChannel(0)!.writeStep(1, true);
     engine.start();
 
@@ -112,7 +112,7 @@ describe("TriggerSequencer — modes (PRD 4.2)", () => {
 
   it("CLOCK declenche a chaque step, pattern vide ou non", () => {
     const { engine, trig } = rig(ChannelMode.CLOCK);
-    engine.setEffectiveLength(0, 4);
+    engine.setBaseLength(0, 4);
     expect(countTriggers(trig, engine, 0, 8)).toBe(8);
   });
 

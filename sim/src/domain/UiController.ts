@@ -318,7 +318,7 @@ export class UiController {
       case UiField.Length: {
         if (channel < 0) break;
         const current = this.engine.getEffectiveLength(channel);
-        this.engine.setEffectiveLength(channel, clampRange(current + delta, MIN_LENGTH, MAX_LENGTH));
+        this.engine.setBaseLength(channel, clampRange(current + delta, MIN_LENGTH, MAX_LENGTH));
         break;
       }
       case UiField.Subdiv: {

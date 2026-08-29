@@ -172,8 +172,8 @@ describe("SUBDIV — aucune autre edition ne decale un channel", () => {
   }
 
   it("a LENGTH edit does not shift the channel", () => {
-    expect(driftAfter((e) => e.setEffectiveLength(0, 8))).toBe(0);
-    expect(driftAfter((e) => e.setEffectiveLength(0, 1))).toBe(0);
+    expect(driftAfter((e) => e.setBaseLength(0, 8))).toBe(0);
+    expect(driftAfter((e) => e.setBaseLength(0, 1))).toBe(0);
   });
 
   it("selecting another pattern does not shift the channel", () => {

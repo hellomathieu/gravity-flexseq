@@ -233,7 +233,7 @@ function channelRecordByte(engine: SequencerEngine, channel: number, offset: num
       return selected < 0 ? 0 : selected;
     }
     case 1:
-      return engine.getEffectiveLength(channel);
+      return engine.getBaseLength(channel);
     case 2: {
       const index = SUBDIVS.indexOf(engine.getSubdiv(channel));
       return index < 0 ? SUBDIVS.indexOf(DEFAULT_SUBDIV) : index;
@@ -264,7 +264,7 @@ function applyChannelRecordByte(
       engine.setSelectedPattern(channel, value);
       break;
     case 1:
-      engine.setEffectiveLength(channel, value);
+      engine.setBaseLengthFromStorage(channel, value);
       break;
     case 2:
       engine.setSubdiv(channel, SUBDIVS[value] ?? DEFAULT_SUBDIV);
@@ -390,7 +390,7 @@ export class PersistentImage implements ScannedImage {
     }
     for (let channel = 0; channel < CHANNEL_COUNT; ++channel) {
       this.engine.setSelectedPattern(channel, 0);
-      this.engine.setEffectiveLength(channel, DEFAULT_LENGTH);
+      this.engine.setBaseLength(channel, DEFAULT_LENGTH);
       this.engine.setSubdiv(channel, DEFAULT_SUBDIV);
       this.engine.setBarLength(channel, DEFAULT_BAR_LENGTH);
       this.engine.setChannelMode(channel, DEFAULT_CHANNEL_MODE);
@@ -568,7 +568,7 @@ export class PersistentImageV3 implements ScannedImage {
     for (let channel = 0; channel < CHANNEL_COUNT; ++channel) {
       this.engine.instanceForChannel(channel)?.clear();
       this.engine.setSelectedPattern(channel, 0);
-      this.engine.setEffectiveLength(channel, DEFAULT_LENGTH);
+      this.engine.setBaseLength(channel, DEFAULT_LENGTH);
       this.engine.setSubdiv(channel, DEFAULT_SUBDIV);
       this.engine.setBarLength(channel, DEFAULT_BAR_LENGTH);
       this.engine.setChannelMode(channel, DEFAULT_CHANNEL_MODE);

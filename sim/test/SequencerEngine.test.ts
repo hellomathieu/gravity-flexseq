@@ -86,7 +86,7 @@ describe("SequencerEngine — effectiveStep derivation", () => {
   it("wraps effectiveStep at effectiveLength", () => {
     const e = new SequencerEngine();
     e.start();
-    e.setEffectiveLength(0, 16);
+    e.setBaseLength(0, 16);
     e.advance(STEP * 16); // one full loop of 16 steps
     expect(e.effectiveStep(0)).toBe(0);
     e.advance(STEP); // step 1 again
@@ -99,10 +99,10 @@ describe("SequencerEngine — effectiveStep derivation", () => {
     e.advance(STEP * 10);
     const before = e.masterPhase;
 
-    expect(e.setEffectiveLength(0, 4)).toBe(true);
+    expect(e.setBaseLength(0, 4)).toBe(true);
     expect(e.masterPhase).toBe(before);
 
-    expect(e.setEffectiveLength(0, 24)).toBe(true);
+    expect(e.setBaseLength(0, 24)).toBe(true);
     expect(e.masterPhase).toBe(before);
   });
 
@@ -114,10 +114,10 @@ describe("SequencerEngine — effectiveStep derivation", () => {
     e.advance(STEP * 5); // localStep = 5, length 16
     expect(e.effectiveStep(0)).toBe(5);
 
-    expect(e.setEffectiveLength(0, 11)).toBe(true);
+    expect(e.setBaseLength(0, 11)).toBe(true);
     expect(e.effectiveStep(0)).toBe(5); // pas de saut (5 < 11)
 
-    expect(e.setEffectiveLength(0, 8)).toBe(true);
+    expect(e.setBaseLength(0, 8)).toBe(true);
     expect(e.effectiveStep(0)).toBe(5); // pas de saut (5 < 8)
   });
 
@@ -125,16 +125,16 @@ describe("SequencerEngine — effectiveStep derivation", () => {
     const e = new SequencerEngine();
     e.start();
     e.advance(STEP * 13); // localStep = 13
-    expect(e.setEffectiveLength(0, 11)).toBe(true);
+    expect(e.setBaseLength(0, 11)).toBe(true);
     expect(e.effectiveStep(0)).toBe(13 % 11); // 2, replie car hors bornes
   });
 
   it("keeps the current step when LENGTH grows", () => {
     const e = new SequencerEngine();
     e.start();
-    e.setEffectiveLength(0, 8);
+    e.setBaseLength(0, 8);
     e.advance(STEP * 3); // localStep = 3
-    expect(e.setEffectiveLength(0, 24)).toBe(true);
+    expect(e.setBaseLength(0, 24)).toBe(true);
     expect(e.effectiveStep(0)).toBe(3); // inchange
     e.advance(STEP); // continue sans saut
     expect(e.effectiveStep(0)).toBe(4);
@@ -143,7 +143,7 @@ describe("SequencerEngine — effectiveStep derivation", () => {
   it("global reset realigns all channels to step 0", () => {
     const e = new SequencerEngine();
     e.start();
-    e.setEffectiveLength(1, 3);
+    e.setBaseLength(1, 3);
     e.advance(STEP * 7);
     expect(e.effectiveStep(0)).toBeGreaterThan(0);
     e.reset();
@@ -154,17 +154,17 @@ describe("SequencerEngine — effectiveStep derivation", () => {
 
   it("rejects invalid effectiveLength without mutation", () => {
     const e = new SequencerEngine();
-    expect(e.setEffectiveLength(0, 12)).toBe(true);
-    expect(e.setEffectiveLength(0, 0)).toBe(false);
-    expect(e.setEffectiveLength(0, 25)).toBe(false);
+    expect(e.setBaseLength(0, 12)).toBe(true);
+    expect(e.setBaseLength(0, 0)).toBe(false);
+    expect(e.setBaseLength(0, 25)).toBe(false);
     expect(e.getEffectiveLength(0)).toBe(12);
   });
 
   it("isolates execution state between channels (same master phase)", () => {
     const e = new SequencerEngine();
     e.start();
-    e.setEffectiveLength(0, 16);
-    e.setEffectiveLength(1, 3);
+    e.setBaseLength(0, 16);
+    e.setBaseLength(1, 3);
     e.advance(STEP * 4);
 
     expect(e.effectiveStep(0)).toBe(4 % 16); // 4
@@ -185,7 +185,7 @@ describe("SequencerEngine — effectiveStep derivation", () => {
   it("rejects invalid channel indices and ticksPerStep", () => {
     const e = new SequencerEngine();
     expect(e.effectiveStep(6)).toBe(-1);
-    expect(e.setEffectiveLength(6, 8)).toBe(false);
+    expect(e.setBaseLength(6, 8)).toBe(false);
     expect(e.setTicksPerStep(0, 0)).toBe(false);
   });
 });
@@ -319,7 +319,7 @@ describe("SequencerEngine — ratchets", () => {
 
   it("un ratchet ne change pas la duree totale du pattern", () => {
     const { bank, e } = rig();
-    e.setEffectiveLength(0, 4);
+    e.setBaseLength(0, 4);
     e.instanceForChannel(0)!.setRatchet(0, RATCHET_6);
     e.start();
     e.advance(96 * 4);
@@ -664,5 +664,50 @@ describe("les instances par canal", () => {
     engine.setSelectedPattern(0, 0);
     expect(engine.patternForChannel(0)).toBe(engine.instanceForChannel(0));
     expect(engine.patternForChannel(0)).not.toBe(bank.getPattern(0));
+  });
+});
+
+describe("base length et longueur effective (ADR 0009)", () => {
+  it("l'entree manuelle s'arrete au plafond d'interface", () => {
+    const engine = new SequencerEngine();
+    expect(engine.setBaseLength(0, 24)).toBe(true);
+    expect(engine.getBaseLength(0)).toBe(24);
+    expect(engine.setBaseLength(0, 25)).toBe(false);
+    expect(engine.getBaseLength(0)).toBe(24);
+  });
+
+  it("l'entree manuelle s'arrete a un", () => {
+    const engine = new SequencerEngine();
+    expect(engine.setBaseLength(0, 1)).toBe(true);
+    expect(engine.setBaseLength(0, 0)).toBe(false);
+    expect(engine.getBaseLength(0)).toBe(1);
+  });
+
+  it("le stockage porte une base au-dessus du plafond d'interface", () => {
+    const engine = new SequencerEngine();
+    expect(engine.setBaseLengthFromStorage(0, 36)).toBe(true);
+    expect(engine.getBaseLength(0)).toBe(36);
+    expect(engine.getEffectiveLength(0)).toBe(24);
+  });
+
+  it("le stockage s'arrete a la capacite du pattern", () => {
+    const engine = new SequencerEngine();
+    expect(engine.setBaseLengthFromStorage(0, 36)).toBe(true);
+    expect(engine.setBaseLengthFromStorage(0, 37)).toBe(false);
+    expect(engine.getBaseLength(0)).toBe(36);
+  });
+
+  it("une base sous le plafond n'est pas ecretee", () => {
+    const engine = new SequencerEngine();
+    expect(engine.setBaseLengthFromStorage(0, 12)).toBe(true);
+    expect(engine.getBaseLength(0)).toBe(12);
+    expect(engine.getEffectiveLength(0)).toBe(12);
+  });
+
+  it("un channel invalide refuse les deux entrees", () => {
+    const engine = new SequencerEngine();
+    expect(engine.setBaseLength(6, 8)).toBe(false);
+    expect(engine.setBaseLengthFromStorage(6, 8)).toBe(false);
+    expect(engine.getBaseLength(6)).toBe(0);
   });
 });
