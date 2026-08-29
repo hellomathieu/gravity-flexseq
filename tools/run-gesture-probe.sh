@@ -298,50 +298,6 @@ fi
 BANK_ADDR="$(printf '0x%x' $(( 0x$bank_vma - AVR_DATA_BASE )))"
 ok "symbole des instances" "pointeur unique, type $bank_type, 2 octets, VMA 0x$bank_vma -> RAM $BANK_ADDR ; $BANK_BYTES octets observes a l adresse pointee"
 
-TEMPLATE_PATTERN="${TEMPLATE_SYMBOL:-11patternBankE$|^patternBank$}"
-TEMPLATE_ADDR=0
-TEMPLATE_WHY=""
-tpl_type=""
-tpl_vma=""
-tpl_rows="$("$NM" -S --defined-only "$ELF" | awk -v pat="$TEMPLATE_PATTERN" '$NF ~ pat { print NF, $0 }')"
-if [ -z "$tpl_rows" ]; then
-  TEMPLATE_WHY="aucun symbole ne correspond a $TEMPLATE_PATTERN"
-elif [ "$(printf '%s\n' "$tpl_rows" | wc -l | tr -d ' ')" -gt 1 ]; then
-  TEMPLATE_WHY="plusieurs symboles correspondent : la selection serait arbitraire"
-else
-  tpl_nf="$(printf '%s' "$tpl_rows" | awk '{print $1}')"
-  if [ "$tpl_nf" = "4" ]; then
-    tpl_vma="$(printf '%s' "$tpl_rows" | awk '{print $2}')"
-    tpl_size="$(printf '%s' "$tpl_rows" | awk '{print $3}')"
-    tpl_type="$(printf '%s' "$tpl_rows" | awk '{print $4}')"
-  else
-    tpl_vma="$(printf '%s' "$tpl_rows" | awk '{print $2}')"
-    tpl_size=""
-    tpl_type="$(printf '%s' "$tpl_rows" | awk '{print $3}')"
-  fi
-  case "$tpl_type" in
-    b|B|d|D) ;;
-    *) TEMPLATE_WHY="type '$tpl_type' : ni .bss ni .data" ;;
-  esac
-  if [ -z "$TEMPLATE_WHY" ] && [ -z "$tpl_size" ]; then
-    TEMPLATE_WHY="st_size absent : taille non verifiable"
-  fi
-  if [ -z "$TEMPLATE_WHY" ] && [ "$(( 0x$tpl_size ))" -ne 368 ]; then
-    TEMPLATE_WHY="taille $(( 0x$tpl_size )) octets au lieu des 368 de la banque"
-  fi
-  if [ -z "$TEMPLATE_WHY" ] && [ "$(( 0x$tpl_vma ))" -lt "$AVR_DATA_BASE" ]; then
-    TEMPLATE_WHY="VMA 0x$tpl_vma sous 0x800000 : ce n est pas l espace de donnees"
-  fi
-  if [ -z "$TEMPLATE_WHY" ]; then
-    TEMPLATE_ADDR="$(printf '0x%x' $(( 0x$tpl_vma - AVR_DATA_BASE )))"
-  fi
-fi
-if [ "$TEMPLATE_ADDR" = "0" ]; then
-  ok "symbole de la banque" "absent ou non verifiable ($TEMPLATE_WHY) : seuls les criteres de template deviendront non decidables"
-else
-  ok "symbole de la banque" "unique, type $tpl_type, 368 octets, VMA 0x$tpl_vma -> RAM $TEMPLATE_ADDR ; INERTE depuis la v3, retrait en B4b.7, resolu independamment du pointeur d instances"
-fi
-
 SUPPRESSED_PATTERN="${SUPPRESSED_SYMBOL:-14suppressedLongE$|^suppressedLong$}"
 
 resolve_suppressed() {
@@ -2063,7 +2019,7 @@ INST_OCTET_ATTENDU=0
 LOG8="$WORK/log8"
 progress "parcours instances (separation template/instance)"
 "$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$BANK_ADDR" "$BOOT_MS" \
-     "$WORK/perchannel.bin" 384 instances "$SUPPRESSED_ADDR" "$TEMPLATE_ADDR" > "$LOG8" 2>&1
+     "$WORK/perchannel.bin" 384 instances "$SUPPRESSED_ADDR" > "$LOG8" 2>&1
 RC=$?
 if [ "$RC" != "0" ]; then
   cat "$LOG8"
@@ -2171,7 +2127,7 @@ printf '\n'
 LOG9="$WORK/log9"
 progress "parcours bootstrap (semis du firmware au premier demarrage)"
 "$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$BANK_ADDR" "$BOOT_MS" \
-     "$WORK/perchannel.bin" 384 bootstrap "$SUPPRESSED_ADDR" "$TEMPLATE_ADDR" > "$LOG9" 2>&1
+     "$WORK/perchannel.bin" 384 bootstrap "$SUPPRESSED_ADDR" > "$LOG9" 2>&1
 RC=$?
 if [ "$RC" != "0" ]; then
   cat "$LOG9"

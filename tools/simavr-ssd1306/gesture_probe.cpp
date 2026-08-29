@@ -23,7 +23,6 @@ static const uint8_t DIAGNOSTIC_MEASURES_THE_POLICY = burst::NO_EMPIRICAL_LIMIT;
 
 #include <flexseq/MainScreen.h>
 #include <flexseq/PatternScreen.h>
-#include <flexseq/PatternBank.h>
 #include <flexseq/FactoryPatterns.h>
 #include <flexseq/Persistence.h>
 #include <flexseq/Transport.h>
@@ -88,7 +87,6 @@ static_assert(SHIFT_BURST_GAP_MS > BUTTON_DEBOUNCE_MS,
 #define MAX_ONSETS 4096
 #define ACTIVE_STEPS 5
 
-#define PATTERN_COUNT 16
 #define PATTERN_BYTES 23
 
 static constexpr uint8_t OBSERVED_CHANNEL_COUNT =
@@ -97,9 +95,6 @@ static constexpr size_t OBSERVED_INSTANCE_BYTES =
     (size_t)OBSERVED_CHANNEL_COUNT * sizeof(flexseq::Pattern);
 #define STEP_BYTES     5
 #define RATCHET_BYTES 18
-
-static constexpr size_t OBSERVED_TEMPLATE_BYTES =
-    (size_t)PATTERN_COUNT * sizeof(flexseq::Pattern);
 
 static constexpr int8_t NO_CHANNEL = -1;
 static constexpr size_t OUT_OF_BUFFER = (size_t)-1;
@@ -112,13 +107,6 @@ static_assert(OBSERVED_CHANNEL_COUNT == 6,
               "the probe observes six channel instances");
 static_assert(OBSERVED_INSTANCE_BYTES == 138,
               "the observed buffer must be 138 bytes");
-static_assert(OBSERVED_TEMPLATE_BYTES == 368,
-              "the observed template zone must be 368 bytes");
-static_assert(OBSERVED_TEMPLATE_BYTES
-                  == (size_t)PATTERN_COUNT * PATTERN_BYTES,
-              "the template zone must hold one record per template");
-static_assert(OBSERVED_TEMPLATE_BYTES != OBSERVED_INSTANCE_BYTES,
-              "the two observed domains must not share a size");
 static_assert(OBSERVED_INSTANCE_BYTES
                   == (size_t)OBSERVED_CHANNEL_COUNT * PATTERN_BYTES,
               "the observed buffer must hold one record per channel");
@@ -233,7 +221,6 @@ static uint8_t *mutableInstanceOf(uint8_t *buffer, int8_t channel)
 static avr_t *g_avr;
 static uint32_t g_twi_bytes;
 static uint16_t g_bank_addr;
-static uint16_t g_template_addr;
 static long g_base_force = -1;
 static long g_channel_force = -1;
 static uint32_t g_bank_reads;
@@ -505,16 +492,6 @@ static void reportInstanceAccess(void)
 {
     printf("instances_acces    lectures %u echecs %u fautes %u\n",
            g_bank_reads, g_bank_read_faults, g_instance_faults);
-}
-
-static int templateZoneIsReadable(const avr_t *avr)
-{
-    if (g_template_addr == 0) return 0;
-    if ((uint32_t)g_template_addr + OBSERVED_TEMPLATE_BYTES
-        > (uint32_t)avr->ramend) {
-        return 0;
-    }
-    return 1;
 }
 
 static long g_template_mutate = -1;
@@ -969,10 +946,6 @@ int main(int argc, char **argv)
     const int policycheck = strcmp(phase, "policycheck") == 0;
     const int parcoursInstances = strcmp(phase, "instances") == 0;
     const int parcoursBootstrap = strcmp(phase, "bootstrap") == 0;
-    if (argc > 8) {
-        g_template_addr = (uint16_t)(strtol(argv[8], NULL, 0) & 0xFFFF);
-    }
-
     {
         const char *e = getenv("DE_ENTRY_MS");
         const char *r = getenv("DE_RELEASE_MS");
