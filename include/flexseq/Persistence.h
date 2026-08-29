@@ -237,6 +237,29 @@ public:
     }
 
     template <typename Storage>
+    bool loadTemplate(Storage& storage, uint8_t channel, uint8_t index) {
+        if (index >= persist::v3::TEMPLATE_COUNT) {
+            return false;
+        }
+        Pattern* instance = engine_.instanceForChannel(channel);
+        if (instance == nullptr) {
+            return false;
+        }
+        for (uint8_t offset = 0; offset < persist::v3::CONTENT_BYTES; ++offset) {
+            persist::v3::applyContentByte(
+                *instance, offset,
+                storage.read(persist::v3::templateAddress(index, offset)));
+        }
+        // PRD 11.1: an out-of-range length is refused, the content already read stays.
+        (void)engine_.setBaseLengthFromStorage(
+            channel,
+            storage.read(persist::v3::templateAddress(index,
+                                                      persist::v3::RECORD_LENGTH_AT)));
+        engine_.setSelectedPattern(channel, index);
+        return true;
+    }
+
+    template <typename Storage>
     void loadTemplatesIntoInstances(Storage& storage) {
         for (uint8_t channel = 0; channel < SequencerEngine::CHANNEL_COUNT; ++channel) {
             Pattern* instance = engine_.instanceForChannel(channel);

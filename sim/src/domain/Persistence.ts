@@ -200,6 +200,7 @@ export const v3 = {
   MAX_TEMPLATE_LENGTH: V3_MAX_TEMPLATE_LENGTH,
   FACTORY_TEMPLATE_LENGTH: V3_FACTORY_TEMPLATE_LENGTH,
 
+  templateAddress: v3TemplateAddress,
   contentByte: v3ContentByte,
   applyContentByte: v3ApplyContentByte,
   templateByte: v3TemplateByte,
@@ -551,6 +552,22 @@ export class PersistentImageV3 implements ScannedImage {
         storage.write(v3TemplateAddress(index, offset), v3FactoryTemplateByte(index, offset));
       }
     }
+  }
+
+  loadTemplate(storage: Storage, channel: number, index: number): boolean {
+    if (!Number.isInteger(index) || index < 0 || index >= V3_TEMPLATE_COUNT) return false;
+    const instance = this.engine.instanceForChannel(channel);
+    if (instance === null) return false;
+    for (let offset = 0; offset < V3_CONTENT_BYTES; ++offset) {
+      v3ApplyContentByte(instance, offset, storage.read(v3TemplateAddress(index, offset)));
+    }
+    // PRD 11.1 : une longueur hors plage est refusee, le contenu deja lu reste.
+    this.engine.setBaseLengthFromStorage(
+      channel,
+      storage.read(v3TemplateAddress(index, V3_RECORD_LENGTH_AT)),
+    );
+    this.engine.setSelectedPattern(channel, index);
+    return true;
   }
 
   loadTemplatesIntoInstances(storage: Storage): void {

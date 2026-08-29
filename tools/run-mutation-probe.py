@@ -73,6 +73,46 @@ MUTANTS = [
      "    if (!validChannel(channel) || bank_ == nullptr) {\n"
      "        return nullptr;\n    }\n"
      "    return bank_->getPattern(channels_[channel].selectedPattern);\n}", "cpp-all"),
+    ("cpp: loadTemplate restores the length through the manual entry point (B4b.6.1)",
+     "include/flexseq/Persistence.h",
+     "        (void)engine_.setBaseLengthFromStorage(\n"
+     "            channel,\n"
+     "            storage.read(persist::v3::templateAddress(index,\n"
+     "                                                      persist::v3::RECORD_LENGTH_AT)));",
+     "        (void)engine_.setBaseLength(\n"
+     "            channel,\n"
+     "            storage.read(persist::v3::templateAddress(index,\n"
+     "                                                      persist::v3::RECORD_LENGTH_AT)));",
+     "cpp-all"),
+    ("cpp: loadTemplate ignores the template length (B4b.6.1)",
+     "include/flexseq/Persistence.h",
+     "        (void)engine_.setBaseLengthFromStorage(\n"
+     "            channel,\n"
+     "            storage.read(persist::v3::templateAddress(index,\n"
+     "                                                      persist::v3::RECORD_LENGTH_AT)));\n"
+     "        engine_.setSelectedPattern(channel, index);",
+     "        engine_.setSelectedPattern(channel, index);",
+     "cpp-all"),
+    ("ts: loadTemplate restores the length through the manual entry point (B4b.6.1)",
+     "sim/src/domain/Persistence.ts",
+     "    this.engine.setBaseLengthFromStorage(\n"
+     "      channel,\n"
+     "      storage.read(v3TemplateAddress(index, V3_RECORD_LENGTH_AT)),\n"
+     "    );",
+     "    this.engine.setBaseLength(\n"
+     "      channel,\n"
+     "      storage.read(v3TemplateAddress(index, V3_RECORD_LENGTH_AT)),\n"
+     "    );",
+     "ts-all"),
+    ("ts: loadTemplate ignores the template length (B4b.6.1)",
+     "sim/src/domain/Persistence.ts",
+     "    this.engine.setBaseLengthFromStorage(\n"
+     "      channel,\n"
+     "      storage.read(v3TemplateAddress(index, V3_RECORD_LENGTH_AT)),\n"
+     "    );\n"
+     "    this.engine.setSelectedPattern(channel, index);",
+     "    this.engine.setSelectedPattern(channel, index);",
+     "ts-all"),
     ("ts: the effective length derivation never runs (ADR 0009)",
      "sim/src/domain/SequencerEngine.ts",
      "    c.baseLength = length;\n"

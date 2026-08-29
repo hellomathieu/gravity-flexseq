@@ -1016,3 +1016,110 @@ describe("le contrat d'image partage par le scheduler", () => {
     expect(eeprom.highestWrite).toBe(384 + 3);
   });
 });
+
+describe("loadTemplate — template EEPROM vers instance (ADR 0009)", () => {
+  function seedTemplate(ee: FakeEeprom, index: number, content: Pattern, length: number): void {
+    for (let offset = 0; offset < v3.TEMPLATE_RECORD; ++offset) {
+      ee.write(v3.templateAddress(index, offset), v3.templateByte(content, length, offset));
+    }
+  }
+
+  function distinctContent(seed: number): Pattern {
+    const p = new Pattern();
+    p.writeStep(seed % Pattern.DEFAULT_TOTAL_STEPS, true);
+    p.writeStep((seed + 7) % Pattern.DEFAULT_TOTAL_STEPS, true);
+    p.setRatchet(seed % Pattern.DEFAULT_TOTAL_STEPS, RATCHET_3);
+    return p;
+  }
+
+  function sameContent(a: Pattern, b: Pattern): boolean {
+    for (let i = 0; i < Pattern.DEFAULT_TOTAL_STEPS; ++i) {
+      if (a.readStep(i) !== b.readStep(i)) return false;
+      if (a.getRatchet(i) !== b.getRatchet(i)) return false;
+    }
+    return true;
+  }
+
+  it("copie le contenu dans l'instance du channel vise", () => {
+    const ee = new FakeEeprom();
+    const r = rigV3();
+    const wanted = distinctContent(5);
+    seedTemplate(ee, 5, wanted, 12);
+    expect(r.image.loadTemplate(ee, 2, 5)).toBe(true);
+    expect(sameContent(wanted, r.engine.instanceForChannel(2)!)).toBe(true);
+  });
+
+  it("laisse les cinq autres instances intactes", () => {
+    const ee = new FakeEeprom();
+    const r = rigV3();
+    seedTemplate(ee, 5, distinctContent(5), 12);
+    const before = new Pattern();
+    expect(r.image.loadTemplate(ee, 2, 5)).toBe(true);
+    for (let ch = 0; ch < 6; ++ch) {
+      if (ch === 2) continue;
+      expect(sameContent(before, r.engine.instanceForChannel(ch)!)).toBe(true);
+    }
+  });
+
+  it("garde une longueur de trente-six dans la base", () => {
+    const ee = new FakeEeprom();
+    const r = rigV3();
+    seedTemplate(ee, 9, distinctContent(3), 36);
+    expect(r.image.loadTemplate(ee, 0, 9)).toBe(true);
+    expect(r.engine.getBaseLength(0)).toBe(36);
+    expect(r.engine.getEffectiveLength(0)).toBe(24);
+    expect(r.engine.getSelectedPattern(0)).toBe(9);
+  });
+
+  it("n'ecrete pas une longueur sous le plafond", () => {
+    const ee = new FakeEeprom();
+    const r = rigV3();
+    seedTemplate(ee, 4, distinctContent(1), 12);
+    expect(r.image.loadTemplate(ee, 1, 4)).toBe(true);
+    expect(r.engine.getBaseLength(1)).toBe(12);
+    expect(r.engine.getEffectiveLength(1)).toBe(12);
+  });
+
+  it("refuse une longueur invalide sans perdre le contenu", () => {
+    const ee = new FakeEeprom();
+    const r = rigV3();
+    const wanted = distinctContent(2);
+    seedTemplate(ee, 6, wanted, 20);
+    ee.write(v3.templateAddress(6, v3.RECORD_LENGTH_AT), 37);
+    expect(r.engine.setBaseLength(3, 8)).toBe(true);
+    expect(r.image.loadTemplate(ee, 3, 6)).toBe(true);
+    expect(sameContent(wanted, r.engine.instanceForChannel(3)!)).toBe(true);
+    expect(r.engine.getBaseLength(3)).toBe(8);
+  });
+
+  it("accepte un slot d'usine gele", () => {
+    const ee = new FakeEeprom();
+    const r = rigV3();
+    const wanted = distinctContent(8);
+    seedTemplate(ee, 0, wanted, 16);
+    expect(r.image.loadTemplate(ee, 4, 0)).toBe(true);
+    expect(sameContent(wanted, r.engine.instanceForChannel(4)!)).toBe(true);
+    expect(r.engine.getSelectedPattern(4)).toBe(0);
+  });
+
+  it("refuse un channel ou un index invalide", () => {
+    const ee = new FakeEeprom();
+    const r = rigV3();
+    seedTemplate(ee, 1, distinctContent(4), 10);
+    expect(r.image.loadTemplate(ee, 6, 1)).toBe(false);
+    expect(r.image.loadTemplate(ee, 0, 16)).toBe(false);
+    const before = new Pattern();
+    for (let ch = 0; ch < 6; ++ch) {
+      expect(sameContent(before, r.engine.instanceForChannel(ch)!)).toBe(true);
+    }
+  });
+
+  it("n'ecrit rien dans l'EEPROM", () => {
+    const ee = new FakeEeprom();
+    const r = rigV3();
+    seedTemplate(ee, 7, distinctContent(6), 18);
+    const before = ee.writes;
+    expect(r.image.loadTemplate(ee, 5, 7)).toBe(true);
+    expect(ee.writes).toBe(before);
+  });
+});

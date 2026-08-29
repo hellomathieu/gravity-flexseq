@@ -940,6 +940,117 @@ uint16_t finishWriteV3(RigV3& r, FakeEeprom& ee, uint32_t nowMs) {
     return calls;
 }
 
+void writeTemplateRecord(FakeEeprom& ee, uint8_t index, const Pattern& content,
+                         uint8_t length) {
+    for (uint8_t offset = 0; offset < persist::v3::TEMPLATE_RECORD; ++offset) {
+        ee.write(persist::v3::templateAddress(index, offset),
+                 persist::v3::templateByte(content, length, offset));
+    }
+}
+
+Pattern distinctContent(uint8_t seed) {
+    Pattern p;
+    p.writeStep(seed % Pattern::DEFAULT_TOTAL_STEPS, true);
+    p.writeStep((seed + 7) % Pattern::DEFAULT_TOTAL_STEPS, true);
+    p.setRatchet(seed % Pattern::DEFAULT_TOTAL_STEPS, flexseq::RATCHET_3);
+    return p;
+}
+
+bool sameContent(const Pattern& a, const Pattern& b) {
+    for (uint8_t i = 0; i < Pattern::DEFAULT_TOTAL_STEPS; ++i) {
+        bool left = false;
+        bool right = false;
+        a.readStep(i, left);
+        b.readStep(i, right);
+        if (left != right) return false;
+        if (a.getRatchet(i) != b.getRatchet(i)) return false;
+    }
+    return true;
+}
+
+void test_load_template_copies_the_content_into_the_channel_instance() {
+    FakeEeprom ee;
+    RigV3 r;
+    const Pattern wanted = distinctContent(5);
+    writeTemplateRecord(ee, 5, wanted, 12);
+    TEST_ASSERT_TRUE(r.image.loadTemplate(ee, 2, 5));
+    TEST_ASSERT_TRUE(sameContent(wanted, *r.engine.instanceForChannel(2)));
+}
+
+void test_load_template_leaves_the_five_other_instances_untouched() {
+    FakeEeprom ee;
+    RigV3 r;
+    writeTemplateRecord(ee, 5, distinctContent(5), 12);
+    Pattern before;
+    TEST_ASSERT_TRUE(r.image.loadTemplate(ee, 2, 5));
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        if (ch == 2) continue;
+        TEST_ASSERT_TRUE(sameContent(before, *r.engine.instanceForChannel(ch)));
+    }
+}
+
+void test_load_template_keeps_a_length_of_thirty_six_in_the_base() {
+    FakeEeprom ee;
+    RigV3 r;
+    writeTemplateRecord(ee, 9, distinctContent(3), 36);
+    TEST_ASSERT_TRUE(r.image.loadTemplate(ee, 0, 9));
+    TEST_ASSERT_EQUAL_UINT8(36, r.engine.getBaseLength(0));
+    TEST_ASSERT_EQUAL_UINT8(24, r.engine.getEffectiveLength(0));
+    TEST_ASSERT_EQUAL_INT8(9, r.engine.getSelectedPattern(0));
+}
+
+void test_load_template_needs_no_clamp_below_the_ceiling() {
+    FakeEeprom ee;
+    RigV3 r;
+    writeTemplateRecord(ee, 4, distinctContent(1), 12);
+    TEST_ASSERT_TRUE(r.image.loadTemplate(ee, 1, 4));
+    TEST_ASSERT_EQUAL_UINT8(12, r.engine.getBaseLength(1));
+    TEST_ASSERT_EQUAL_UINT8(12, r.engine.getEffectiveLength(1));
+}
+
+void test_load_template_refuses_an_invalid_length_without_losing_the_content() {
+    FakeEeprom ee;
+    RigV3 r;
+    const Pattern wanted = distinctContent(2);
+    writeTemplateRecord(ee, 6, wanted, 20);
+    ee.write(persist::v3::templateAddress(6, persist::v3::RECORD_LENGTH_AT), 37);
+    TEST_ASSERT_TRUE(r.engine.setBaseLength(3, 8));
+    TEST_ASSERT_TRUE(r.image.loadTemplate(ee, 3, 6));
+    TEST_ASSERT_TRUE(sameContent(wanted, *r.engine.instanceForChannel(3)));
+    TEST_ASSERT_EQUAL_UINT8(8, r.engine.getBaseLength(3));
+}
+
+void test_load_template_accepts_a_frozen_factory_slot() {
+    FakeEeprom ee;
+    RigV3 r;
+    const Pattern wanted = distinctContent(8);
+    writeTemplateRecord(ee, 0, wanted, 16);
+    TEST_ASSERT_TRUE(r.image.loadTemplate(ee, 4, 0));
+    TEST_ASSERT_TRUE(sameContent(wanted, *r.engine.instanceForChannel(4)));
+    TEST_ASSERT_EQUAL_INT8(0, r.engine.getSelectedPattern(4));
+}
+
+void test_load_template_refuses_an_invalid_channel_or_index() {
+    FakeEeprom ee;
+    RigV3 r;
+    writeTemplateRecord(ee, 1, distinctContent(4), 10);
+    TEST_ASSERT_FALSE(r.image.loadTemplate(ee, 6, 1));
+    TEST_ASSERT_FALSE(r.image.loadTemplate(ee, 0, 16));
+    Pattern before;
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        TEST_ASSERT_TRUE(sameContent(before, *r.engine.instanceForChannel(ch)));
+    }
+}
+
+void test_load_template_writes_nothing_to_the_eeprom() {
+    FakeEeprom ee;
+    RigV3 r;
+    writeTemplateRecord(ee, 7, distinctContent(6), 18);
+    const uint16_t before = ee.writes;
+    TEST_ASSERT_TRUE(r.image.loadTemplate(ee, 5, 7));
+    TEST_ASSERT_EQUAL_UINT16(before, ee.writes);
+}
+
 struct JournalEeprom {
     uint8_t cell[persist::EEPROM_SIZE];
     uint16_t order[persist::EEPROM_SIZE];
@@ -1295,6 +1406,14 @@ int main() {
 
     RUN_TEST(test_a_round_trip_restores_the_state_byte_for_byte);
     RUN_TEST(test_a_round_trip_keeps_a_base_length_above_the_interface_ceiling);
+    RUN_TEST(test_load_template_copies_the_content_into_the_channel_instance);
+    RUN_TEST(test_load_template_leaves_the_five_other_instances_untouched);
+    RUN_TEST(test_load_template_keeps_a_length_of_thirty_six_in_the_base);
+    RUN_TEST(test_load_template_needs_no_clamp_below_the_ceiling);
+    RUN_TEST(test_load_template_refuses_an_invalid_length_without_losing_the_content);
+    RUN_TEST(test_load_template_accepts_a_frozen_factory_slot);
+    RUN_TEST(test_load_template_refuses_an_invalid_channel_or_index);
+    RUN_TEST(test_load_template_writes_nothing_to_the_eeprom);
     RUN_TEST(test_the_patterns_survive_with_their_ratchets);
 
     RUN_TEST(test_a_wrong_version_byte_returns_the_defaults);
