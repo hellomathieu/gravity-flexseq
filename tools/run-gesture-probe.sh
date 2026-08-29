@@ -365,7 +365,7 @@ if [ -n "${SELFTEST:-}" ]; then
   printf '\n%s--- CONTRE-EPREUVE DU FRACTIONNEMENT ---%s\n' "$C_B" "$C_0"
   SRC="$ROOT/tools/simavr-ssd1306/gesture_probe.cpp"
   SELF_FAILED=0
-  selfbad() { printf '  %s❌%s %-22s %s%s%s\n' "$C_ERR" "$C_0" "$1" "$C_DIM" "$2" "$C_0"; SELF_FAILED=1; }
+  selfbad() { printf '  %s❌%s %-22s %s%s%s\n' "$C_ERR" "$C_0" "$1" "$C_DIM" "$2" "$C_0"; SELF_FAILED=$((SELF_FAILED + 1)); }
   build_mutant() {
     c++ -O2 -w -std=gnu++11 -I"$PREFIX/include/simavr" -I"$PREFIX/include" \
       -I"$ROOT/tools/simavr-ssd1306" -I"$ROOT/include" "$1" \
@@ -573,8 +573,8 @@ MUTANT3
     selfbad "P2.6.0 controle de l image" "la sonde rend 0 alors que l image injectee ne correspond pas a l attendu"
   else
     IMG_RC=$?
-    if [ "$IMG_RC" = "5" ] && grep -q '^controle_usine     0' "$WORK/img.log"; then
-      ok "P2.6.0 controle de l image" "un octet altere cote machine rend le controle rouge, sortie 5, aucun verdict firmware"
+    if [ "$IMG_RC" = "5" ] && grep -q '⛔ instances : templates d usine' "$WORK/img.log"; then
+      ok "P2.6.0 controle de l image" "un octet altere cote machine rend le controle du rig INVALID, sortie 5, aucun verdict firmware"
     else
       selfbad "P2.6.0 controle de l image" "sortie $IMG_RC au lieu de 5"
     fi
@@ -724,7 +724,7 @@ MUTANT3
 
   progress "l : un octet du template change -> FAIL"
   expect_verdict "l. template modifie -> FAIL" FAIL 1 "+" "*" TEMPLATE_MUTATE=0
-  if grep -q '❌ instances : template inchange' "$WORK/class.log"; then
+  if grep -q '❌ instances : templates EEPROM stables' "$WORK/class.log"; then
     ok "l. la non-modification du template a des dents" "un seul octet change dans la zone EEPROM des templates suffit a rougir"
   else
     selfbad "l. la non-modification du template a des dents" "le critere de template n a pas rougi"
@@ -751,7 +751,7 @@ MUTANT3
     printf '  %s✅ Les quatre chemins du verdict global : PASS/0, FAIL/1, INVALID/5 deux fois, tous verifies sur le code ET le mot.%s\n' "$C_OK" "$C_0"
     exit 0
   fi
-  printf '  %s❌ Une mutation du fractionnement passe inapercue.%s\n' "$C_ERR" "$C_0"
+  printf '  %s❌ SELFTEST : %d cas en echec. Chacun est marque ❌ ci-dessus.%s\n' "$C_ERR" "$SELF_FAILED" "$C_0"
   exit 1
 fi
 
@@ -2113,13 +2113,15 @@ if [ -z "${I_EE_LISIBLE:-}" ] || [ "${I_EE_LISIBLE:-0}" != "1" ]; then
 elif [ "$I_EE_USINE" = "0" ]; then
   ok "instances : templates d usine" "les 384 octets EEPROM portent A1..A8 puis huit records vides, longueur 16"
 else
-  bad "instances : templates d usine" "$I_EE_USINE octet(s) hors attendu, premier a l offset ${I_EE_USINE_OU:-?} de l image"
+  inval "instances : templates d usine" "$I_EE_USINE octet(s) hors attendu dans l image FOURNIE, premier a l offset ${I_EE_USINE_OU:-?} : le rig est faux, aucun verdict sur le firmware"
 fi
 
 if [ "${I_EE_LU:-0}" != "1" ]; then
   inval "instances : templates EEPROM stables" "l EEPROM simulee n a pas pu etre relue par AVR_IOCTL_EEPROM_GET"
 elif [ "$W_INST" != "1" ]; then
   inval "instances : templates EEPROM stables" "temoins amont invalides"
+elif [ "${I_EE_USINE:-1}" != "0" ]; then
+  inval "instances : templates EEPROM stables" "le controle du rig est invalide : une derive n est pas attribuable au firmware"
 elif [ "$I_EE_DERIVE" = "0" ]; then
   ok "instances : templates EEPROM stables" "les 384 octets RELUS de l EEPROM simulee sont identiques a l image fournie"
 else
@@ -2173,7 +2175,10 @@ else
 fi
 
 B_INST_ATTENDU="$(printf '%s %s %s %s %s %s' "$B_INST_ATT" "$B_INST_ATT" "$B_INST_ATT" "$B_INST_ATT" "$B_INST_ATT" "$B_INST_ATT")"
-if [ "$(echo $B_INST)" = "$(echo $B_INST_ATTENDU)" ]; then
+garde_pointeur "$LOG9" "bootstrap : temoin du pointeur" && W_BOOT_PTR=1 || W_BOOT_PTR=0
+if [ "$W_BOOT_PTR" != "1" ]; then
+  inval "bootstrap : six instances sur A1" "temoin du pointeur invalide : les masques lus ne sont pas attribuables au firmware"
+elif [ "$(echo $B_INST)" = "$(echo $B_INST_ATTENDU)" ]; then
   ok "bootstrap : six instances sur A1" "les six masques valent $B_INST_ATT, et non ceux de l image differenciee"
 else
   bad "bootstrap : six instances sur A1" "masques $B_INST au lieu de six fois $B_INST_ATT"
