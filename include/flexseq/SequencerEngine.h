@@ -32,6 +32,7 @@ public:
     static constexpr uint16_t TICKS_PER_SIXTEENTH = PPQN / 4; // 24
     static constexpr uint8_t MIN_LENGTH = 1;
     static constexpr uint8_t MAX_LENGTH = 24;
+    static constexpr int8_t LENGTH_CV_OFFSET = 0;
     static constexpr uint8_t DEFAULT_LENGTH = 16;
     static constexpr uint8_t CHANNEL_COUNT = 6;
     static constexpr uint8_t PATTERN_COUNT = 16;
@@ -68,6 +69,7 @@ public:
     // Per-channel length (1..24). Query returns 0 for an invalid channel.
     uint8_t getEffectiveLength(uint8_t channel) const;
     bool setEffectiveLength(uint8_t channel, uint8_t length);
+    uint8_t getBaseLength(uint8_t channel) const;
 
     // Per-channel ticks per step (>= 1). Query returns 0 for an invalid channel.
     uint16_t getTicksPerStep(uint8_t channel) const;
@@ -147,6 +149,9 @@ private:
     void refreshStepTiming(uint8_t channel, bool resetSubOnset = true);
 
     void clampOffset(uint8_t channel);
+
+    // ADR 0009: the single writer of effectiveLength.
+    void refreshEffectiveLength(uint8_t channel);
 
     bool onBeat() const { return beatTick_ == 0; }
     void scheduleTicks(uint8_t channel, uint16_t ticks);

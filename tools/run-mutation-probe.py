@@ -58,6 +58,13 @@ MUTANTS = [
      "    if (!validChannel(channel) || bank_ == nullptr) {\n"
      "        return nullptr;\n    }\n"
      "    return bank_->getPattern(channels_[channel].selectedPattern);\n}", "cpp-all"),
+    ("cpp: the effective length derivation never runs (ADR 0009)",
+     "src/domain/SequencerEngine.cpp",
+     "    channels_[channel].baseLength = length;\n"
+     "    refreshEffectiveLength(channel);\n"
+     "    return true;",
+     "    channels_[channel].baseLength = length;\n"
+     "    return true;", "cpp-all"),
     ("cpp: the edit path writes into the shared template instead of the instance",
      "src/domain/SequencerEngine.cpp",
      "Pattern* SequencerEngine::patternForChannel(uint8_t channel) {\n"

@@ -16,7 +16,6 @@ SequencerEngine::SequencerEngine()
         onsets_[ch] = 0;
         channels_[ch].selectedPattern = 0;
         channels_[ch].baseLength = DEFAULT_LENGTH;
-        channels_[ch].effectiveLength = DEFAULT_LENGTH;
         channels_[ch].subdiv = DEFAULT_SUBDIV;
         channels_[ch].ticksPerStep = subdivToTicks(DEFAULT_SUBDIV);
         channels_[ch].barLength = DEFAULT_BAR_LENGTH;
@@ -26,6 +25,7 @@ SequencerEngine::SequencerEngine()
         channels_[ch].localStep = 0;
         channels_[ch].acc = 0;
         channels_[ch].pendingTicks = 0;
+        refreshEffectiveLength(ch);
         refreshStepTiming(ch);
     }
 }
@@ -230,14 +230,33 @@ bool SequencerEngine::setEffectiveLength(uint8_t channel, uint8_t length) {
     if (!validChannel(channel) || length < MIN_LENGTH || length > MAX_LENGTH) {
         return false;
     }
+    channels_[channel].baseLength = length;
+    refreshEffectiveLength(channel);
+    return true;
+}
+
+uint8_t SequencerEngine::getBaseLength(uint8_t channel) const {
+    if (!validChannel(channel)) {
+        return 0;
+    }
+    return channels_[channel].baseLength;
+}
+
+void SequencerEngine::refreshEffectiveLength(uint8_t channel) {
     ChannelState& c = channels_[channel];
-    c.effectiveLength = length;
+    int16_t wanted = static_cast<int16_t>(c.baseLength) + LENGTH_CV_OFFSET;
+    if (wanted < static_cast<int16_t>(MIN_LENGTH)) {
+        wanted = static_cast<int16_t>(MIN_LENGTH);
+    }
+    if (wanted > static_cast<int16_t>(MAX_LENGTH)) {
+        wanted = static_cast<int16_t>(MAX_LENGTH);
+    }
+    c.effectiveLength = static_cast<uint8_t>(wanted);
     // Smoothed local phase: only fold when the position falls out of range.
-    if (c.localStep >= length) {
-        c.localStep = static_cast<uint8_t>(c.localStep % length);
+    if (c.localStep >= c.effectiveLength) {
+        c.localStep = static_cast<uint8_t>(c.localStep % c.effectiveLength);
         refreshStepTiming(channel);
     }
-    return true;
 }
 
 uint16_t SequencerEngine::getTicksPerStep(uint8_t channel) const {
