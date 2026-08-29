@@ -1466,6 +1466,23 @@ void test_every_unknown_version_byte_falls_back_to_the_defaults() {
     }
 }
 
+void test_the_v3_defaults_reset_the_mode_the_offset_and_the_skip_chance() {
+    eeprom.reset();
+    eeprom.cell[384] = 0xFF;
+    RigV3 r;
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        TEST_ASSERT_TRUE(r.engine.setChannelMode(ch, flexseq::MODE_RANDOM));
+        TEST_ASSERT_TRUE(r.engine.setOffset(ch, 7));
+        TEST_ASSERT_TRUE(r.engine.setSkipChance(ch, 9));
+    }
+    TEST_ASSERT_FALSE(flexseq::bootstrap(eeprom, r.image, r.scheduler, 0));
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        TEST_ASSERT_EQUAL_UINT8(flexseq::MODE_CLOCK, r.engine.getChannelMode(ch));
+        TEST_ASSERT_EQUAL_UINT8(0, r.engine.getOffset(ch));
+        TEST_ASSERT_EQUAL_UINT8(0, r.engine.getSkipChance(ch));
+    }
+}
+
 void test_the_v3_logical_image_is_two_hundred_and_four_bytes() {
     TEST_ASSERT_EQUAL_UINT16(204, flexseq::PersistentImageV3::SIZE);
     TEST_ASSERT_EQUAL_UINT16(203, flexseq::PersistentImageV3::VERSION_INDEX);
@@ -1582,6 +1599,7 @@ int main() {
     RUN_TEST(test_a_nominal_boot_restores_the_instances_and_never_overwrites_them);
     RUN_TEST(test_a_valid_version_two_image_is_refused_without_migration);
     RUN_TEST(test_every_unknown_version_byte_falls_back_to_the_defaults);
+    RUN_TEST(test_the_v3_defaults_reset_the_mode_the_offset_and_the_skip_chance);
 
     RUN_TEST(test_the_v3_scan_visits_and_writes_the_two_hundred_and_four_logical_bytes);
     RUN_TEST(test_the_v3_scan_touches_only_the_version_and_the_data_zone);

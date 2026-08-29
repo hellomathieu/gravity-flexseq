@@ -1370,3 +1370,22 @@ describe("isTemplateEmpty — les 36 cases inactives (B4b.6.4)", () => {
     expect(r.image.isTemplateEmpty(ee, 16)).toBe(false);
   });
 });
+
+describe("les defauts de la version 3 (B4b.6.5)", () => {
+  it("remettent le mode, l'offset et le skip chance", () => {
+    const ee = new FakeEeprom();
+    ee.write(384, 0xff);
+    const r = rigV3();
+    for (let ch = 0; ch < 6; ++ch) {
+      expect(r.engine.setChannelMode(ch, ChannelMode.RANDOM)).toBe(true);
+      expect(r.engine.setOffset(ch, 7)).toBe(true);
+      expect(r.engine.setSkipChance(ch, 9)).toBe(true);
+    }
+    expect(bootstrap(ee, r.image, r.scheduler, 0)).toBe(false);
+    for (let ch = 0; ch < 6; ++ch) {
+      expect(r.engine.getChannelMode(ch)).toBe(ChannelMode.CLOCK);
+      expect(r.engine.getOffset(ch)).toBe(0);
+      expect(r.engine.getSkipChance(ch)).toBe(0);
+    }
+  });
+});
