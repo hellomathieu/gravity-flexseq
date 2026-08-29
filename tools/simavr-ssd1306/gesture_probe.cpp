@@ -220,11 +220,11 @@ static uint8_t *mutableInstanceOf(uint8_t *buffer, int8_t channel)
 
 static avr_t *g_avr;
 static uint32_t g_twi_bytes;
-static uint16_t g_bank_addr;
+static uint16_t g_instance_ptr_addr;
 static long g_base_force = -1;
 static long g_channel_force = -1;
-static uint32_t g_bank_reads;
-static uint32_t g_bank_read_faults;
+static uint32_t g_instance_reads;
+static uint32_t g_instance_read_faults;
 static uint32_t g_instance_faults;
 static uint16_t g_base_seen;
 
@@ -326,12 +326,12 @@ static uint32_t gapGcdInWindow(const outline_t *l, uint32_t from, uint32_t to,
     return g;
 }
 
-static uint32_t activeStepsInPattern(const uint8_t *bank)
+static uint32_t activeStepsInPattern(const uint8_t *pattern)
 {
     uint32_t n = 0;
     for (uint32_t b = 0; b < (uint32_t)STEP_BYTES; ++b) {
         for (uint32_t bit = 0; bit < 8; ++bit) {
-            if (bank[b] & (1u << bit)) ++n;
+            if (pattern[b] & (1u << bit)) ++n;
         }
     }
     return n;
@@ -463,8 +463,8 @@ static void run_for(avr_t *avr, double ms)
 static uint16_t instance_base(const avr_t *avr)
 {
     if (g_base_force >= 0) return (uint16_t)(g_base_force & 0xFFFF);
-    const uint16_t lo = avr->data[g_bank_addr];
-    const uint16_t hi = avr->data[g_bank_addr + 1];
+    const uint16_t lo = avr->data[g_instance_ptr_addr];
+    const uint16_t hi = avr->data[g_instance_ptr_addr + 1];
     return (uint16_t)(lo | (hi << 8));
 }
 
@@ -475,13 +475,13 @@ static int baseIsReadable(const avr_t *avr, uint16_t base)
     return 1;
 }
 
-static void read_bank(const avr_t *avr, uint8_t *out)
+static void readInstances(const avr_t *avr, uint8_t *out)
 {
     const uint16_t base = instance_base(avr);
     g_base_seen = base;
-    ++g_bank_reads;
+    ++g_instance_reads;
     if (!baseIsReadable(avr, base)) {
-        ++g_bank_read_faults;
+        ++g_instance_read_faults;
         memset(out, 0, (size_t)OBSERVED_INSTANCE_BYTES);
         return;
     }
@@ -491,7 +491,7 @@ static void read_bank(const avr_t *avr, uint8_t *out)
 static void reportInstanceAccess(void)
 {
     printf("instances_acces    lectures %u echecs %u fautes %u\n",
-           g_bank_reads, g_bank_read_faults, g_instance_faults);
+           g_instance_reads, g_instance_read_faults, g_instance_faults);
 }
 
 static long g_template_mutate = -1;
@@ -696,7 +696,7 @@ static void buildExpectedInstances(uint8_t *out)
     }
 }
 
-static uint32_t bankDiffCount(const uint8_t *a, const uint8_t *b, uint32_t *firstOut)
+static uint32_t instancesDiffCount(const uint8_t *a, const uint8_t *b, uint32_t *firstOut)
 {
     uint32_t n = 0, first = 0xFFFFFFFFu;
     for (uint32_t i = 0; i < (uint32_t)(OBSERVED_INSTANCE_BYTES); ++i) {
@@ -911,13 +911,13 @@ int main(int argc, char **argv)
         return 0;
     }
     if (argc < 3) {
-        fprintf(stderr, "usage: %s <firmware.hex> <adresse_patternBank> [duree_boot_ms]\n",
+        fprintf(stderr, "usage: %s <firmware.hex> <adresse_pointeur_instances> [duree_boot_ms]\n",
                 argv[0]);
         return 2;
     }
     const char *fw = argv[1];
-    const long bank_symbol = strtol(argv[2], NULL, 0);
-    g_bank_addr = (uint16_t)(bank_symbol & 0xFFFF);
+    const long instance_ptr_symbol = strtol(argv[2], NULL, 0);
+    g_instance_ptr_addr = (uint16_t)(instance_ptr_symbol & 0xFFFF);
     {
         const char *forced = getenv("INSTANCE_BASE_FORCE");
         if (forced != NULL) g_base_force = strtol(forced, NULL, 0);
@@ -1037,8 +1037,8 @@ int main(int argc, char **argv)
     avr_load_firmware(avr, &f);
     uart_quiet(avr, '0');
 
-    if (g_bank_addr == 0 || g_bank_addr >= avr->ramend) {
-        fprintf(stderr, "adresse de patternBank hors RAM : 0x%04x\n", g_bank_addr);
+    if (g_instance_ptr_addr == 0 || g_instance_ptr_addr >= avr->ramend) {
+        fprintf(stderr, "adresse du pointeur d instances hors RAM : 0x%04x\n", g_instance_ptr_addr);
         return 2;
     }
 
@@ -1129,8 +1129,8 @@ int main(int argc, char **argv)
     }
 
     printf("firmware           %s\n", fw);
-    printf("patternBank        symbole 0x%06lx, RAM 0x%04x\n",
-           (unsigned long)bank_symbol, g_bank_addr);
+    printf("instances_symbole  symbole 0x%06lx, RAM 0x%04x\n",
+           (unsigned long)instance_ptr_symbol, g_instance_ptr_addr);
     printf("contrat            rotate=quadrature, press=%d ms, longPress=%d ms,"
            " shiftRotate=%d crans max par salve (%d ms, seuil %d ms)\n",
            PRESS_MS, LONG_PRESS_MS, SHIFT_BURST_DETENTS,
@@ -1144,20 +1144,20 @@ int main(int argc, char **argv)
 
     run_for(avr, boot_ms);
 
-    static uint8_t bank[OBSERVED_INSTANCE_BYTES];
-    read_bank(avr, bank);
+    static uint8_t instancesAtStart[OBSERVED_INSTANCE_BYTES];
+    readInstances(avr, instancesAtStart);
 
     printf("instances_pointeur base 0x%04x lisible %d canal_force %ld\n",
            g_base_seen, baseIsReadable(avr, g_base_seen), g_channel_force);
     printf("twi_bytes_boot     %u\n", g_twi_bytes);
-    printf("bank_low_masks    ");
+    printf("instances_low_masks ");
     for (uint8_t p = 0; p < OBSERVED_CHANNEL_COUNT; ++p) {
-        printf(" %04x", lowMaskOfInstance(bank, (int8_t)p));
+        printf(" %04x", lowMaskOfInstance(instancesAtStart, (int8_t)p));
     }
     printf("\n");
-    printf("bank_ratchets_a1  ");
+    printf("instances_ratchets_c0 ");
     for (int b = 0; b < RATCHET_BYTES; ++b) {
-        printf(" %02x", bank[STEP_BYTES + b]);
+        printf(" %02x", instancesAtStart[STEP_BYTES + b]);
     }
     printf("\n");
 
@@ -1196,7 +1196,7 @@ int main(int argc, char **argv)
         sizeof(flexseq::Pattern) == (size_t)PATTERN_BYTES
         && OBSERVED_INSTANCE_BYTES
                == (size_t)(flexseq::SequencerEngine::CHANNEL_COUNT * PATTERN_BYTES)
-        && memcmp(expectedBytes, bank, OBSERVED_INSTANCE_BYTES) == 0;
+        && memcmp(expectedBytes, instancesAtStart, OBSERVED_INSTANCE_BYTES) == 0;
     printf("controle_source    %s\n", expectedSource);
     printf("inst_attendus     ");
     for (uint8_t ch = 0; ch < OBSERVED_CHANNEL_COUNT; ++ch) {
@@ -1300,10 +1300,10 @@ int main(int argc, char **argv)
         run_for(avr, 2500.0);
         depart = g_ticks;
         run_for(avr, 20000.0);
-        read_bank(avr, vu);
+        readInstances(avr, vu);
         uint32_t prem = 0;
         printf("dh_apres           onglet %d twi %u ecarts %u\n",
-               selectedTab(), twiSalve, bankDiffCount(vu, expectedBytes, &prem));
+               selectedTab(), twiSalve, instancesDiffCount(vu, expectedBytes, &prem));
         for (int o = 0; o < OUT_COUNT; ++o) {
             uint32_t k = 0, g = 0, d = 0, on = 0;
             printf("dh_apres_OUT%d pgcd %u periode3 %u distances %u retenues %u onsets %u\n",
@@ -1359,10 +1359,10 @@ int main(int argc, char **argv)
         for (int i = 0; i < 4; ++i) {
             const uint32_t m = g_twi_bytes;
             shiftRotate(avr, sv[i].crans, sv[i].aFirst, DIAGNOSTIC_MEASURES_THE_POLICY, false);
-            read_bank(avr, vu);
+            readInstances(avr, vu);
             uint32_t prem = 0;
-            printf("dd_%-9s twi %u banque %u onglet %d\n", sv[i].nom,
-                   g_twi_bytes - m, bankDiffCount(vu, expectedBytes, &prem),
+            printf("dd_%-9s twi %u instances %u onglet %d\n", sv[i].nom,
+                   g_twi_bytes - m, instancesDiffCount(vu, expectedBytes, &prem),
                    selectedTab());
             printChampInk(sv[i].nom);
             if (i < 3 && gapMs > 0.0) run_for(avr, gapMs);
@@ -1371,10 +1371,10 @@ int main(int argc, char **argv)
         run_for(avr, 2500.0);
         depart = g_ticks;
         run_for(avr, 20000.0);
-        read_bank(avr, vu);
+        readInstances(avr, vu);
         uint32_t premier = 0;
         printf("dd_final           onglet %d ecarts %u\n",
-               selectedTab(), bankDiffCount(vu, expectedBytes, &premier));
+               selectedTab(), instancesDiffCount(vu, expectedBytes, &premier));
         for (int o = 0; o < OUT_COUNT; ++o) {
             uint32_t k = 0, g = 0, d = 0, on = 0;
             printf("dd_final_OUT%d pgcd %u periode3 %u distances %u retenues %u onsets %u\n",
@@ -1429,8 +1429,8 @@ int main(int argc, char **argv)
             const uint32_t depart = g_ticks;
             run_for(avr, 20000.0);
 
-            read_bank(avr, vu);
-            const uint32_t ecarts = bankDiffCount(vu, expectedBytes, &premier);
+            readInstances(avr, vu);
+            const uint32_t ecarts = instancesDiffCount(vu, expectedBytes, &premier);
             printf("dbg_%-7s onglet %d twi %u ecarts %u\n",
                    salves[i].nom, selectedTab(), twiGeste, ecarts);
             for (int o = 0; o < OUT_COUNT; ++o) {
@@ -1558,8 +1558,8 @@ int main(int argc, char **argv)
             const uint32_t depart = g_ticks;
             run_for(avr, etape == 1 ? 25000.0 : 20000.0);
 
-            read_bank(avr, vu);
-            const uint32_t ecarts = bankDiffCount(vu, expectedBytes, &premier);
+            readInstances(avr, vu);
+            const uint32_t ecarts = instancesDiffCount(vu, expectedBytes, &premier);
             printf("rE_%s onglet %d twi %u ecarts %u\n", nom, selectedTab(), twiGeste, ecarts);
             for (int o = 0; o < OUT_COUNT; ++o) {
                 uint32_t kept = 0, gaps = 0, dropped = 0, onsets = 0;
@@ -1601,8 +1601,8 @@ int main(int argc, char **argv)
 
         uint32_t depart = g_ticks;
         run_for(avr, 20000.0);
-        read_bank(avr, vu);
-        ecarts = bankDiffCount(vu, expectedBytes, &premier);
+        readInstances(avr, vu);
+        ecarts = instancesDiffCount(vu, expectedBytes, &premier);
         uint32_t cad = gapGcdInWindow(&g_out[sortieR11], depart, g_ticks, &kept, &gaps, &dropped);
         printf("rD_base            cadence %u distances %u retenues %u ecarts %u\n",
                cad, gaps, kept, ecarts);
@@ -1619,8 +1619,8 @@ int main(int argc, char **argv)
         run_for(avr, 2500.0);
         depart = g_ticks;
         run_for(avr, 20000.0);
-        read_bank(avr, vu);
-        ecarts = bankDiffCount(vu, expectedBytes, &premier);
+        readInstances(avr, vu);
+        ecarts = instancesDiffCount(vu, expectedBytes, &premier);
         cad = gapGcdInWindow(&g_out[sortieR11], depart, g_ticks, &kept, &gaps, &dropped);
         printf("rD_x24             cadence %u distances %u retenues %u ecarts %u\n",
                cad, gaps, kept, ecarts);
@@ -1648,8 +1648,8 @@ int main(int argc, char **argv)
         for (int cran = 1; cran <= 3; ++cran) {
             marque = g_twi_bytes;
             if (!skipBGeste) shiftRotate(avr, 1, 1, harness::RATCHET_BURST_LIMIT, false);
-            read_bank(avr, vu);
-            ecarts = bankDiffCount(vu, expectedBytes, &premier);
+            readInstances(avr, vu);
+            ecarts = instancesDiffCount(vu, expectedBytes, &premier);
             printf("rD_cran%d           nibble %02x octet %02x ecarts %u premier %u twi %u"
                    " canal %d octet_instance %u\n",
                    cran, (unsigned)(byteOfInstance(vu, canalR11, rangR11) >> 4),
@@ -1660,8 +1660,8 @@ int main(int argc, char **argv)
 
         marque = g_twi_bytes;
         if (!skipBGeste) shiftRotate(avr, 6, 0, harness::RATCHET_BURST_LIMIT, false);
-        read_bank(avr, vu);
-        ecarts = bankDiffCount(vu, expectedBytes, &premier);
+        readInstances(avr, vu);
+        ecarts = instancesDiffCount(vu, expectedBytes, &premier);
         printf("rD_retour          nibble %02x octet %02x ecarts %u twi %u\n",
                (unsigned)(byteOfInstance(vu, canalR11, rangR11) >> 4),
                    (unsigned)byteOfInstance(vu, canalR11, rangR11),
@@ -1678,8 +1678,8 @@ int main(int argc, char **argv)
         run_for(avr, 2500.0);
         depart = g_ticks;
         run_for(avr, 20000.0);
-        read_bank(avr, vu);
-        ecarts = bankDiffCount(vu, expectedBytes, &premier);
+        readInstances(avr, vu);
+        ecarts = instancesDiffCount(vu, expectedBytes, &premier);
         cad = gapGcdInWindow(&g_out[sortieR11], depart, g_ticks, &kept, &gaps, &dropped);
         printf("rD_cadence_fin     cadence %u distances %u retenues %u ecarts %u twi %u\n",
                cad, gaps, kept, ecarts, g_twi_bytes - marque);
@@ -1731,9 +1731,9 @@ int main(int argc, char **argv)
             const uint32_t depart = g_ticks;
             run_for(avr, 20000.0);
 
-            read_bank(avr, vu);
+            readInstances(avr, vu);
             uint32_t premier = 0;
-            const uint32_t ecarts = bankDiffCount(vu, expectedBytes, &premier);
+            const uint32_t ecarts = instancesDiffCount(vu, expectedBytes, &premier);
             printf("rC_%s onglet %d twi %u ecarts %u\n", nom, selectedTab(), twiGeste, ecarts);
             for (int o = 0; o < OUT_COUNT; ++o) {
                 uint32_t kept = 0, gaps = 0, dropped = 0, onsets = 0;
@@ -1880,7 +1880,7 @@ int main(int argc, char **argv)
         printf("boot_semis         lu %d ecarts %u premier %u\n",
                luApresSetup, usineEcarts, usinePremier);
 
-        read_bank(avr, instances);
+        readInstances(avr, instances);
         printf("boot_instances    ");
         for (uint8_t c = 0; c < OBSERVED_CHANNEL_COUNT; ++c) {
             printf(" %04x", lowMaskOfInstance(instances, (int8_t)c));
@@ -1917,7 +1917,7 @@ int main(int argc, char **argv)
         playPress(avr);
         run_for(avr, 1000.0);
 
-        read_bank(avr, avant);
+        readInstances(avr, avant);
 
         uint32_t eepromUsinePremier = 0;
         const uint32_t eepromUsineEcarts = eepromTemplateFactoryDiff(&eepromUsinePremier);
@@ -1959,12 +1959,12 @@ int main(int argc, char **argv)
         marque = g_twi_bytes;
         pressFor(avr, (double)PRESS_MS);
         const int mute = mutateEepromTemplates(avr);
-        read_bank(avr, apres);
+        readInstances(avr, apres);
         if (mute) printf("inst_mutation      octet %ld de la zone EEPROM des templates\n",
                          g_template_mutate);
 
         uint32_t premier = 0;
-        const uint32_t ecarts = bankDiffCount(avant, apres, &premier);
+        const uint32_t ecarts = instancesDiffCount(avant, apres, &premier);
         printf("inst_edit          canal_vise %d ecarts %u premier %u"
                " canal %d octet_instance %u twi %u\n",
                (int)canalInstances, ecarts, premier,
@@ -2010,16 +2010,16 @@ int main(int argc, char **argv)
         printf("rA_edit            twi %u creneaux %d %d\n",
                g_twi_bytes - marque, creneauxAvant, tabBandSlotsWithInk());
 
-        read_bank(avr, vu);
-        ecarts = bankDiffCount(vu, expectedBytes, &premier);
+        readInstances(avr, vu);
+        ecarts = instancesDiffCount(vu, expectedBytes, &premier);
         printf("rA_base            masque %04x octet6 %02x octet8 %02x ecarts %u\n",
                lowMaskOfInstance(vu, canalA), byteOfInstance(vu, canalA, STEP_BYTES + 2), byteOfInstance(vu, canalA, STEP_BYTES + 4), ecarts);
 
         rotate(avr, 3, 1);
         marque = g_twi_bytes;
         pressFor(avr, (double)PRESS_MS);
-        read_bank(avr, vu);
-        ecarts = bankDiffCount(vu, expectedBytes, &premier);
+        readInstances(avr, vu);
+        ecarts = instancesDiffCount(vu, expectedBytes, &premier);
         printf("rA_r8_pose         masque %04x ecarts %u premier %u twi %u"
                " canal %d octet_instance %u\n",
                lowMaskOfInstance(vu, canalA), ecarts, premier,
@@ -2027,16 +2027,16 @@ int main(int argc, char **argv)
                (int)channelOfOffset(premier), (unsigned)byteOfOffset(premier));
         marque = g_twi_bytes;
         pressFor(avr, (double)PRESS_MS);
-        read_bank(avr, vu);
-        ecarts = bankDiffCount(vu, expectedBytes, &premier);
+        readInstances(avr, vu);
+        ecarts = instancesDiffCount(vu, expectedBytes, &premier);
         printf("rA_r8_retour       masque %04x ecarts %u twi %u\n",
                lowMaskOfInstance(vu, canalA), ecarts, g_twi_bytes - marque);
 
         rotate(avr, 2, 1);
         marque = g_twi_bytes;
         shiftRotate(avr, 4, 1, harness::STEP_BURST_LIMIT, false);
-        read_bank(avr, vu);
-        ecarts = bankDiffCount(vu, expectedBytes, &premier);
+        readInstances(avr, vu);
+        ecarts = instancesDiffCount(vu, expectedBytes, &premier);
         printf("rA_r9_pose         octet6 %02x ecarts %u premier %u twi %u"
                " canal %d octet_instance %u\n",
                byteOfInstance(vu, canalA, STEP_BYTES + 2), ecarts, premier,
@@ -2044,8 +2044,8 @@ int main(int argc, char **argv)
                (int)channelOfOffset(premier), (unsigned)byteOfOffset(premier));
         marque = g_twi_bytes;
         shiftRotate(avr, 4, 0, harness::RATCHET_BURST_LIMIT, false);
-        read_bank(avr, vu);
-        ecarts = bankDiffCount(vu, expectedBytes, &premier);
+        readInstances(avr, vu);
+        ecarts = instancesDiffCount(vu, expectedBytes, &premier);
         printf("rA_r9_retour       octet6 %02x ecarts %u twi %u\n",
                byteOfInstance(vu, canalA, STEP_BYTES + 2), ecarts, g_twi_bytes - marque);
 
@@ -2053,8 +2053,8 @@ int main(int argc, char **argv)
         rotate(avr, versR10 == 0 ? 24 : versR10, 1);
         marque = g_twi_bytes;
         shiftRotate(avr, 4, 1, harness::STEP_BURST_LIMIT, false);
-        read_bank(avr, vu);
-        ecarts = bankDiffCount(vu, expectedBytes, &premier);
+        readInstances(avr, vu);
+        ecarts = instancesDiffCount(vu, expectedBytes, &premier);
         printf("rA_r10             cible %d rotations %d octet6 %02x ecarts %u twi %u\n",
                r10Step, versR10 == 0 ? 24 : versR10, byteOfInstance(vu, canalA, STEP_BYTES + 2), ecarts,
                g_twi_bytes - marque);
@@ -2062,8 +2062,8 @@ int main(int argc, char **argv)
         rotate(avr, (9 - r10Step + 24) % 24, 1);
         marque = g_twi_bytes;
         shiftRotate(avr, 5, 1, harness::RATCHET_BURST_LIMIT, false);
-        read_bank(avr, vu);
-        ecarts = bankDiffCount(vu, expectedBytes, &premier);
+        readInstances(avr, vu);
+        ecarts = instancesDiffCount(vu, expectedBytes, &premier);
         printf("rA_r12_pose        octet8 %02x ecarts %u premier %u twi %u"
                " canal %d octet_instance %u\n",
                byteOfInstance(vu, canalA, STEP_BYTES + 4), ecarts, premier,
@@ -2071,8 +2071,8 @@ int main(int argc, char **argv)
                (int)channelOfOffset(premier), (unsigned)byteOfOffset(premier));
         marque = g_twi_bytes;
         shiftRotate(avr, 5, 0, harness::RATCHET_BURST_LIMIT, false);
-        read_bank(avr, vu);
-        ecarts = bankDiffCount(vu, expectedBytes, &premier);
+        readInstances(avr, vu);
+        ecarts = instancesDiffCount(vu, expectedBytes, &premier);
         printf("rA_r12_retour      octet8 %02x ecarts %u twi %u\n",
                byteOfInstance(vu, canalA, STEP_BYTES + 4), ecarts, g_twi_bytes - marque);
         return 0;
@@ -2160,10 +2160,10 @@ int main(int argc, char **argv)
         return 0;
     }
 
-    static uint8_t bankAfterRotations[OBSERVED_INSTANCE_BYTES];
-    read_bank(avr, bankAfterRotations);
-    printf("bank_inchangee     %d\n",
-           memcmp(bank, bankAfterRotations, sizeof(bank)) == 0 ? 1 : 0);
+    static uint8_t instancesAfterRotations[OBSERVED_INSTANCE_BYTES];
+    readInstances(avr, instancesAfterRotations);
+    printf("instances_inchangees %d\n",
+           memcmp(instancesAtStart, instancesAfterRotations, sizeof(instancesAtStart)) == 0 ? 1 : 0);
 
     run_for(avr, FRAME_SETTLE_MS);
     const uint32_t sigTabBar = screenSignature();
@@ -2206,54 +2206,54 @@ int main(int argc, char **argv)
            sigEdit, g_twi_bytes - twiMark, slotsBeforeEdit, tabBandSlotsWithInk(),
            (sigEdit != sigTabBar && sigEdit != sigAfterShort) ? 1 : 0);
 
-    static uint8_t bankBeforeShift[OBSERVED_INSTANCE_BYTES];
-    read_bank(avr, bankBeforeShift);
-    printf("ratchet_avant      %02x\n", byteOfInstance(bankBeforeShift, canalPrincipal, STEP_BYTES));
+    static uint8_t instancesBeforeShift[OBSERVED_INSTANCE_BYTES];
+    readInstances(avr, instancesBeforeShift);
+    printf("ratchet_avant      %02x\n", byteOfInstance(instancesBeforeShift, canalPrincipal, STEP_BYTES));
 
     twiMark = g_twi_bytes;
     const double heldMs = skipShift ? 192.0 : shiftRotate(avr, 3, 1, harness::RATCHET_BURST_LIMIT, false);
-    static uint8_t bankAfterShift[OBSERVED_INSTANCE_BYTES];
-    read_bank(avr, bankAfterShift);
+    static uint8_t instancesAfterShift[OBSERVED_INSTANCE_BYTES];
+    readInstances(avr, instancesAfterShift);
     printf("shift_maintien_ms  %.1f\n", heldMs);
-    printf("ratchet_apres      %02x\n", byteOfInstance(bankAfterShift, canalPrincipal, STEP_BYTES));
+    printf("ratchet_apres      %02x\n", byteOfInstance(instancesAfterShift, canalPrincipal, STEP_BYTES));
     printf("shift_twi          %u\n", g_twi_bytes - twiMark);
     printf("masques_intacts    %d\n",
-           memcmp(instanceOf(bankBeforeShift, canalPrincipal),
-                  instanceOf(bankAfterShift, canalPrincipal), STEP_BYTES) == 0
-           && lowMaskOfInstance(bankAfterShift, canalPrincipal) == 0x9111 ? 1 : 0);
+           memcmp(instanceOf(instancesBeforeShift, canalPrincipal),
+                  instanceOf(instancesAfterShift, canalPrincipal), STEP_BYTES) == 0
+           && lowMaskOfInstance(instancesAfterShift, canalPrincipal) == 0x9111 ? 1 : 0);
 
     twiMark = g_twi_bytes;
     shiftRotate(avr, 2, 1, harness::RATCHET_BURST_LIMIT, false);
-    static uint8_t bankTriplet[OBSERVED_INSTANCE_BYTES];
-    read_bank(avr, bankTriplet);
+    static uint8_t instancesTriplet[OBSERVED_INSTANCE_BYTES];
+    readInstances(avr, instancesTriplet);
     printf("triolet_pose       %02x twi %u\n",
-           byteOfInstance(bankTriplet, canalPrincipal, STEP_BYTES) & 0x0F, g_twi_bytes - twiMark);
+           byteOfInstance(instancesTriplet, canalPrincipal, STEP_BYTES) & 0x0F, g_twi_bytes - twiMark);
 
     twiMark = g_twi_bytes;
     shiftRotate(avr, 5, 0, harness::RATCHET_BURST_LIMIT, false);
-    static uint8_t bankNoRatchet[OBSERVED_INSTANCE_BYTES];
-    read_bank(avr, bankNoRatchet);
+    static uint8_t instancesNoRatchet[OBSERVED_INSTANCE_BYTES];
+    readInstances(avr, instancesNoRatchet);
     printf("triolet_retire     %02x twi %u\n",
-           byteOfInstance(bankNoRatchet, canalPrincipal, STEP_BYTES) & 0x0F, g_twi_bytes - twiMark);
-    printf("banque_restauree   %d\n",
-           memcmp(expectedBytes, bankNoRatchet, OBSERVED_INSTANCE_BYTES) == 0 ? 1 : 0);
+           byteOfInstance(instancesNoRatchet, canalPrincipal, STEP_BYTES) & 0x0F, g_twi_bytes - twiMark);
+    printf("instances_restaurees %d\n",
+           memcmp(expectedBytes, instancesNoRatchet, OBSERVED_INSTANCE_BYTES) == 0 ? 1 : 0);
 
     rotate(avr, 1, 1);
     twiMark = g_twi_bytes;
     pressFor(avr, (double)PRESS_MS);
-    static uint8_t bankToggled[OBSERVED_INSTANCE_BYTES];
-    read_bank(avr, bankToggled);
+    static uint8_t instancesToggled[OBSERVED_INSTANCE_BYTES];
+    readInstances(avr, instancesToggled);
     printf("step1_bascule      %04x twi %u\n",
-           lowMaskOfInstance(bankToggled, canalPrincipal), g_twi_bytes - twiMark);
+           lowMaskOfInstance(instancesToggled, canalPrincipal), g_twi_bytes - twiMark);
 
     twiMark = g_twi_bytes;
     pressFor(avr, (double)PRESS_MS);
-    static uint8_t bankRestored[OBSERVED_INSTANCE_BYTES];
-    read_bank(avr, bankRestored);
+    static uint8_t instancesRestored[OBSERVED_INSTANCE_BYTES];
+    readInstances(avr, instancesRestored);
     printf("step1_rebascule    %04x twi %u\n",
-           lowMaskOfInstance(bankRestored, canalPrincipal), g_twi_bytes - twiMark);
-    printf("banque_finale      %d\n",
-           memcmp(expectedBytes, bankRestored, OBSERVED_INSTANCE_BYTES) == 0 ? 1 : 0);
+           lowMaskOfInstance(instancesRestored, canalPrincipal), g_twi_bytes - twiMark);
+    printf("instances_finales    %d\n",
+           memcmp(expectedBytes, instancesRestored, OBSERVED_INSTANCE_BYTES) == 0 ? 1 : 0);
 
     rotate(avr, 1, 0);
 
@@ -2267,26 +2267,26 @@ int main(int argc, char **argv)
     printf("fract_demande      %d crans, plafond %d crans par salve\n",
            longDetents, SHIFT_BURST_DETENTS);
     const double heldUp = shiftRotate(avr, longDetents, 1, harness::RATCHET_BURST_LIMIT, true);
-    static uint8_t bankLongUp[OBSERVED_INSTANCE_BYTES];
-    read_bank(avr, bankLongUp);
+    static uint8_t instancesLongUp[OBSERVED_INSTANCE_BYTES];
+    readInstances(avr, instancesLongUp);
     const int burstsUp = g_shift_bursts - burstsBefore;
     printf("fract_salves       %d\n", burstsUp);
     printf("fract_maintien_up  %.1f\n", heldUp);
-    printf("fract_ratchet      %02x\n", byteOfInstance(bankLongUp, canalPrincipal, STEP_BYTES) & 0x0F);
+    printf("fract_ratchet      %02x\n", byteOfInstance(instancesLongUp, canalPrincipal, STEP_BYTES) & 0x0F);
     printf("fract_masques      %d\n",
-           memcmp(instanceOf(bankRestored, canalPrincipal),
-                  instanceOf(bankLongUp, canalPrincipal), STEP_BYTES) == 0
-           && lowMaskOfInstance(bankLongUp, canalPrincipal) == 0x9111 ? 1 : 0);
+           memcmp(instanceOf(instancesRestored, canalPrincipal),
+                  instanceOf(instancesLongUp, canalPrincipal), STEP_BYTES) == 0
+           && lowMaskOfInstance(instancesLongUp, canalPrincipal) == 0x9111 ? 1 : 0);
     printf("fract_twi          %u\n", g_twi_bytes - twiMark);
 
     const double heldDown = shiftRotate(avr, longDetents, 0, harness::RATCHET_BURST_LIMIT, true);
-    static uint8_t bankLongDown[OBSERVED_INSTANCE_BYTES];
-    read_bank(avr, bankLongDown);
+    static uint8_t instancesLongDown[OBSERVED_INSTANCE_BYTES];
+    readInstances(avr, instancesLongDown);
     uint32_t suppressedAfter = 0;
     const int readableAfter = readSuppressedCounter(avr, &suppressedAfter);
     printf("fract_maintien_max %.1f\n", heldDown > heldUp ? heldDown : heldUp);
     printf("fract_retour       %d\n",
-           memcmp(expectedBytes, bankLongDown, OBSERVED_INSTANCE_BYTES) == 0 ? 1 : 0);
+           memcmp(expectedBytes, instancesLongDown, OBSERVED_INSTANCE_BYTES) == 0 ? 1 : 0);
     printf("fract_enc_sw       %u\n", g_enc_sw_lows - encSwLowsBefore);
     printf("fract_compteur     lisible %d avant %ld apres %ld\n",
            (readableBefore && readableAfter) ? 1 : 0,

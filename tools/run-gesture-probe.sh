@@ -44,7 +44,7 @@ production simule, et verifie leur effet.
   SKIP_EDIT=1                    n'entre pas dans EDIT (classe 2)
   EXPECT_RATCHET_APRES=<hh>      change l'attente du ratchet (classe 3)
 
-Le harnais charge le binaire de production, attache l'ecran, lit la banque de
+Le harnais charge le binaire de production, attache l'ecran, lit les instances de
 patterns en RAM et compte le trafic I2C (P2.0), puis injecte et verifie les
 gestes du contrat :
 
@@ -245,58 +245,58 @@ ok "image differenciee" "SEQ, un template par canal, C0 a C5 vers les templates 
 ELF="$ROOT/.pio/build/nanoatmega328/firmware.elf"
 AVR_DATA_BASE=$(( 0x800000 ))
 
-BANK_BYTES="$("$BIN" --observed-instance-bytes 2>/dev/null | tr -d '[:space:]')"
-case "$BANK_BYTES" in
+INSTANCE_BYTES="$("$BIN" --observed-instance-bytes 2>/dev/null | tr -d '[:space:]')"
+case "$INSTANCE_BYTES" in
   ''|*[!0-9]*)
     inval "symbole des instances" "le harnais n annonce aucune taille d instances observable"
     exit 1 ;;
 esac
 
-BANK_PATTERN="${BANK_SYMBOL:-12instanceBaseE$|^instanceBase$}"
-bank_rows="$("$NM" -S --defined-only "$ELF" | awk -v pat="$BANK_PATTERN" '$NF ~ pat { print NF, $0 }')"
-if [ -z "$bank_rows" ]; then bank_count=0
-else bank_count="$(printf '%s\n' "$bank_rows" | wc -l | tr -d ' ')"; fi
+INSTANCE_PTR_PATTERN="${INSTANCE_PTR_SYMBOL:-12instanceBaseE$|^instanceBase$}"
+ptr_rows="$("$NM" -S --defined-only "$ELF" | awk -v pat="$INSTANCE_PTR_PATTERN" '$NF ~ pat { print NF, $0 }')"
+if [ -z "$ptr_rows" ]; then ptr_count=0
+else ptr_count="$(printf '%s\n' "$ptr_rows" | wc -l | tr -d ' ')"; fi
 
-if [ "$bank_count" -eq 0 ]; then
-  inval "symbole des instances" "aucun symbole ne correspond a $BANK_PATTERN"
+if [ "$ptr_count" -eq 0 ]; then
+  inval "symbole des instances" "aucun symbole ne correspond a $INSTANCE_PTR_PATTERN"
   verdict_invalid_exit
 fi
-if [ "$bank_count" -gt 1 ]; then
-  inval "symbole des instances" "$bank_count symboles correspondent : la selection serait arbitraire"
-  printf '%s\n' "$bank_rows" | sed 's/^/      /'
+if [ "$ptr_count" -gt 1 ]; then
+  inval "symbole des instances" "$ptr_count symboles correspondent : la selection serait arbitraire"
+  printf '%s\n' "$ptr_rows" | sed 's/^/      /'
   verdict_invalid_exit
 fi
 
-bank_nf="$(printf '%s' "$bank_rows" | awk '{print $1}')"
-if [ "$bank_nf" = "4" ]; then
-  bank_vma="$(printf '%s' "$bank_rows" | awk '{print $2}')"
-  bank_size="$(printf '%s' "$bank_rows" | awk '{print $3}')"
-  bank_type="$(printf '%s' "$bank_rows" | awk '{print $4}')"
+ptr_nf="$(printf '%s' "$ptr_rows" | awk '{print $1}')"
+if [ "$ptr_nf" = "4" ]; then
+  ptr_vma="$(printf '%s' "$ptr_rows" | awk '{print $2}')"
+  ptr_size="$(printf '%s' "$ptr_rows" | awk '{print $3}')"
+  ptr_type="$(printf '%s' "$ptr_rows" | awk '{print $4}')"
 else
-  bank_vma="$(printf '%s' "$bank_rows" | awk '{print $2}')"
-  bank_size=""
-  bank_type="$(printf '%s' "$bank_rows" | awk '{print $3}')"
+  ptr_vma="$(printf '%s' "$ptr_rows" | awk '{print $2}')"
+  ptr_size=""
+  ptr_type="$(printf '%s' "$ptr_rows" | awk '{print $3}')"
 fi
 
-case "$bank_type" in
+case "$ptr_type" in
   b|B|d|D) ;;
-  *) inval "symbole des instances" "type '$bank_type' : ni .bss ni .data, l adresse n est pas une adresse de donnees"
+  *) inval "symbole des instances" "type '$ptr_type' : ni .bss ni .data, l adresse n est pas une adresse de donnees"
      verdict_invalid_exit ;;
 esac
-if [ -z "$bank_size" ]; then
+if [ -z "$ptr_size" ]; then
   inval "symbole des instances" "st_size absent de la sortie de avr-nm -S : taille non verifiable"
   verdict_invalid_exit
 fi
-if [ "$(( 0x$bank_size ))" -ne 2 ]; then
-  inval "symbole des instances" "taille $(( 0x$bank_size )) octets : ce n est pas le pointeur d instrumentation, qui en fait 2"
+if [ "$(( 0x$ptr_size ))" -ne 2 ]; then
+  inval "symbole des instances" "taille $(( 0x$ptr_size )) octets : ce n est pas le pointeur d instrumentation, qui en fait 2"
   verdict_invalid_exit
 fi
-if [ "$(( 0x$bank_vma ))" -lt "$AVR_DATA_BASE" ]; then
-  inval "symbole des instances" "VMA 0x$bank_vma sous 0x800000 : ce n est pas l espace de donnees"
+if [ "$(( 0x$ptr_vma ))" -lt "$AVR_DATA_BASE" ]; then
+  inval "symbole des instances" "VMA 0x$ptr_vma sous 0x800000 : ce n est pas l espace de donnees"
   verdict_invalid_exit
 fi
-BANK_ADDR="$(printf '0x%x' $(( 0x$bank_vma - AVR_DATA_BASE )))"
-ok "symbole des instances" "pointeur unique, type $bank_type, 2 octets, VMA 0x$bank_vma -> RAM $BANK_ADDR ; $BANK_BYTES octets observes a l adresse pointee"
+INSTANCE_PTR_ADDR="$(printf '0x%x' $(( 0x$ptr_vma - AVR_DATA_BASE )))"
+ok "symbole des instances" "pointeur unique, type $ptr_type, 2 octets, VMA 0x$ptr_vma -> RAM $INSTANCE_PTR_ADDR ; $INSTANCE_BYTES octets observes a l adresse pointee"
 
 SUPPRESSED_PATTERN="${SUPPRESSED_SYMBOL:-14suppressedLongE$|^suppressedLong$}"
 
@@ -389,7 +389,7 @@ MUTANT1
   [ $? = 0 ] || die "mutant 1 : motif absent du code source" 2
   cmp -s "$SRC" "$WORK/m1.cpp" && die "mutant 1 : mutation non appliquee" 2
   if build_mutant "$WORK/m1.cpp" "$WORK/m1" > "$LOG" 2>&1; then
-    "$WORK/m1" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$BANK_ADDR" "$BOOT_MS" \
+    "$WORK/m1" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$INSTANCE_PTR_ADDR" "$BOOT_MS" \
       "" 384 structure "$SUPPRESSED_ADDR" > "$WORK/m1.log" 2>&1
     RC=$?
     if [ "$RC" = "4" ]; then
@@ -430,7 +430,7 @@ MUTANT3
   [ $? = 0 ] || die "mutant 3 : motif absent du code source" 2
   cmp -s "$SRC" "$WORK/m3.cpp" && die "mutant 3 : mutation non appliquee" 2
   if build_mutant "$WORK/m3.cpp" "$WORK/m3" > "$LOG" 2>&1; then
-    "$WORK/m3" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$BANK_ADDR" "$BOOT_MS" \
+    "$WORK/m3" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$INSTANCE_PTR_ADDR" "$BOOT_MS" \
       "" 384 structure "$SUPPRESSED_ADDR" > "$WORK/m3.log" 2>&1
     M3_HOLD="$(grep -E '^shift_salve ' "$WORK/m3.log" | awk '{print $5}' | sort -g | tail -1)"
     M3_SUPP="$(grep -E '^fract_suppressions ' "$WORK/m3.log" | awk '{print $2}')"
@@ -465,7 +465,7 @@ MUTANT3
 
   expect_addr_invalid() {
     local label="$1" addr="$2"
-    "$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$BANK_ADDR" 1 \
+    "$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$INSTANCE_PTR_ADDR" 1 \
       "" 384 symbolcheck "$addr" > "$WORK/addr.log" 2>&1
     local valide
     valide="$(grep -E '^suppressed_addr ' "$WORK/addr.log" | awk '{print $NF}')"
@@ -725,13 +725,13 @@ MUTANT3
   progress "l : un octet du template change -> FAIL"
   expect_verdict "l. template modifie -> FAIL" FAIL 1 "+" "*" TEMPLATE_MUTATE=0
   if grep -q '❌ instances : template inchange' "$WORK/class.log"; then
-    ok "l. la non-modification du template a des dents" "un seul octet change dans la banque suffit a rougir"
+    ok "l. la non-modification du template a des dents" "un seul octet change dans la zone EEPROM des templates suffit a rougir"
   else
     selfbad "l. la non-modification du template a des dents" "le critere de template n a pas rougi"
   fi
 
   progress "i : symbole d instrumentation absent -> INVALID"
-  expect_verdict "i. symbole absent -> INVALID" INVALID 5 0 "+" BANK_SYMBOL=aucun_symbole_de_ce_nom
+  expect_verdict "i. symbole absent -> INVALID" INVALID 5 0 "+" INSTANCE_PTR_SYMBOL=aucun_symbole_de_ce_nom
   if grep -q '⛔ symbole des instances' "$WORK/class.log"; then
     ok "i. la cause est nommee" "symbole absent : INVALID et code 5, jamais le code d un defaut firmware"
   else
@@ -756,13 +756,13 @@ MUTANT3
 fi
 
 progress "demarrage simule ($BOOT_MS ms)"
-"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$BANK_ADDR" "$BOOT_MS" \
+"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$INSTANCE_PTR_ADDR" "$BOOT_MS" \
      "" 384 structure "$SUPPRESSED_ADDR" > "$LOG" 2>&1
 RC=$?
 if [ "$RC" != "0" ]; then
   cat "$LOG"
   case "$RC" in
-    3) dieinval "$LOG" "controle de la banque en echec, aucun verdict sur le firmware" ;;
+    3) dieinval "$LOG" "controle des instances en echec, aucun verdict sur le firmware" ;;
     4) die "INVALID (classe 2) : salve de SHIFT refusee avant injection, le geste n etait pas valide" 4 ;;
     *) die "le harnais s'est termine anormalement (code $RC)" ;;
   esac
@@ -777,7 +777,7 @@ else
 fi
 
 printf '\n%s--- LECTURE DE LA BANQUE ---%s\n' "$C_B" "$C_0"
-grep -E '^bank_low_masks|^bank_ratchets_a1' "$LOG"
+grep -E '^instances_low_masks|^instances_ratchets_c0' "$LOG"
 
 printf '\n%s--- ROTATION ---%s\n' "$C_B" "$C_0"
 grep -E '^tab_start|^amorce|^cran_' "$LOG" | sed 's/^/  /'
@@ -835,7 +835,7 @@ if [ "$CRAN_LINES" -eq "$CRAN_EXPECTED" ]; then
 fi
 
 printf '\n%s--- PRECONDITIONS DE L INSTRUMENT ---%s\n' "$C_B" "$C_0"
-grep -E '^instances_pointeur|^instances_acces|^bank_inchangee|^controle_source|^inst_attendus|^controle_usine|^entree_edit' "$LOG" | sed 's/^/  /'
+grep -E '^instances_pointeur|^instances_acces|^instances_inchangees|^controle_source|^inst_attendus|^controle_usine|^entree_edit' "$LOG" | sed 's/^/  /'
 printf '\n'
 
 PTR_BASE="$(grep -E '^instances_pointeur ' "$LOG" | awk '{print $3}')"
@@ -861,13 +861,17 @@ else
   W_PTR=1
 fi
 
-BANK_OK="$(grep -E '^bank_inchangee ' "$LOG" | awk '{print $2}')"
-if [ "$BANK_OK" = "1" ]; then
-  ok "temoin des instances" "banque inchangee par les rotations seules"
-  W_BANK=1
+INSTANCES_LINE="$(grep -E '^instances_inchangees ' "$LOG")"
+INSTANCES_OK="$(printf '%s' "$INSTANCES_LINE" | awk '{print $2}')"
+if [ -z "$INSTANCES_LINE" ]; then
+  inval "temoin des instances" "cle instances_inchangees absente du journal : la sonde et le harnais ne parlent plus le meme contrat"
+  W_INSTANCES=0
+elif [ "$INSTANCES_OK" = "1" ]; then
+  ok "temoin des instances" "instances inchangees par les rotations seules"
+  W_INSTANCES=1
 else
-  inval "temoin des instances" "banque modifiee par les seules rotations : l instrument n est pas sain"
-  W_BANK=0
+  inval "temoin des instances" "instances modifiees par les seules rotations : l instrument n est pas sain"
+  W_INSTANCES=0
 fi
 
 CTRL="$(grep -E '^controle_usine ' "$LOG" | awk '{print $2}')"
@@ -876,7 +880,7 @@ if [ "$CTRL_SRC" != "usine" ]; then
   inval "controle d usine" "attendu construit depuis '${CTRL_SRC:-rien}' alors qu aucune image n est prechargee"
   W_FACTORY=0
 elif [ "$CTRL" = "1" ]; then
-  ok "controle d usine" "attendu = $CTRL_SRC ; la banque lue en RAM est IDENTIQUE, octet pour octet, a celle que le domaine construit"
+  ok "controle d usine" "attendu = $CTRL_SRC ; les instances lues en RAM sont IDENTIQUES, octet pour octet, a celles que le domaine construit"
   W_FACTORY=1
 else
   inval "controle d usine" "classe 2 : l instrument est faux, aucun verdict sur le firmware"
@@ -981,7 +985,7 @@ else
   W_SHIFT_HOLD=0
 fi
 
-W_P23=$(( W_SHIFT_TWI * W_SHIFT_HOLD * W_PTR * W_BANK * W_FACTORY * W_EDIT ))
+W_P23=$(( W_SHIFT_TWI * W_SHIFT_HOLD * W_PTR * W_INSTANCES * W_FACTORY * W_EDIT ))
 P23_OK=0
 if [ "$W_P23" != "1" ]; then
   inval "trois crans sous SHIFT" "temoins amont invalides : l effet n est pas attribuable au firmware"
@@ -1001,19 +1005,19 @@ else
 fi
 
 printf '\n%s--- VERIFICATION A ---%s\n' "$C_B" "$C_0"
-grep -E '^triolet_|^banque_|^step1_' "$LOG" | sed 's/^/  /'
+grep -E '^triolet_|^instances_restaurees|^instances_finales|^step1_' "$LOG" | sed 's/^/  /'
 printf '\n'
 
 TRI_POSE="$(grep -E '^triolet_pose ' "$LOG" | awk '{print $2}')"
 TRI_POSE_TWI="$(grep -E '^triolet_pose ' "$LOG" | awk '{print $4}')"
 TRI_OFF="$(grep -E '^triolet_retire ' "$LOG" | awk '{print $2}')"
 TRI_OFF_TWI="$(grep -E '^triolet_retire ' "$LOG" | awk '{print $4}')"
-REST="$(grep -E '^banque_restauree ' "$LOG" | awk '{print $2}')"
+REST="$(grep -E '^instances_restaurees ' "$LOG" | awk '{print $2}')"
 TOG="$(grep -E '^step1_bascule ' "$LOG" | awk '{print $2}')"
 TOG_TWI="$(grep -E '^step1_bascule ' "$LOG" | awk '{print $4}')"
 UNTOG="$(grep -E '^step1_rebascule ' "$LOG" | awk '{print $2}')"
 UNTOG_TWI="$(grep -E '^step1_rebascule ' "$LOG" | awk '{print $4}')"
-FINAL="$(grep -E '^banque_finale ' "$LOG" | awk '{print $2}')"
+FINAL="$(grep -E '^instances_finales ' "$LOG" | awk '{print $2}')"
 
 A_TWI_OK=1
 A_TWI_DETAIL=""
@@ -1031,7 +1035,7 @@ else
   inval "temoin I2C" "au moins un geste sans trafic —$A_TWI_DETAIL"
 fi
 
-W_A=$(( A_TWI_OK * W_PTR * W_BANK * W_FACTORY * W_EDIT * P23_OK ))
+W_A=$(( A_TWI_OK * W_PTR * W_INSTANCES * W_FACTORY * W_EDIT * P23_OK ))
 if [ "$W_A" != "1" ]; then
   inval "triolet pose" "temoins amont invalides (dont l etat laisse par P2.3) : l effet n est pas attribuable au firmware"
   inval "triolet retire" "temoins amont invalides : l effet n est pas attribuable au firmware"
@@ -1044,9 +1048,9 @@ else
     bad "triolet pose" "code $TRI_POSE au lieu de 07"
   fi
   if [ "$TRI_OFF" = "00" ] && [ "$REST" = "1" ]; then
-    ok "triolet retire" "code 00, et la banque redevient identique a celle d usine"
+    ok "triolet retire" "code 00, et les instances redeviennent identiques a celles d usine"
   else
-    bad "triolet retire" "code $TRI_OFF, banque restauree=$REST"
+    bad "triolet retire" "code $TRI_OFF, instances restaurees=$REST"
   fi
   if [ "$TOG" = "9113" ]; then
     ok "step bascule" "masque 9111 -> 9113 : le step 1 seul a change"
@@ -1054,9 +1058,9 @@ else
     bad "step bascule" "masque $TOG au lieu de 9113"
   fi
   if [ "$UNTOG" = "9111" ] && [ "$FINAL" = "1" ]; then
-    ok "step rebascule" "masque 9111, et la banque entiere redevient celle d usine"
+    ok "step rebascule" "masque 9111, et les six instances redeviennent celles d usine"
   else
-    bad "step rebascule" "masque $UNTOG, banque finale=$FINAL"
+    bad "step rebascule" "masque $UNTOG, instances finales=$FINAL"
   fi
 fi
 
@@ -1140,7 +1144,7 @@ else
   inval "temoin 2 : compteur" "$F_SUPP appuis longs absorbes ($F_BEFORE -> $F_AFTER) : le maintien injecte a franchi le seuil"
 fi
 
-W_FRACT=$(( W_FRACT_TWI * W_ENCSW * W_SALVES * W_SPLIT * W_PTR * W_BANK * W_FACTORY * W_EDIT ))
+W_FRACT=$(( W_FRACT_TWI * W_ENCSW * W_SALVES * W_SPLIT * W_PTR * W_INSTANCES * W_FACTORY * W_EDIT ))
 if [ "$W_FRACT" != "1" ]; then
   inval "temoin 1 : pattern" "temoins amont invalides : l effet n est pas attribuable au firmware"
   inval "retour a l usine" "temoins amont invalides : l effet n est pas attribuable au firmware"
@@ -1151,21 +1155,21 @@ else
     bad "temoin 1 : pattern" "le pattern a change : un SHIFT + appui long est parti pendant le fractionnement"
   fi
   if [ "$F_BACK" = "1" ]; then
-    ok "retour a l usine" "les $ASKED crans inverses ramenent la banque entiere a celle d usine"
+    ok "retour a l usine" "les $ASKED crans inverses ramenent les six instances a celles d usine"
   else
-    bad "retour a l usine" "la banque ne revient pas a celle d usine"
+    bad "retour a l usine" "les instances ne reviennent pas a celles d usine"
   fi
 fi
 
 LOG2="$WORK/log2"
 progress "phase temporelle (P2.5)"
-"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$BANK_ADDR" "$BOOT_MS" \
+"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$INSTANCE_PTR_ADDR" "$BOOT_MS" \
      "$WORK/image.bin" 384 temporal "$SUPPRESSED_ADDR" > "$LOG2" 2>&1
 RC=$?
 if [ "$RC" != "0" ]; then
   cat "$LOG2"
   case "$RC" in
-    3) dieinval "$LOG2" "controle de la banque en echec, aucun verdict sur le firmware" ;;
+    3) dieinval "$LOG2" "controle des instances en echec, aucun verdict sur le firmware" ;;
     4) die "INVALID (classe 2) : salve de SHIFT refusee avant injection, le geste n etait pas valide" 4 ;;
     *) die "la phase temporelle s'est terminee anormalement (code $RC)" ;;
   esac
@@ -1215,7 +1219,7 @@ if [ "$IMG_B_MASK" != "$TIMING_MASK" ] || [ "$IMG_B_SUBDIV" != "$TIMING_SUBDIV" 
   inval "image de la phase B" "masque ${IMG_B_MASK:-rien} subdiv ${IMG_B_SUBDIV:-rien} : ce n est pas l image de mesure temporelle ($TIMING_MASK / $TIMING_SUBDIV)"
   W_B_IMAGE=0
 elif [ "$CTRL_B_SRC" = "image" ] && [ "$CTRL_B" = "1" ]; then
-  ok "image de la phase B" "masque $IMG_B_MASK subdiv $IMG_B_SUBDIV : image de MESURE TEMPORELLE, banque identique a l attendu"
+  ok "image de la phase B" "masque $IMG_B_MASK subdiv $IMG_B_SUBDIV : image de MESURE TEMPORELLE, instances identiques a l attendu"
   W_B_IMAGE=1
 else
   inval "image de la phase B" "attendu = ${CTRL_B_SRC:-rien}, controle = ${CTRL_B:-rien} : l etat injecte n est pas verifie"
@@ -1279,13 +1283,13 @@ else
 fi
 LOG3="$WORK/log3"
 progress "rig de la couche 1 (P2.6.1)"
-"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$BANK_ADDR" "$BOOT_MS" \
+"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$INSTANCE_PTR_ADDR" "$BOOT_MS" \
      "$WORK/rig.bin" 384 rig "$SUPPRESSED_ADDR" > "$LOG3" 2>&1
 RC=$?
 if [ "$RC" != "0" ]; then
   cat "$LOG3"
   case "$RC" in
-    3) dieinval "$LOG3" "controle de la banque en echec sur le rig, aucun verdict sur le firmware" ;;
+    3) dieinval "$LOG3" "controle des instances en echec sur le rig, aucun verdict sur le firmware" ;;
     4) die "INVALID (classe 2) : salve de SHIFT refusee avant injection, le geste n etait pas valide" 4 ;;
     *) die "la phase rig s'est terminee anormalement (code $RC)" ;;
   esac
@@ -1350,13 +1354,13 @@ fi
 
 LOG4="$WORK/log4"
 progress "recettes de verification A (P2.6.2)"
-"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$BANK_ADDR" "$BOOT_MS" \
+"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$INSTANCE_PTR_ADDR" "$BOOT_MS" \
      "$WORK/rig.bin" 384 recettesA "$SUPPRESSED_ADDR" > "$LOG4" 2>&1
 RC=$?
 if [ "$RC" != "0" ]; then
   cat "$LOG4"
   case "$RC" in
-    3) dieinval "$LOG4" "controle de la banque en echec sur les recettes A, aucun verdict sur le firmware" ;;
+    3) dieinval "$LOG4" "controle des instances en echec sur les recettes A, aucun verdict sur le firmware" ;;
     4) die "INVALID (classe 2) : salve de SHIFT refusee avant injection, le geste n etait pas valide" 4 ;;
     *) die "la phase des recettes A s'est terminee anormalement (code $RC)" ;;
   esac
@@ -1376,7 +1380,7 @@ if [ "$A2_MASK_IMG" != "$RIG_MASK_ATTENDU" ] || [ "$A2_SUBDIV_IMG" != "$RIG_SUBD
   inval "A : image du rig" "masque ${A2_MASK_IMG:-rien} subdiv ${A2_SUBDIV_IMG:-rien} : ce n est pas le rig de la couche 1"
   W_A2_IMG=0
 elif [ "$A2_SRC" = "image" ] && [ "$A2_CTRL" = "1" ]; then
-  ok "A : image du rig" "masque $A2_MASK_IMG subdiv $A2_SUBDIV_IMG, banque identique a l attendu"
+  ok "A : image du rig" "masque $A2_MASK_IMG subdiv $A2_SUBDIV_IMG, instances identiques a l attendu"
   W_A2_IMG=1
 else
   inval "A : image du rig" "attendu = ${A2_SRC:-rien}, controle = ${A2_CTRL:-rien}"
@@ -1405,7 +1409,7 @@ A2_BASE_O6="$(a2 rA_base 5)"
 A2_BASE_O8="$(a2 rA_base 7)"
 A2_BASE_ECARTS="$(a2 rA_base 9)"
 if [ -z "$A2_BASE_MASK" ]; then
-  inval "A : etat initial" "aucune lecture de banque publiee"
+  inval "A : etat initial" "aucune lecture d instances publiee"
   W_A2_BASE=0
 elif [ "$A2_BASE_MASK" = "$RIG_MASQUE_BASE" ] && [ "$A2_BASE_O6" = "00" ] \
      && [ "$A2_BASE_O8" = "00" ] && [ "$A2_BASE_ECARTS" = "0" ]; then
@@ -1498,14 +1502,14 @@ else
     elif [ "${R10_TWI:-0}" -eq 0 ] 2>/dev/null; then
       inval "R10 : refus sur step inactif" "aucun trafic : un refus et un geste non injecte seraient indistinguables"
     elif [ "$R10_EC" = "0" ] && [ "$R10_O6" = "00" ]; then
-      ok "R10 : refus sur step inactif" "step $R10_CIBLE atteint en $R10_ROT rotations, $R10_TWI octets, banque INCHANGEE"
+      ok "R10 : refus sur step inactif" "step $R10_CIBLE atteint en $R10_ROT rotations, $R10_TWI octets, instances INCHANGEES"
       R10_OK=1
     else
       bad "R10 : refus sur step inactif" "step $R10_CIBLE : octet6 $R10_O6, $R10_EC ecart(s) — un ratchet a ete ecrit"
     fi
     if [ "$R10_OK" != "1" ]; then
-      inval "R12 : triolet sur step 9" "R10 a laisse la banque hors de l etat du rig : l effet n est pas attribuable"
-      inval "R12 : retour" "R10 a laisse la banque hors de l etat du rig"
+      inval "R12 : triolet sur step 9" "R10 a laisse les instances hors de l etat du rig : l effet n est pas attribuable"
+      inval "R12 : retour" "R10 a laisse les instances hors de l etat du rig"
     else
       juge_a2 "R12 : triolet sur step 9" rA_r12_pose 3 "${EXPECT_R12_NIBBLE:-$R12_OCTET_ATTENDU}" 5 7 9 1 9
       juge_a2 "R12 : retour" rA_r12_retour 3 "00" 5 0 7 0 ""
@@ -1515,13 +1519,13 @@ fi
 
 LOG5="$WORK/log5"
 progress "recettes de verification B : R1 et R13 (P2.6.3)"
-"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$BANK_ADDR" "$BOOT_MS" \
+"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$INSTANCE_PTR_ADDR" "$BOOT_MS" \
      "$WORK/rig.bin" 384 recettesB "$SUPPRESSED_ADDR" > "$LOG5" 2>&1
 RC=$?
 if [ "$RC" != "0" ]; then
   cat "$LOG5"
   case "$RC" in
-    3) dieinval "$LOG5" "controle de la banque en echec sur les recettes B, aucun verdict sur le firmware" ;;
+    3) dieinval "$LOG5" "controle des instances en echec sur les recettes B, aucun verdict sur le firmware" ;;
     4) die "INVALID (classe 2) : salve de SHIFT refusee avant injection, le geste n etait pas valide" 4 ;;
     *) die "la phase des recettes B s'est terminee anormalement (code $RC)" ;;
   esac
@@ -1541,7 +1545,7 @@ if [ "$B_MASK" != "$RIG_MASK_ATTENDU" ] || [ "$B_SUB" != "$RIG_SUBDIV_ATTENDU" ]
   inval "B : image du rig" "masque ${B_MASK:-rien} subdiv ${B_SUB:-rien} : ce n est pas le rig de la couche 1"
   W_B3_IMG=0
 elif [ "$B_SRC" = "image" ] && [ "$B_CTRL" = "1" ] && [ "$B_ACTIFS" = "$B_STEPS_ACTIFS_ATTENDU" ]; then
-  ok "B : image du rig" "masque $B_MASK subdiv $B_SUB, $B_ACTIFS steps actifs derives de l image, banque identique a l attendu"
+  ok "B : image du rig" "masque $B_MASK subdiv $B_SUB, $B_ACTIFS steps actifs derives de l image, instances identiques a l attendu"
   W_B3_IMG=1
 else
   inval "B : image du rig" "controle ${B_CTRL:-rien}, steps actifs ${B_ACTIFS:-rien} (attendu $B_STEPS_ACTIFS_ATTENDU)"
@@ -1704,13 +1708,13 @@ fi
 
 LOG6="$WORK/log6"
 progress "recette R2 (P2.6.4)"
-"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$BANK_ADDR" "$BOOT_MS" \
+"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$INSTANCE_PTR_ADDR" "$BOOT_MS" \
      "$WORK/rig.bin" 384 recetteR2 "$SUPPRESSED_ADDR" > "$LOG6" 2>&1
 RC=$?
 if [ "$RC" != "0" ]; then
   cat "$LOG6"
   case "$RC" in
-    3) dieinval "$LOG6" "controle de la banque en echec sur R2, aucun verdict sur le firmware" ;;
+    3) dieinval "$LOG6" "controle des instances en echec sur R2, aucun verdict sur le firmware" ;;
     4) die "INVALID (classe 2) : salve de SHIFT refusee avant injection, le geste n etait pas valide" 4 ;;
     *) die "la phase R2 s'est terminee anormalement (code $RC)" ;;
   esac
@@ -1733,7 +1737,7 @@ if [ "$R2_MASK" != "$RIG_MASK_ATTENDU" ] || [ "$R2_SUB" != "$RIG_SUBDIV_ATTENDU"
   inval "R2 : image du rig" "masque ${R2_MASK:-rien} subdiv ${R2_SUB:-rien} steps ${R2_ACTIFS:-rien} : ce n est pas le rig"
   W_R2_IMG=0
 elif [ "$R2_SRC" = "image" ] && [ "$R2_CTRL" = "1" ]; then
-  ok "R2 : image du rig" "masque $R2_MASK subdiv $R2_SUB, $R2_ACTIFS steps actifs, banque identique a l attendu"
+  ok "R2 : image du rig" "masque $R2_MASK subdiv $R2_SUB, $R2_ACTIFS steps actifs, instances identiques a l attendu"
   W_R2_IMG=1
 else
   inval "R2 : image du rig" "controle ${R2_CTRL:-rien}"
@@ -1770,7 +1774,7 @@ for o in 1 2 3 4 5 6; do
     || { R2_BASE_OK=0; R2_BASE_D="$R2_BASE_D OUT$o=$(c2o base $o 3)/$(c2o base $o 5)"; }
 done
 if [ "$R2_BASE_OK" = "1" ] && [ "$(c2 base 7)" = "0" ]; then
-  ok "R2 : etat initial" "les six sorties a $R2_PAS_BASE / $R2_PERIODE_BASE ticks, banque a 0 ecart"
+  ok "R2 : etat initial" "les six sorties a $R2_PAS_BASE / $R2_PERIODE_BASE ticks, instances a 0 ecart"
   W_R2_BASE=1
 else
   inval "R2 : etat initial" "etat de depart non etabli —$R2_BASE_D ecarts=$(c2 base 7)"
@@ -1828,7 +1832,7 @@ else
   done
   [ "$R2_PAT_OK" = "1" ] \
     && ok "R2 : pattern intact" "0 ecart avec l attendu du rig aux cinq etapes : aucun step ni ratchet touche" \
-    || bad "R2 : pattern intact" "la banque a change —$R2_PAT_D ecart(s)"
+    || bad "R2 : pattern intact" "les instances ont change —$R2_PAT_D ecart(s)"
 
   R2_RES_OK=1; R2_RES_D=""
   for st in lenrest subrest; do
@@ -1857,13 +1861,13 @@ fi
 
 LOG7="$WORK/log7"
 progress "recette R11 (P2.6.5)"
-"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$BANK_ADDR" "$BOOT_MS" \
+"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$INSTANCE_PTR_ADDR" "$BOOT_MS" \
      "$WORK/rig.bin" 384 recetteR11 "$SUPPRESSED_ADDR" > "$LOG7" 2>&1
 RC=$?
 if [ "$RC" != "0" ]; then
   cat "$LOG7"
   case "$RC" in
-    3) dieinval "$LOG7" "controle de la banque en echec sur R11, aucun verdict sur le firmware" ;;
+    3) dieinval "$LOG7" "controle des instances en echec sur R11, aucun verdict sur le firmware" ;;
     4) die "INVALID (classe 2) : salve de SHIFT refusee avant injection, le geste n etait pas valide" 4 ;;
     *) die "la phase R11 s'est terminee anormalement (code $RC)" ;;
   esac
@@ -1883,7 +1887,7 @@ if [ "$D_MASK" != "$RIG_MASK_ATTENDU" ] || [ "$D_SUB" != "$RIG_SUBDIV_ATTENDU" ]
   inval "R11 : image du rig" "masque ${D_MASK:-rien} subdiv ${D_SUB:-rien} : ce n est pas le rig"
   W_R11_IMG=0
 elif [ "$D_SRC" = "image" ] && [ "$D_CTRL" = "1" ]; then
-  ok "R11 : image du rig" "masque $D_MASK subdiv $D_SUB, banque identique a l attendu"
+  ok "R11 : image du rig" "masque $D_MASK subdiv $D_SUB, instances identiques a l attendu"
   W_R11_IMG=1
 else
   inval "R11 : image du rig" "controle ${D_CTRL:-rien}"
@@ -1915,7 +1919,7 @@ else
 fi
 
 if [ "$(d2 base 3)" = "$R11_CADENCE_BASE" ] && [ "$(d2 base 9)" = "0" ]; then
-  ok "R11 : etat initial" "cadence $(d2 base 3) ticks, banque a 0 ecart"
+  ok "R11 : etat initial" "cadence $(d2 base 3) ticks, instances a 0 ecart"
   W_R11_BASE=1
 else
   inval "R11 : etat initial" "cadence $(d2 base 3), ecarts $(d2 base 9) : etat de depart non etabli"
@@ -1995,14 +1999,14 @@ else
 
   NR="$(d2 retour 3)"; ER="$(d2 retour 7)"
   if [ "$NR" = "$R11_NIBBLE_ZERO" ] && [ "$ER" = "0" ]; then
-    ok "R11 : retour a 00" "nibble $NR, banque entiere identique a l attendu du rig"
+    ok "R11 : retour a 00" "nibble $NR, les six instances identiques a l attendu du rig"
   else
     bad "R11 : retour a 00" "nibble $NR, $ER ecart(s)"
   fi
 
   CF="$(d2 cadence_fin 3)"; EF="$(d2 cadence_fin 9)"
   if [ "$CF" = "$R11_CADENCE_BASE" ] && [ "$EF" = "0" ]; then
-    ok "R11 : cadence restauree" "retour a $CF ticks par step, banque a 0 ecart"
+    ok "R11 : cadence restauree" "retour a $CF ticks par step, instances a 0 ecart"
   else
     bad "R11 : cadence restauree" "cadence $CF (attendu $R11_CADENCE_BASE), $EF ecart(s)"
   fi
@@ -2018,13 +2022,13 @@ INST_OCTET_ATTENDU=0
 
 LOG8="$WORK/log8"
 progress "parcours instances (separation template/instance)"
-"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$BANK_ADDR" "$BOOT_MS" \
+"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$INSTANCE_PTR_ADDR" "$BOOT_MS" \
      "$WORK/perchannel.bin" 384 instances "$SUPPRESSED_ADDR" > "$LOG8" 2>&1
 RC=$?
 if [ "$RC" != "0" ]; then
   cat "$LOG8"
   case "$RC" in
-    3) dieinval "$LOG8" "controle de la banque en echec sur le parcours instances, aucun verdict sur le firmware" ;;
+    3) dieinval "$LOG8" "controle des instances en echec sur le parcours instances, aucun verdict sur le firmware" ;;
     *) die "le parcours instances s'est termine anormalement (code $RC)" ;;
   esac
 fi
@@ -2126,7 +2130,7 @@ printf '\n'
 
 LOG9="$WORK/log9"
 progress "parcours bootstrap (semis du firmware au premier demarrage)"
-"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$BANK_ADDR" "$BOOT_MS" \
+"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$INSTANCE_PTR_ADDR" "$BOOT_MS" \
      "$WORK/perchannel.bin" 384 bootstrap "$SUPPRESSED_ADDR" > "$LOG9" 2>&1
 RC=$?
 if [ "$RC" != "0" ]; then
