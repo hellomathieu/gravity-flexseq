@@ -256,14 +256,14 @@ void test_editing_the_ratchet_of_the_current_step_does_not_shift_the_channel() {
     {
         DriftRig r;
         const int8_t step = r.engine.effectiveStep(0);
-        r.bank.getPattern(0)->setRatchet(static_cast<uint8_t>(step), flexseq::RATCHET_TRIPLET);
+        r.engine.instanceForChannel(0)->setRatchet(static_cast<uint8_t>(step), flexseq::RATCHET_TRIPLET);
         r.engine.refreshTiming(0);
         TEST_ASSERT_EQUAL_INT32(0, r.drift());
     }
     {
         DriftRig r;
         const int8_t step = r.engine.effectiveStep(0);
-        r.bank.getPattern(0)->setRatchet(static_cast<uint8_t>(step), flexseq::RATCHET_NONE);
+        r.engine.instanceForChannel(0)->setRatchet(static_cast<uint8_t>(step), flexseq::RATCHET_NONE);
         r.engine.refreshTiming(0);
         TEST_ASSERT_EQUAL_INT32(0, r.drift());
     }

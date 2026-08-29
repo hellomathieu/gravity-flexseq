@@ -185,12 +185,12 @@ describe("SUBDIV — aucune autre edition ne decale un channel", () => {
   });
 
   it("editing the ratchet of the current step does not shift the channel", () => {
-    expect(driftAfter((e, bank) => {
-      bank.getPattern(0)!.setRatchet(e.effectiveStep(0), RATCHET_TRIPLET);
+    expect(driftAfter((e) => {
+      e.instanceForChannel(0)!.setRatchet(e.effectiveStep(0), RATCHET_TRIPLET);
       e.refreshTiming(0);
     })).toBe(0);
-    expect(driftAfter((e, bank) => {
-      bank.getPattern(0)!.setRatchet(e.effectiveStep(0), RATCHET_NONE);
+    expect(driftAfter((e) => {
+      e.instanceForChannel(0)!.setRatchet(e.effectiveStep(0), RATCHET_NONE);
       e.refreshTiming(0);
     })).toBe(0);
   });
