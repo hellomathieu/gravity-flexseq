@@ -1005,6 +1005,10 @@ describe("le contrat d'image partage par le scheduler", () => {
       byteAt: (index: number) => r.image.byteAt(index),
       applyByte: (index: number, value: number) => r.image.applyByte(index, value),
       resetToDefaults: () => r.image.resetToDefaults(),
+      templateRecordSize: r.image.templateRecordSize,
+      canWriteTemplate: () => false,
+      templateAddressAt: () => 0,
+      templateByteAt: () => 0,
     };
     r.scheduler.markDirty(0);
     let calls = 0;
@@ -1201,5 +1205,100 @@ describe("saveTemplate — instance vers template EEPROM (ADR 0009)", () => {
     }
     expect(r.engine.getBaseLength(5)).toBe(30);
     expect(r.engine.getEffectiveLength(5)).toBe(24);
+  });
+});
+
+describe("ecriture differee d'un template par l'ordonnanceur (B4b.6.2b)", () => {
+  function distinctContent(seed: number): Pattern {
+    const p = new Pattern();
+    p.writeStep(seed % Pattern.DEFAULT_TOTAL_STEPS, true);
+    p.setRatchet(seed % Pattern.DEFAULT_TOTAL_STEPS, RATCHET_3);
+    return p;
+  }
+
+  it("une demande valide s'arme et se declare", () => {
+    const r = rigV3();
+    expect(r.scheduler.isWritingTemplate).toBe(false);
+    expect(r.scheduler.requestTemplateWrite(r.image, 0, 9)).toBe(true);
+    expect(r.scheduler.isWritingTemplate).toBe(true);
+  });
+
+  it("ecrit un octet par appel a advance", () => {
+    const ee = new FakeEeprom();
+    const r = rigV3();
+    expect(r.scheduler.requestTemplateWrite(r.image, 0, 9)).toBe(true);
+    for (let written = 0; written < v3.TEMPLATE_RECORD; ++written) {
+      const before = ee.writes;
+      expect(r.scheduler.advance(ee, r.image, 0)).toBe(true);
+      expect(ee.writes).toBe(before + 1);
+    }
+  });
+
+  it("se termine apres son record et laisse le bon contenu", () => {
+    const ee = new FakeEeprom();
+    const r = rigV3();
+    const wanted = distinctContent(4);
+    for (let i = 0; i < Pattern.DEFAULT_TOTAL_STEPS; ++i) {
+      r.engine.instanceForChannel(0)!.writeStep(i, wanted.readStep(i) === true);
+      r.engine.instanceForChannel(0)!.setRatchet(i, wanted.getRatchet(i));
+    }
+    expect(r.engine.setBaseLengthFromStorage(0, 21)).toBe(true);
+    expect(r.scheduler.requestTemplateWrite(r.image, 0, 11)).toBe(true);
+    for (let i = 0; i < v3.TEMPLATE_RECORD; ++i) r.scheduler.advance(ee, r.image, 0);
+    expect(r.scheduler.isWritingTemplate).toBe(false);
+    for (let offset = 0; offset < v3.CONTENT_BYTES; ++offset) {
+      expect(ee.read(v3.templateAddress(11, offset))).toBe(v3.contentByte(wanted, offset));
+    }
+    expect(ee.read(v3.templateAddress(11, v3.RECORD_LENGTH_AT))).toBe(21);
+  });
+
+  it("une demande sur un slot gele n'arme rien", () => {
+    const r = rigV3();
+    for (let index = 0; index < 8; ++index) {
+      expect(r.scheduler.requestTemplateWrite(r.image, 0, index)).toBe(false);
+    }
+    expect(r.scheduler.isWritingTemplate).toBe(false);
+  });
+
+  it("une seconde demande est refusee pendant une ecriture en vol", () => {
+    const ee = new FakeEeprom();
+    const r = rigV3();
+    expect(r.scheduler.requestTemplateWrite(r.image, 0, 9)).toBe(true);
+    expect(r.scheduler.advance(ee, r.image, 0)).toBe(true);
+    expect(r.scheduler.requestTemplateWrite(r.image, 1, 10)).toBe(false);
+  });
+
+  it("le template passe avant le balayage de l'image", () => {
+    const ee = new FakeEeprom();
+    const r = rigV3();
+    r.scheduler.markDirty(0);
+    expect(r.scheduler.requestTemplateWrite(r.image, 0, 9)).toBe(true);
+    expect(r.scheduler.advance(ee, r.image, QUIET_MS)).toBe(true);
+    expect(ee.lowestWrite).toBeGreaterThanOrEqual(v3.templateAddress(9, 0));
+    expect(r.scheduler.isDirty).toBe(true);
+  });
+
+  it("le balayage reprend apres le template", () => {
+    const ee = new FakeEeprom();
+    const r = rigV3();
+    r.scheduler.markDirty(0);
+    expect(r.scheduler.requestTemplateWrite(r.image, 0, 9)).toBe(true);
+    for (let i = 0; i < v3.TEMPLATE_RECORD; ++i) r.scheduler.advance(ee, r.image, QUIET_MS);
+    expect(r.scheduler.isWritingTemplate).toBe(false);
+    expect(r.scheduler.advance(ee, r.image, QUIET_MS)).toBe(true);
+    expect(ee.highestWrite).toBeGreaterThanOrEqual(769);
+    expect(r.scheduler.isDirty).toBe(true);
+  });
+
+  it("aucun appel a advance n'ecrit plus d'un octet", () => {
+    const ee = new FakeEeprom();
+    const r = rigV3();
+    r.scheduler.markDirty(0);
+    expect(r.scheduler.requestTemplateWrite(r.image, 0, 13)).toBe(true);
+    for (let pass = 0; pass < 400; ++pass) {
+      const before = ee.writes;
+      if (!r.scheduler.advance(ee, r.image, QUIET_MS)) break;
+      expect(ee.writes).toBe(before + 1);
+    }
   });
 });

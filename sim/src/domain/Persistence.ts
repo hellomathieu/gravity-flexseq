@@ -321,11 +321,27 @@ export interface ScannedImage {
   applyByte(index: number, value: number): void;
   addressAt(index: number): number;
   resetToDefaults(): void;
+  readonly templateRecordSize: number;
+  canWriteTemplate(channel: number, index: number): boolean;
+  templateAddressAt(index: number, offset: number): number;
+  templateByteAt(channel: number, index: number, offset: number): number;
 }
 
 export class PersistentImage implements ScannedImage {
   static readonly SIZE = TOTAL_SIZE;
   static readonly VERSION_INDEX = HEADER_OFFSET;
+
+  /** La version 2 n'a pas de zone de templates : toute demande est refusee. */
+  readonly templateRecordSize = 1;
+  canWriteTemplate(): boolean {
+    return false;
+  }
+  templateAddressAt(): number {
+    return BASE_ADDRESS;
+  }
+  templateByteAt(): number {
+    return 0;
+  }
 
   readonly size = PersistentImage.SIZE;
   readonly versionIndex = PersistentImage.VERSION_INDEX;
@@ -557,6 +573,25 @@ export class PersistentImageV3 implements ScannedImage {
     }
   }
 
+  readonly templateRecordSize = V3_TEMPLATE_RECORD;
+
+  canWriteTemplate(channel: number, index: number): boolean {
+    if (!Number.isInteger(index)) return false;
+    if (index < V3_FROZEN_TEMPLATE_COUNT || index >= V3_TEMPLATE_COUNT) return false;
+    return this.engine.instanceForChannel(channel) !== null;
+  }
+
+  templateAddressAt(index: number, offset: number): number {
+    return v3TemplateAddress(index, offset);
+  }
+
+  templateByteAt(channel: number, index: number, offset: number): number {
+    void index;
+    const instance = this.engine.instanceForChannel(channel);
+    if (instance === null) return 0;
+    return v3TemplateByte(instance, this.engine.getBaseLength(channel), offset);
+  }
+
   saveTemplate(storage: Storage, channel: number, index: number): boolean {
     if (!Number.isInteger(index)) return false;
     if (index < V3_FROZEN_TEMPLATE_COUNT || index >= V3_TEMPLATE_COUNT) return false;
@@ -619,10 +654,28 @@ export class PersistentImageV3 implements ScannedImage {
 }
 
 export class PersistenceScheduler {
+  static readonly NO_TEMPLATE = 0xff;
+
   private lastChangeMs = 0;
   private cursorIndex = 0;
   private dirtyFlag = false;
   private writingFlag = false;
+  private templateChannel = 0;
+  private templateIndex = PersistenceScheduler.NO_TEMPLATE;
+  private templateCursor = 0;
+
+  requestTemplateWrite(image: ScannedImage, channel: number, index: number): boolean {
+    if (this.templateIndex !== PersistenceScheduler.NO_TEMPLATE) return false;
+    if (!image.canWriteTemplate(channel, index)) return false;
+    this.templateChannel = channel;
+    this.templateIndex = index;
+    this.templateCursor = 0;
+    return true;
+  }
+
+  get isWritingTemplate(): boolean {
+    return this.templateIndex !== PersistenceScheduler.NO_TEMPLATE;
+  }
 
   markDirty(nowMs: number): void {
     this.dirtyFlag = true;
@@ -648,6 +701,19 @@ export class PersistenceScheduler {
   }
 
   advance(storage: Storage, image: ScannedImage, nowMs: number): boolean {
+    // Une ecriture de template est une COMMANDE, pas un anti-rebond : elle passe
+    // avant le balayage et n'attend aucun delai de calme. Un octet par appel.
+    if (this.templateIndex !== PersistenceScheduler.NO_TEMPLATE) {
+      storage.write(
+        image.templateAddressAt(this.templateIndex, this.templateCursor),
+        image.templateByteAt(this.templateChannel, this.templateIndex, this.templateCursor),
+      );
+      ++this.templateCursor;
+      if (this.templateCursor >= image.templateRecordSize) {
+        this.templateIndex = PersistenceScheduler.NO_TEMPLATE;
+      }
+      return true;
+    }
     if (!this.writingFlag) {
       if (!this.quietElapsed(nowMs)) return false;
       this.writingFlag = true;

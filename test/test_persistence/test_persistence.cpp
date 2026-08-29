@@ -968,6 +968,100 @@ bool sameContent(const Pattern& a, const Pattern& b) {
     return true;
 }
 
+void test_a_template_request_arms_and_reports_itself() {
+    FakeEeprom ee;
+    RigV3 r;
+    TEST_ASSERT_FALSE(r.scheduler.isWritingTemplate());
+    TEST_ASSERT_TRUE(r.scheduler.requestTemplateWrite(r.image, 0, 9));
+    TEST_ASSERT_TRUE(r.scheduler.isWritingTemplate());
+}
+
+void test_a_template_request_writes_one_byte_per_advance() {
+    FakeEeprom ee;
+    RigV3 r;
+    TEST_ASSERT_TRUE(r.scheduler.requestTemplateWrite(r.image, 0, 9));
+    for (uint8_t written = 0; written < persist::v3::TEMPLATE_RECORD; ++written) {
+        const uint16_t before = ee.writes;
+        TEST_ASSERT_TRUE(r.scheduler.advance(ee, r.image, 0));
+        TEST_ASSERT_EQUAL_UINT16(before + 1, ee.writes);
+    }
+}
+
+void test_a_template_request_ends_after_its_record() {
+    FakeEeprom ee;
+    RigV3 r;
+    const Pattern wanted = distinctContent(4);
+    *r.engine.instanceForChannel(0) = wanted;
+    TEST_ASSERT_TRUE(r.engine.setBaseLengthFromStorage(0, 21));
+    TEST_ASSERT_TRUE(r.scheduler.requestTemplateWrite(r.image, 0, 11));
+    for (uint8_t i = 0; i < persist::v3::TEMPLATE_RECORD; ++i) {
+        r.scheduler.advance(ee, r.image, 0);
+    }
+    TEST_ASSERT_FALSE(r.scheduler.isWritingTemplate());
+    for (uint8_t offset = 0; offset < persist::v3::CONTENT_BYTES; ++offset) {
+        TEST_ASSERT_EQUAL_UINT8(persist::v3::contentByte(wanted, offset),
+                                ee.read(persist::v3::templateAddress(11, offset)));
+    }
+    TEST_ASSERT_EQUAL_UINT8(
+        21, ee.read(persist::v3::templateAddress(11, persist::v3::RECORD_LENGTH_AT)));
+}
+
+void test_a_template_request_on_a_frozen_slot_arms_nothing() {
+    FakeEeprom ee;
+    RigV3 r;
+    for (uint8_t index = 0; index < 8; ++index) {
+        TEST_ASSERT_FALSE(r.scheduler.requestTemplateWrite(r.image, 0, index));
+    }
+    TEST_ASSERT_FALSE(r.scheduler.isWritingTemplate());
+}
+
+void test_a_second_template_request_is_refused_while_one_is_in_flight() {
+    FakeEeprom ee;
+    RigV3 r;
+    TEST_ASSERT_TRUE(r.scheduler.requestTemplateWrite(r.image, 0, 9));
+    TEST_ASSERT_TRUE(r.scheduler.advance(ee, r.image, 0));
+    TEST_ASSERT_FALSE(r.scheduler.requestTemplateWrite(r.image, 1, 10));
+}
+
+void test_the_template_request_goes_before_the_image_scan() {
+    FakeEeprom ee;
+    RigV3 r;
+    r.scheduler.markDirty(0);
+    TEST_ASSERT_TRUE(r.scheduler.requestTemplateWrite(r.image, 0, 9));
+    TEST_ASSERT_TRUE(r.scheduler.advance(ee, r.image, persist::QUIET_MS));
+    TEST_ASSERT_TRUE(ee.lowestWrite >= persist::v3::templateAddress(9, 0));
+    TEST_ASSERT_TRUE(r.scheduler.isDirty());
+}
+
+void test_the_image_scan_resumes_after_the_template() {
+    FakeEeprom ee;
+    RigV3 r;
+    r.scheduler.markDirty(0);
+    TEST_ASSERT_TRUE(r.scheduler.requestTemplateWrite(r.image, 0, 9));
+    for (uint8_t i = 0; i < persist::v3::TEMPLATE_RECORD; ++i) {
+        r.scheduler.advance(ee, r.image, persist::QUIET_MS);
+    }
+    TEST_ASSERT_FALSE(r.scheduler.isWritingTemplate());
+    TEST_ASSERT_TRUE(r.scheduler.advance(ee, r.image, persist::QUIET_MS));
+    // The template zone ends at 768; the scanned image starts at 769.
+    TEST_ASSERT_TRUE(ee.highestWrite >= 769);
+    TEST_ASSERT_TRUE(r.scheduler.isDirty());
+}
+
+void test_no_advance_ever_writes_more_than_one_byte() {
+    FakeEeprom ee;
+    RigV3 r;
+    r.scheduler.markDirty(0);
+    TEST_ASSERT_TRUE(r.scheduler.requestTemplateWrite(r.image, 0, 13));
+    for (uint16_t pass = 0; pass < 400; ++pass) {
+        const uint16_t before = ee.writes;
+        if (!r.scheduler.advance(ee, r.image, persist::QUIET_MS)) {
+            break;
+        }
+        TEST_ASSERT_EQUAL_UINT16(before + 1, ee.writes);
+    }
+}
+
 void test_save_template_writes_the_instance_content_into_the_record() {
     FakeEeprom ee;
     RigV3 r;
@@ -1470,6 +1564,14 @@ int main() {
 
     RUN_TEST(test_a_round_trip_restores_the_state_byte_for_byte);
     RUN_TEST(test_a_round_trip_keeps_a_base_length_above_the_interface_ceiling);
+    RUN_TEST(test_a_template_request_arms_and_reports_itself);
+    RUN_TEST(test_a_template_request_writes_one_byte_per_advance);
+    RUN_TEST(test_a_template_request_ends_after_its_record);
+    RUN_TEST(test_a_template_request_on_a_frozen_slot_arms_nothing);
+    RUN_TEST(test_a_second_template_request_is_refused_while_one_is_in_flight);
+    RUN_TEST(test_the_template_request_goes_before_the_image_scan);
+    RUN_TEST(test_the_image_scan_resumes_after_the_template);
+    RUN_TEST(test_no_advance_ever_writes_more_than_one_byte);
     RUN_TEST(test_save_template_writes_the_instance_content_into_the_record);
     RUN_TEST(test_save_template_writes_the_base_length_not_the_effective_one);
     RUN_TEST(test_save_template_refuses_the_eight_frozen_slots_without_writing);

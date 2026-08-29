@@ -73,6 +73,40 @@ MUTANTS = [
      "    if (!validChannel(channel) || bank_ == nullptr) {\n"
      "        return nullptr;\n    }\n"
      "    return bank_->getPattern(channels_[channel].selectedPattern);\n}", "cpp-all"),
+    ("cpp: the scheduler writes the whole template record in one advance (B4b.6.2b)",
+     "include/flexseq/Persistence.h",
+     "            storage.write(image.templateAddressAt(templateIndex_, templateCursor_),\n"
+     "                          image.templateByteAt(templateChannel_, templateIndex_,\n"
+     "                                               templateCursor_));\n"
+     "            ++templateCursor_;",
+     "            while (templateCursor_ < Image::TEMPLATE_RECORD_SIZE) {\n"
+     "                storage.write(image.templateAddressAt(templateIndex_, templateCursor_),\n"
+     "                              image.templateByteAt(templateChannel_, templateIndex_,\n"
+     "                                                   templateCursor_));\n"
+     "                ++templateCursor_;\n            }", "cpp-all"),
+    ("cpp: the image scan goes before the template request (B4b.6.2b)",
+     "include/flexseq/Persistence.h",
+     "        if (templateIndex_ != NO_TEMPLATE) {\n"
+     "            storage.write(image.templateAddressAt",
+     "        if (templateIndex_ != NO_TEMPLATE && !dirty_) {\n"
+     "            storage.write(image.templateAddressAt", "cpp-all"),
+    ("ts: the scheduler writes the whole template record in one advance (B4b.6.2b)",
+     "sim/src/domain/Persistence.ts",
+     "      ++this.templateCursor;\n"
+     "      if (this.templateCursor >= image.templateRecordSize) {",
+     "      while (this.templateCursor < image.templateRecordSize) {\n"
+     "        storage.write(\n"
+     "          image.templateAddressAt(this.templateIndex, this.templateCursor),\n"
+     "          image.templateByteAt(this.templateChannel, this.templateIndex, this.templateCursor),\n"
+     "        );\n"
+     "        ++this.templateCursor;\n      }\n"
+     "      if (this.templateCursor >= image.templateRecordSize) {", "ts-all"),
+    ("ts: the image scan goes before the template request (B4b.6.2b)",
+     "sim/src/domain/Persistence.ts",
+     "    if (this.templateIndex !== PersistenceScheduler.NO_TEMPLATE) {\n"
+     "      storage.write(",
+     "    if (this.templateIndex !== PersistenceScheduler.NO_TEMPLATE && !this.dirtyFlag) {\n"
+     "      storage.write(", "ts-all"),
     ("cpp: saveTemplate serialises the effective length (B4b.6.2)",
      "include/flexseq/Persistence.h",
      "        const uint8_t length = engine_.getBaseLength(channel);",

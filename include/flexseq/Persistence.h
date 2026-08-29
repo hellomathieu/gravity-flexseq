@@ -202,6 +202,11 @@ public:
         return static_cast<uint16_t>(persist::BASE_ADDRESS + index);
     }
 
+    static constexpr uint8_t TEMPLATE_RECORD_SIZE = 1;
+    bool canWriteTemplate(uint8_t, uint8_t) const { return false; }
+    uint16_t templateAddressAt(uint8_t, uint8_t) const { return persist::BASE_ADDRESS; }
+    uint8_t templateByteAt(uint8_t, uint8_t, uint8_t) const { return 0; }
+
     uint8_t byteAt(uint16_t index) const;
     void applyByte(uint16_t index, uint8_t value);
     void resetToDefaults();
@@ -239,6 +244,29 @@ public:
                               persist::v3::factoryTemplateByte(index, offset));
             }
         }
+    }
+
+    static constexpr uint8_t TEMPLATE_RECORD_SIZE = persist::v3::TEMPLATE_RECORD;
+
+    bool canWriteTemplate(uint8_t channel, uint8_t index) const {
+        if (index < persist::v3::FROZEN_TEMPLATE_COUNT
+            || index >= persist::v3::TEMPLATE_COUNT) {
+            return false;
+        }
+        return engine_.instanceForChannel(channel) != nullptr;
+    }
+
+    uint16_t templateAddressAt(uint8_t index, uint8_t offset) const {
+        return persist::v3::templateAddress(index, offset);
+    }
+
+    uint8_t templateByteAt(uint8_t channel, uint8_t index, uint8_t offset) const {
+        (void)index;
+        const Pattern* instance = engine_.instanceForChannel(channel);
+        if (instance == nullptr) {
+            return 0;
+        }
+        return persist::v3::templateByte(*instance, engine_.getBaseLength(channel), offset);
     }
 
     template <typename Storage>
@@ -309,8 +337,27 @@ class PersistenceScheduler {
 public:
     static constexpr uint16_t QUIET_MS = persist::QUIET_MS;
 
+    static constexpr uint8_t NO_TEMPLATE = 0xFF;
+
     PersistenceScheduler()
-        : lastChangeMs_(0), cursor_(0), dirty_(false), writing_(false) {}
+        : lastChangeMs_(0), cursor_(0), dirty_(false), writing_(false),
+          templateChannel_(0), templateIndex_(NO_TEMPLATE), templateCursor_(0) {}
+
+    template <typename Image>
+    bool requestTemplateWrite(const Image& image, uint8_t channel, uint8_t index) {
+        if (templateIndex_ != NO_TEMPLATE) {
+            return false;
+        }
+        if (!image.canWriteTemplate(channel, index)) {
+            return false;
+        }
+        templateChannel_ = channel;
+        templateIndex_ = index;
+        templateCursor_ = 0;
+        return true;
+    }
+
+    bool isWritingTemplate() const { return templateIndex_ != NO_TEMPLATE; }
 
     void markDirty(uint32_t nowMs) {
         dirty_ = true;
@@ -329,6 +376,18 @@ public:
 
     template <typename Storage, typename Image>
     bool advance(Storage& storage, const Image& image, uint32_t nowMs) {
+        // A template write is a command, not a debounce: it takes priority over
+        // the image scan and waits for no quiet delay. One byte per call.
+        if (templateIndex_ != NO_TEMPLATE) {
+            storage.write(image.templateAddressAt(templateIndex_, templateCursor_),
+                          image.templateByteAt(templateChannel_, templateIndex_,
+                                               templateCursor_));
+            ++templateCursor_;
+            if (templateCursor_ >= Image::TEMPLATE_RECORD_SIZE) {
+                templateIndex_ = NO_TEMPLATE;
+            }
+            return true;
+        }
         if (!writing_) {
             if (!quietElapsed(nowMs)) {
                 return false;
@@ -371,6 +430,9 @@ private:
     uint16_t cursor_;
     bool dirty_;
     bool writing_;
+    uint8_t templateChannel_;
+    uint8_t templateIndex_;
+    uint8_t templateCursor_;
 };
 
 template <typename Storage>
