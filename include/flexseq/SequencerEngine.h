@@ -120,6 +120,7 @@ public:
 private:
     struct ChannelState {
         uint8_t selectedPattern;
+        uint8_t baseLength;
         uint8_t effectiveLength;
         int16_t subdiv;
         uint16_t ticksPerStep;

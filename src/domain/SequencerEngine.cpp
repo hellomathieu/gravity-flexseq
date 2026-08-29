@@ -15,6 +15,7 @@ SequencerEngine::SequencerEngine()
     for (uint8_t ch = 0; ch < CHANNEL_COUNT; ++ch) {
         onsets_[ch] = 0;
         channels_[ch].selectedPattern = 0;
+        channels_[ch].baseLength = DEFAULT_LENGTH;
         channels_[ch].effectiveLength = DEFAULT_LENGTH;
         channels_[ch].subdiv = DEFAULT_SUBDIV;
         channels_[ch].ticksPerStep = subdivToTicks(DEFAULT_SUBDIV);
