@@ -73,6 +73,30 @@ MUTANTS = [
      "    if (!validChannel(channel) || bank_ == nullptr) {\n"
      "        return nullptr;\n    }\n"
      "    return bank_->getPattern(channels_[channel].selectedPattern);\n}", "cpp-all"),
+    ("cpp: isTemplateEmpty looks at the ratchet bytes too (B4b.6.4)",
+     "include/flexseq/Persistence.h",
+     "        for (uint8_t offset = 0; offset < persist::v3::STEP_BYTES; ++offset) {",
+     "        for (uint8_t offset = 0; offset < persist::v3::CONTENT_BYTES; ++offset) {",
+     "cpp-all"),
+    ("cpp: isTemplateEmpty drops the canonical mask on the last step byte (B4b.6.4)",
+     "include/flexseq/Persistence.h",
+     "            if (offset == persist::v3::STEP_BYTES - 1) {\n"
+     "                byte = static_cast<uint8_t>(byte & persist::v3::LAST_STEP_BYTE_MASK);\n"
+     "            }",
+     "            if (false) {\n"
+     "                byte = static_cast<uint8_t>(byte & persist::v3::LAST_STEP_BYTE_MASK);\n"
+     "            }", "cpp-all"),
+    ("ts: isTemplateEmpty looks at the ratchet bytes too (B4b.6.4)",
+     "sim/src/domain/Persistence.ts",
+     "    for (let offset = 0; offset < V3_STEP_BYTES; ++offset) {\n"
+     "      let byte = storage.read(v3TemplateAddress(index, V3_RECORD_STEPS_AT + offset));",
+     "    for (let offset = 0; offset < V3_CONTENT_BYTES; ++offset) {\n"
+     "      let byte = storage.read(v3TemplateAddress(index, V3_RECORD_STEPS_AT + offset));",
+     "ts-all"),
+    ("ts: isTemplateEmpty drops the canonical mask on the last step byte (B4b.6.4)",
+     "sim/src/domain/Persistence.ts",
+     "      if (offset === V3_STEP_BYTES - 1) byte &= V3_LAST_STEP_BYTE_MASK;",
+     "      if (false) byte &= V3_LAST_STEP_BYTE_MASK;", "ts-all"),
     ("cpp: the scheduler writes the whole template record in one advance (B4b.6.2b)",
      "include/flexseq/Persistence.h",
      "            storage.write(image.templateAddressAt(templateIndex_, templateCursor_),\n"

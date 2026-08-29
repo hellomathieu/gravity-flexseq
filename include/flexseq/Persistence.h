@@ -248,6 +248,24 @@ public:
 
     static constexpr uint8_t TEMPLATE_RECORD_SIZE = persist::v3::TEMPLATE_RECORD;
 
+    template <typename Storage>
+    bool isTemplateEmpty(Storage& storage, uint8_t index) const {
+        if (index >= persist::v3::TEMPLATE_COUNT) {
+            return false;
+        }
+        for (uint8_t offset = 0; offset < persist::v3::STEP_BYTES; ++offset) {
+            uint8_t byte = storage.read(persist::v3::templateAddress(
+                index, static_cast<uint8_t>(persist::v3::RECORD_STEPS_AT + offset)));
+            if (offset == persist::v3::STEP_BYTES - 1) {
+                byte = static_cast<uint8_t>(byte & persist::v3::LAST_STEP_BYTE_MASK);
+            }
+            if (byte != 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     bool canWriteTemplate(uint8_t channel, uint8_t index) const {
         if (index < persist::v3::FROZEN_TEMPLATE_COUNT
             || index >= persist::v3::TEMPLATE_COUNT) {

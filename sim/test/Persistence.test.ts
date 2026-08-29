@@ -1302,3 +1302,71 @@ describe("ecriture differee d'un template par l'ordonnanceur (B4b.6.2b)", () => 
     }
   });
 });
+
+describe("isTemplateEmpty — les 36 cases inactives (B4b.6.4)", () => {
+  function seedTemplate(ee: FakeEeprom, index: number, content: Pattern, length: number): void {
+    for (let offset = 0; offset < v3.TEMPLATE_RECORD; ++offset) {
+      ee.write(v3.templateAddress(index, offset), v3.templateByte(content, length, offset));
+    }
+  }
+
+  it("un template a zero est vide", () => {
+    const ee = new FakeEeprom();
+    const r = rigV3();
+    seedTemplate(ee, 10, new Pattern(), 16);
+    expect(r.image.isTemplateEmpty(ee, 10)).toBe(true);
+  });
+
+  it("un seul pas actif rend le template occupe", () => {
+    const ee = new FakeEeprom();
+    const r = rigV3();
+    for (let step = 0; step < Pattern.DEFAULT_TOTAL_STEPS; ++step) {
+      const one = new Pattern();
+      one.writeStep(step, true);
+      seedTemplate(ee, 10, one, 16);
+      expect(r.image.isTemplateEmpty(ee, 10)).toBe(false);
+    }
+  });
+
+  it("le trente-sixieme pas seul rend le template occupe", () => {
+    const ee = new FakeEeprom();
+    const r = rigV3();
+    const last = new Pattern();
+    last.writeStep(35, true);
+    seedTemplate(ee, 10, last, 16);
+    expect(r.image.isTemplateEmpty(ee, 10)).toBe(false);
+  });
+
+  it("des ratchets seuls laissent le template vide", () => {
+    const ee = new FakeEeprom();
+    const r = rigV3();
+    seedTemplate(ee, 10, new Pattern(), 16);
+    for (let offset = 0; offset < v3.RATCHET_BYTES; ++offset) {
+      ee.write(v3.templateAddress(10, v3.RECORD_RATCHETS_AT + offset), 0x66);
+    }
+    expect(r.image.isTemplateEmpty(ee, 10)).toBe(true);
+  });
+
+  it("les quatre bits au-dela du dernier pas n'occupent pas le template", () => {
+    const ee = new FakeEeprom();
+    const r = rigV3();
+    seedTemplate(ee, 10, new Pattern(), 16);
+    ee.write(v3.templateAddress(10, v3.RECORD_STEPS_AT + v3.STEP_BYTES - 1), 0xf0);
+    expect(r.image.isTemplateEmpty(ee, 10)).toBe(true);
+  });
+
+  it("la requete n'ecrit rien", () => {
+    const ee = new FakeEeprom();
+    const r = rigV3();
+    seedTemplate(ee, 10, new Pattern(), 16);
+    const before = ee.writes;
+    expect(r.image.isTemplateEmpty(ee, 10)).toBe(true);
+    expect(ee.writes).toBe(before);
+  });
+
+  it("un index hors plage n'est pas vide", () => {
+    const ee = new FakeEeprom();
+    const r = rigV3();
+    expect(r.image.isTemplateEmpty(ee, 16)).toBe(false);
+  });
+});

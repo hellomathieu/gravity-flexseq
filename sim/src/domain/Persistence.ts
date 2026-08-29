@@ -39,6 +39,9 @@ export const PREFS_SIZE = 6;
 export const TOTAL_SIZE = HEADER_SIZE + PATTERNS_SIZE + CHANNELS_SIZE + GLOBAL_SIZE + PREFS_SIZE;
 
 const V3_STEP_BYTES = Math.floor((Pattern.DEFAULT_TOTAL_STEPS + 7) / 8);
+/** ADR 0007 : les bits au-dela du dernier pas sont des zeros canoniques. */
+const V3_LAST_STEP_BYTE_BITS = Pattern.DEFAULT_TOTAL_STEPS - (V3_STEP_BYTES - 1) * 8;
+const V3_LAST_STEP_BYTE_MASK = (1 << V3_LAST_STEP_BYTE_BITS) - 1;
 const V3_RATCHET_BYTES = Math.floor(Pattern.DEFAULT_TOTAL_STEPS / 2);
 const V3_CONTENT_BYTES = V3_STEP_BYTES + V3_RATCHET_BYTES;
 const V3_LENGTH_BYTES = 1;
@@ -574,6 +577,16 @@ export class PersistentImageV3 implements ScannedImage {
   }
 
   readonly templateRecordSize = V3_TEMPLATE_RECORD;
+
+  isTemplateEmpty(storage: Storage, index: number): boolean {
+    if (!Number.isInteger(index) || index < 0 || index >= V3_TEMPLATE_COUNT) return false;
+    for (let offset = 0; offset < V3_STEP_BYTES; ++offset) {
+      let byte = storage.read(v3TemplateAddress(index, V3_RECORD_STEPS_AT + offset));
+      if (offset === V3_STEP_BYTES - 1) byte &= V3_LAST_STEP_BYTE_MASK;
+      if (byte !== 0) return false;
+    }
+    return true;
+  }
 
   canWriteTemplate(channel: number, index: number): boolean {
     if (!Number.isInteger(index)) return false;

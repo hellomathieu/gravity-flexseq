@@ -968,6 +968,75 @@ bool sameContent(const Pattern& a, const Pattern& b) {
     return true;
 }
 
+void test_an_all_zero_template_is_empty() {
+    FakeEeprom ee;
+    RigV3 r;
+    Pattern silent;
+    writeTemplateRecord(ee, 10, silent, 16);
+    TEST_ASSERT_TRUE(r.image.isTemplateEmpty(ee, 10));
+}
+
+void test_one_active_step_makes_a_template_occupied() {
+    FakeEeprom ee;
+    RigV3 r;
+    for (uint8_t step = 0; step < Pattern::DEFAULT_TOTAL_STEPS; ++step) {
+        Pattern one;
+        one.writeStep(step, true);
+        writeTemplateRecord(ee, 10, one, 16);
+        TEST_ASSERT_FALSE(r.image.isTemplateEmpty(ee, 10));
+    }
+}
+
+void test_the_thirty_sixth_step_alone_makes_a_template_occupied() {
+    FakeEeprom ee;
+    RigV3 r;
+    Pattern last;
+    last.writeStep(35, true);
+    writeTemplateRecord(ee, 10, last, 16);
+    TEST_ASSERT_FALSE(r.image.isTemplateEmpty(ee, 10));
+}
+
+void test_ratchets_alone_leave_a_template_empty() {
+    FakeEeprom ee;
+    RigV3 r;
+    Pattern silent;
+    writeTemplateRecord(ee, 10, silent, 16);
+    for (uint8_t offset = 0; offset < persist::v3::RATCHET_BYTES; ++offset) {
+        ee.write(persist::v3::templateAddress(
+                     10, static_cast<uint8_t>(persist::v3::RECORD_RATCHETS_AT + offset)),
+                 0x66);
+    }
+    TEST_ASSERT_TRUE(r.image.isTemplateEmpty(ee, 10));
+}
+
+void test_the_four_bits_above_the_last_step_do_not_occupy_a_template() {
+    FakeEeprom ee;
+    RigV3 r;
+    Pattern silent;
+    writeTemplateRecord(ee, 10, silent, 16);
+    ee.write(persist::v3::templateAddress(
+                 10, static_cast<uint8_t>(persist::v3::RECORD_STEPS_AT
+                                          + persist::v3::STEP_BYTES - 1)),
+             0xF0);
+    TEST_ASSERT_TRUE(r.image.isTemplateEmpty(ee, 10));
+}
+
+void test_an_empty_query_reads_five_bytes_and_writes_none() {
+    FakeEeprom ee;
+    RigV3 r;
+    Pattern silent;
+    writeTemplateRecord(ee, 10, silent, 16);
+    const uint16_t before = ee.writes;
+    TEST_ASSERT_TRUE(r.image.isTemplateEmpty(ee, 10));
+    TEST_ASSERT_EQUAL_UINT16(before, ee.writes);
+}
+
+void test_an_out_of_range_index_is_not_empty() {
+    FakeEeprom ee;
+    RigV3 r;
+    TEST_ASSERT_FALSE(r.image.isTemplateEmpty(ee, 16));
+}
+
 void test_a_template_request_arms_and_reports_itself() {
     FakeEeprom ee;
     RigV3 r;
@@ -1564,6 +1633,13 @@ int main() {
 
     RUN_TEST(test_a_round_trip_restores_the_state_byte_for_byte);
     RUN_TEST(test_a_round_trip_keeps_a_base_length_above_the_interface_ceiling);
+    RUN_TEST(test_an_all_zero_template_is_empty);
+    RUN_TEST(test_one_active_step_makes_a_template_occupied);
+    RUN_TEST(test_the_thirty_sixth_step_alone_makes_a_template_occupied);
+    RUN_TEST(test_ratchets_alone_leave_a_template_empty);
+    RUN_TEST(test_the_four_bits_above_the_last_step_do_not_occupy_a_template);
+    RUN_TEST(test_an_empty_query_reads_five_bytes_and_writes_none);
+    RUN_TEST(test_an_out_of_range_index_is_not_empty);
     RUN_TEST(test_a_template_request_arms_and_reports_itself);
     RUN_TEST(test_a_template_request_writes_one_byte_per_advance);
     RUN_TEST(test_a_template_request_ends_after_its_record);
