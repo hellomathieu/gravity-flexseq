@@ -33,10 +33,20 @@
 #   ./tools/run-mutation-probe.py --list     la liste, sans rien executer
 #   ./tools/run-mutation-probe.py --check-anchors   les ancres, sans muter ni compiler
 #   ./tools/run-mutation-probe.py --only cpp   ou --only ts
+#   ./tools/run-mutation-probe.py --match <sous-chaine>   filtre sur l etiquette
 #   TIMEOUT=600 ./tools/run-mutation-probe.py
 #
+# `--match` s'applique APRES `--only`, donc les deux se combinent. Il existe
+# parce qu'une passe complete dure des heures : apres avoir recible un mutant,
+# il faut pouvoir l'executer seul.
+#
+# UNE INVOCATION QUI N'EST PAS COMPRISE EST REFUSEE. Un argument inconnu lancait
+# la serie complete : le 2026-08-29, un `--help` a demarre les 230 mutants. Un
+# filtre qui ne selectionne rien est refuse de la meme facon, parce qu'une passe
+# vide se lit comme une passe reussie.
+#
 # Sortie 0 si tous les mutants sont tues, 1 s'il en survit un, 2 si un motif est
-# absent du code, 127 si un outil manque.
+# absent du code, 3 si l'invocation est refusee, 127 si un outil manque.
 
 import os
 import signal
@@ -1111,14 +1121,53 @@ def on_signal(signum, _frame):
     sys.exit(130)
 
 
+KNOWN_FLAGS = ("--list", "--check-anchors")
+KNOWN_OPTIONS = ("--only", "--match")
+
+
+def refuse(message):
+    print(f"  {ERR}invocation refusee{Z} {DIM}{message}{Z}")
+    print(f"  {DIM}Aucun mutant n'a ete execute.{Z}")
+    return None
+
+
 def selected(argv):
-    if "--only" in argv:
-        want = argv[argv.index("--only") + 1]
+    """Rend la liste des mutants a executer, ou None si l invocation est refusee.
+
+    Un argument inconnu ne doit PAS se lire comme une passe complete, et un
+    filtre qui ne selectionne rien ne doit pas se lire comme une passe reussie.
+    """
+    i = 0
+    only = match = None
+    while i < len(argv):
+        arg = argv[i]
+        if arg in KNOWN_FLAGS:
+            i += 1
+        elif arg in KNOWN_OPTIONS:
+            if i + 1 >= len(argv) or argv[i + 1].startswith("--"):
+                return refuse(f"{arg} attend une valeur")
+            if arg == "--only":
+                only = argv[i + 1]
+            else:
+                match = argv[i + 1]
+            i += 2
+        else:
+            return refuse(f"argument inconnu : {arg}")
+
+    mutants = list(MUTANTS)
+    if only is not None:
         # Three families carry a two-word prefix -- "ts drift:", "ts reconcile:",
         # "ts gestures:" -- so a plain startswith(want + ":") hid 29 mutants from
         # --only ts while a full pass still ran them. Match the first word.
-        return [m for m in MUTANTS if m[0].split(":", 1)[0].split(" ", 1)[0] == want]
-    return list(MUTANTS)
+        mutants = [m for m in mutants
+                   if m[0].split(":", 1)[0].split(" ", 1)[0] == only]
+        if not mutants:
+            return refuse(f"--only {only} ne selectionne aucun mutant")
+    if match is not None:
+        mutants = [m for m in mutants if match in m[0]]
+        if not mutants:
+            return refuse(f"--match {match!r} ne selectionne aucun mutant")
+    return mutants
 
 
 def check_anchors(mutants):
@@ -1175,6 +1224,8 @@ def check_anchors(mutants):
 def main():
     argv = sys.argv[1:]
     mutants = selected(argv)
+    if mutants is None:
+        return 3
 
     if "--list" in argv:
         for label, rel, _, _, suite in mutants:
