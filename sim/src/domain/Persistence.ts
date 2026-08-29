@@ -50,6 +50,8 @@ const V3_RECORD_LENGTH_AT = V3_RECORD_RATCHETS_AT + V3_RATCHET_BYTES;
 const V3_TEMPLATE_RECORD = V3_CONTENT_BYTES + V3_LENGTH_BYTES;
 const V3_INSTANCE_RECORD = V3_CONTENT_BYTES;
 const V3_TEMPLATE_COUNT = PATTERN_COUNT;
+/** PRD 5.0 : A1 a A8 portent le contenu d'usine de l'original et ne changent jamais. */
+const V3_FROZEN_TEMPLATE_COUNT = 8;
 const V3_INSTANCE_COUNT = CHANNEL_COUNT;
 
 const V3_HEADER_OFFSET = 0;
@@ -164,6 +166,7 @@ export const v3 = {
   TEMPLATE_RECORD: V3_TEMPLATE_RECORD,
   INSTANCE_RECORD: V3_INSTANCE_RECORD,
   TEMPLATE_COUNT: V3_TEMPLATE_COUNT,
+  FROZEN_TEMPLATE_COUNT: V3_FROZEN_TEMPLATE_COUNT,
   INSTANCE_COUNT: V3_INSTANCE_COUNT,
 
   HEADER_OFFSET: V3_HEADER_OFFSET,
@@ -552,6 +555,18 @@ export class PersistentImageV3 implements ScannedImage {
         storage.write(v3TemplateAddress(index, offset), v3FactoryTemplateByte(index, offset));
       }
     }
+  }
+
+  saveTemplate(storage: Storage, channel: number, index: number): boolean {
+    if (!Number.isInteger(index)) return false;
+    if (index < V3_FROZEN_TEMPLATE_COUNT || index >= V3_TEMPLATE_COUNT) return false;
+    const instance = this.engine.instanceForChannel(channel);
+    if (instance === null) return false;
+    const length = this.engine.getBaseLength(channel);
+    for (let offset = 0; offset < V3_TEMPLATE_RECORD; ++offset) {
+      storage.write(v3TemplateAddress(index, offset), v3TemplateByte(instance, length, offset));
+    }
+    return true;
   }
 
   loadTemplate(storage: Storage, channel: number, index: number): boolean {

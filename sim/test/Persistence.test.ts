@@ -1123,3 +1123,83 @@ describe("loadTemplate — template EEPROM vers instance (ADR 0009)", () => {
     expect(ee.writes).toBe(before);
   });
 });
+
+describe("saveTemplate — instance vers template EEPROM (ADR 0009)", () => {
+  function distinctContent(seed: number): Pattern {
+    const p = new Pattern();
+    p.writeStep(seed % Pattern.DEFAULT_TOTAL_STEPS, true);
+    p.writeStep((seed + 7) % Pattern.DEFAULT_TOTAL_STEPS, true);
+    p.setRatchet(seed % Pattern.DEFAULT_TOTAL_STEPS, RATCHET_3);
+    return p;
+  }
+
+  function copyInto(target: Pattern, source: Pattern): void {
+    for (let i = 0; i < Pattern.DEFAULT_TOTAL_STEPS; ++i) {
+      target.writeStep(i, source.readStep(i) === true);
+      target.setRatchet(i, source.getRatchet(i));
+    }
+  }
+
+  it("ecrit le contenu de l'instance dans le record", () => {
+    const ee = new FakeEeprom();
+    const r = rigV3();
+    const wanted = distinctContent(3);
+    copyInto(r.engine.instanceForChannel(1)!, wanted);
+    expect(r.image.saveTemplate(ee, 1, 9)).toBe(true);
+    for (let offset = 0; offset < v3.CONTENT_BYTES; ++offset) {
+      expect(ee.read(v3.templateAddress(9, offset))).toBe(v3.contentByte(wanted, offset));
+    }
+  });
+
+  it("ecrit baseLength et non effectiveLength", () => {
+    const ee = new FakeEeprom();
+    const r = rigV3();
+    expect(r.engine.setBaseLengthFromStorage(1, 36)).toBe(true);
+    expect(r.engine.getEffectiveLength(1)).toBe(24);
+    expect(r.image.saveTemplate(ee, 1, 9)).toBe(true);
+    expect(ee.read(v3.templateAddress(9, v3.RECORD_LENGTH_AT))).toBe(36);
+  });
+
+  it("refuse les huit slots geles sans ecrire", () => {
+    const ee = new FakeEeprom();
+    const r = rigV3();
+    for (let index = 0; index < 8; ++index) {
+      const before = ee.writes;
+      expect(r.image.saveTemplate(ee, 0, index)).toBe(false);
+      expect(ee.writes).toBe(before);
+    }
+  });
+
+  it("accepte les huit slots inscriptibles", () => {
+    const ee = new FakeEeprom();
+    const r = rigV3();
+    for (let index = 8; index < 16; ++index) {
+      expect(r.image.saveTemplate(ee, 0, index)).toBe(true);
+    }
+  });
+
+  it("refuse un channel ou un index invalide sans ecrire", () => {
+    const ee = new FakeEeprom();
+    const r = rigV3();
+    const before = ee.writes;
+    expect(r.image.saveTemplate(ee, 6, 9)).toBe(false);
+    expect(r.image.saveTemplate(ee, 0, 16)).toBe(false);
+    expect(ee.writes).toBe(before);
+  });
+
+  it("un aller-retour save puis load rend le meme pattern et la meme longueur", () => {
+    const ee = new FakeEeprom();
+    const r = rigV3();
+    const wanted = distinctContent(6);
+    copyInto(r.engine.instanceForChannel(2)!, wanted);
+    expect(r.engine.setBaseLengthFromStorage(2, 30)).toBe(true);
+    expect(r.image.saveTemplate(ee, 2, 12)).toBe(true);
+    expect(r.image.loadTemplate(ee, 5, 12)).toBe(true);
+    for (let i = 0; i < Pattern.DEFAULT_TOTAL_STEPS; ++i) {
+      expect(r.engine.instanceForChannel(5)!.readStep(i)).toBe(wanted.readStep(i));
+      expect(r.engine.instanceForChannel(5)!.getRatchet(i)).toBe(wanted.getRatchet(i));
+    }
+    expect(r.engine.getBaseLength(5)).toBe(30);
+    expect(r.engine.getEffectiveLength(5)).toBe(24);
+  });
+});

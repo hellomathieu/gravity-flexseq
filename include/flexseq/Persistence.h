@@ -141,6 +141,11 @@ static_assert(LAST_STEP_BYTE_MASK == 0x0F,
 constexpr uint8_t MIN_TEMPLATE_LENGTH = 1;
 constexpr uint8_t MAX_TEMPLATE_LENGTH = Pattern::DEFAULT_TOTAL_STEPS;
 
+// PRD 5.0: A1 to A8 carry the original's factory content and never change.
+constexpr uint8_t FROZEN_TEMPLATE_COUNT = 8;
+static_assert(FROZEN_TEMPLATE_COUNT * 2 == PATTERN_COUNT,
+              "PRD 5.0 splits the sixteen templates into eight frozen and eight writable");
+
 static_assert(MIN_TEMPLATE_LENGTH == 1, "a template plays at least one step");
 static_assert(MAX_TEMPLATE_LENGTH == 36,
               "the format bound is the pattern capacity, never the engine's cap");
@@ -234,6 +239,24 @@ public:
                               persist::v3::factoryTemplateByte(index, offset));
             }
         }
+    }
+
+    template <typename Storage>
+    bool saveTemplate(Storage& storage, uint8_t channel, uint8_t index) {
+        if (index < persist::v3::FROZEN_TEMPLATE_COUNT
+            || index >= persist::v3::TEMPLATE_COUNT) {
+            return false;
+        }
+        const Pattern* instance = engine_.instanceForChannel(channel);
+        if (instance == nullptr) {
+            return false;
+        }
+        const uint8_t length = engine_.getBaseLength(channel);
+        for (uint8_t offset = 0; offset < persist::v3::TEMPLATE_RECORD; ++offset) {
+            storage.write(persist::v3::templateAddress(index, offset),
+                          persist::v3::templateByte(*instance, length, offset));
+        }
+        return true;
     }
 
     template <typename Storage>

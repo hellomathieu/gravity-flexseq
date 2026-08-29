@@ -73,6 +73,25 @@ MUTANTS = [
      "    if (!validChannel(channel) || bank_ == nullptr) {\n"
      "        return nullptr;\n    }\n"
      "    return bank_->getPattern(channels_[channel].selectedPattern);\n}", "cpp-all"),
+    ("cpp: saveTemplate serialises the effective length (B4b.6.2)",
+     "include/flexseq/Persistence.h",
+     "        const uint8_t length = engine_.getBaseLength(channel);",
+     "        const uint8_t length = engine_.getEffectiveLength(channel);", "cpp-all"),
+    ("cpp: the freeze lets the eighth factory slot be written (B4b.6.2)",
+     "include/flexseq/Persistence.h",
+     "        if (index < persist::v3::FROZEN_TEMPLATE_COUNT\n"
+     "            || index >= persist::v3::TEMPLATE_COUNT) {",
+     "        if (index < persist::v3::FROZEN_TEMPLATE_COUNT - 1\n"
+     "            || index >= persist::v3::TEMPLATE_COUNT) {", "cpp-all"),
+    ("ts: saveTemplate serialises the effective length (B4b.6.2)",
+     "sim/src/domain/Persistence.ts",
+     "    const length = this.engine.getBaseLength(channel);",
+     "    const length = this.engine.getEffectiveLength(channel);", "ts-all"),
+    ("ts: the freeze lets the eighth factory slot be written (B4b.6.2)",
+     "sim/src/domain/Persistence.ts",
+     "    if (index < V3_FROZEN_TEMPLATE_COUNT || index >= V3_TEMPLATE_COUNT) return false;",
+     "    if (index < V3_FROZEN_TEMPLATE_COUNT - 1 || index >= V3_TEMPLATE_COUNT) return false;",
+     "ts-all"),
     ("cpp: loadTemplate restores the length through the manual entry point (B4b.6.1)",
      "include/flexseq/Persistence.h",
      "        (void)engine_.setBaseLengthFromStorage(\n"

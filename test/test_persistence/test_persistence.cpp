@@ -968,6 +968,70 @@ bool sameContent(const Pattern& a, const Pattern& b) {
     return true;
 }
 
+void test_save_template_writes_the_instance_content_into_the_record() {
+    FakeEeprom ee;
+    RigV3 r;
+    const Pattern wanted = distinctContent(3);
+    *r.engine.instanceForChannel(1) = wanted;
+    TEST_ASSERT_TRUE(r.image.saveTemplate(ee, 1, 9));
+    for (uint8_t offset = 0; offset < persist::v3::CONTENT_BYTES; ++offset) {
+        TEST_ASSERT_EQUAL_UINT8(persist::v3::contentByte(wanted, offset),
+                                ee.read(persist::v3::templateAddress(9, offset)));
+    }
+}
+
+void test_save_template_writes_the_base_length_not_the_effective_one() {
+    FakeEeprom ee;
+    RigV3 r;
+    TEST_ASSERT_TRUE(r.engine.setBaseLengthFromStorage(1, 36));
+    TEST_ASSERT_EQUAL_UINT8(36, r.engine.getBaseLength(1));
+    TEST_ASSERT_EQUAL_UINT8(24, r.engine.getEffectiveLength(1));
+    TEST_ASSERT_TRUE(r.image.saveTemplate(ee, 1, 9));
+    TEST_ASSERT_EQUAL_UINT8(
+        36, ee.read(persist::v3::templateAddress(9, persist::v3::RECORD_LENGTH_AT)));
+}
+
+void test_save_template_refuses_the_eight_frozen_slots_without_writing() {
+    FakeEeprom ee;
+    RigV3 r;
+    for (uint8_t index = 0; index < 8; ++index) {
+        const uint16_t before = ee.writes;
+        TEST_ASSERT_FALSE(r.image.saveTemplate(ee, 0, index));
+        TEST_ASSERT_EQUAL_UINT16(before, ee.writes);
+    }
+}
+
+void test_save_template_accepts_the_eight_writable_slots() {
+    FakeEeprom ee;
+    RigV3 r;
+    for (uint8_t index = 8; index < 16; ++index) {
+        TEST_ASSERT_TRUE(r.image.saveTemplate(ee, 0, index));
+    }
+}
+
+void test_save_template_refuses_an_invalid_channel_or_index_without_writing() {
+    FakeEeprom ee;
+    RigV3 r;
+    const uint16_t before = ee.writes;
+    TEST_ASSERT_FALSE(r.image.saveTemplate(ee, 6, 9));
+    TEST_ASSERT_FALSE(r.image.saveTemplate(ee, 0, 16));
+    TEST_ASSERT_EQUAL_UINT16(before, ee.writes);
+}
+
+void test_save_then_load_returns_the_same_pattern_and_length() {
+    FakeEeprom ee;
+    RigV3 r;
+    const Pattern wanted = distinctContent(6);
+    *r.engine.instanceForChannel(2) = wanted;
+    TEST_ASSERT_TRUE(r.engine.setBaseLengthFromStorage(2, 30));
+    TEST_ASSERT_TRUE(r.image.saveTemplate(ee, 2, 12));
+
+    TEST_ASSERT_TRUE(r.image.loadTemplate(ee, 5, 12));
+    TEST_ASSERT_TRUE(sameContent(wanted, *r.engine.instanceForChannel(5)));
+    TEST_ASSERT_EQUAL_UINT8(30, r.engine.getBaseLength(5));
+    TEST_ASSERT_EQUAL_UINT8(24, r.engine.getEffectiveLength(5));
+}
+
 void test_load_template_copies_the_content_into_the_channel_instance() {
     FakeEeprom ee;
     RigV3 r;
@@ -1406,6 +1470,12 @@ int main() {
 
     RUN_TEST(test_a_round_trip_restores_the_state_byte_for_byte);
     RUN_TEST(test_a_round_trip_keeps_a_base_length_above_the_interface_ceiling);
+    RUN_TEST(test_save_template_writes_the_instance_content_into_the_record);
+    RUN_TEST(test_save_template_writes_the_base_length_not_the_effective_one);
+    RUN_TEST(test_save_template_refuses_the_eight_frozen_slots_without_writing);
+    RUN_TEST(test_save_template_accepts_the_eight_writable_slots);
+    RUN_TEST(test_save_template_refuses_an_invalid_channel_or_index_without_writing);
+    RUN_TEST(test_save_then_load_returns_the_same_pattern_and_length);
     RUN_TEST(test_load_template_copies_the_content_into_the_channel_instance);
     RUN_TEST(test_load_template_leaves_the_five_other_instances_untouched);
     RUN_TEST(test_load_template_keeps_a_length_of_thirty_six_in_the_base);
