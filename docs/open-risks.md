@@ -1,6 +1,6 @@
 # Open risks and watch items
 
-**Last review: 2026-08-29.** Thirty open lines, twenty-nine closed or accepted.
+**Last review: 2026-08-29.** Thirty open lines, thirty-one closed or accepted.
 
 ## What this document is, and is not
 
@@ -69,6 +69,8 @@ reopens them without knowing what has already been established or costed.
 
 | # | Subject | State | By what |
 |---|---|---|---|
+| 55 | **Twenty-two of the 230 mutants could not run, and the series reported itself as complete.** The first end-to-end pass, on 2026-08-29, stopped on the first of them. Sixteen anchors had gone stale when the channel record codec moved from member methods to free functions -- `engine_.` became `engine.`, the TypeScript indentation dropped from six spaces to four, and `applyChannelRecordByte` collapsed each `case` onto one line. Six more had become ambiguous when version 3 duplicated the `resetToDefaults` of version 2, line for line. A later pass then crashed on ten mutants of lot B4b.6 carrying the suite tag `ts-all`, which `SUITES` does not define. ⚠️ **None of the three faults could report itself as an undetected mutation** -- the probe raises an error, as it should -- **but none of them could run either**, and only a full pass, which nobody had ever completed, would have surfaced them | **closed 2026-08-29**, commit `097aa24` | the 22 anchors are re-targeted, never deleted: the 16 follow the codec, the 6 are anchored on what is unique to the version 3 body. The ten suite tags become `ts`. `--only` also recovers its 29 missing mutants -- three families carry a two-word prefix, `ts drift:`, `ts reconcile:`, `ts gestures:`, and the predicate compared the whole prefix -- so the counts become **108 cpp, 122 ts, 230 total**. **`--check-anchors` makes the check permanent**: it reports, without mutating and without compiling, an unreadable file, an absent anchor, an ambiguous anchor, and an unknown suite tag. Each red path was exercised and restored |
+| 56 | **The version 3 fallback to defaults was not covered: nothing asserted that it restores the mode, the offset and the skip chance.** Version 2 was covered by `test_a_wrong_version_byte_returns_the_defaults`; the only version 3 fallback test checked the pattern content of the instances and nothing else. The format that actually ships had the weaker assertions | **closed 2026-08-29**, commit `d79966e` | found by mutation, and by accident. Six mutants on the defaults were re-targeted from the version 2 body to the version 3 one to lift an ambiguity, which **moved their criterion of detection** without anyone intending it. They then survived the first complete pass, and their survival named the missing assertion. ⚠️ **The re-targeting was wrong as a re-targeting; the coverage defect it revealed was real.** One assertion per language now dirties all six channels -- RANDOM, offset 7, skip chance 9 -- before forcing the fallback, because a `resetToDefaults` that did nothing would otherwise still pass, the initial values being the defaults already. The series then runs complete: **230 anchors applicable, 230 detected, no survivor**, the first score of this project that is both complete and replayable. ⚠️ It says every mutant that exists is detected. It does **not** say the coverage is exhaustive: a probe only finds the holes a mutant aims at |
 | 45 | **The Flash cost of the version 3 persistence codec was unknown, and lot S could not be decided without it.** The codec was declared and tested, but no firmware path called it, so the linker removed it entirely: RAM +0 and Flash +0 measured on 2026-08-26, mangled symbols absent from the ELF | **closed 2026-08-28**, commit `815546b` | activating version 3 in `main.cpp` costs **Flash +2 bytes**. The linker dropped the version 2 image in exchange: `avr-nm` finds `PersistentImageV3::addressAt` and no `PersistentImage::` symbol, and `loadFactoryPatterns` has no caller left. The firmware carries ONE image implementation, which is why the net cost is almost nothing. Extracting `bootstrap()` from `main.cpp` into `Persistence.h` cost 32 bytes more; that figure is measured, its cause is not. Measured footprint: RAM 1699/2048, Flash 27164/30720 |
 | 49 | **Two assertions of the input-adapter suite read the shared bank, and the suite was red.** `test_a_long_press_on_shift_clears_the_pattern` and `test_a_rotation_while_shift_is_held_spares_the_pattern` toggled a step through the UI, then read `bank.getPattern(0)`. Since lot B4b.4 the UI writes the channel instance, so the bank stayed empty and both assertions failed. The firmware was not at fault: the oracles were stale, exactly like the gesture probe's oracles that lot B4b.4.5 repaired. The suite lives in `env:native_adapter`, which `run-cpp-tests.sh` does not run, so a green C++ run hid it for the whole of lot B4b.4 | **closed 2026-08-28**, commit `b0b220a` | the three reads became `engine.instanceForChannel(0)`, the form `test_ui_controller` and the TypeScript suite already used. Only the test file changed: 3 lines, no firmware change. Both assertions were observed **red before and green after**, on the same production binary, so the counter-proof is measured and not assumed. `run-all-tests.sh` then returned RC=0: env:native 404/404, env:native_adapter 5/5, TypeScript 392/392, typecheck clean, libGravity conform. ⚠️ The method rule this line produced stays open below: **a green suite is not a green repository** |
 | 11b | **Nothing wired had been exercised on the module** | **closed 2026-08-23, on the module** | FlexSeq was flashed -- 28774 bytes written and verified in 9 seconds -- and the owner then drove it. Both rotation directions, the eight gestures, PLAY starting and stopping the clock with the six LEDs following, the encoder switch, the step cursor, the ratchet and triplet editing, and the playhead advancing in EDIT. The wiring is no longer proven by tests alone. What that run produced is not silence but **six new lines**, 26 to 31 |
@@ -432,6 +434,22 @@ already carried that template. Two firmware mutations were caught by a STRONGER
 witness upstream and never reached the one they targeted. Before trusting a
 mutation, look for a second path to the same effect, check that the fixture does
 not already carry the expected value, and check which witness fires first.
+
+**A guard built from one breakdown only covers that breakdown.**
+`--check-anchors` was written on 2026-08-29 to catch anchors that had gone
+absent or ambiguous. It was run, it returned green, and the very next full pass
+crashed on ten mutants whose SUITE TAG did not exist -- a different way of being
+unrunnable, which the fresh guard did not look for. The guard now covers four
+categories: an unreadable file, an absent anchor, an ambiguous anchor, an unknown
+suite tag. **When a new failure reveals another category of unrunnability, widen
+the guard to the CATEGORY, and prove the widening with a falsifiable
+counter-proof** -- not to the single case that was just observed.
+
+⚠️ A related trap from the same day, and it cost a wrong claim: a counter-proof
+that does not break what it claims to break proves nothing. Appending ` // x`
+after the semicolon of an anchored line left the anchor a substring of the line,
+so the guard stayed green and the red path looked unreachable. Break the
+expression itself, not its surroundings.
 
 **An oracle that locates a constant by its POSITION in a file goes stale in
 silence.** `run-stack-probe.sh` read the active persistence format by cutting
