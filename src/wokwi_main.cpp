@@ -84,7 +84,7 @@ void setup() {
 
     engine.setPatternBank(&patternBank); // sans ca, les ratchets sont ignores
     engine.setSelectedPattern(CH, 0);
-    engine.setEffectiveLength(CH, 20);   // steps 20..23 -> simples points
+    engine.setBaseLength(CH, 20);   // steps 20..23 -> simples points
     engine.setSubdiv(CH, 1);             // /1 : une unite par step
     engine.setBarLength(CH, 3);          // separation en 3/4
 

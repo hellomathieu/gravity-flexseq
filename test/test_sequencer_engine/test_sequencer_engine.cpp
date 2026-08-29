@@ -99,7 +99,7 @@ void test_derives_step_from_phase_and_ticks_per_step() {
 void test_wraps_step_at_effective_length() {
     SequencerEngine e;
     e.start();
-    TEST_ASSERT_TRUE(e.setEffectiveLength(0, 16));
+    TEST_ASSERT_TRUE(e.setBaseLength(0, 16));
     e.advance(STEP * 16);
     TEST_ASSERT_EQUAL_INT8(0, e.effectiveStep(0));
     e.advance(STEP);
@@ -111,9 +111,9 @@ void test_masterphase_untouched_when_length_changes() {
     e.start();
     e.advance(STEP * 10);
     uint32_t before = e.masterPhase();
-    TEST_ASSERT_TRUE(e.setEffectiveLength(0, 4));
+    TEST_ASSERT_TRUE(e.setBaseLength(0, 4));
     TEST_ASSERT_EQUAL_UINT32(before, e.masterPhase());
-    TEST_ASSERT_TRUE(e.setEffectiveLength(0, 24));
+    TEST_ASSERT_TRUE(e.setBaseLength(0, 24));
     TEST_ASSERT_EQUAL_UINT32(before, e.masterPhase());
 }
 
@@ -122,9 +122,9 @@ void test_no_jump_when_length_shrinks_within_range() {
     e.start();
     e.advance(STEP * 5); // localStep = 5
     TEST_ASSERT_EQUAL_INT8(5, e.effectiveStep(0));
-    TEST_ASSERT_TRUE(e.setEffectiveLength(0, 11));
+    TEST_ASSERT_TRUE(e.setBaseLength(0, 11));
     TEST_ASSERT_EQUAL_INT8(5, e.effectiveStep(0));
-    TEST_ASSERT_TRUE(e.setEffectiveLength(0, 8));
+    TEST_ASSERT_TRUE(e.setBaseLength(0, 8));
     TEST_ASSERT_EQUAL_INT8(5, e.effectiveStep(0));
 }
 
@@ -132,16 +132,16 @@ void test_folds_into_range_only_when_length_drops_below() {
     SequencerEngine e;
     e.start();
     e.advance(STEP * 13); // localStep = 13
-    TEST_ASSERT_TRUE(e.setEffectiveLength(0, 11));
+    TEST_ASSERT_TRUE(e.setBaseLength(0, 11));
     TEST_ASSERT_EQUAL_INT8(13 % 11, e.effectiveStep(0)); // 2
 }
 
 void test_keeps_step_when_length_grows() {
     SequencerEngine e;
     e.start();
-    e.setEffectiveLength(0, 8);
+    e.setBaseLength(0, 8);
     e.advance(STEP * 3); // localStep = 3
-    TEST_ASSERT_TRUE(e.setEffectiveLength(0, 24));
+    TEST_ASSERT_TRUE(e.setBaseLength(0, 24));
     TEST_ASSERT_EQUAL_INT8(3, e.effectiveStep(0));
     e.advance(STEP);
     TEST_ASSERT_EQUAL_INT8(4, e.effectiveStep(0));
@@ -150,7 +150,7 @@ void test_keeps_step_when_length_grows() {
 void test_global_reset_realigns_all_channels() {
     SequencerEngine e;
     e.start();
-    e.setEffectiveLength(1, 3);
+    e.setBaseLength(1, 3);
     e.advance(STEP * 7);
     TEST_ASSERT_TRUE(e.effectiveStep(0) > 0);
     e.reset();
@@ -161,17 +161,17 @@ void test_global_reset_realigns_all_channels() {
 
 void test_rejects_invalid_effective_length_without_mutation() {
     SequencerEngine e;
-    TEST_ASSERT_TRUE(e.setEffectiveLength(0, 12));
-    TEST_ASSERT_FALSE(e.setEffectiveLength(0, 0));
-    TEST_ASSERT_FALSE(e.setEffectiveLength(0, 25));
+    TEST_ASSERT_TRUE(e.setBaseLength(0, 12));
+    TEST_ASSERT_FALSE(e.setBaseLength(0, 0));
+    TEST_ASSERT_FALSE(e.setBaseLength(0, 25));
     TEST_ASSERT_EQUAL_UINT8(12, e.getEffectiveLength(0));
 }
 
 void test_isolates_execution_state_between_channels() {
     SequencerEngine e;
     e.start();
-    e.setEffectiveLength(0, 16);
-    e.setEffectiveLength(1, 3);
+    e.setBaseLength(0, 16);
+    e.setBaseLength(1, 3);
     e.advance(STEP * 4);
     TEST_ASSERT_EQUAL_INT8(4 % 16, e.effectiveStep(0)); // 4
     TEST_ASSERT_EQUAL_INT8(4 % 3, e.effectiveStep(1));  // 1
@@ -190,7 +190,7 @@ void test_supports_different_ticks_per_step_per_channel() {
 void test_rejects_invalid_channel_and_ticks_per_step() {
     SequencerEngine e;
     TEST_ASSERT_EQUAL_INT8(-1, e.effectiveStep(6));
-    TEST_ASSERT_FALSE(e.setEffectiveLength(6, 8));
+    TEST_ASSERT_FALSE(e.setBaseLength(6, 8));
     TEST_ASSERT_FALSE(e.setTicksPerStep(0, 0));
 }
 
@@ -330,7 +330,7 @@ void test_ratchet_step_keeps_the_pattern_duration() {
     allSeq(e);
     e.setPatternBank(&bank);
     e.setSelectedPattern(0, 0);
-    e.setEffectiveLength(0, 4);
+    e.setBaseLength(0, 4);
     e.instanceForChannel(0)->setRatchet(0, RATCHET_6);
     e.start();
     e.advance(96 * 4); // four plain step durations
@@ -729,6 +729,50 @@ void test_the_channel_plays_its_own_instance() {
     }
 }
 
+
+void test_the_manual_entry_point_stops_at_the_interface_ceiling() {
+    SequencerEngine e;
+    TEST_ASSERT_TRUE(e.setBaseLength(0, 24));
+    TEST_ASSERT_EQUAL_UINT8(24, e.getBaseLength(0));
+    TEST_ASSERT_FALSE(e.setBaseLength(0, 25));
+    TEST_ASSERT_EQUAL_UINT8(24, e.getBaseLength(0));
+}
+
+void test_the_manual_entry_point_stops_at_one() {
+    SequencerEngine e;
+    TEST_ASSERT_TRUE(e.setBaseLength(0, 1));
+    TEST_ASSERT_FALSE(e.setBaseLength(0, 0));
+    TEST_ASSERT_EQUAL_UINT8(1, e.getBaseLength(0));
+}
+
+void test_storage_carries_a_base_length_above_the_interface_ceiling() {
+    SequencerEngine e;
+    TEST_ASSERT_TRUE(e.setBaseLengthFromStorage(0, 36));
+    TEST_ASSERT_EQUAL_UINT8(36, e.getBaseLength(0));
+    TEST_ASSERT_EQUAL_UINT8(24, e.getEffectiveLength(0));
+}
+
+void test_storage_stops_at_the_pattern_capacity() {
+    SequencerEngine e;
+    TEST_ASSERT_TRUE(e.setBaseLengthFromStorage(0, 36));
+    TEST_ASSERT_FALSE(e.setBaseLengthFromStorage(0, 37));
+    TEST_ASSERT_EQUAL_UINT8(36, e.getBaseLength(0));
+}
+
+void test_a_base_length_below_the_ceiling_needs_no_clamp() {
+    SequencerEngine e;
+    TEST_ASSERT_TRUE(e.setBaseLengthFromStorage(0, 12));
+    TEST_ASSERT_EQUAL_UINT8(12, e.getBaseLength(0));
+    TEST_ASSERT_EQUAL_UINT8(12, e.getEffectiveLength(0));
+}
+
+void test_an_invalid_channel_refuses_both_entry_points() {
+    SequencerEngine e;
+    TEST_ASSERT_FALSE(e.setBaseLength(6, 8));
+    TEST_ASSERT_FALSE(e.setBaseLengthFromStorage(6, 8));
+    TEST_ASSERT_EQUAL_UINT8(0, e.getBaseLength(6));
+}
+
 int main() {
     UNITY_BEGIN();
 
@@ -798,5 +842,11 @@ int main() {
     RUN_TEST(test_an_instance_is_independent_of_the_bank);
     RUN_TEST(test_two_channels_on_one_template_keep_separate_instances);
     RUN_TEST(test_the_channel_plays_its_own_instance);
+    RUN_TEST(test_the_manual_entry_point_stops_at_the_interface_ceiling);
+    RUN_TEST(test_the_manual_entry_point_stops_at_one);
+    RUN_TEST(test_storage_carries_a_base_length_above_the_interface_ceiling);
+    RUN_TEST(test_storage_stops_at_the_pattern_capacity);
+    RUN_TEST(test_a_base_length_below_the_ceiling_needs_no_clamp);
+    RUN_TEST(test_an_invalid_channel_refuses_both_entry_points);
     return UNITY_END();
 }

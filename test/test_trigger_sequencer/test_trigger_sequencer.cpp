@@ -35,7 +35,7 @@ void test_triggers_only_on_active_step_onset() {
 
     // Channel 0 plays pattern 0 with steps 1 and 3 active, length 4.
     engine.setSelectedPattern(0, 0);
-    engine.setEffectiveLength(0, 4);
+    engine.setBaseLength(0, 4);
     engine.instanceForChannel(0)->writeStep(1, true);
     engine.instanceForChannel(0)->writeStep(3, true);
 
@@ -66,7 +66,7 @@ void test_no_trigger_without_a_step_onset() {
     seqMode(engine);
 
     engine.instanceForChannel(0)->writeStep(1, true);
-    engine.setEffectiveLength(0, 4);
+    engine.setBaseLength(0, 4);
     engine.start();
 
     engine.advance(STEP - 1); // no boundary crossed
@@ -83,8 +83,8 @@ void test_channels_with_different_patterns_are_independent() {
 
     engine.setSelectedPattern(0, 0);
     engine.setSelectedPattern(1, 1);
-    engine.setEffectiveLength(0, 4);
-    engine.setEffectiveLength(1, 4);
+    engine.setBaseLength(0, 4);
+    engine.setBaseLength(1, 4);
     engine.instanceForChannel(0)->writeStep(1, true);
 
     engine.start();
@@ -117,7 +117,7 @@ void test_clock_triggers_on_every_step_whatever_the_pattern() {
     TriggerSequencer trig(engine);
     engine.setPatternBank(&bank);
 
-    engine.setEffectiveLength(0, 4);
+    engine.setBaseLength(0, 4);
     engine.start();
     TEST_ASSERT_EQUAL_UINT16(8, countTriggers(trig, engine, 0, 8));
 }

@@ -87,7 +87,7 @@ void setup() {
 
     engine.setPatternBank(&patternBank);
     engine.setSelectedPattern(DEMO_TAB - 1, 9);
-    engine.setEffectiveLength(DEMO_TAB - 1, 20);
+    engine.setBaseLength(DEMO_TAB - 1, 20);
     engine.setSubdiv(DEMO_TAB - 1, -4);
     engine.setBarLength(DEMO_TAB - 1, 3);
 

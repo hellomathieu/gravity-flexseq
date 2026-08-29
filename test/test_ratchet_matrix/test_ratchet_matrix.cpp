@@ -261,7 +261,7 @@ void test_the_train_is_regular_without_a_ratchet() {
     for (uint8_t i = 0; i < 4; ++i) {
         r.pattern()->writeStep(i, true);
     }
-    r.engine.setEffectiveLength(0, 4);
+    r.engine.setBaseLength(0, 4);
     r.useSubdiv(1);
 
     uint16_t gaps[8];
@@ -278,7 +278,7 @@ void test_a_ratchet_3_at_unity_splits_its_step_in_three() {
         r.pattern()->writeStep(i, true);
     }
     r.pattern()->setRatchet(0, flexseq::RATCHET_3);
-    r.engine.setEffectiveLength(0, 4);
+    r.engine.setBaseLength(0, 4);
     r.useSubdiv(1);
 
     const uint16_t expected[9] = {32, 32, 96, 96, 96, 32, 32, 32, 96};
@@ -297,7 +297,7 @@ void test_a_triplet_at_unity_fires_three_times_over_two_steps() {
         r.pattern()->writeStep(i, true);
     }
     r.pattern()->setRatchet(0, flexseq::RATCHET_TRIPLET);
-    r.engine.setEffectiveLength(0, 4);
+    r.engine.setBaseLength(0, 4);
     r.useSubdiv(1);
 
     const uint16_t expected[6] = {64, 64, 96, 96, 96, 64};
@@ -318,7 +318,7 @@ void test_a_ratchet_with_an_uneven_slot_still_uses_the_whole_step() {
         r.pattern()->writeStep(i, true);
     }
     r.pattern()->setRatchet(0, flexseq::RATCHET_3);
-    r.engine.setEffectiveLength(0, 4);
+    r.engine.setBaseLength(0, 4);
     r.useSubdiv(-3);
 
     const uint16_t expected[9] = {11, 11, 32, 32, 32, 10, 11, 11, 32};
@@ -353,7 +353,7 @@ void test_an_inactive_step_emits_nothing_whatever_its_ratchet() {
     for (uint8_t c = 0; c < CODE_COUNT; ++c) {
         Rig r;
         r.pattern()->setRatchet(0, CODES[c]);
-        r.engine.setEffectiveLength(0, 1);
+        r.engine.setBaseLength(0, 1);
         r.useSubdiv(1);
         r.engine.start();
 
@@ -377,7 +377,7 @@ void test_an_inactive_triplet_is_a_triplet_rest() {
     r.pattern()->writeStep(2, true);
     r.pattern()->writeStep(3, true);
     r.pattern()->setRatchet(0, flexseq::RATCHET_TRIPLET);
-    r.engine.setEffectiveLength(0, 4);
+    r.engine.setBaseLength(0, 4);
     r.useSubdiv(1);
 
     const uint16_t expected[6] = {96, 96, 288, 96, 96, 288};

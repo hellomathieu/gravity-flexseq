@@ -33,6 +33,7 @@ public:
     static constexpr uint8_t MIN_LENGTH = 1;
     static constexpr uint8_t MAX_LENGTH = 24;
     static constexpr int8_t LENGTH_CV_OFFSET = 0;
+    static constexpr uint8_t MAX_STORED_LENGTH = Pattern::DEFAULT_TOTAL_STEPS;
     static constexpr uint8_t DEFAULT_LENGTH = 16;
     static constexpr uint8_t CHANNEL_COUNT = 6;
     static constexpr uint8_t PATTERN_COUNT = 16;
@@ -68,8 +69,11 @@ public:
 
     // Per-channel length (1..24). Query returns 0 for an invalid channel.
     uint8_t getEffectiveLength(uint8_t channel) const;
-    bool setEffectiveLength(uint8_t channel, uint8_t length);
+    bool setBaseLength(uint8_t channel, uint8_t length);
     uint8_t getBaseLength(uint8_t channel) const;
+
+    // ADR 0009: a base length restored from storage may exceed MAX_LENGTH.
+    bool setBaseLengthFromStorage(uint8_t channel, uint8_t length);
 
     // Per-channel ticks per step (>= 1). Query returns 0 for an invalid channel.
     uint16_t getTicksPerStep(uint8_t channel) const;

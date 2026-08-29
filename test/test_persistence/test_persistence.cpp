@@ -81,7 +81,7 @@ void fillDistinctState(Rig& r) {
     }
     for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
         r.engine.setSelectedPattern(ch, static_cast<uint8_t>(15 - ch));
-        r.engine.setEffectiveLength(ch, static_cast<uint8_t>(24 - ch * 3));
+        r.engine.setBaseLength(ch, static_cast<uint8_t>(24 - ch * 3));
         r.engine.setSubdiv(ch, flexseq::subdivAtIndex(static_cast<uint8_t>(ch * 3)));
         r.engine.setBarLength(ch, ch % 2 == 0 ? 3 : 6);
         r.engine.setChannelMode(ch, static_cast<flexseq::ChannelMode>(ch % 3));
@@ -487,6 +487,21 @@ void test_the_v3_length_bound_is_the_pattern_capacity_not_the_engine_cap() {
 /*
  * Aller-retour
  */
+
+void test_a_round_trip_keeps_a_base_length_above_the_interface_ceiling() {
+    eeprom.reset();
+    Rig saved;
+    TEST_ASSERT_TRUE(saved.engine.setBaseLengthFromStorage(0, 36));
+    TEST_ASSERT_EQUAL_UINT8(36, saved.engine.getBaseLength(0));
+    TEST_ASSERT_EQUAL_UINT8(24, saved.engine.getEffectiveLength(0));
+    saved.scheduler.markDirty(0);
+    finishWrite(saved, eeprom, persist::QUIET_MS);
+
+    Rig loaded;
+    TEST_ASSERT_TRUE(loaded.scheduler.load(eeprom, loaded.image));
+    TEST_ASSERT_EQUAL_UINT8(36, loaded.engine.getBaseLength(0));
+    TEST_ASSERT_EQUAL_UINT8(24, loaded.engine.getEffectiveLength(0));
+}
 
 void test_a_round_trip_restores_the_state_byte_for_byte() {
     eeprom.reset();
@@ -1279,6 +1294,7 @@ int main() {
     RUN_TEST(test_the_v3_length_bound_is_the_pattern_capacity_not_the_engine_cap);
 
     RUN_TEST(test_a_round_trip_restores_the_state_byte_for_byte);
+    RUN_TEST(test_a_round_trip_keeps_a_base_length_above_the_interface_ceiling);
     RUN_TEST(test_the_patterns_survive_with_their_ratchets);
 
     RUN_TEST(test_a_wrong_version_byte_returns_the_defaults);

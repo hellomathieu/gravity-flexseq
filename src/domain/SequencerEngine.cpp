@@ -226,8 +226,17 @@ uint8_t SequencerEngine::getEffectiveLength(uint8_t channel) const {
     return channels_[channel].effectiveLength;
 }
 
-bool SequencerEngine::setEffectiveLength(uint8_t channel, uint8_t length) {
+bool SequencerEngine::setBaseLength(uint8_t channel, uint8_t length) {
     if (!validChannel(channel) || length < MIN_LENGTH || length > MAX_LENGTH) {
+        return false;
+    }
+    channels_[channel].baseLength = length;
+    refreshEffectiveLength(channel);
+    return true;
+}
+
+bool SequencerEngine::setBaseLengthFromStorage(uint8_t channel, uint8_t length) {
+    if (!validChannel(channel) || length < MIN_LENGTH || length > MAX_STORED_LENGTH) {
         return false;
     }
     channels_[channel].baseLength = length;

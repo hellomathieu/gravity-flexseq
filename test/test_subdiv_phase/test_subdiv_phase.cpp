@@ -230,12 +230,12 @@ struct DriftRig {
 void test_a_length_edit_does_not_shift_the_channel() {
     {
         DriftRig r;
-        r.engine.setEffectiveLength(0, 8);
+        r.engine.setBaseLength(0, 8);
         TEST_ASSERT_EQUAL_INT32(0, r.drift());
     }
     {
         DriftRig r;
-        r.engine.setEffectiveLength(0, 1);
+        r.engine.setBaseLength(0, 1);
         TEST_ASSERT_EQUAL_INT32(0, r.drift());
     }
 }

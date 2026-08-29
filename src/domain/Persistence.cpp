@@ -19,7 +19,7 @@ uint8_t channelRecordByte(const SequencerEngine& engine, uint8_t channel, uint8_
             return selected < 0 ? 0 : static_cast<uint8_t>(selected);
         }
         case 1:
-            return engine.getEffectiveLength(channel);
+            return engine.getBaseLength(channel);
         case 2: {
             const int8_t index = subdivIndexOf(engine.getSubdiv(channel));
             return index < 0 ? DEFAULT_SUBDIV_INDEX : static_cast<uint8_t>(index);
@@ -43,7 +43,7 @@ void applyChannelRecordByte(SequencerEngine& engine, uint8_t channel, uint8_t of
                             uint8_t value) {
     switch (offset) {
         case 0: engine.setSelectedPattern(channel, value); break;
-        case 1: engine.setEffectiveLength(channel, value); break;
+        case 1: engine.setBaseLengthFromStorage(channel, value); break;
         case 2: engine.setSubdiv(channel, subdivAtIndex(value)); break;
         case 3: engine.setBarLength(channel, value); break;
         case 4: engine.setChannelMode(channel, static_cast<ChannelMode>(value)); break;
@@ -272,7 +272,7 @@ void PersistentImage::resetToDefaults() {
     }
     for (uint8_t channel = 0; channel < SequencerEngine::CHANNEL_COUNT; ++channel) {
         engine_.setSelectedPattern(channel, 0);
-        engine_.setEffectiveLength(channel, SequencerEngine::DEFAULT_LENGTH);
+        engine_.setBaseLength(channel, SequencerEngine::DEFAULT_LENGTH);
         engine_.setSubdiv(channel, DEFAULT_SUBDIV);
         engine_.setBarLength(channel, SequencerEngine::DEFAULT_BAR_LENGTH);
         engine_.setChannelMode(channel, DEFAULT_CHANNEL_MODE);
@@ -383,7 +383,7 @@ void PersistentImageV3::resetToDefaults() {
             instance->clear();
         }
         engine_.setSelectedPattern(channel, 0);
-        engine_.setEffectiveLength(channel, SequencerEngine::DEFAULT_LENGTH);
+        engine_.setBaseLength(channel, SequencerEngine::DEFAULT_LENGTH);
         engine_.setSubdiv(channel, DEFAULT_SUBDIV);
         engine_.setBarLength(channel, SequencerEngine::DEFAULT_BAR_LENGTH);
         engine_.setChannelMode(channel, DEFAULT_CHANNEL_MODE);
