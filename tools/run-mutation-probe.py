@@ -31,6 +31,7 @@
 # Usage :
 #   ./tools/run-mutation-probe.py            toute la serie
 #   ./tools/run-mutation-probe.py --list     la liste, sans rien executer
+#   ./tools/run-mutation-probe.py --check-anchors   les ancres, sans muter ni compiler
 #   ./tools/run-mutation-probe.py --only cpp   ou --only ts
 #   TIMEOUT=600 ./tools/run-mutation-probe.py
 #
@@ -60,9 +61,15 @@ MUTANTS = [
      "    return bank_->getPattern(channels_[channel].selectedPattern);\n}", "cpp-all"),
     ("cpp: the effective length derivation never runs (ADR 0009)",
      "src/domain/SequencerEngine.cpp",
+     "bool SequencerEngine::setBaseLength(uint8_t channel, uint8_t length) {\n"
+     "    if (!validChannel(channel) || length < MIN_LENGTH || length > MAX_LENGTH) {\n"
+     "        return false;\n    }\n"
      "    channels_[channel].baseLength = length;\n"
      "    refreshEffectiveLength(channel);\n"
      "    return true;",
+     "bool SequencerEngine::setBaseLength(uint8_t channel, uint8_t length) {\n"
+     "    if (!validChannel(channel) || length < MIN_LENGTH || length > MAX_LENGTH) {\n"
+     "        return false;\n    }\n"
      "    channels_[channel].baseLength = length;\n"
      "    return true;", "cpp-all"),
     ("cpp: the edit path writes into the shared template instead of the instance",
@@ -92,11 +99,11 @@ MUTANTS = [
      "      let byte = storage.read(v3TemplateAddress(index, V3_RECORD_STEPS_AT + offset));",
      "    for (let offset = 0; offset < V3_CONTENT_BYTES; ++offset) {\n"
      "      let byte = storage.read(v3TemplateAddress(index, V3_RECORD_STEPS_AT + offset));",
-     "ts-all"),
+     "ts"),
     ("ts: isTemplateEmpty drops the canonical mask on the last step byte (B4b.6.4)",
      "sim/src/domain/Persistence.ts",
      "      if (offset === V3_STEP_BYTES - 1) byte &= V3_LAST_STEP_BYTE_MASK;",
-     "      if (false) byte &= V3_LAST_STEP_BYTE_MASK;", "ts-all"),
+     "      if (false) byte &= V3_LAST_STEP_BYTE_MASK;", "ts"),
     ("cpp: the scheduler writes the whole template record in one advance (B4b.6.2b)",
      "include/flexseq/Persistence.h",
      "            storage.write(image.templateAddressAt(templateIndex_, templateCursor_),\n"
@@ -124,32 +131,38 @@ MUTANTS = [
      "          image.templateByteAt(this.templateChannel, this.templateIndex, this.templateCursor),\n"
      "        );\n"
      "        ++this.templateCursor;\n      }\n"
-     "      if (this.templateCursor >= image.templateRecordSize) {", "ts-all"),
+     "      if (this.templateCursor >= image.templateRecordSize) {", "ts"),
     ("ts: the image scan goes before the template request (B4b.6.2b)",
      "sim/src/domain/Persistence.ts",
      "    if (this.templateIndex !== PersistenceScheduler.NO_TEMPLATE) {\n"
      "      storage.write(",
      "    if (this.templateIndex !== PersistenceScheduler.NO_TEMPLATE && !this.dirtyFlag) {\n"
-     "      storage.write(", "ts-all"),
+     "      storage.write(", "ts"),
     ("cpp: saveTemplate serialises the effective length (B4b.6.2)",
      "include/flexseq/Persistence.h",
      "        const uint8_t length = engine_.getBaseLength(channel);",
      "        const uint8_t length = engine_.getEffectiveLength(channel);", "cpp-all"),
     ("cpp: the freeze lets the eighth factory slot be written (B4b.6.2)",
      "include/flexseq/Persistence.h",
+     "    bool saveTemplate(Storage& storage, uint8_t channel, uint8_t index) {\n"
      "        if (index < persist::v3::FROZEN_TEMPLATE_COUNT\n"
      "            || index >= persist::v3::TEMPLATE_COUNT) {",
+     "    bool saveTemplate(Storage& storage, uint8_t channel, uint8_t index) {\n"
      "        if (index < persist::v3::FROZEN_TEMPLATE_COUNT - 1\n"
      "            || index >= persist::v3::TEMPLATE_COUNT) {", "cpp-all"),
     ("ts: saveTemplate serialises the effective length (B4b.6.2)",
      "sim/src/domain/Persistence.ts",
      "    const length = this.engine.getBaseLength(channel);",
-     "    const length = this.engine.getEffectiveLength(channel);", "ts-all"),
+     "    const length = this.engine.getEffectiveLength(channel);", "ts"),
     ("ts: the freeze lets the eighth factory slot be written (B4b.6.2)",
      "sim/src/domain/Persistence.ts",
+     "  saveTemplate(storage: Storage, channel: number, index: number): boolean {\n"
+     "    if (!Number.isInteger(index)) return false;\n"
      "    if (index < V3_FROZEN_TEMPLATE_COUNT || index >= V3_TEMPLATE_COUNT) return false;",
+     "  saveTemplate(storage: Storage, channel: number, index: number): boolean {\n"
+     "    if (!Number.isInteger(index)) return false;\n"
      "    if (index < V3_FROZEN_TEMPLATE_COUNT - 1 || index >= V3_TEMPLATE_COUNT) return false;",
-     "ts-all"),
+     "ts"),
     ("cpp: loadTemplate restores the length through the manual entry point (B4b.6.1)",
      "include/flexseq/Persistence.h",
      "        (void)engine_.setBaseLengthFromStorage(\n"
@@ -180,7 +193,7 @@ MUTANTS = [
      "      channel,\n"
      "      storage.read(v3TemplateAddress(index, V3_RECORD_LENGTH_AT)),\n"
      "    );",
-     "ts-all"),
+     "ts"),
     ("ts: loadTemplate ignores the template length (B4b.6.1)",
      "sim/src/domain/Persistence.ts",
      "    this.engine.setBaseLengthFromStorage(\n"
@@ -189,18 +202,18 @@ MUTANTS = [
      "    );\n"
      "    this.engine.setSelectedPattern(channel, index);",
      "    this.engine.setSelectedPattern(channel, index);",
-     "ts-all"),
+     "ts"),
     ("ts: the effective length derivation never runs (ADR 0009)",
      "sim/src/domain/SequencerEngine.ts",
      "    c.baseLength = length;\n"
      "    this.refreshEffectiveLength(channel);\n"
      "    return true;\n  }\n\n  /**\n   * Definit baseLength depuis le STOCKAGE",
      "    c.baseLength = length;\n"
-     "    return true;\n  }\n\n  /**\n   * Definit baseLength depuis le STOCKAGE", "ts-all"),
+     "    return true;\n  }\n\n  /**\n   * Definit baseLength depuis le STOCKAGE", "ts"),
     ("ts: the stored bound falls back to the interface ceiling (ADR 0009)",
      "sim/src/domain/SequencerEngine.ts",
      "export const MAX_STORED_LENGTH = Pattern.DEFAULT_TOTAL_STEPS;",
-     "export const MAX_STORED_LENGTH = MAX_LENGTH;", "ts-all"),
+     "export const MAX_STORED_LENGTH = MAX_LENGTH;", "ts"),
     ("cpp: the stored bound falls back to the interface ceiling (ADR 0009)",
      "include/flexseq/SequencerEngine.h",
      "    static constexpr uint8_t MAX_STORED_LENGTH = Pattern::DEFAULT_TOTAL_STEPS;",
@@ -219,46 +232,49 @@ MUTANTS = [
      "    return this.bank.getPattern(c.selectedPattern);\n  }", "ts-instances"),
     ("cpp: channel byte 4 stops reporting the mode",
      "src/domain/Persistence.cpp",
-     "        case 4:\n            return static_cast<uint8_t>(engine_.getChannelMode(channel));",
+     "        case 4:\n            return static_cast<uint8_t>(engine.getChannelMode(channel));",
      "        case 4:\n            return 0;", "cpp"),
     ("cpp: channel byte 5 stops reporting the offset",
      "src/domain/Persistence.cpp",
-     "        case 5:\n            return static_cast<uint8_t>(engine_.getOffset(channel) & 0xFF);",
+     "        case 5:\n            return static_cast<uint8_t>(engine.getOffset(channel) & 0xFF);",
      "        case 5:\n            return 0;", "cpp"),
     ("cpp: channel byte 6 stops reporting the skip chance",
      "src/domain/Persistence.cpp",
-     "        case 6:\n            return engine_.getSkipChance(channel);",
+     "        case 6:\n            return engine.getSkipChance(channel);",
      "        case 6:\n            return 0;", "cpp"),
     ("cpp: a reserved CV byte reports something",
      "src/domain/Persistence.cpp",
-     "        case 6:\n            return engine_.getSkipChance(channel);\n        default:\n            return 0;",
-     "        case 6:\n            return engine_.getSkipChance(channel);\n        default:\n            return 1;", "cpp"),
+     "        case 6:\n            return engine.getSkipChance(channel);\n        default:\n            return 0;",
+     "        case 6:\n            return engine.getSkipChance(channel);\n        default:\n            return 1;", "cpp"),
     ("cpp: loading the mode byte becomes a no-op",
      "src/domain/Persistence.cpp",
-     "        case 4:\n            engine_.setChannelMode(channel, static_cast<ChannelMode>(value));\n            break;",
-     "        case 4:\n            break;", "cpp"),
+     "        case 4: engine.setChannelMode(channel, static_cast<ChannelMode>(value)); break;",
+     "        case 4: break;", "cpp"),
     ("cpp: loading the offset byte becomes a no-op",
      "src/domain/Persistence.cpp",
-     "        case 5:\n            engine_.setOffset(channel, value);\n            break;",
-     "        case 5:\n            break;", "cpp"),
+     "        case 5: engine.setOffset(channel, value); break;",
+     "        case 5: break;", "cpp"),
     ("cpp: loading the skip chance byte becomes a no-op",
      "src/domain/Persistence.cpp",
-     "        case 6:\n            engine_.setSkipChance(channel, value);\n            break;",
-     "        case 6:\n            break;", "cpp"),
+     "        case 6: engine.setSkipChance(channel, value); break;",
+     "        case 6: break;", "cpp"),
     ("cpp: a stored CV target reaches the mode instead of being ignored",
      "src/domain/Persistence.cpp",
-     "        case 6:\n            engine_.setSkipChance(channel, value);\n            break;\n        default:\n            break;",
-     "        case 6:\n            engine_.setSkipChance(channel, value);\n            break;\n        default:\n"
+     "        case 6: engine.setSkipChance(channel, value); break;\n        default: break;",
+     "        case 6: engine.setSkipChance(channel, value); break;\n        default:\n"
      "            engine_.setChannelMode(channel, static_cast<ChannelMode>(value & 1));\n            break;", "cpp"),
     ("cpp: the defaults stop resetting the mode",
      "src/domain/Persistence.cpp",
-     "        engine_.setChannelMode(channel, DEFAULT_CHANNEL_MODE);\n", "", "cpp"),
+     "        Pattern* instance = engine_.instanceForChannel(channel);\n        if (instance != nullptr) {\n            instance->clear();\n        }\n        engine_.setSelectedPattern(channel, 0);\n        engine_.setBaseLength(channel, SequencerEngine::DEFAULT_LENGTH);\n        engine_.setSubdiv(channel, DEFAULT_SUBDIV);\n        engine_.setBarLength(channel, SequencerEngine::DEFAULT_BAR_LENGTH);\n        engine_.setChannelMode(channel, DEFAULT_CHANNEL_MODE);\n",
+     "        Pattern* instance = engine_.instanceForChannel(channel);\n        if (instance != nullptr) {\n            instance->clear();\n        }\n        engine_.setSelectedPattern(channel, 0);\n        engine_.setBaseLength(channel, SequencerEngine::DEFAULT_LENGTH);\n        engine_.setSubdiv(channel, DEFAULT_SUBDIV);\n        engine_.setBarLength(channel, SequencerEngine::DEFAULT_BAR_LENGTH);\n", "cpp"),
     ("cpp: the defaults stop resetting the offset",
      "src/domain/Persistence.cpp",
-     "        engine_.setOffset(channel, 0);\n", "", "cpp"),
+     "        Pattern* instance = engine_.instanceForChannel(channel);\n        if (instance != nullptr) {\n            instance->clear();\n        }\n        engine_.setSelectedPattern(channel, 0);\n        engine_.setBaseLength(channel, SequencerEngine::DEFAULT_LENGTH);\n        engine_.setSubdiv(channel, DEFAULT_SUBDIV);\n        engine_.setBarLength(channel, SequencerEngine::DEFAULT_BAR_LENGTH);\n        engine_.setChannelMode(channel, DEFAULT_CHANNEL_MODE);\n        engine_.setOffset(channel, 0);\n",
+     "        Pattern* instance = engine_.instanceForChannel(channel);\n        if (instance != nullptr) {\n            instance->clear();\n        }\n        engine_.setSelectedPattern(channel, 0);\n        engine_.setBaseLength(channel, SequencerEngine::DEFAULT_LENGTH);\n        engine_.setSubdiv(channel, DEFAULT_SUBDIV);\n        engine_.setBarLength(channel, SequencerEngine::DEFAULT_BAR_LENGTH);\n        engine_.setChannelMode(channel, DEFAULT_CHANNEL_MODE);\n", "cpp"),
     ("cpp: the defaults stop resetting the skip chance",
      "src/domain/Persistence.cpp",
-     "        engine_.setSkipChance(channel, 0);\n", "", "cpp"),
+     "        Pattern* instance = engine_.instanceForChannel(channel);\n        if (instance != nullptr) {\n            instance->clear();\n        }\n        engine_.setSelectedPattern(channel, 0);\n        engine_.setBaseLength(channel, SequencerEngine::DEFAULT_LENGTH);\n        engine_.setSubdiv(channel, DEFAULT_SUBDIV);\n        engine_.setBarLength(channel, SequencerEngine::DEFAULT_BAR_LENGTH);\n        engine_.setChannelMode(channel, DEFAULT_CHANNEL_MODE);\n        engine_.setOffset(channel, 0);\n        engine_.setSkipChance(channel, 0);\n",
+     "        Pattern* instance = engine_.instanceForChannel(channel);\n        if (instance != nullptr) {\n            instance->clear();\n        }\n        engine_.setSelectedPattern(channel, 0);\n        engine_.setBaseLength(channel, SequencerEngine::DEFAULT_LENGTH);\n        engine_.setSubdiv(channel, DEFAULT_SUBDIV);\n        engine_.setBarLength(channel, SequencerEngine::DEFAULT_BAR_LENGTH);\n        engine_.setChannelMode(channel, DEFAULT_CHANNEL_MODE);\n        engine_.setOffset(channel, 0);\n", "cpp"),
     ("cpp: the version byte stays at 1",
      "include/flexseq/Persistence.h",
      "constexpr uint8_t FORMAT_VERSION = 2;", "constexpr uint8_t FORMAT_VERSION = 1;", "cpp"),
@@ -288,46 +304,49 @@ MUTANTS = [
 
     ("ts: channel byte 4 stops reporting the mode",
      "sim/src/domain/Persistence.ts",
-     "      case 4:\n        return this.engine.getChannelMode(channel);",
-     "      case 4:\n        return 0;", "ts"),
+     "    case 4:\n      return engine.getChannelMode(channel);",
+     "    case 4:\n      return 0;", "ts"),
     ("ts: channel byte 5 stops reporting the offset",
      "sim/src/domain/Persistence.ts",
-     "      case 5:\n        return this.engine.getOffset(channel) & 0xff;",
-     "      case 5:\n        return 0;", "ts"),
+     "    case 5:\n      return engine.getOffset(channel) & 0xff;",
+     "    case 5:\n      return 0;", "ts"),
     ("ts: channel byte 6 stops reporting the skip chance",
      "sim/src/domain/Persistence.ts",
-     "      case 6:\n        return this.engine.getSkipChance(channel);",
-     "      case 6:\n        return 0;", "ts"),
+     "    case 6:\n      return engine.getSkipChance(channel);",
+     "    case 6:\n      return 0;", "ts"),
     ("ts: a reserved CV byte reports something",
      "sim/src/domain/Persistence.ts",
-     "      case 6:\n        return this.engine.getSkipChance(channel);\n      default:\n        return 0;",
-     "      case 6:\n        return this.engine.getSkipChance(channel);\n      default:\n        return 1;", "ts"),
+     "    case 6:\n      return engine.getSkipChance(channel);\n    default:\n      return 0;",
+     "    case 6:\n      return engine.getSkipChance(channel);\n    default:\n      return 1;", "ts"),
     ("ts: loading the mode byte becomes a no-op",
      "sim/src/domain/Persistence.ts",
-     "      case 4:\n        this.engine.setChannelMode(channel, value as ChannelMode);\n        break;",
-     "      case 4:\n        break;", "ts"),
+     "    case 4:\n      engine.setChannelMode(channel, value as ChannelMode);\n      break;",
+     "    case 4:\n      break;", "ts"),
     ("ts: loading the offset byte becomes a no-op",
      "sim/src/domain/Persistence.ts",
-     "      case 5:\n        this.engine.setOffset(channel, value);\n        break;",
-     "      case 5:\n        break;", "ts"),
+     "    case 5:\n      engine.setOffset(channel, value);\n      break;",
+     "    case 5:\n      break;", "ts"),
     ("ts: loading the skip chance byte becomes a no-op",
      "sim/src/domain/Persistence.ts",
-     "      case 6:\n        this.engine.setSkipChance(channel, value);\n        break;",
-     "      case 6:\n        break;", "ts"),
+     "    case 6:\n      engine.setSkipChance(channel, value);\n      break;",
+     "    case 6:\n      break;", "ts"),
     ("ts: a stored CV target reaches the mode instead of being ignored",
      "sim/src/domain/Persistence.ts",
-     "      case 6:\n        this.engine.setSkipChance(channel, value);\n        break;\n      default:\n        break;",
-     "      case 6:\n        this.engine.setSkipChance(channel, value);\n        break;\n      default:\n"
+     "    case 6:\n      engine.setSkipChance(channel, value);\n      break;\n    default:\n      break;",
+     "    case 6:\n      engine.setSkipChance(channel, value);\n      break;\n      default:\n"
      "        this.engine.setChannelMode(channel, (value & 1) as ChannelMode);\n        break;", "ts"),
     ("ts: the defaults stop resetting the mode",
      "sim/src/domain/Persistence.ts",
-     "      this.engine.setChannelMode(channel, DEFAULT_CHANNEL_MODE);\n", "", "ts"),
+     "      this.engine.instanceForChannel(channel)?.clear();\n      this.engine.setSelectedPattern(channel, 0);\n      this.engine.setBaseLength(channel, DEFAULT_LENGTH);\n      this.engine.setSubdiv(channel, DEFAULT_SUBDIV);\n      this.engine.setBarLength(channel, DEFAULT_BAR_LENGTH);\n      this.engine.setChannelMode(channel, DEFAULT_CHANNEL_MODE);\n",
+     "      this.engine.instanceForChannel(channel)?.clear();\n      this.engine.setSelectedPattern(channel, 0);\n      this.engine.setBaseLength(channel, DEFAULT_LENGTH);\n      this.engine.setSubdiv(channel, DEFAULT_SUBDIV);\n      this.engine.setBarLength(channel, DEFAULT_BAR_LENGTH);\n", "ts"),
     ("ts: the defaults stop resetting the offset",
      "sim/src/domain/Persistence.ts",
-     "      this.engine.setOffset(channel, 0);\n", "", "ts"),
+     "      this.engine.instanceForChannel(channel)?.clear();\n      this.engine.setSelectedPattern(channel, 0);\n      this.engine.setBaseLength(channel, DEFAULT_LENGTH);\n      this.engine.setSubdiv(channel, DEFAULT_SUBDIV);\n      this.engine.setBarLength(channel, DEFAULT_BAR_LENGTH);\n      this.engine.setChannelMode(channel, DEFAULT_CHANNEL_MODE);\n      this.engine.setOffset(channel, 0);\n",
+     "      this.engine.instanceForChannel(channel)?.clear();\n      this.engine.setSelectedPattern(channel, 0);\n      this.engine.setBaseLength(channel, DEFAULT_LENGTH);\n      this.engine.setSubdiv(channel, DEFAULT_SUBDIV);\n      this.engine.setBarLength(channel, DEFAULT_BAR_LENGTH);\n      this.engine.setChannelMode(channel, DEFAULT_CHANNEL_MODE);\n", "ts"),
     ("ts: the defaults stop resetting the skip chance",
      "sim/src/domain/Persistence.ts",
-     "      this.engine.setSkipChance(channel, 0);\n", "", "ts"),
+     "      this.engine.instanceForChannel(channel)?.clear();\n      this.engine.setSelectedPattern(channel, 0);\n      this.engine.setBaseLength(channel, DEFAULT_LENGTH);\n      this.engine.setSubdiv(channel, DEFAULT_SUBDIV);\n      this.engine.setBarLength(channel, DEFAULT_BAR_LENGTH);\n      this.engine.setChannelMode(channel, DEFAULT_CHANNEL_MODE);\n      this.engine.setOffset(channel, 0);\n      this.engine.setSkipChance(channel, 0);\n",
+     "      this.engine.instanceForChannel(channel)?.clear();\n      this.engine.setSelectedPattern(channel, 0);\n      this.engine.setBaseLength(channel, DEFAULT_LENGTH);\n      this.engine.setSubdiv(channel, DEFAULT_SUBDIV);\n      this.engine.setBarLength(channel, DEFAULT_BAR_LENGTH);\n      this.engine.setChannelMode(channel, DEFAULT_CHANNEL_MODE);\n      this.engine.setOffset(channel, 0);\n", "ts"),
     ("ts: the version byte stays at 1",
      "sim/src/domain/Persistence.ts",
      "export const FORMAT_VERSION = 2;", "export const FORMAT_VERSION = 1;", "ts"),
@@ -1095,8 +1114,62 @@ def on_signal(signum, _frame):
 def selected(argv):
     if "--only" in argv:
         want = argv[argv.index("--only") + 1]
-        return [m for m in MUTANTS if m[0].startswith(want + ":")]
+        # Three families carry a two-word prefix -- "ts drift:", "ts reconcile:",
+        # "ts gestures:" -- so a plain startswith(want + ":") hid 29 mutants from
+        # --only ts while a full pass still ran them. Match the first word.
+        return [m for m in MUTANTS if m[0].split(":", 1)[0].split(" ", 1)[0] == want]
     return list(MUTANTS)
+
+
+def check_anchors(mutants):
+    """Verifie les ancres SANS muter et SANS compiler.
+
+    Une ancre absente ou ambigue rend la mutation inapplicable, et la sonde
+    s'arrete alors au milieu d'une passe qui dure des dizaines de minutes. Ce
+    controle repond en quelques secondes. Il est ne d'une panne reelle : le
+    2026-08-29, 22 mutants sur 230 etaient inapplicables -- 16 ancres perimees
+    par le passage du codec a des fonctions libres, 6 rendues ambigues par la
+    duplication des defauts entre la version 2 et la version 3.
+    """
+    absent = []
+    ambiguous = []
+    unreadable = []
+    unknown_suite = []
+    for label, rel, old, _new, suite in mutants:
+        if suite not in SUITES:
+            unknown_suite.append((label, suite))
+        path = os.path.join(ROOT, rel)
+        try:
+            with open(path) as handle:
+                body = handle.read()
+        except OSError as error:
+            unreadable.append((label, rel, error))
+            continue
+        found = body.count(old)
+        if found == 0:
+            absent.append((label, rel))
+        elif found > 1:
+            ambiguous.append((label, rel, found))
+
+    print(f"{B}=================== ANCRES DE MUTATION ==================={Z}")
+    print(f"  mutants examines   {len(mutants)}")
+    for label, rel, error in unreadable:
+        print(f"  {ERR}fichier illisible{Z}  {label}   {DIM}{rel} : {error}{Z}")
+    for label, rel in absent:
+        print(f"  {ERR}ancre ABSENTE{Z}      {label}   {DIM}{rel}{Z}")
+    for label, rel, found in ambiguous:
+        print(f"  {ERR}ancre AMBIGUE{Z}      {label}   {DIM}{rel} : {found} cibles{Z}")
+    for label, suite in unknown_suite:
+        print(f"  {ERR}SUITE INCONNUE{Z}     {label}   {DIM}tag \"{suite}\" absent de SUITES{Z}")
+    broken = len(absent) + len(ambiguous) + len(unreadable) + len(unknown_suite)
+    if broken:
+        print(f"  {ERR}{broken} ancre(s) inapplicable(s){Z} — la passe complete "
+              f"s'arreterait dessus.")
+        print(f"  {DIM}Recibler sans deplacer le critere de detection : une ancre "
+              f"elargie doit voir sa cible elargie d'autant.{Z}")
+        return 2
+    print(f"  {OK}toutes presentes exactement une fois{Z}")
+    return 0
 
 
 def main():
@@ -1108,6 +1181,9 @@ def main():
             print(f"  {label}   {DIM}{rel} [{suite}]{Z}")
         print(f"\n  {len(mutants)} mutants")
         return 0
+
+    if "--check-anchors" in argv:
+        return check_anchors(mutants)
 
     for name in ("cpp", "ts"):
         if any(m[4].startswith(name) for m in mutants):
