@@ -66,9 +66,9 @@ MUTANTS = [
      "const Pattern* SequencerEngine::patternForChannel(uint8_t channel) const {\n"
      "    return instanceForChannel(channel);\n}",
      "const Pattern* SequencerEngine::patternForChannel(uint8_t channel) const {\n"
-     "    if (!validChannel(channel) || bank_ == nullptr) {\n"
+     "    if (!validChannel(channel)) {\n"
      "        return nullptr;\n    }\n"
-     "    return bank_->getPattern(channels_[channel].selectedPattern);\n}", "cpp-all"),
+     "    return instanceForChannel(0);\n}", "cpp-all"),
     ("cpp: the effective length derivation never runs (ADR 0009)",
      "src/domain/SequencerEngine.cpp",
      "bool SequencerEngine::setBaseLength(uint8_t channel, uint8_t length) {\n"
@@ -87,9 +87,9 @@ MUTANTS = [
      "Pattern* SequencerEngine::patternForChannel(uint8_t channel) {\n"
      "    return instanceForChannel(channel);\n}",
      "Pattern* SequencerEngine::patternForChannel(uint8_t channel) {\n"
-     "    if (!validChannel(channel) || bank_ == nullptr) {\n"
+     "    if (!validChannel(channel)) {\n"
      "        return nullptr;\n    }\n"
-     "    return bank_->getPattern(channels_[channel].selectedPattern);\n}", "cpp-all"),
+     "    return instanceForChannel(0);\n}", "cpp-all"),
     ("cpp: isTemplateEmpty looks at the ratchet bytes too (B4b.6.4)",
      "include/flexseq/Persistence.h",
      "        for (uint8_t offset = 0; offset < persist::v3::STEP_BYTES; ++offset) {",
@@ -237,9 +237,8 @@ MUTANTS = [
      "  patternForChannel(channel: number): Pattern | null {\n"
      "    return this.instanceForChannel(channel);\n  }",
      "  patternForChannel(channel: number): Pattern | null {\n"
-     "    const c = this.channels[channel];\n"
-     "    if (!c || !this.bank) return null;\n"
-     "    return this.bank.getPattern(c.selectedPattern);\n  }", "ts-instances"),
+     "    if (this.instanceForChannel(channel) === null) return null;\n"
+     "    return this.instanceForChannel(0);\n  }", "ts-instances"),
     ("cpp: channel byte 4 stops reporting the mode",
      "src/domain/Persistence.cpp",
      "        case 4:\n            return static_cast<uint8_t>(engine.getChannelMode(channel));",
