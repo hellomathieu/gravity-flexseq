@@ -24,6 +24,7 @@ uint8_t ratchetAtIndex(uint8_t index) {
     return RATCHET_TRIPLET;
 }
 
+__attribute__((noinline))
 uint8_t wrapIndex(uint8_t current, int16_t delta, uint8_t count) {
     if (count == 0) {
         return 0;
@@ -46,6 +47,7 @@ int16_t clampRange(int16_t value, int16_t low, int16_t high) {
     return value;
 }
 
+__attribute__((noinline))
 uint8_t clampIndex(uint8_t current, int16_t delta, uint8_t count) {
     if (count == 0) {
         return 0;
@@ -58,6 +60,7 @@ uint8_t clampIndex(uint8_t current, int16_t delta, uint8_t count) {
     return static_cast<uint8_t>(value);
 }
 
+__attribute__((noinline))
 int8_t oneStep(int8_t delta) {
     if (delta > 0) {
         return 1;
