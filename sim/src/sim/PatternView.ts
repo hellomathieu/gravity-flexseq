@@ -31,7 +31,7 @@ export const CELL_SYMBOL: Record<CellKind, string> = {
   beyond: "•",
 };
 
-export const GRID_STEPS = 24;
+export const GRID_STEPS = 36;
 
 export function viewPattern(pattern: Pattern, length: number): CellView[] {
   const cells: CellView[] = [];

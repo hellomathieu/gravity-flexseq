@@ -2,7 +2,7 @@
  * OledDisplay — apercu fidele de l'ecran OLED du Gravity (128 x 64, 1-bit).
  *
  * Geometrie reprise du POC Wokwi (`flexseq-oled-playground/sketch.ino`), qui
- * fait foi : 24 steps en 2 lignes de 12, pas horizontal de 10 px, grille
+ * fait foi : 36 steps en 3 lignes de 12, pas horizontal de 10 px, grille
  * centree, glyphes 5x5 identiques au firmware d'origine, cadre de selection
  * 9x9, step courant marque par le pixel central inverse.
  *
@@ -29,7 +29,10 @@ const PER_ROW = 12;
 const COL_SPACING = 10;
 const GRID_WIDTH = (PER_ROW - 1) * COL_SPACING; // 110
 const COL_X0 = Math.floor((OLED_W - GRID_WIDTH + 1) / 2); // 9
-const ROW_CY = [20, 38] as const; // centres verticaux des 2 lignes
+const ROW_CY = [18, 36, 54] as const; // centres verticaux des 3 lignes
+// Miroir de screen::GRID_STEPS : une position graphique par colonne et par
+// rangee. Les quatre bornes qui suivent lisaient 24 en dur, chacune de son cote.
+const GRID_STEPS = ROW_CY.length * PER_ROW;
 const GLYPH_HALF = 2; // glyphe 5x5
 const SELECT_HALF = 4; // cadre 9x9
 const SELECT_SIZE = 9;
@@ -55,7 +58,7 @@ const HEADER_LINE_Y = 11;
 const HEADER_LINE_X = 4;
 const HEADER_LINE_W = 120;
 
-const GRID_BOTTOM_Y = ROW_CY[1]! + DIGIT_DY + 4;
+const GRID_BOTTOM_Y = ROW_CY[ROW_CY.length - 1]! + DIGIT_DY + 4;
 
 export interface StepCenter {
   x: number;
@@ -70,10 +73,10 @@ function rowOf(index: number): number {
   return Math.floor(index / PER_ROW);
 }
 
-/** Centres des 24 positions (index 0..23), 2 lignes de 12. Pur, deterministe. */
+/** Centres des 36 positions (index 0..35), 3 lignes de 12. Pur, deterministe. */
 export function stepCenters(): StepCenter[] {
   const centers: StepCenter[] = [];
-  for (let i = 0; i < 24; ++i) centers.push({ x: colX(i), y: ROW_CY[rowOf(i)]! });
+  for (let i = 0; i < GRID_STEPS; ++i) centers.push({ x: colX(i), y: ROW_CY[rowOf(i)]! });
   return centers;
 }
 
@@ -168,7 +171,7 @@ export function drawOled(ctx: OledCtx, model: OledModel): void {
   // Separations de mesure : barre dans la gouttiere, jamais en bord de ligne.
   const bar = model.barLength ?? 0;
   if (bar > 0) {
-    for (let k = bar; k < 24; k += bar) {
+    for (let k = bar; k < GRID_STEPS; k += bar) {
       if (k % PER_ROW === 0) continue;
       const bx = colX(k) - Math.floor(COL_SPACING / 2);
       const cy = ROW_CY[rowOf(k)]!;
@@ -207,13 +210,13 @@ export function drawOled(ctx: OledCtx, model: OledModel): void {
   }
 
   // Cadre d'edition autour du step courant.
-  if (model.cursor >= 0 && model.cursor < 24) {
+  if (model.cursor >= 0 && model.cursor < GRID_STEPS) {
     frame(ctx, colX(model.cursor), ROW_CY[rowOf(model.cursor)]!);
   }
 
   // Step joue : pixel central inverse (blanc sur un step actif, noir sinon).
   const head = model.playhead;
-  if (head !== undefined && head >= 0 && head < 24) {
+  if (head !== undefined && head >= 0 && head < GRID_STEPS) {
     const cell = model.cells.find((c) => c.index === head);
     if (cell && cell.kind !== "beyond") {
       ctx.fillStyle = cell.kind === "active" ? PAPER : INK;

@@ -36,11 +36,28 @@ const cell = (index: number, kind: Kind, ratchet = RATCHET_NONE) => ({ index, ki
 const C = stepCenters();
 
 describe("OledDisplay — geometry (sketch.ino)", () => {
-  it("has 24 centers on 2 rows of 12", () => {
-    expect(C).toHaveLength(24);
+  it("has 36 centers on 3 rows of 12", () => {
+    expect(C).toHaveLength(36);
     for (let i = 0; i < 12; ++i) expect(C[i]!.y).toBe(C[0]!.y);
     for (let i = 12; i < 24; ++i) expect(C[i]!.y).toBe(C[12]!.y);
+    for (let i = 24; i < 36; ++i) expect(C[i]!.y).toBe(C[24]!.y);
     expect(C[12]!.y).toBeGreaterThan(C[0]!.y);
+    expect(C[24]!.y).toBeGreaterThan(C[12]!.y);
+  });
+
+  // 18, 36 et 54 en toutes lettres : une assertion qui lirait ROW_CY suivrait la
+  // constante et ne prouverait rien de sa valeur.
+  it("places the three row centres at 18, 36 and 54", () => {
+    expect(C[0]!.y).toBe(18);
+    expect(C[12]!.y).toBe(36);
+    expect(C[24]!.y).toBe(54);
+    expect(C[11]!.y).toBe(18);
+    expect(C[23]!.y).toBe(36);
+    expect(C[35]!.y).toBe(54);
+  });
+
+  it("ends the grid on the last pixel row", () => {
+    expect(GRID_BOTTOM_Y).toBe(63);
   });
 
   it("uses a 10 px pitch, centered, inside 128 px", () => {

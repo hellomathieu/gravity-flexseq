@@ -345,20 +345,11 @@ describe("UiController — EDIT PATTERN", () => {
     expect(ui.stepCursor).toBe(0);
   });
 
-  it("the step cursor walks twenty four steps", () => {
-    const { ui, enterEdit } = rig();
-    enterEdit();
-    for (let i = 0; i < 23; ++i) ui.handle(UiEvent.Rotate, 1);
-    expect(ui.stepCursor).toBe(23);
-    ui.handle(UiEvent.Rotate, 1);
-    expect(ui.stepCursor).toBe(0);
-  });
-
-  it("rotate moves the step cursor and wraps at twenty four", () => {
+  it("rotate moves the step cursor and wraps at thirty six", () => {
     const { ui, enterEdit } = rig();
     enterEdit();
     ui.handle(UiEvent.Rotate, -1);
-    expect(ui.stepCursor).toBe(23);
+    expect(ui.stepCursor).toBe(35);
     ui.handle(UiEvent.Rotate, 1);
     expect(ui.stepCursor).toBe(0);
     for (let i = 0; i < 5; ++i) ui.handle(UiEvent.Rotate, 5);
@@ -609,5 +600,20 @@ describe("PLAY et la source d horloge", () => {
     expect(r.ui.setClockSource(0)).toBe(true);
     r.ui.handle(UiEvent.PlayPress);
     expect(r.engine.isRunning).toBe(false);
+  });
+});
+
+describe("UiController — step cursor bound", () => {
+  // 35 et 36 en toutes lettres : une boucle bornee par STEP_COUNT suivrait la
+  // constante et ne prouverait rien de sa valeur.
+  it("reaches 35 and wraps at 36", () => {
+    const { ui, enterEdit } = rig();
+    enterEdit();
+    expect(ui.stepCursor).toBe(0);
+    for (let i = 0; i < 35; ++i) ui.handle(UiEvent.Rotate, 1);
+    expect(ui.stepCursor).toBe(35);
+    ui.handle(UiEvent.Rotate, 1);
+    expect(ui.stepCursor).toBe(0);
+    expect(STEP_COUNT).toBe(36);
   });
 });

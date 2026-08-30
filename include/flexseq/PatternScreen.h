@@ -25,16 +25,18 @@ constexpr uint8_t WIDTH = 128;
 constexpr uint8_t HEIGHT = 64;
 
 constexpr uint8_t PER_ROW = 12;
-constexpr uint8_t GRID_ROWS = 2;
+constexpr uint8_t GRID_ROWS = 3;
 constexpr uint8_t GRID_STEPS = PER_ROW * GRID_ROWS;
 constexpr uint8_t COL_SPACING = 10;
 constexpr uint8_t GRID_WIDTH = (PER_ROW - 1) * COL_SPACING;      // 110
 constexpr uint8_t COL_X0 = (WIDTH - GRID_WIDTH + 1) / 2;         // 9
 
 // Ecart vertical superieur a celui du sketch (22/35) : le sketch precede les
-// ratchets, dont le chiffre se loge sous le step.
-constexpr uint8_t ROW_CY_0 = 20;
-constexpr uint8_t ROW_CY_1 = 38;
+// ratchets, dont le chiffre se loge sous le step. L'ecart de 18 px est celui des
+// deux rangees d'origine ; la troisieme rangee tient parce que le pied a quitte
+// l'ecran EDIT, sans toucher ni au titre ni a DIGIT_DY.
+constexpr uint8_t ROW_CY_0 = 18;
+constexpr uint8_t ROW_SPACING = 18;
 
 constexpr uint8_t GLYPH_HALF = 2;   // glyphe 5x5
 constexpr uint8_t SELECT_HALF = 4;  // cadre 9x9
@@ -64,7 +66,22 @@ constexpr uint8_t HEADER_LINE_W = 120;
 // quitte l'ecran EDIT ; elle reste parce que le controle de rotation delimite la
 // bande du titre avec elle.
 constexpr uint8_t GLYPH_ASCENT = 6;
-constexpr uint8_t GRID_BOTTOM_Y = ROW_CY_1 + DIGIT_DY + DIGIT_H - 1;
+constexpr uint8_t LAST_ROW_CY = ROW_CY_0 + (GRID_ROWS - 1) * ROW_SPACING;
+constexpr uint8_t GRID_BOTTOM_Y = LAST_ROW_CY + DIGIT_DY + DIGIT_H - 1;
+
+static_assert(GRID_ROWS == 3, "the grid holds three rows");
+static_assert(GRID_STEPS == PER_ROW * GRID_ROWS, "the grid holds one step per position");
+static_assert(ROW_SPACING >= DIGIT_DY + 11,
+              "two rows must not overlap: a row spans BAR_HALF_H above and "
+              "DIGIT_DY + DIGIT_H - 1 below its centre");
+static_assert(ROW_CY_0 - BAR_HALF_H > HEADER_LINE_Y,
+              "row 0 must clear the header rule");
+static_assert(ROW_CY_0 - BAR_HALF_H >= 8,
+              "band 0 must carry the title alone: PagedScreen::titleBand depends on it");
+static_assert(GRID_BOTTOM_Y <= HEIGHT - 1,
+              "the last row must fit on the screen");
+static_assert(TITLE_BASELINE_Y / 8 == 0,
+              "the title must stay inside band 0 for the band skip to apply");
 
 inline uint8_t colX(uint8_t index) {
     return static_cast<uint8_t>(COL_X0 + (index % PER_ROW) * COL_SPACING);
@@ -75,7 +92,7 @@ inline uint8_t rowOf(uint8_t index) {
 }
 
 inline uint8_t rowCY(uint8_t index) {
-    return rowOf(index) == 0 ? ROW_CY_0 : ROW_CY_1;
+    return static_cast<uint8_t>(ROW_CY_0 + rowOf(index) * ROW_SPACING);
 }
 
 }  // namespace screen
@@ -239,8 +256,8 @@ void drawPatternScreen(Canvas& canvas, const PatternScreenModel& model,
     // Les steps, ligne par ligne : une ligne hors bande fait sauter ses 12
     // positions d'un coup. C'est l'economie principale — sur les 8 bandes, six
     // ne portent aucune ligne de steps.
-    for (uint8_t row = 0; row < 2; ++row) {
-        const int16_t cy = row == 0 ? screen::ROW_CY_0 : screen::ROW_CY_1;
+    for (uint8_t row = 0; row < screen::GRID_ROWS; ++row) {
+        const int16_t cy = screen::rowCY(static_cast<uint8_t>(row * screen::PER_ROW));
         // Extension verticale d'une ligne : du haut du cadre de curseur au bas
         // du chiffre de ratchet.
         if (!touches(band, cy - screen::SELECT_HALF, cy + screen::DIGIT_DY + screen::DIGIT_H)) {

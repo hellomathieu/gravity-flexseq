@@ -48,6 +48,7 @@ struct FakeDisplay {
         clearCalls = 0;
         sendCalls = 0;
         memset(opsPerPage, 0, sizeof(opsPerPage));
+        memset(strPerPage, 0, sizeof(strPerPage));
         bands = 0;
         clipped = true;
         ops = 0;
@@ -91,6 +92,7 @@ struct FakeDisplay {
     // n'a pas ete dessinee du tout, meme quand elle ne porte pas de pixels (le
     // texte n'est pas rasterise ici).
     uint16_t opsPerPage[PAGES];
+    uint8_t strPerPage[PAGES];
 
     // Encre AFFICHEE par le panneau — la seule qui compte.
     uint16_t ink() const {
@@ -154,7 +156,7 @@ struct FakeDisplay {
 
     uint8_t drawStr(uint8_t, uint8_t, const char* s) {
         ++ops;
-        if (page < PAGES) ++opsPerPage[page];
+        if (page < PAGES) { ++opsPerPage[page]; ++strPerPage[page]; }
         return getStrWidth(s);
     }
 
@@ -471,12 +473,22 @@ void test_the_band_conversion_is_the_right_way_round(void) {
         opsPerBand[i] = static_cast<uint16_t>(display.ops - before);
     }
 
-    TEST_ASSERT_EQUAL_UINT16_MESSAGE(0, opsPerBand[0],
-        "bande d'affichage 0 = logique 56..63 : sous la grille, et le pied est parti");
-    TEST_ASSERT_EQUAL_UINT16_MESSAGE(0, opsPerBand[1],
-        "bande d'affichage 1 = logique 48..55 : sous la grille");
-    TEST_ASSERT_GREATER_THAN_UINT16_MESSAGE(0, opsPerBand[FakeDisplay::PAGES - 1],
-        "la derniere bande porte le titre");
+    // Avec trois rangees aucune bande n'est vide : le discriminant devient le
+    // TITRE, seul drawStr de l'ecran. Il vit en haut du canvas LOGIQUE, donc
+    // dans la DERNIERE bande d'affichage. Inverser la conversion le ferait
+    // basculer dans la premiere.
+    uint8_t bandsWithText = 0;
+    for (uint8_t i = 0; i < FakeDisplay::PAGES; ++i) {
+        if (display.strPerPage[i] > 0) ++bandsWithText;
+    }
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, bandsWithText,
+        "le titre est le seul texte de l'ecran");
+    TEST_ASSERT_GREATER_THAN_UINT8_MESSAGE(0, display.strPerPage[FakeDisplay::PAGES - 1],
+        "le titre doit tomber dans la DERNIERE bande d'affichage");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, display.strPerPage[0],
+        "le titre ne doit jamais tomber dans la premiere bande d'affichage");
+    TEST_ASSERT_GREATER_THAN_UINT16_MESSAGE(0, opsPerBand[0],
+        "bande d'affichage 0 = logique 56..63, donc la TROISIEME rangee");
 }
 
 // Une image complete laisse de l'encre : la reunion des bandes montre quelque

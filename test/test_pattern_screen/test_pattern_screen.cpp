@@ -115,18 +115,64 @@ static PatternScreenModel model(uint8_t length = 24, int8_t cursor = -1,
  * Geometrie (miroir du sketch Wokwi et du renderer TS)
  */
 
-void test_grid_is_two_rows_of_twelve_at_10px_pitch() {
+void test_the_column_grid_is_centred_and_regular() {
     TEST_ASSERT_EQUAL_UINT8(9, screen::colX(0));
     TEST_ASSERT_EQUAL_UINT8(19, screen::colX(1));
     TEST_ASSERT_EQUAL_UINT8(119, screen::colX(11));
-    // meme grille de colonnes sur les deux lignes
+    // meme grille de colonnes sur les trois lignes
     for (uint8_t col = 0; col < 12; ++col) {
         TEST_ASSERT_EQUAL_UINT8(screen::colX(col), screen::colX(col + 12));
+        TEST_ASSERT_EQUAL_UINT8(screen::colX(col), screen::colX(col + 24));
     }
-    TEST_ASSERT_EQUAL_UINT8(20, screen::rowCY(0));
-    TEST_ASSERT_EQUAL_UINT8(38, screen::rowCY(12));
     // tout tient dans 128 px
     TEST_ASSERT_TRUE(screen::colX(11) + screen::GLYPH_HALF < screen::WIDTH);
+}
+
+// Les quatre constats sont SEPARES : si un mutant les fait tomber ensemble, on
+// veut savoir lequel a cede -- la presence de la rangee, sa position, la borne
+// globale, ou le rendu effectif de ses douze colonnes.
+void test_the_grid_holds_three_rows_of_twelve() {
+    TEST_ASSERT_EQUAL_UINT8(3, screen::GRID_ROWS);
+    TEST_ASSERT_EQUAL_UINT8(12, screen::PER_ROW);
+    TEST_ASSERT_EQUAL_UINT8(36, screen::GRID_STEPS);
+}
+
+void test_the_three_row_centres_are_18_36_and_54() {
+    TEST_ASSERT_EQUAL_UINT8(18, screen::rowCY(0));
+    TEST_ASSERT_EQUAL_UINT8(36, screen::rowCY(12));
+    TEST_ASSERT_EQUAL_UINT8(54, screen::rowCY(24));
+    // un index quelconque de chaque rangee, pas seulement son premier
+    TEST_ASSERT_EQUAL_UINT8(18, screen::rowCY(11));
+    TEST_ASSERT_EQUAL_UINT8(36, screen::rowCY(23));
+    TEST_ASSERT_EQUAL_UINT8(54, screen::rowCY(35));
+}
+
+void test_the_grid_ends_on_the_last_pixel_row() {
+    TEST_ASSERT_EQUAL_UINT8(63, screen::GRID_BOTTOM_Y);
+    TEST_ASSERT_TRUE(screen::GRID_BOTTOM_Y < screen::HEIGHT);
+    // la rangee 0 degage le filet, et la bande 0 ne porte que le titre
+    TEST_ASSERT_TRUE(screen::rowCY(0) - screen::BAR_HALF_H > screen::HEADER_LINE_Y);
+    TEST_ASSERT_TRUE(screen::rowCY(0) - screen::BAR_HALF_H >= 8);
+}
+
+// Le rendu effectif : chacune des douze colonnes de la TROISIEME rangee pose
+// quelque chose. Au-dela de LENGTH c'est un pixel isole, dans LENGTH un glyphe :
+// dans les deux cas le centre est encre.
+void test_the_third_row_draws_its_twelve_centres() {
+    pattern.clear();
+    PatternScreenModel m = model(24);  // rangee 2 au-dela de LENGTH : un point central
+    canvas.reset();
+    drawPatternScreen(canvas, m);
+
+    const uint8_t cy = screen::rowCY(24);
+    uint8_t inked = 0;
+    for (uint8_t col = 0; col < 12; ++col) {
+        if (canvas.at(screen::colX(static_cast<uint8_t>(24 + col)), cy)) {
+            ++inked;
+        }
+    }
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(12, inked,
+        "les douze colonnes de la rangee 2 doivent poser leur centre");
 }
 
 /*
@@ -312,14 +358,18 @@ void test_the_grid_ignores_the_steps_above_23() {
     TEST_ASSERT_EQUAL_UINT16(canvas.inkCount(), withHiddenContent);
 }
 
-void test_a_cursor_above_23_frames_nothing() {
+void test_a_cursor_above_35_frames_nothing() {
     drawPatternScreen(canvas, model(24, -1));
     const uint16_t withoutCursor = canvas.inkCount();
 
     canvas.reset();
-    drawPatternScreen(canvas, model(24, 24));
-
+    drawPatternScreen(canvas, model(24, 36));
     TEST_ASSERT_EQUAL_UINT16(withoutCursor, canvas.inkCount());
+
+    // et le curseur 24, premier step de la TROISIEME rangee, encadre bien
+    canvas.reset();
+    drawPatternScreen(canvas, model(24, 24));
+    TEST_ASSERT_NOT_EQUAL_UINT16(withoutCursor, canvas.inkCount());
 }
 
 void test_cursor_frames_the_edited_step() {
@@ -433,29 +483,30 @@ void test_eight_bands_reunited_equal_the_whole_image(void) {
         "le texte n'est pas dessine le meme nombre de fois band par bande");
     TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, whole.strCalls, "titre");
 }
-
-// L'ecartement doit AGIR, pas seulement etre correct : une bande vide de tout
-// element ne doit rien poser du tout.
-void test_a_band_without_any_element_draws_nothing(void) {
+// Le decoupage doit AGIR. Avec trois rangees, plus aucune bande n'est vide :
+// ce qui reste verifiable est qu'une bande ne dessine QUE la rangee qu'elle
+// contient. La bande 32..39 porte la rangee 1, jamais les rangees 0 ni 2.
+void test_a_band_draws_only_the_row_it_contains(void) {
     PatternScreenModel m = richModel();
-
-    // Bande 7 (y 56..63) : sous la derniere ligne de chiffres (max y = 38+5+4=47),
-    // et le pied a quitte l'ecran EDIT.
     canvas.reset();
-    drawPatternScreen(canvas, m, flexseq::Band{56, 63});
+    drawPatternScreen(canvas, m, flexseq::Band{32, 39});
 
-    uint16_t ink = 0;
-    for (uint8_t y = 0; y < screen::HEIGHT; ++y)
-        for (uint8_t x = 0; x < screen::WIDTH; ++x)
-            if (canvas.px[y][x]) ++ink;
-
-    TEST_ASSERT_EQUAL_UINT16(0, ink);
-    TEST_ASSERT_EQUAL_UINT8(0, canvas.strCalls); // pas meme le titre mesure
+    for (uint8_t col = 0; col < screen::PER_ROW; ++col) {
+        TEST_ASSERT_FALSE_MESSAGE(canvas.at(screen::colX(col), screen::rowCY(0)),
+                                  "la rangee 0 a ete dessinee hors de sa bande");
+        TEST_ASSERT_FALSE_MESSAGE(
+            canvas.at(screen::colX(static_cast<uint8_t>(24 + col)), screen::rowCY(24)),
+            "la rangee 2 a ete dessinee hors de sa bande");
+    }
 }
 
 int main() {
     UNITY_BEGIN();
-    RUN_TEST(test_grid_is_two_rows_of_twelve_at_10px_pitch);
+    RUN_TEST(test_the_column_grid_is_centred_and_regular);
+    RUN_TEST(test_the_grid_holds_three_rows_of_twelve);
+    RUN_TEST(test_the_three_row_centres_are_18_36_and_54);
+    RUN_TEST(test_the_grid_ends_on_the_last_pixel_row);
+    RUN_TEST(test_the_third_row_draws_its_twelve_centres);
 
     RUN_TEST(test_active_step_is_a_filled_disc);
     RUN_TEST(test_inactive_step_is_a_hollow_ring);
@@ -475,7 +526,7 @@ int main() {
     RUN_TEST(test_separations_2_3_6_stay_inside_the_rows);
 
     RUN_TEST(test_the_grid_ignores_the_steps_above_23);
-    RUN_TEST(test_a_cursor_above_23_frames_nothing);
+    RUN_TEST(test_a_cursor_above_35_frames_nothing);
     RUN_TEST(test_cursor_frames_the_edited_step);
     RUN_TEST(test_playhead_clears_the_centre_of_an_active_step);
     RUN_TEST(test_playhead_inks_the_centre_of_an_inactive_step);
@@ -484,6 +535,6 @@ int main() {
     RUN_TEST(test_title_is_centred_on_its_baseline);
 
     RUN_TEST(test_eight_bands_reunited_equal_the_whole_image);
-    RUN_TEST(test_a_band_without_any_element_draws_nothing);
+    RUN_TEST(test_a_band_draws_only_the_row_it_contains);
     return UNITY_END();
 }

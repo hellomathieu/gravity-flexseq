@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { Pattern, RATCHET_3 } from "../src/domain/Pattern.js";
-import { viewPattern, toAscii, CELL_SYMBOL } from "../src/sim/PatternView.js";
+import { viewPattern, toAscii, CELL_SYMBOL, GRID_STEPS } from "../src/sim/PatternView.js";
 
 describe("PatternView — viewPattern", () => {
-  it("always projects exactly 24 cells", () => {
-    expect(viewPattern(new Pattern(), 16)).toHaveLength(24);
+  it("always projects exactly 36 cells, one per grid position", () => {
+    expect(viewPattern(new Pattern(), 16)).toHaveLength(36);
+    expect(GRID_STEPS).toBe(36);
   });
 
   it("marks positions beyond the channel length as 'beyond'", () => {
@@ -44,16 +45,18 @@ describe("PatternView — viewPattern", () => {
 });
 
 describe("PatternView — toAscii", () => {
-  it("renders 2 rows of 12 with length 16, all off", () => {
+  it("renders 3 rows of 12 with length 16, all off", () => {
     const ascii = toAscii(viewPattern(new Pattern(), 16));
     const lines = ascii.split("\n");
 
-    // marqueur1, cellules1, marqueur2, cellules2
-    expect(lines).toHaveLength(4);
+    // un marqueur et une ligne de cellules par rangee
+    expect(lines).toHaveLength(6);
     expect(lines[1]).toBe("□".repeat(12)); // steps 0..11 : dans la longueur, off
     expect(lines[3]).toBe("□".repeat(4) + "•".repeat(8)); // 12..15 off, 16..23 beyond
+    expect(lines[5]).toBe("•".repeat(12)); // 24..35 : au-dela de la longueur
     expect(lines[0]!.trim()).toBe(""); // pas de triolet
     expect(lines[2]!.trim()).toBe("");
+    expect(lines[4]!.trim()).toBe("");
   });
 
   it("marks a ratchet step above the row", () => {

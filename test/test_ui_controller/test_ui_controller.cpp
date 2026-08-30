@@ -376,22 +376,11 @@ void test_press_on_the_edit_entry_enters_the_grid() {
     TEST_ASSERT_EQUAL_UINT8(0, r.ui.stepCursor());
 }
 
-void test_the_step_cursor_walks_twenty_four_steps() {
-    Rig r;
-    r.enterEdit();
-    for (uint8_t i = 0; i < 23; ++i) {
-        r.ui.handle(UiController::EVENT_ROTATE, 1);
-    }
-    TEST_ASSERT_EQUAL_UINT8(23, r.ui.stepCursor());
-    r.ui.handle(UiController::EVENT_ROTATE, 1);
-    TEST_ASSERT_EQUAL_UINT8(0, r.ui.stepCursor());
-}
-
-void test_rotate_moves_the_step_cursor_and_wraps_at_twenty_four() {
+void test_rotate_moves_the_step_cursor_and_wraps_at_thirty_six() {
     Rig r;
     r.enterEdit();
     r.ui.handle(UiController::EVENT_ROTATE, -1);
-    TEST_ASSERT_EQUAL_UINT8(23, r.ui.stepCursor());
+    TEST_ASSERT_EQUAL_UINT8(35, r.ui.stepCursor());
     r.ui.handle(UiController::EVENT_ROTATE, 1);
     TEST_ASSERT_EQUAL_UINT8(0, r.ui.stepCursor());
     for (uint8_t i = 0; i < 5; ++i) {
@@ -497,6 +486,29 @@ void test_shift_long_press_clears_the_pattern_steps_and_ratchets() {
         TEST_ASSERT_FALSE(active);
         TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, r.engine.instanceForChannel(0)->getRatchet(step));
     }
+}
+
+// 35 et 36 sont ECRITS EN TOUTES LETTRES. Une boucle bornee par STEP_COUNT
+// suivrait la constante et ne prouverait rien de sa valeur.
+void test_the_step_cursor_reaches_35_and_wraps_at_36() {
+    Rig r;
+    r.enterEdit();
+    TEST_ASSERT_EQUAL_UINT8(0, r.ui.stepCursor());
+    for (uint8_t i = 0; i < 35; ++i) {
+        r.ui.handle(UiController::EVENT_ROTATE, 1);
+    }
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(35, r.ui.stepCursor(),
+        "le curseur doit atteindre le step 35");
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, r.ui.stepCursor(),
+        "le 36e cran doit ramener le curseur a 0");
+}
+
+void test_the_step_cursor_wraps_backwards_from_0_to_35() {
+    Rig r;
+    r.enterEdit();
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    TEST_ASSERT_EQUAL_UINT8(35, r.ui.stepCursor());
 }
 
 void test_long_press_returns_from_the_grid_to_the_tab() {
@@ -729,8 +741,7 @@ int main(int, char**) {
     RUN_TEST(test_the_edit_entry_is_not_a_value);
 
     RUN_TEST(test_press_on_the_edit_entry_enters_the_grid);
-    RUN_TEST(test_the_step_cursor_walks_twenty_four_steps);
-    RUN_TEST(test_rotate_moves_the_step_cursor_and_wraps_at_twenty_four);
+    RUN_TEST(test_rotate_moves_the_step_cursor_and_wraps_at_thirty_six);
     RUN_TEST(test_press_toggles_the_step_under_the_cursor);
     RUN_TEST(test_shift_rotate_sets_the_ratchet_of_an_active_step_and_clamps);
     RUN_TEST(test_a_ratchet_edit_takes_effect_on_the_current_step_immediately);
@@ -738,6 +749,8 @@ int main(int, char**) {
     RUN_TEST(test_shift_rotate_on_an_inactive_step_does_nothing);
     RUN_TEST(test_the_grid_follows_the_pattern_of_the_channel_selected_in_edit);
     RUN_TEST(test_shift_long_press_clears_the_pattern_steps_and_ratchets);
+    RUN_TEST(test_the_step_cursor_reaches_35_and_wraps_at_36);
+    RUN_TEST(test_the_step_cursor_wraps_backwards_from_0_to_35);
     RUN_TEST(test_long_press_returns_from_the_grid_to_the_tab);
 
     RUN_TEST(test_play_toggles_the_transport_at_every_level);

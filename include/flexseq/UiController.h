@@ -58,7 +58,7 @@ public:
 #endif
     static constexpr uint16_t DEFAULT_TEMPO = FLEXSEQ_DEFAULT_TEMPO;
 
-    static constexpr uint8_t STEP_COUNT = 24;
+    static constexpr uint8_t STEP_COUNT = 36;
     static constexpr uint8_t BAR_LENGTH_CHOICE_COUNT = 5;
     static constexpr uint8_t RATCHET_CHOICE_COUNT = 6;
 
