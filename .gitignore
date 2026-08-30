@@ -98,11 +98,6 @@ tools/simavr-test/*.hex
 # Suivi de developpement, non normatif et temporaire (voir son en-tete)
 WORKPLAN.md
 
-# Copie locale du PRD Notion. La source normative reste la page Notion : cette
-# copie sert a la lecture hors ligne et ne doit jamais devenir une source
-# concurrente (.claude/rules/knowledge-persistence.md). Non versionnee, comme
-# CLAUDE.md et WORKPLAN.md.
-PRD.md
 
 # Claude Graphify
 .gitattributes
