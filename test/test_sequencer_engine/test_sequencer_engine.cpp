@@ -161,7 +161,7 @@ void test_rejects_invalid_effective_length_without_mutation() {
     SequencerEngine e;
     TEST_ASSERT_TRUE(e.setBaseLength(0, 12));
     TEST_ASSERT_FALSE(e.setBaseLength(0, 0));
-    TEST_ASSERT_FALSE(e.setBaseLength(0, 25));
+    TEST_ASSERT_FALSE(e.setBaseLength(0, 37));
     TEST_ASSERT_EQUAL_UINT8(12, e.getEffectiveLength(0));
 }
 
@@ -682,10 +682,14 @@ void test_the_channel_plays_its_own_instance() {
 
 void test_the_manual_entry_point_stops_at_the_interface_ceiling() {
     SequencerEngine e;
+    TEST_ASSERT_TRUE(e.setBaseLength(0, 1));
     TEST_ASSERT_TRUE(e.setBaseLength(0, 24));
-    TEST_ASSERT_EQUAL_UINT8(24, e.getBaseLength(0));
-    TEST_ASSERT_FALSE(e.setBaseLength(0, 25));
-    TEST_ASSERT_EQUAL_UINT8(24, e.getBaseLength(0));
+    TEST_ASSERT_TRUE(e.setBaseLength(0, 25));
+    TEST_ASSERT_EQUAL_UINT8(25, e.getEffectiveLength(0));
+    TEST_ASSERT_TRUE(e.setBaseLength(0, 36));
+    TEST_ASSERT_EQUAL_UINT8(36, e.getBaseLength(0));
+    TEST_ASSERT_FALSE(e.setBaseLength(0, 37));
+    TEST_ASSERT_EQUAL_UINT8(36, e.getBaseLength(0));
 }
 
 void test_the_manual_entry_point_stops_at_one() {
@@ -695,11 +699,11 @@ void test_the_manual_entry_point_stops_at_one() {
     TEST_ASSERT_EQUAL_UINT8(1, e.getBaseLength(0));
 }
 
-void test_storage_carries_a_base_length_above_the_interface_ceiling() {
+void test_the_storage_entry_point_accepts_the_pattern_capacity() {
     SequencerEngine e;
     TEST_ASSERT_TRUE(e.setBaseLengthFromStorage(0, 36));
     TEST_ASSERT_EQUAL_UINT8(36, e.getBaseLength(0));
-    TEST_ASSERT_EQUAL_UINT8(24, e.getEffectiveLength(0));
+    TEST_ASSERT_EQUAL_UINT8(36, e.getEffectiveLength(0));
 }
 
 void test_storage_stops_at_the_pattern_capacity() {
@@ -793,7 +797,7 @@ int main() {
     RUN_TEST(test_the_channel_plays_its_own_instance);
     RUN_TEST(test_the_manual_entry_point_stops_at_the_interface_ceiling);
     RUN_TEST(test_the_manual_entry_point_stops_at_one);
-    RUN_TEST(test_storage_carries_a_base_length_above_the_interface_ceiling);
+    RUN_TEST(test_the_storage_entry_point_accepts_the_pattern_capacity);
     RUN_TEST(test_storage_stops_at_the_pattern_capacity);
     RUN_TEST(test_a_base_length_below_the_ceiling_needs_no_clamp);
     RUN_TEST(test_an_invalid_channel_refuses_both_entry_points);

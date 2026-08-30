@@ -233,12 +233,12 @@ describe("UiController — inside a tab", () => {
     expect(engine.getSelectedPattern(0)).toBe(0);
   });
 
-  it("the length field is clamped to one and twenty four", () => {
+  it("the length field is clamped to one and thirty six", () => {
     const { ui, engine, enterTab, gotoField } = rig();
     enterTab();
     gotoField(UiField.Length);
     for (let i = 0; i < 40; i += 1) ui.handle(UiEvent.ShiftRotate, 1);
-    expect(engine.getEffectiveLength(0)).toBe(24);
+    expect(engine.getEffectiveLength(0)).toBe(36);
     for (let i = 0; i < 40; i += 1) ui.handle(UiEvent.ShiftRotate, -1);
     expect(engine.getEffectiveLength(0)).toBe(1);
   });
@@ -267,12 +267,12 @@ describe("UiController — inside a tab", () => {
     const { ui, engine, enterTab, gotoField } = rig();
     enterTab();
     gotoField(UiField.Length);
-    for (let i = 0; i < 7; i += 1) ui.handle(UiEvent.ShiftRotate, 1);
-    expect(engine.getEffectiveLength(0)).toBe(23);
+    for (let i = 0; i < 19; i += 1) ui.handle(UiEvent.ShiftRotate, 1);
+    expect(engine.getEffectiveLength(0)).toBe(35);
     ui.handle(UiEvent.ShiftRotate, 3);
-    expect(engine.getEffectiveLength(0)).toBe(24);
+    expect(engine.getEffectiveLength(0)).toBe(36);
 
-    for (let i = 0; i < 22; i += 1) ui.handle(UiEvent.ShiftRotate, -1);
+    for (let i = 0; i < 34; i += 1) ui.handle(UiEvent.ShiftRotate, -1);
     expect(engine.getEffectiveLength(0)).toBe(2);
     ui.handle(UiEvent.ShiftRotate, -3);
     expect(engine.getEffectiveLength(0)).toBe(1);

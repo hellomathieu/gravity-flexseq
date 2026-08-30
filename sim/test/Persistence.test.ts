@@ -414,7 +414,7 @@ describe("Persistence — the version 3 template record", () => {
   it("bounds the length by the pattern capacity, never by the engine cap", () => {
     expect(v3.MIN_TEMPLATE_LENGTH).toBe(1);
     expect(v3.MAX_TEMPLATE_LENGTH).toBe(36);
-    expect(MAX_LENGTH).toBe(24);
+    expect(MAX_LENGTH).toBe(36);
 
     const pattern = new Pattern();
     const length = { value: 1 };
@@ -445,14 +445,14 @@ describe("Persistence — round trip", () => {
     const saved = rig();
     expect(saved.engine.setBaseLengthFromStorage(0, 36)).toBe(true);
     expect(saved.engine.getBaseLength(0)).toBe(36);
-    expect(saved.engine.getEffectiveLength(0)).toBe(24);
+    expect(saved.engine.getEffectiveLength(0)).toBe(36);
     saved.scheduler.markDirty(0);
     finishWrite(saved, eeprom, QUIET_MS);
 
     const loaded = rig();
     expect(loaded.scheduler.load(eeprom, loaded.image)).toBe(true);
     expect(loaded.engine.getBaseLength(0)).toBe(36);
-    expect(loaded.engine.getEffectiveLength(0)).toBe(24);
+    expect(loaded.engine.getEffectiveLength(0)).toBe(36);
   });
 
   it("keeps the patterns with their ratchets", () => {
@@ -1070,7 +1070,7 @@ describe("loadTemplate — template EEPROM vers instance (ADR 0009)", () => {
     seedTemplate(ee, 9, distinctContent(3), 36);
     expect(r.image.loadTemplate(ee, 0, 9)).toBe(true);
     expect(r.engine.getBaseLength(0)).toBe(36);
-    expect(r.engine.getEffectiveLength(0)).toBe(24);
+    expect(r.engine.getEffectiveLength(0)).toBe(36);
     expect(r.engine.getSelectedPattern(0)).toBe(9);
   });
 
@@ -1158,7 +1158,7 @@ describe("saveTemplate — instance vers template EEPROM (ADR 0009)", () => {
     const ee = new FakeEeprom();
     const r = rigV3();
     expect(r.engine.setBaseLengthFromStorage(1, 36)).toBe(true);
-    expect(r.engine.getEffectiveLength(1)).toBe(24);
+    expect(r.engine.getEffectiveLength(1)).toBe(36);
     expect(r.image.saveTemplate(ee, 1, 9)).toBe(true);
     expect(ee.read(v3.templateAddress(9, v3.RECORD_LENGTH_AT))).toBe(36);
   });
@@ -1203,7 +1203,7 @@ describe("saveTemplate — instance vers template EEPROM (ADR 0009)", () => {
       expect(r.engine.instanceForChannel(5)!.getRatchet(i)).toBe(wanted.getRatchet(i));
     }
     expect(r.engine.getBaseLength(5)).toBe(30);
-    expect(r.engine.getEffectiveLength(5)).toBe(24);
+    expect(r.engine.getEffectiveLength(5)).toBe(30);
   });
 });
 

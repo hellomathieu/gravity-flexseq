@@ -115,7 +115,7 @@ describe('couche 1 — recettes de gestes contre le MODELE de reference, jamais 
       driver.goToTab(TAB_FIRST_CHANNEL);
       driver.setLength(30);
       const period = cycleLengthInTicks(engine, 0, 96 * 60);
-      expect(period).toBe(2304);
+      expect(period).toBe(3456);
     });
   });
 

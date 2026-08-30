@@ -247,14 +247,14 @@ void test_the_pattern_field_is_clamped_to_the_bank() {
     TEST_ASSERT_EQUAL_INT8(0, r.engine.getSelectedPattern(0));
 }
 
-void test_the_length_field_is_clamped_to_one_and_twenty_four() {
+void test_the_length_field_is_clamped_to_one_and_thirty_six() {
     Rig r;
     r.enterTab();
     r.gotoField(UiController::FIELD_LENGTH);
     for (uint8_t i = 0; i < 40; ++i) {
         r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
     }
-    TEST_ASSERT_EQUAL_UINT8(24, r.engine.getEffectiveLength(0));
+    TEST_ASSERT_EQUAL_UINT8(36, r.engine.getEffectiveLength(0));
     for (uint8_t i = 0; i < 40; ++i) {
         r.ui.handle(UiController::EVENT_SHIFT_ROTATE, -1);
     }
@@ -731,7 +731,7 @@ int main(int, char**) {
     RUN_TEST(test_tempo_is_clamped_to_the_musical_range);
     RUN_TEST(test_the_clock_source_field_never_reaches_the_sentinel);
     RUN_TEST(test_the_pattern_field_is_clamped_to_the_bank);
-    RUN_TEST(test_the_length_field_is_clamped_to_one_and_twenty_four);
+    RUN_TEST(test_the_length_field_is_clamped_to_one_and_thirty_six);
     RUN_TEST(test_the_subdiv_field_walks_the_libgravity_list_and_clamps);
     RUN_TEST(test_the_bar_length_field_walks_only_the_allowed_values);
     RUN_TEST(test_no_field_keeps_the_acceleration_not_even_the_tempo);

@@ -475,7 +475,7 @@ void test_the_v3_instance_record_carries_no_length() {
 void test_the_v3_length_bound_is_the_pattern_capacity_not_the_engine_cap() {
     TEST_ASSERT_EQUAL_UINT8(1, persist::v3::MIN_TEMPLATE_LENGTH);
     TEST_ASSERT_EQUAL_UINT8(36, persist::v3::MAX_TEMPLATE_LENGTH);
-    TEST_ASSERT_EQUAL_UINT8(24, SequencerEngine::MAX_LENGTH);
+    TEST_ASSERT_EQUAL_UINT8(36, SequencerEngine::MAX_LENGTH);
 
     Pattern pattern;
     uint8_t length = 1;
@@ -492,14 +492,14 @@ void test_a_round_trip_keeps_a_base_length_above_the_interface_ceiling() {
     Rig saved;
     TEST_ASSERT_TRUE(saved.engine.setBaseLengthFromStorage(0, 36));
     TEST_ASSERT_EQUAL_UINT8(36, saved.engine.getBaseLength(0));
-    TEST_ASSERT_EQUAL_UINT8(24, saved.engine.getEffectiveLength(0));
+    TEST_ASSERT_EQUAL_UINT8(36, saved.engine.getEffectiveLength(0));
     saved.scheduler.markDirty(0);
     finishWrite(saved, eeprom, persist::QUIET_MS);
 
     Rig loaded;
     TEST_ASSERT_TRUE(loaded.scheduler.load(eeprom, loaded.image));
     TEST_ASSERT_EQUAL_UINT8(36, loaded.engine.getBaseLength(0));
-    TEST_ASSERT_EQUAL_UINT8(24, loaded.engine.getEffectiveLength(0));
+    TEST_ASSERT_EQUAL_UINT8(36, loaded.engine.getEffectiveLength(0));
 }
 
 void test_a_round_trip_restores_the_state_byte_for_byte() {
@@ -1147,7 +1147,7 @@ void test_save_template_writes_the_base_length_not_the_effective_one() {
     RigV3 r;
     TEST_ASSERT_TRUE(r.engine.setBaseLengthFromStorage(1, 36));
     TEST_ASSERT_EQUAL_UINT8(36, r.engine.getBaseLength(1));
-    TEST_ASSERT_EQUAL_UINT8(24, r.engine.getEffectiveLength(1));
+    TEST_ASSERT_EQUAL_UINT8(36, r.engine.getEffectiveLength(1));
     TEST_ASSERT_TRUE(r.image.saveTemplate(ee, 1, 9));
     TEST_ASSERT_EQUAL_UINT8(
         36, ee.read(persist::v3::templateAddress(9, persist::v3::RECORD_LENGTH_AT)));
@@ -1191,7 +1191,7 @@ void test_save_then_load_returns_the_same_pattern_and_length() {
     TEST_ASSERT_TRUE(r.image.loadTemplate(ee, 5, 12));
     TEST_ASSERT_TRUE(sameContent(wanted, *r.engine.instanceForChannel(5)));
     TEST_ASSERT_EQUAL_UINT8(30, r.engine.getBaseLength(5));
-    TEST_ASSERT_EQUAL_UINT8(24, r.engine.getEffectiveLength(5));
+    TEST_ASSERT_EQUAL_UINT8(30, r.engine.getEffectiveLength(5));
 }
 
 void test_load_template_copies_the_content_into_the_channel_instance() {
@@ -1221,7 +1221,7 @@ void test_load_template_keeps_a_length_of_thirty_six_in_the_base() {
     writeTemplateRecord(ee, 9, distinctContent(3), 36);
     TEST_ASSERT_TRUE(r.image.loadTemplate(ee, 0, 9));
     TEST_ASSERT_EQUAL_UINT8(36, r.engine.getBaseLength(0));
-    TEST_ASSERT_EQUAL_UINT8(24, r.engine.getEffectiveLength(0));
+    TEST_ASSERT_EQUAL_UINT8(36, r.engine.getEffectiveLength(0));
     TEST_ASSERT_EQUAL_INT8(9, r.engine.getSelectedPattern(0));
 }
 

@@ -51,7 +51,7 @@ export const TICKS_PER_SIXTEENTH = PPQN / 4; // 24
 
 /** Bornes de longueur, alignees sur le domaine Pattern. */
 export const MIN_LENGTH = 1;
-export const MAX_LENGTH = 24;
+export const MAX_LENGTH = 36;
 export const DEFAULT_LENGTH = 16;
 
 /** ADR 0009 : plafond d'une longueur venue du stockage, la capacite du Pattern. */

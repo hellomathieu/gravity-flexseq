@@ -29,7 +29,7 @@ public:
     static constexpr uint8_t PPQN = 96;
     static constexpr uint16_t TICKS_PER_SIXTEENTH = PPQN / 4; // 24
     static constexpr uint8_t MIN_LENGTH = 1;
-    static constexpr uint8_t MAX_LENGTH = 24;
+    static constexpr uint8_t MAX_LENGTH = 36;
     static constexpr int8_t LENGTH_CV_OFFSET = 0;
     static constexpr uint8_t MAX_STORED_LENGTH = Pattern::DEFAULT_TOTAL_STEPS;
     static constexpr uint8_t DEFAULT_LENGTH = 16;
@@ -60,12 +60,13 @@ public:
     int8_t getSelectedPattern(uint8_t channel) const;
     bool setSelectedPattern(uint8_t channel, uint8_t index);
 
-    // Per-channel length (1..24). Query returns 0 for an invalid channel.
+    // Per-channel length (1..36). Query returns 0 for an invalid channel.
     uint8_t getEffectiveLength(uint8_t channel) const;
     bool setBaseLength(uint8_t channel, uint8_t length);
     uint8_t getBaseLength(uint8_t channel) const;
 
-    // ADR 0009: a base length restored from storage may exceed MAX_LENGTH.
+    // ADR 0009 and its amendment of 2026-08-30: the storage path keeps its own
+    // bound, MAX_STORED_LENGTH, which now holds the same value as MAX_LENGTH.
     bool setBaseLengthFromStorage(uint8_t channel, uint8_t length);
 
     // Per-channel ticks per step (>= 1). Query returns 0 for an invalid channel.

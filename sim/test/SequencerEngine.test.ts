@@ -155,7 +155,7 @@ describe("SequencerEngine — effectiveStep derivation", () => {
     const e = new SequencerEngine();
     expect(e.setBaseLength(0, 12)).toBe(true);
     expect(e.setBaseLength(0, 0)).toBe(false);
-    expect(e.setBaseLength(0, 25)).toBe(false);
+    expect(e.setBaseLength(0, 37)).toBe(false);
     expect(e.getEffectiveLength(0)).toBe(12);
   });
 
@@ -642,10 +642,14 @@ describe("les instances par canal", () => {
 describe("base length et longueur effective (ADR 0009)", () => {
   it("l'entree manuelle s'arrete au plafond d'interface", () => {
     const engine = new SequencerEngine();
+    expect(engine.setBaseLength(0, 1)).toBe(true);
     expect(engine.setBaseLength(0, 24)).toBe(true);
-    expect(engine.getBaseLength(0)).toBe(24);
-    expect(engine.setBaseLength(0, 25)).toBe(false);
-    expect(engine.getBaseLength(0)).toBe(24);
+    expect(engine.setBaseLength(0, 25)).toBe(true);
+    expect(engine.getEffectiveLength(0)).toBe(25);
+    expect(engine.setBaseLength(0, 36)).toBe(true);
+    expect(engine.getBaseLength(0)).toBe(36);
+    expect(engine.setBaseLength(0, 37)).toBe(false);
+    expect(engine.getBaseLength(0)).toBe(36);
   });
 
   it("l'entree manuelle s'arrete a un", () => {
@@ -655,11 +659,11 @@ describe("base length et longueur effective (ADR 0009)", () => {
     expect(engine.getBaseLength(0)).toBe(1);
   });
 
-  it("le stockage porte une base au-dessus du plafond d'interface", () => {
+  it("l'entree de stockage accepte la capacite du pattern", () => {
     const engine = new SequencerEngine();
     expect(engine.setBaseLengthFromStorage(0, 36)).toBe(true);
     expect(engine.getBaseLength(0)).toBe(36);
-    expect(engine.getEffectiveLength(0)).toBe(24);
+    expect(engine.getEffectiveLength(0)).toBe(36);
   });
 
   it("le stockage s'arrete a la capacite du pattern", () => {
