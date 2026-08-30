@@ -105,12 +105,28 @@ without the interface cap. And `LENGTH_CV_OFFSET` becomes variable with the
 Length CV. A merge would repair nothing and would remove a boundary the project
 needs again.
 
-⚠️ **The convergence costs one mutant, and the loss is recorded here rather than
-absorbed.** The mutant that replaced the storage call by the manual call in
-`Persistence.cpp` is now an **equivalent mutant**: the two functions have the
-same body and the same bound, so no value separates them. It leaves the
-denominator, which the lot keeps at 230 by adding a TypeScript mutant on
-`MAX_LENGTH`. That mutant closes a gap the C++ side never had.
+⚠️ **The convergence costs three mutants, and the loss is recorded here rather
+than absorbed.** `baseLength` and `effectiveLength` now hold the same value at
+all times, because `LENGTH_CV_OFFSET` is 0 and the two bounds are equal. No test
+can separate them. Three mutants become **equivalent mutants**:
+
+- `cpp: the channel record restores the base through the manual entry point` —
+  the two entry points have the same body and the same bound;
+- `cpp: saveTemplate serialises the effective length (B4b.6.2)`;
+- `ts: saveTemplate serialises the effective length (B4b.6.2)`.
+
+The three leave the denominator. Lot SF3 adds one TypeScript mutant on
+`MAX_LENGTH`, which closes a gap the C++ side never had. The denominator
+therefore goes from 230 to **228**.
+
+⚠️ **Two tests lose their discriminating power at the same time, and they were
+renamed rather than left to claim a proof they no longer carry.**
+`test_save_template_writes_the_base_length_not_the_effective_one` and its
+TypeScript twin now read `test_save_template_writes_the_channel_length_into_the_record`
+and `ecrit la longueur du canal dans l'enregistrement`. They still assert that
+`saveTemplate()` writes the channel length at the length offset. They no longer
+assert **which of the two fields** it reads. That proof returns with the Length
+CV, and not before.
 
 ⚠️ **The screen no longer shows a length the channel cannot play.** The paragraph
 under Consequences said the screen would show 24 while the base held 36. Lot SF3
