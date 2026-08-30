@@ -1,0 +1,132 @@
+import { describe, it, expect } from "vitest";
+import {
+  CV_MIN,
+  CV_MAX,
+  ZONE_WIDTH,
+  ZONE_COUNT,
+  OFFSET_MIN,
+  OFFSET_MAX,
+  HYSTERESIS,
+  STAY_WIDTH,
+  zoneFor,
+  zoneWithHysteresis,
+  effectiveLengthFor,
+} from "../src/domain/LengthCv";
+
+describe("Length CV — constantes du contrat", () => {
+  it("porte les valeurs decidees en LCV.2 et LCV.3a", () => {
+    expect(CV_MIN).toBe(-512);
+    expect(CV_MAX).toBe(512);
+    expect(ZONE_WIDTH).toBe(33);
+    expect(ZONE_COUNT).toBe(31);
+    expect(OFFSET_MIN).toBe(-15);
+    expect(OFFSET_MAX).toBe(15);
+    expect(HYSTERESIS).toBe(8);
+    expect(STAY_WIDTH).toBe(24);
+  });
+});
+
+describe("Length CV — quantification", () => {
+  it("suit le vecteur partage avec le C++", () => {
+    expect(zoneFor(-512)).toBe(-15);
+    expect(zoneFor(-496)).toBe(-15);
+    expect(zoneFor(-495)).toBe(-15);
+    expect(zoneFor(-49)).toBe(-1);
+    expect(zoneFor(-34)).toBe(-1);
+    expect(zoneFor(-17)).toBe(-1);
+    expect(zoneFor(-16)).toBe(0);
+    expect(zoneFor(0)).toBe(0);
+    expect(zoneFor(16)).toBe(0);
+    expect(zoneFor(17)).toBe(1);
+    expect(zoneFor(33)).toBe(1);
+    expect(zoneFor(49)).toBe(1);
+    expect(zoneFor(50)).toBe(2);
+    expect(zoneFor(478)).toBe(14);
+    expect(zoneFor(479)).toBe(15);
+    expect(zoneFor(495)).toBe(15);
+    expect(zoneFor(512)).toBe(15);
+  });
+
+  it("garde les deux zones extremes plus larges d'une unite", () => {
+    expect(zoneFor(-479)).toBe(-15);
+    expect(zoneFor(-478)).toBe(-14);
+    expect(zoneFor(479)).toBe(15);
+    expect(zoneFor(478)).toBe(14);
+  });
+
+  it("couvre toute la plage avec trente et une zones", () => {
+    const seen = new Set<number>();
+    for (let cv = -512; cv <= 512; cv += 1) {
+      const zone = zoneFor(cv);
+      expect(zone).toBeGreaterThanOrEqual(-15);
+      expect(zone).toBeLessThanOrEqual(15);
+      seen.add(zone);
+    }
+    expect(seen.size).toBe(31);
+  });
+});
+
+describe("Length CV — hysteresis", () => {
+  it("garde la zone sur la frontiere exacte", () => {
+    expect(zoneWithHysteresis(24, 0)).toBe(0);
+    expect(zoneWithHysteresis(-24, 0)).toBe(0);
+    expect(zoneWithHysteresis(9, 1)).toBe(1);
+    expect(zoneWithHysteresis(57, 1)).toBe(1);
+  });
+
+  it("cede une unite au-dela de la frontiere", () => {
+    expect(zoneWithHysteresis(25, 0)).toBe(1);
+    expect(zoneWithHysteresis(-25, 0)).toBe(-1);
+    expect(zoneWithHysteresis(8, 1)).toBe(0);
+    expect(zoneWithHysteresis(58, 1)).toBe(2);
+  });
+
+  it("se mesure depuis le CENTRE de la zone et non depuis son bord", () => {
+    expect(zoneWithHysteresis(471, 15)).toBe(15);
+    expect(zoneWithHysteresis(470, 15)).toBe(14);
+    expect(zoneWithHysteresis(-471, -15)).toBe(-15);
+    expect(zoneWithHysteresis(-470, -15)).toBe(-14);
+  });
+
+  it("ne cede jamais au bruit mesure de plus ou moins trois", () => {
+    for (let zone = -15; zone <= 15; zone += 1) {
+      const centre = 33 * zone;
+      for (const probe of [centre, centre + 16, centre - 16, centre + 17, centre - 17]) {
+        for (let delta = -3; delta <= 3; delta += 1) {
+          const cv = Math.max(-512, Math.min(512, probe + delta));
+          expect(zoneWithHysteresis(cv, zone)).toBe(zone);
+        }
+      }
+    }
+  });
+
+  it("ne recule jamais sur une rampe montante", () => {
+    let current = -15;
+    let previous = -15;
+    for (let cv = -512; cv <= 512; cv += 1) {
+      current = zoneWithHysteresis(cv, current);
+      expect(current).toBeGreaterThanOrEqual(previous);
+      previous = current;
+    }
+    expect(current).toBe(15);
+  });
+});
+
+describe("Length CV — longueur effective", () => {
+  it("raccourcit et allonge", () => {
+    expect(effectiveLengthFor(18, 0)).toBe(18);
+    expect(effectiveLengthFor(18, 15)).toBe(33);
+    expect(effectiveLengthFor(18, -15)).toBe(3);
+    expect(effectiveLengthFor(18, 1)).toBe(19);
+    expect(effectiveLengthFor(18, -1)).toBe(17);
+  });
+
+  it("sature a un et a trente-six", () => {
+    expect(effectiveLengthFor(1, -15)).toBe(1);
+    expect(effectiveLengthFor(1, 15)).toBe(16);
+    expect(effectiveLengthFor(36, 15)).toBe(36);
+    expect(effectiveLengthFor(36, -15)).toBe(21);
+    expect(effectiveLengthFor(2, -15)).toBe(1);
+    expect(effectiveLengthFor(35, 15)).toBe(36);
+  });
+});
