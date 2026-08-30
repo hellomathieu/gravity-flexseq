@@ -1,7 +1,7 @@
 # Conformity to the original firmware — the inventory
 
 **Lot 15, 2026-08-23.** Tracking document, **never normative**. Every decision it
-raises belongs to the Notion PRD; this file only says what was read and where.
+raises belongs to `PRD.md`; this file only says what was read and where.
 
 ## Why it exists
 

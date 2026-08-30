@@ -9,8 +9,9 @@ anyone wanted to undo it.
 ## What an ADR is not
 
 - **Not a session log**, and not an implementation history.
-- **Not a product decision** — those live in the **Notion PRD**, which is their
-  normative source. An ADR may *reference* it, never copy it.
+- **Not a product decision** — those live in **`PRD.md`** at the root of this
+  repository, which is their normative source since 2026-08-30. An ADR may
+  *reference* it, never copy it.
 - **Not a hypothesis**, and not an unconfirmed proposal.
 - **Not a routine implementation detail** — the code is the source of truth for
   those.

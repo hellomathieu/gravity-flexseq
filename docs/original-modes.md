@@ -22,7 +22,7 @@ length. It is a **source of candidate features, not the reference**:
 `docs/original-1.2-dev-features.md`.
 
 This document is **tracking, never normative**. The normative sources are the
-Notion PRD for product decisions and `docs/decisions/` for architecture. It
+`PRD.md` for product decisions and `docs/decisions/` for architecture. It
 describes the **original**, not FlexSeq.
 
 ## The shape

@@ -5,7 +5,7 @@
 ## What this document is, and is not
 
 It is a **tracking index**, not a source of truth. Every line points to where the
-fact is established — Notion PRD, an ADR, `CLAUDE.md`, or the code — and copies
+fact is established — `PRD.md`, an ADR, `CLAUDE.md`, or the code — and copies
 only what it strictly needs to be understandable on its own. The project rule is
 strict on this: a fact lives in **one** source, elsewhere it is referenced
 (`.claude/rules/knowledge-persistence.md`).
