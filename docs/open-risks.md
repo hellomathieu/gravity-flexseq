@@ -1,6 +1,6 @@
 # Open risks and watch items
 
-**Last review: 2026-08-29.** Thirty open lines, thirty-one closed or accepted.
+**Last review: 2026-08-30.** Thirty-six open lines, thirty-three closed or accepted.
 
 ## What this document is, and is not
 
@@ -19,12 +19,13 @@ either closed without anyone noting it, or accepted without anyone saying so.
 
 ## What is still open
 
-Twenty-six lines, and each one states **what it is waiting for and from whom**. A line
+Thirty-six lines, and each one states **what it is waiting for and from whom**. A line
 that waits for nothing from nobody no longer belongs here: it is in the table
 below.
 
 | # | Subject | Severity | What is left, and from whom |
 |---|---|---|---|
+| 64 | **The LENGTH field edits `effectiveLength`, not `baseLength`, so a stored length above the interface cap is destroyed at the first detent.** `UiController.cpp:314` and `UiController.ts:321` read `getEffectiveLength(ch)`, add the delta, clamp to `[MIN_LENGTH, MAX_LENGTH]`, then call `setBaseLength()`. ADR 0009 makes `baseLength` the value the user edits and the value persistence keeps. Today a template of 36 gives `baseLength = 36` and `effectiveLength = 24`. One detent up asks for 25, which `setBaseLength()` refuses. One detent down writes 23. The base of 36 is lost, and no message says so. Found by reading during SF3a on 2026-08-30, not by a red test | **latent.** SF3 hides it: with `MAX_LENGTH = 36` and `LENGTH_CV_OFFSET = 0` the two values are always equal, so the field reads the base by accident. The defect returns with the Length CV, which is what makes the two values differ | **a design decision, then a test.** Do not repair it inside SF3c: the repair needs its own test and its own decision. It is **not blocking for SF3**. It is **blocking before the Length CV** |
 | 63 | **`ASCII=1` on `run-screen-dump.sh` prints no image at all.** The script extracts the ASCII art with `sed -n '/^--- /,/^   +-*+$/p'`, and the range closes on the FIRST border line, which is the border ABOVE the panel. The observed output is two headings and two borders, and **zero rows of panel**. `CLAUDE.md` states that the switch prints the image twice, as the panel carries it and flipped. Measured 2026-08-30 during lot F | low. The verdict is unaffected: it comes from the harness's own `rotation OK` line, not from the art. What is lost is the way a reader looks at the render with their own eyes | **a one-line fix in the script**, and it belongs to no lot in progress |
 | 62 | **A routine frame of the EDIT screen went from 23.5 to 33.0 ms with lot F, and nothing tracks that figure.** Seven of the eight bands now draw, against five: the footer took the second skip route with it, and the third row fills the bands it freed. ⚠️ **The contract of ADR 0001 is NOT breached**, and the ADR now says why in normative terms: the budget applies to one main-loop pass, not to the accumulated duration of a frame. Measured p90 of the pass **6.61 ms against 12** | low today. It matters for lot E, which adds the PATTERNS tab on the same renderer, and for any lot that puts a time-varying element back on the main screen | **nothing now.** Re-measure with `run-blocking-probe.sh` and the `FLEXSEQ_START_IN_EDIT` flag at the start of lot E, not at its end |
 | 61 | **`main` is 5976 bytes and `PagedScreen::renderFrom` is 2490, and these are MEASURED CONSUMERS, not demonstrated savings.** Both figures come from `avr-nm` on the ELF of `HEAD`, read on 2026-08-30 during QB3. Together they hold **8466 bytes, so 31 % of the Flash in use** — each one is heavier than the whole of lot S, whose measured gain is 126 bytes. ⚠️ **Their size says nothing about what a change could return.** `main` holds `setup()`, the loop, `bootstrap()`, and everything LTO inlined into it, the engine constructor included — the method rule of this document already states that. `renderFrom` is the spread renderer of ADR 0001. No analysis of their content exists, no gain is estimated, and **no gain must be assumed** | **an unqualified opportunity, not a risk.** The budgets pass: Flash 88.9 %, and 1864 bytes of margin before the guard | **a decision from the owner on whether to open a lot**, and before it an analysis that does not exist. QB3 excluded both on 2026-08-30, so that the gain of lot S stays attributable. The lever QB3 refuted — a `PROGMEM` table of bounds — does not apply to them either: see ADR 0010 |
