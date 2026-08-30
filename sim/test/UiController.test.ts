@@ -17,7 +17,7 @@ import {
   UiLevel,
 } from "../src/domain/UiController.js";
 import { Transport } from "../src/domain/Transport.js";
-import { PatternBank, PATTERN_COUNT } from "../src/domain/PatternBank.js";
+import { PATTERN_COUNT } from "../src/domain/PatternBank.js";
 import {
   CHANNEL_COUNT,
   DEFAULT_BAR_LENGTH,
@@ -30,12 +30,10 @@ import { RATCHET_CODES, RATCHET_NONE, RATCHET_2, RATCHET_3, RATCHET_TRIPLET } fr
 import { DEFAULT_SUBDIV, SUBDIVS } from "../src/domain/subdiv.js";
 
 function rig() {
-  const bank = new PatternBank();
   const engine = new SequencerEngine();
   for (let ch = 0; ch < engine.channelCount(); ++ch) {
     engine.setChannelMode(ch, ChannelMode.SEQ);
   }
-  engine.setPatternBank(bank);
   const transport = new Transport(engine);
   const ui = new UiController(engine, transport);
 
@@ -60,7 +58,7 @@ function rig() {
     ui.handle(UiEvent.Press);
   };
 
-  return { bank, engine, transport, ui, gotoTab, gotoField, enterTab, enterEdit };
+  return { engine, transport, ui, gotoTab, gotoField, enterTab, enterEdit };
 }
 
 describe("UiController — tab bar", () => {
@@ -368,7 +366,7 @@ describe("UiController — EDIT PATTERN", () => {
   });
 
   it("press toggles the step under the cursor", () => {
-    const { ui, bank, enterEdit, engine } = rig();
+    const { ui, enterEdit, engine } = rig();
     enterEdit();
     for (let i = 0; i < 7; ++i) ui.handle(UiEvent.Rotate, 1);
     expect(engine.instanceForChannel(0)!.readStep(7)).toBe(false);
@@ -379,7 +377,7 @@ describe("UiController — EDIT PATTERN", () => {
   });
 
   it("shift rotate sets the ratchet of an active step and clamps", () => {
-    const { ui, bank, enterEdit, engine } = rig();
+    const { ui, enterEdit, engine } = rig();
     enterEdit();
     ui.handle(UiEvent.Press);
     ui.handle(UiEvent.ShiftRotate, 1);
@@ -393,7 +391,7 @@ describe("UiController — EDIT PATTERN", () => {
   });
 
   it("a ratchet edit takes effect on the current step immediately", () => {
-    const { ui, engine, bank, enterEdit } = rig();
+    const { ui, engine, enterEdit } = rig();
     enterEdit();
     ui.handle(UiEvent.Press);
     engine.start();
@@ -404,7 +402,7 @@ describe("UiController — EDIT PATTERN", () => {
   });
 
   it("shift rotate in edit no longer changes channel", () => {
-    const { ui, bank, enterEdit, engine } = rig();
+    const { ui, enterEdit, engine } = rig();
     enterEdit();
     ui.handle(UiEvent.Press);
     ui.handle(UiEvent.ShiftRotate, 1);
@@ -414,7 +412,7 @@ describe("UiController — EDIT PATTERN", () => {
   });
 
   it("shift rotate on an inactive step does nothing", () => {
-    const { ui, bank, enterEdit, engine } = rig();
+    const { ui, enterEdit, engine } = rig();
     enterEdit();
     expect(engine.instanceForChannel(0)!.readStep(0)).toBe(false);
     ui.handle(UiEvent.ShiftRotate, 1);
@@ -422,7 +420,7 @@ describe("UiController — EDIT PATTERN", () => {
   });
 
   it("the grid follows the pattern of the channel selected in edit", () => {
-    const { ui, engine, bank, enterEdit, gotoTab } = rig();
+    const { ui, engine, enterEdit, gotoTab } = rig();
     engine.setSelectedPattern(1, 5);
     gotoTab(TAB_FIRST_CHANNEL + 1);
     enterEdit();
@@ -432,7 +430,7 @@ describe("UiController — EDIT PATTERN", () => {
   });
 
   it("shift long press clears the pattern steps and ratchets", () => {
-    const { ui, bank, enterEdit, engine } = rig();
+    const { ui, enterEdit, engine } = rig();
     enterEdit();
     ui.handle(UiEvent.Press);
     ui.handle(UiEvent.ShiftRotate, 3);
@@ -516,7 +514,7 @@ describe("UiController — PLAY and the gesture left free", () => {
   });
 
   it("shift press is deliberately free and changes nothing", () => {
-    const { ui, bank, enterEdit, engine } = rig();
+    const { ui, enterEdit, engine } = rig();
     enterEdit();
     for (let i = 0; i < 3; ++i) ui.handle(UiEvent.Rotate, 1);
     ui.handle(UiEvent.ShiftPress);

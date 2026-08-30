@@ -2,14 +2,12 @@
 #include <libGravity.h>
 
 #include <flexseq/MainScreen.h>
-#include <flexseq/PatternBank.h>
 #include <flexseq/SequencerEngine.h>
 #include <flexseq/Transport.h>
 #include <flexseq/UiController.h>
 
 namespace {
 
-flexseq::PatternBank patternBank;
 flexseq::SequencerEngine engine;
 flexseq::Transport transport(engine);
 flexseq::UiController ui(engine, transport);
@@ -85,7 +83,6 @@ void setup() {
     gravity.Init();
     gravity.display.setFont(u8g2_font_5x7_tr);
 
-    engine.setPatternBank(&patternBank);
     engine.setSelectedPattern(DEMO_TAB - 1, 9);
     engine.setBaseLength(DEMO_TAB - 1, 20);
     engine.setSubdiv(DEMO_TAB - 1, -4);

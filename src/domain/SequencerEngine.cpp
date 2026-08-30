@@ -1,14 +1,12 @@
 #include <flexseq/SequencerEngine.h>
 
 #include <flexseq/Pattern.h>
-#include <flexseq/PatternBank.h>
 
 namespace flexseq {
 
 
 SequencerEngine::SequencerEngine()
-    : bank_(nullptr),
-      phase_(0),
+    : phase_(0),
       beatTick_(0),
       running_(false),
       stepped_(0) {
@@ -26,13 +24,6 @@ SequencerEngine::SequencerEngine()
         channels_[ch].acc = 0;
         channels_[ch].pendingTicks = 0;
         refreshEffectiveLength(ch);
-        refreshStepTiming(ch);
-    }
-}
-
-void SequencerEngine::setPatternBank(PatternBank* bank) {
-    bank_ = bank;
-    for (uint8_t ch = 0; ch < CHANNEL_COUNT; ++ch) {
         refreshStepTiming(ch);
     }
 }

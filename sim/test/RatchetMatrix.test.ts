@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { PatternBank } from "../src/domain/PatternBank.js";
 import {
   ChannelMode,
   SequencerEngine,
@@ -61,9 +60,7 @@ const TRIGGERS: number[][] = [
 ];
 
 function rig(subdiv: number, code: number, activeSteps: number[], length = 4) {
-  const bank = new PatternBank();
   const engine = new SequencerEngine();
-  engine.setPatternBank(bank);
   const seq = new TriggerSequencer(engine);
   engine.setChannelMode(0, ChannelMode.SEQ);
   const pattern = engine.instanceForChannel(0)!;
@@ -72,7 +69,7 @@ function rig(subdiv: number, code: number, activeSteps: number[], length = 4) {
   engine.setBaseLength(0, length);
   engine.setSubdiv(0, subdiv);
   engine.refreshTiming();
-  return { bank, engine, seq, pattern };
+  return { engine, seq, pattern };
 }
 
 // Ecarts en ticks entre declenchements SORTIS, ceux que la sortie recoit.
@@ -202,9 +199,7 @@ describe("Le train de declenchements", () => {
 
 describe("Le refus a la saisie", () => {
   function editRig(subdiv: number) {
-    const bank = new PatternBank();
     const engine = new SequencerEngine();
-    engine.setPatternBank(bank);
     const transport = new Transport(engine);
     const ui = new UiController(engine, transport);
     for (let ch = 0; ch < 6; ++ch) engine.setChannelMode(ch, ChannelMode.SEQ);

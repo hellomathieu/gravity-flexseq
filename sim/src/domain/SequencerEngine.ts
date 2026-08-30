@@ -28,7 +28,6 @@
  */
 
 import { subdivToTicks, DEFAULT_SUBDIV } from "./subdiv.js";
-import type { PatternBank } from "./PatternBank.js";
 
 import {
   Pattern,
@@ -65,7 +64,7 @@ const PHASE_MODULO = 0x1_0000_0000;
 
 export const CHANNEL_COUNT = 6;
 
-/** Nombre de patterns partages selectionnables par channel (voir PatternBank). */
+/** Nombre de templates selectionnables par channel (voir PatternBank). */
 export const PATTERN_COUNT = 16;
 
 
@@ -121,7 +120,6 @@ export class SequencerEngine {
   private phase = 0; // masterPhase, en ticks (uint32)
   private beatTick = 0; // ticks depuis la derniere noire, dans [0, PPQN)
   private running = false;
-  private bank: PatternBank | null = null;
   private readonly onsets: number[];
   private readonly channels: ChannelState[];
   private readonly instances: Pattern[];
@@ -207,11 +205,6 @@ export class SequencerEngine {
 
   patternForChannel(channel: number): Pattern | null {
     return this.instanceForChannel(channel);
-  }
-
-  setPatternBank(bank: PatternBank | null): void {
-    this.bank = bank;
-    for (let ch = 0; ch < this.channels.length; ++ch) this.refreshStepTiming(ch);
   }
 
   /**

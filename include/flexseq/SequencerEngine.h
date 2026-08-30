@@ -9,8 +9,6 @@
 
 namespace flexseq {
 
-class PatternBank;
-
 // SequencerEngine — FlexSeq temporal core (mirror of the TS reference model).
 //
 //  - masterPhase: monotonic counter of 96 PPQN ticks (uint32, wraps naturally).
@@ -43,11 +41,6 @@ public:
     static constexpr uint8_t DEFAULT_BAR_LENGTH = 4;
 
     SequencerEngine();
-
-    // Optional shared bank. Once set, the engine reads each step's ratchet code
-    // to shape its duration and its trigger count. Without a bank every step is
-    // a plain one-unit, one-trigger step.
-    void setPatternBank(PatternBank* bank);
 
     Pattern* patternForChannel(uint8_t channel);
     const Pattern* patternForChannel(uint8_t channel) const;
@@ -162,7 +155,6 @@ private:
     void applyTicks(uint8_t channel, uint16_t ticks);
     uint16_t alignedAcc(uint16_t stepTicks, uint16_t ticks) const;
 
-    PatternBank* bank_; // optional; drives ratchet timing
     uint32_t phase_;
     uint8_t beatTick_; // ticks since the last quarter-note beat, in [0, PPQN)
     bool running_;

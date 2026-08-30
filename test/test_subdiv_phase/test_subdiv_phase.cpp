@@ -2,11 +2,9 @@
 #include <unity.h>
 
 #include <flexseq/Pattern.h>
-#include <flexseq/PatternBank.h>
 #include <flexseq/SequencerEngine.h>
 #include <flexseq/Subdiv.h>
 
-using flexseq::PatternBank;
 using flexseq::SequencerEngine;
 
 void setUp() {}
@@ -189,11 +187,9 @@ void test_a_drained_burst_of_ticks_does_not_lose_the_pending_rate() {
 namespace {
 
 struct DriftRig {
-    PatternBank bank;
     SequencerEngine engine;
 
     DriftRig() {
-        engine.setPatternBank(&bank);
         for (uint8_t ch = 0; ch < 2; ++ch) {
             engine.setChannelMode(ch, flexseq::MODE_SEQ);
         }

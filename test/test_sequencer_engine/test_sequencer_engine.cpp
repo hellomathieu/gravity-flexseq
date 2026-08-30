@@ -1,10 +1,8 @@
 #include <stdint.h>
 #include <unity.h>
 
-#include <flexseq/PatternBank.h>
 #include <flexseq/SequencerEngine.h>
 
-using flexseq::PatternBank;
 using flexseq::SequencerEngine;
 using flexseq::MODE_CLOCK;
 using flexseq::MODE_RANDOM;
@@ -288,10 +286,8 @@ void test_rejects_invalid_subdiv() {
  */
 
 void test_plain_step_fires_one_onset_per_step() {
-    PatternBank bank;
     SequencerEngine e;
     allSeq(e);
-    e.setPatternBank(&bank);
     e.start();
     TEST_ASSERT_EQUAL_UINT16(96, e.currentStepTicks(0));
     TEST_ASSERT_EQUAL_UINT8(1, e.currentStepTriggers(0));
@@ -301,10 +297,8 @@ void test_plain_step_fires_one_onset_per_step() {
 }
 
 void test_ratchet_fires_n_onsets_inside_one_step_duration() {
-    PatternBank bank;
     SequencerEngine e;
     allSeq(e);
-    e.setPatternBank(&bank);
     e.setSelectedPattern(0, 0);
     e.instanceForChannel(0)->setRatchet(1, RATCHET_3);
     e.start();
@@ -325,10 +319,8 @@ void test_ratchet_fires_n_onsets_inside_one_step_duration() {
 }
 
 void test_ratchet_step_keeps_the_pattern_duration() {
-    PatternBank bank;
     SequencerEngine e;
     allSeq(e);
-    e.setPatternBank(&bank);
     e.setSelectedPattern(0, 0);
     e.setBaseLength(0, 4);
     e.instanceForChannel(0)->setRatchet(0, RATCHET_6);
@@ -338,10 +330,8 @@ void test_ratchet_step_keeps_the_pattern_duration() {
 }
 
 void test_ratchet_counts_all_onsets_in_a_batched_advance() {
-    PatternBank bank;
     SequencerEngine e;
     allSeq(e);
-    e.setPatternBank(&bank);
     e.setSelectedPattern(0, 0);
     e.instanceForChannel(0)->setRatchet(1, RATCHET_4);
     e.start();
@@ -351,10 +341,8 @@ void test_ratchet_counts_all_onsets_in_a_batched_advance() {
 }
 
 void test_triplet_stretches_the_step_to_two_units() {
-    PatternBank bank;
     SequencerEngine e;
     allSeq(e);
-    e.setPatternBank(&bank);
     e.setSelectedPattern(0, 0);
     e.instanceForChannel(0)->setRatchet(1, RATCHET_TRIPLET);
     e.start();
@@ -373,13 +361,10 @@ void test_triplet_stretches_the_step_to_two_units() {
 }
 
 void test_triplet_pushes_the_rest_of_the_pattern_later() {
-    PatternBank bank;
     SequencerEngine plain;
     SequencerEngine withTriplet;
     allSeq(plain);
     allSeq(withTriplet);
-    plain.setPatternBank(&bank);
-    withTriplet.setPatternBank(&bank);
 
     withTriplet.instanceForChannel(0)->setRatchet(0, RATCHET_TRIPLET);
     withTriplet.refreshTiming();
@@ -397,10 +382,8 @@ void test_triplet_pushes_the_rest_of_the_pattern_later() {
 // au moins MIN_SLOT_TICKS. A x3 un tiers de step vaut 10,67 ticks : le ratchet
 // joue, et ses positions sont arrondies a moins d'un tick.
 void test_a_ratchet_plays_when_its_slot_is_not_a_whole_tick() {
-    PatternBank bank;
     SequencerEngine e;
     allSeq(e);
-    e.setPatternBank(&bank);
     e.setSelectedPattern(0, 0);
     e.instanceForChannel(0)->setRatchet(0, RATCHET_3);
     TEST_ASSERT_TRUE(e.setSubdiv(0, -3));
@@ -410,10 +393,8 @@ void test_a_ratchet_plays_when_its_slot_is_not_a_whole_tick() {
 // Le plancher, lui, refuse : a x12 un step vaut 8 ticks, donc un sixieme
 // vaudrait 1 tick.
 void test_a_ratchet_is_refused_when_its_slot_falls_under_two_ticks() {
-    PatternBank bank;
     SequencerEngine e;
     allSeq(e);
-    e.setPatternBank(&bank);
     e.setSelectedPattern(0, 0);
     e.instanceForChannel(0)->setRatchet(0, RATCHET_6);
     TEST_ASSERT_TRUE(e.setSubdiv(0, -12));
@@ -430,10 +411,8 @@ void test_a_new_engine_plays_plain_steps() {
 }
 
 void test_ratchets_do_not_shift_masterphase() {
-    PatternBank bank;
     SequencerEngine e;
     allSeq(e);
-    e.setPatternBank(&bank);
     e.instanceForChannel(0)->setRatchet(0, RATCHET_TRIPLET);
     e.start();
     e.advance(192);
@@ -463,11 +442,8 @@ void test_bar_length_rejects_values_that_do_not_divide_twelve() {
 }
 
 void test_bar_length_never_affects_timing() {
-    PatternBank bank;
     SequencerEngine a;
     SequencerEngine b;
-    a.setPatternBank(&bank);
-    b.setPatternBank(&bank);
     b.setBarLength(0, 3);
     a.start();
     b.start();
@@ -547,9 +523,7 @@ void test_clock_counts_every_offset_crossing_in_a_batched_advance() {
 }
 
 void test_clock_and_random_ignore_ratchets() {
-    PatternBank bank;
     SequencerEngine e;
-    e.setPatternBank(&bank);
     e.instanceForChannel(0)->setRatchet(0, RATCHET_4);
     e.instanceForChannel(0)->setRatchet(1, RATCHET_TRIPLET);
     e.setChannelMode(1, MODE_RANDOM);
@@ -612,9 +586,7 @@ void test_skip_chance_is_bounded_to_ten_tenths() {
 }
 
 void test_switching_to_seq_starts_reading_the_pattern_again() {
-    PatternBank bank;
     SequencerEngine e;
-    e.setPatternBank(&bank);
     e.instanceForChannel(0)->setRatchet(0, RATCHET_4);
     TEST_ASSERT_EQUAL_UINT8(1, e.currentStepTriggers(0));
     e.setChannelMode(0, MODE_SEQ);
@@ -688,27 +660,8 @@ void test_every_instance_can_carry_its_own_content() {
     }
 }
 
-void test_an_instance_is_independent_of_the_bank() {
-    PatternBank bank;
-    SequencerEngine engine;
-    engine.setPatternBank(&bank);
-    engine.setSelectedPattern(0, 4);
-
-    TEST_ASSERT_TRUE(engine.instanceForChannel(0)->writeStep(7, true));
-    bool inBank = true;
-    TEST_ASSERT_TRUE(bank.getPattern(4)->readStep(7, inBank));
-    TEST_ASSERT_FALSE(inBank);
-
-    TEST_ASSERT_TRUE(bank.getPattern(4)->writeStep(9, true));
-    bool inInstance = true;
-    TEST_ASSERT_TRUE(engine.instanceForChannel(0)->readStep(9, inInstance));
-    TEST_ASSERT_FALSE(inInstance);
-}
-
 void test_two_channels_on_one_template_keep_separate_instances() {
-    PatternBank bank;
     SequencerEngine engine;
-    engine.setPatternBank(&bank);
     TEST_ASSERT_TRUE(engine.setSelectedPattern(0, 2));
     TEST_ASSERT_TRUE(engine.setSelectedPattern(1, 2));
 
@@ -719,13 +672,10 @@ void test_two_channels_on_one_template_keep_separate_instances() {
 }
 
 void test_the_channel_plays_its_own_instance() {
-    PatternBank bank;
     SequencerEngine engine;
-    engine.setPatternBank(&bank);
     for (uint8_t ch = 0; ch < 6; ++ch) {
         TEST_ASSERT_TRUE(engine.setSelectedPattern(ch, 0));
         TEST_ASSERT_TRUE(engine.patternForChannel(ch) == engine.instanceForChannel(ch));
-        TEST_ASSERT_FALSE(engine.patternForChannel(ch) == bank.getPattern(0));
     }
 }
 
@@ -839,7 +789,6 @@ int main() {
     RUN_TEST(test_the_const_overload_names_the_same_instance);
     RUN_TEST(test_writing_one_instance_leaves_the_five_others_untouched);
     RUN_TEST(test_every_instance_can_carry_its_own_content);
-    RUN_TEST(test_an_instance_is_independent_of_the_bank);
     RUN_TEST(test_two_channels_on_one_template_keep_separate_instances);
     RUN_TEST(test_the_channel_plays_its_own_instance);
     RUN_TEST(test_the_manual_entry_point_stops_at_the_interface_ceiling);

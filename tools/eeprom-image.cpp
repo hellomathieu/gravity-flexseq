@@ -236,7 +236,6 @@ int main(int argc, char** argv) {
     UiController ui(engine, transport);
     Preferences preferences;
     PersistentImage image(bank, engine, ui, preferences);
-    engine.setPatternBank(&bank);
 
     if (stepList != nullptr) {
         uint8_t steps[24];

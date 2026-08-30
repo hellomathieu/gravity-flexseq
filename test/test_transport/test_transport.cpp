@@ -2,12 +2,10 @@
 #include <unity.h>
 
 #include <flexseq/Pattern.h>
-#include <flexseq/PatternBank.h>
 #include <flexseq/SequencerEngine.h>
 #include <flexseq/Transport.h>
 #include <flexseq/UiController.h>
 
-using flexseq::PatternBank;
 using flexseq::SequencerEngine;
 using flexseq::Transport;
 using flexseq::UiController;
@@ -93,7 +91,6 @@ void test_batched_ticks_cross_multiple_steps() {
 namespace {
 
 struct Wired {
-    PatternBank bank;
     SequencerEngine engine;
     Transport transport;
     UiController ui;
@@ -102,7 +99,6 @@ struct Wired {
         for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
             engine.setChannelMode(ch, flexseq::MODE_SEQ);
         }
-        engine.setPatternBank(&bank);
     }
 };
 

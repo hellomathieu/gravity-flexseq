@@ -2,14 +2,12 @@
 #include <unity.h>
 
 #include <flexseq/Pattern.h>
-#include <flexseq/PatternBank.h>
 #include <flexseq/SequencerEngine.h>
 #include <flexseq/Subdiv.h>
 #include <flexseq/Transport.h>
 #include <flexseq/UiController.h>
 
 using flexseq::Pattern;
-using flexseq::PatternBank;
 using flexseq::SequencerEngine;
 using flexseq::Transport;
 using flexseq::UiController;
@@ -20,7 +18,6 @@ void tearDown() {}
 namespace {
 
 struct Rig {
-    PatternBank bank;
     SequencerEngine engine;
     Transport transport;
     UiController ui;
@@ -29,7 +26,6 @@ struct Rig {
         for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
             engine.setChannelMode(ch, flexseq::MODE_SEQ);
         }
-        engine.setPatternBank(&bank);
     }
 
     void enterTab() { ui.handle(UiController::EVENT_PRESS); }

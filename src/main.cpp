@@ -9,7 +9,6 @@
 #include <flexseq/InputAdapter.h>
 #include <flexseq/Persistence.h>
 #include <flexseq/PagedScreen.h>
-#include <flexseq/PatternBank.h>
 #include <flexseq/PatternScreen.h>
 #include <flexseq/SequencerEngine.h>
 #include <flexseq/Transport.h>
@@ -19,7 +18,6 @@
 
 namespace {
 
-flexseq::PatternBank patternBank;
 flexseq::SequencerEngine engine;
 flexseq::Transport transport(engine);
 flexseq::TriggerSequencer triggers(engine);
@@ -154,9 +152,6 @@ void setup() {
     // libGravity ne definit aucune police : police integree U8g2 (evite aussi
     // d'embarquer les donnees de police GPLv3 du firmware d'origine).
     gravity.display.setFont(u8g2_font_5x7_tr);
-
-    // The engine reads the bank to shorten triplet steps (3 in one step's time).
-    engine.setPatternBank(&patternBank);
 
     // Echantillonnage du CV SOUS INTERRUPTION. FlexSeq prend la propriete du
     // convertisseur : voir include/flexseq/CvSampler.h. La calibration est lue

@@ -58,7 +58,6 @@ struct Rig {
 
     Rig() : engine(), transport(engine), ui(engine, transport), prefs(),
             image(bank, engine, ui, prefs) {
-        engine.setPatternBank(&bank);
     }
 };
 

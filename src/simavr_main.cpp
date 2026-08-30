@@ -1,7 +1,6 @@
 #include <Arduino.h>
 #include <libGravity.h>
 
-#include <flexseq/PatternBank.h>
 #include <flexseq/SequencerEngine.h>
 #include <flexseq/Transport.h>
 #include <flexseq/TriggerSequencer.h>
@@ -9,7 +8,7 @@
 // -----------------------------------------------------------------------------
 // SimAVR integration firmware
 //
-// Exercises the REAL FlexSeq domain (PatternBank + SequencerEngine + Transport +
+// Exercises the REAL FlexSeq domain (SequencerEngine + Transport +
 // TriggerSequencer) driving the REAL libGravity DigitalOutput, so the whole
 // engine -> effectiveStep -> pattern read -> trigger -> GPIO chain is observable
 // in the SimAVR VCD harness.
@@ -26,7 +25,6 @@
 
 namespace {
 
-flexseq::PatternBank patternBank;
 flexseq::SequencerEngine engine;
 flexseq::Transport transport(engine);
 flexseq::TriggerSequencer triggers(engine);
@@ -43,13 +41,12 @@ void setup() {
     gravity.outputs[TEST_CHANNEL].Low();
 
     // Preload a deterministic pattern: active steps 0, 4, 8, 12 (length 16).
-    flexseq::Pattern* pattern = patternBank.getPattern(0);
+    flexseq::Pattern* pattern = engine.instanceForChannel(TEST_CHANNEL);
     pattern->writeStep(0, true);
     pattern->writeStep(4, true);
     pattern->writeStep(8, true);
     pattern->writeStep(12, true);
 
-    engine.setPatternBank(&patternBank);
     engine.setSelectedPattern(TEST_CHANNEL, 0);
     engine.setBaseLength(TEST_CHANNEL, 16);
     engine.setSubdiv(TEST_CHANNEL, -4);  // 1/16 steps (24 ticks) for this harness

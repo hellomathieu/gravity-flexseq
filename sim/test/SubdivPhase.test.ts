@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { SequencerEngine, PPQN } from "../src/domain/SequencerEngine.js";
 import { Transport } from "../src/domain/Transport.js";
 import { SUBDIVS, subdivToTicks } from "../src/domain/subdiv.js";
-import { PatternBank } from "../src/domain/PatternBank.js";
 import { RATCHET_TRIPLET, RATCHET_NONE } from "../src/domain/Pattern.js";
 import { ChannelMode } from "../src/domain/SequencerEngine.js";
 
@@ -148,17 +147,15 @@ describe("SUBDIV — la phase reste sur la grille du maitre", () => {
 
 describe("SUBDIV — aucune autre edition ne decale un channel", () => {
   /** Les deux channels tournent a la meme cadence ; l'edition ne touche que le 0. */
-  function driftAfter(act: (engine: SequencerEngine, bank: PatternBank) => void): number {
-    const bank = new PatternBank();
+  function driftAfter(act: (engine: SequencerEngine) => void): number {
     const engine = new SequencerEngine();
-    engine.setPatternBank(bank);
     for (const ch of [0, 1]) engine.setChannelMode(ch, ChannelMode.SEQ);
     engine.setSelectedPattern(0, 0);
     engine.setSelectedPattern(1, 1);
     const transport = new Transport(engine);
     transport.start();
     for (let t = 0; t < 137; ++t) engine.advance(1);
-    act(engine, bank);
+    act(engine);
     const a: number[] = [];
     const b: number[] = [];
     for (let t = 138; t <= 900; ++t) {

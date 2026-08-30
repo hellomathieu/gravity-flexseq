@@ -2,7 +2,6 @@
 #include <libGravity.h>
 
 #include <flexseq/PagedScreen.h>
-#include <flexseq/PatternBank.h>
 #include <flexseq/PatternScreen.h>
 #include <flexseq/SequencerEngine.h>
 #include <flexseq/Transport.h>
@@ -26,7 +25,6 @@
 
 namespace {
 
-flexseq::PatternBank patternBank;
 flexseq::SequencerEngine engine;
 flexseq::Transport transport(engine);
 
@@ -52,7 +50,7 @@ void beginFrame() {
     flexseq::PatternScreenModel model;
     model.title = "EDIT PATTERN A1";
     model.titleWidth = 0;  // PagedScreen la mesure une fois par image
-    model.pattern = patternBank.getPattern(0);
+    model.pattern = engine.instanceForChannel(CH);
     model.length = engine.getEffectiveLength(CH);
     model.cursor = CURSOR;
     model.playhead = engine.effectiveStep(CH);
@@ -71,7 +69,7 @@ void setup() {
     gravity.display.setFont(u8g2_font_5x7_tr);
 
     // Contenu de demonstration : couvre toute la legende du PRD.
-    flexseq::Pattern* pattern = patternBank.getPattern(0);
+    flexseq::Pattern* pattern = engine.instanceForChannel(CH);
     const uint8_t active[] = {0, 2, 5, 6, 7, 8, 13, 15, 16, 19};
     for (uint8_t i = 0; i < sizeof(active); ++i) {
         pattern->writeStep(active[i], true);
@@ -82,7 +80,6 @@ void setup() {
     pattern->setRatchet(16, flexseq::RATCHET_4);
     pattern->setRatchet(15, flexseq::RATCHET_TRIPLET); // tient 2 unites
 
-    engine.setPatternBank(&patternBank); // sans ca, les ratchets sont ignores
     engine.setSelectedPattern(CH, 0);
     engine.setBaseLength(CH, 20);   // steps 20..23 -> simples points
     engine.setSubdiv(CH, 1);             // /1 : une unite par step

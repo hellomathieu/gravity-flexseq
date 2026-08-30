@@ -101,7 +101,6 @@ function scanEverything(r: ReturnType<typeof rigV3>): JournalEeprom {
 function rig() {
   const bank = new PatternBank();
   const engine = new SequencerEngine();
-  engine.setPatternBank(bank);
   const transport = new Transport(engine);
   const ui = new UiController(engine, transport);
   const prefs: Preferences = defaultPreferences();

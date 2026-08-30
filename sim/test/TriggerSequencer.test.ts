@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { PatternBank } from "../src/domain/PatternBank.js";
 import { SequencerEngine, PPQN, ChannelMode, CHANNEL_COUNT } from "../src/domain/SequencerEngine.js";
 import { Prng } from "../src/domain/Prng.js";
 import { TriggerSequencer } from "../src/domain/TriggerSequencer.js";
@@ -11,10 +10,8 @@ const STEP = PPQN; // 96 = default ticksPerStep (/1)
 
 describe("TriggerSequencer", () => {
   it("triggers only on the onset of an active step", () => {
-    const bank = new PatternBank();
     const engine = new SequencerEngine();
     const trig = new TriggerSequencer(engine);
-    engine.setPatternBank(bank);
     for (let ch = 0; ch < CHANNEL_COUNT; ++ch) engine.setChannelMode(ch, ChannelMode.SEQ);
 
     engine.setSelectedPattern(0, 0);
@@ -45,10 +42,8 @@ describe("TriggerSequencer", () => {
   });
 
   it("does not trigger without a step onset", () => {
-    const bank = new PatternBank();
     const engine = new SequencerEngine();
     const trig = new TriggerSequencer(engine);
-    engine.setPatternBank(bank);
     for (let ch = 0; ch < CHANNEL_COUNT; ++ch) engine.setChannelMode(ch, ChannelMode.SEQ);
 
     engine.instanceForChannel(0)!.writeStep(1, true);
@@ -62,10 +57,8 @@ describe("TriggerSequencer", () => {
   });
 
   it("keeps channels with different patterns independent", () => {
-    const bank = new PatternBank();
     const engine = new SequencerEngine();
     const trig = new TriggerSequencer(engine);
-    engine.setPatternBank(bank);
     for (let ch = 0; ch < CHANNEL_COUNT; ++ch) engine.setChannelMode(ch, ChannelMode.SEQ);
 
     engine.setSelectedPattern(0, 0);
@@ -100,14 +93,12 @@ describe("TriggerSequencer — modes (PRD 4.2)", () => {
   }
 
   function rig(mode: ChannelMode, skipChance = 0) {
-    const bank = new PatternBank();
     const engine = new SequencerEngine();
     const trig = new TriggerSequencer(engine);
-    engine.setPatternBank(bank);
     engine.setChannelMode(0, mode);
     engine.setSkipChance(0, skipChance);
     engine.start();
-    return { bank, engine, trig };
+    return { engine, trig };
   }
 
   it("CLOCK declenche a chaque step, pattern vide ou non", () => {
@@ -223,14 +214,11 @@ describe("Prng", () => {
 
 describe("la dette d onsets", () => {
   it("garde l onset que la sortie n a pas pu emettre", () => {
-    const bank = new PatternBank();
     const engine = new SequencerEngine();
     const trig = new TriggerSequencer(engine);
-    engine.setPatternBank(bank);
     for (let ch = 0; ch < CHANNEL_COUNT; ++ch) {
       engine.setChannelMode(ch, ChannelMode.SEQ);
     }
-    engine.setPatternBank(bank);
     engine.setSelectedPattern(0, 0);
     engine.instanceForChannel(0)!.writeStep(0, true);
     engine.instanceForChannel(0)!.setRatchet(0, RATCHET_6);
@@ -253,14 +241,11 @@ describe("la dette d onsets", () => {
   });
 
   it("plafonne la dette a un pas entier", () => {
-    const bank = new PatternBank();
     const engine = new SequencerEngine();
     const trig = new TriggerSequencer(engine);
-    engine.setPatternBank(bank);
     for (let ch = 0; ch < CHANNEL_COUNT; ++ch) {
       engine.setChannelMode(ch, ChannelMode.SEQ);
     }
-    engine.setPatternBank(bank);
     engine.setSelectedPattern(0, 0);
     // TOUS les pas actifs : l onset de frontiere appartient au pas SUIVANT,
     // donc un motif a un seul pas actif tarit apres le premier pas.

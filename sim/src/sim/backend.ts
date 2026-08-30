@@ -10,7 +10,7 @@
  * Editer le pattern d'un channel modifie le pattern PARTAGE : les autres
  * channels qui le referencent voient le meme contenu.
  */
-import { PatternBank, PATTERN_COUNT } from "../domain/PatternBank.js";
+import { PATTERN_COUNT } from "../domain/PatternBank.js";
 import { SequencerEngine, CHANNEL_COUNT, ChannelMode } from "../domain/SequencerEngine.js";
 import { TriggerSequencer } from "../domain/TriggerSequencer.js";
 import { viewPattern, type CellView } from "./PatternView.js";
@@ -54,13 +54,10 @@ export class TsReferenceBackend implements SimBackend {
   readonly channelCount = CHANNEL_COUNT;
   readonly patternCount = PATTERN_COUNT;
 
-  private readonly bank = new PatternBank();
   private readonly engine = new SequencerEngine();
   private readonly triggers = new TriggerSequencer(this.engine);
 
   constructor() {
-    // Le moteur consulte la banque pour la duree des steps ternaires.
-    this.engine.setPatternBank(this.bank);
     // Le simulateur est l'editeur de patterns : ses six channels sont en SEQ.
     // Le defaut du domaine reste CLOCK, comme l'original (PRD 4.2).
     for (let ch = 0; ch < CHANNEL_COUNT; ++ch) {

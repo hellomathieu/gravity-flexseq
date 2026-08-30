@@ -8,7 +8,6 @@
 #include <libGravity.h>
 
 #include <flexseq/InputAdapter.h>
-#include <flexseq/PatternBank.h>
 #include <flexseq/SequencerEngine.h>
 #include <flexseq/Transport.h>
 #include <flexseq/UiController.h>
@@ -18,7 +17,6 @@ Gravity gravity;
 
 #include "../../src/hal/InputAdapter.cpp"
 
-using flexseq::PatternBank;
 using flexseq::SequencerEngine;
 using flexseq::Transport;
 using flexseq::UiController;
@@ -32,7 +30,6 @@ constexpr uint16_t LONG_PRESS_MS = 750;
 constexpr uint16_t SETTLE_MS = 20;
 
 struct Rig {
-    PatternBank bank;
     SequencerEngine engine;
     Transport transport;
     UiController ui;
@@ -41,7 +38,6 @@ struct Rig {
 
     Rig() : engine(), transport(engine), ui(engine, transport) {
         ArduinoMock::reset();
-        engine.setPatternBank(&bank);
         for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
             engine.setChannelMode(ch, flexseq::MODE_SEQ);
         }

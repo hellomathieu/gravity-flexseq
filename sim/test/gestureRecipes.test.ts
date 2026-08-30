@@ -31,7 +31,6 @@ function rig(activeSteps: readonly number[] = ACTIVE_STEPS) {
   for (let ch = 0; ch < engine.channelCount(); ++ch) {
     engine.setChannelMode(ch, ChannelMode.SEQ);
   }
-  engine.setPatternBank(bank);
   const pattern = engine.instanceForChannel(0)!;
   for (const step of activeSteps) pattern.writeStep(step, true);
   const transport = new Transport(engine);
