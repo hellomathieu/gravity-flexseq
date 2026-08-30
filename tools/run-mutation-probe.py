@@ -148,10 +148,10 @@ MUTANTS = [
      "      storage.write(",
      "    if (this.templateIndex !== PersistenceScheduler.NO_TEMPLATE && !this.dirtyFlag) {\n"
      "      storage.write(", "ts"),
-    ("cpp: saveTemplate serialises the effective length (B4b.6.2)",
-     "include/flexseq/Persistence.h",
-     "        const uint8_t length = engine_.getBaseLength(channel);",
-     "        const uint8_t length = engine_.getEffectiveLength(channel);", "cpp-all"),
+    # ADR 0009, amendement du 2026-08-30 : baseLength et effectiveLength portent
+    # desormais toujours la meme valeur, et les deux points d entree portent la
+    # meme borne, donc CINQ mutations sont indetectables par construction. Elles
+    # sont retirees, pas masquees. Voir l ADR.
     ("cpp: the freeze lets the eighth factory slot be written (B4b.6.2)",
      "include/flexseq/Persistence.h",
      "    bool saveTemplate(Storage& storage, uint8_t channel, uint8_t index) {\n"
@@ -160,10 +160,6 @@ MUTANTS = [
      "    bool saveTemplate(Storage& storage, uint8_t channel, uint8_t index) {\n"
      "        if (index < persist::v3::FROZEN_TEMPLATE_COUNT - 1\n"
      "            || index >= persist::v3::TEMPLATE_COUNT) {", "cpp-all"),
-    ("ts: saveTemplate serialises the effective length (B4b.6.2)",
-     "sim/src/domain/Persistence.ts",
-     "    const length = this.engine.getBaseLength(channel);",
-     "    const length = this.engine.getEffectiveLength(channel);", "ts"),
     ("ts: the freeze lets the eighth factory slot be written (B4b.6.2)",
      "sim/src/domain/Persistence.ts",
      "  saveTemplate(storage: Storage, channel: number, index: number): boolean {\n"
@@ -173,17 +169,6 @@ MUTANTS = [
      "    if (!Number.isInteger(index)) return false;\n"
      "    if (index < V3_FROZEN_TEMPLATE_COUNT - 1 || index >= V3_TEMPLATE_COUNT) return false;",
      "ts"),
-    ("cpp: loadTemplate restores the length through the manual entry point (B4b.6.1)",
-     "include/flexseq/Persistence.h",
-     "        (void)engine_.setBaseLengthFromStorage(\n"
-     "            channel,\n"
-     "            storage.read(persist::v3::templateAddress(index,\n"
-     "                                                      persist::v3::RECORD_LENGTH_AT)));",
-     "        (void)engine_.setBaseLength(\n"
-     "            channel,\n"
-     "            storage.read(persist::v3::templateAddress(index,\n"
-     "                                                      persist::v3::RECORD_LENGTH_AT)));",
-     "cpp-all"),
     ("cpp: loadTemplate ignores the template length (B4b.6.1)",
      "include/flexseq/Persistence.h",
      "        (void)engine_.setBaseLengthFromStorage(\n"
@@ -193,17 +178,6 @@ MUTANTS = [
      "        engine_.setSelectedPattern(channel, index);",
      "        engine_.setSelectedPattern(channel, index);",
      "cpp-all"),
-    ("ts: loadTemplate restores the length through the manual entry point (B4b.6.1)",
-     "sim/src/domain/Persistence.ts",
-     "    this.engine.setBaseLengthFromStorage(\n"
-     "      channel,\n"
-     "      storage.read(v3TemplateAddress(index, V3_RECORD_LENGTH_AT)),\n"
-     "    );",
-     "    this.engine.setBaseLength(\n"
-     "      channel,\n"
-     "      storage.read(v3TemplateAddress(index, V3_RECORD_LENGTH_AT)),\n"
-     "    );",
-     "ts"),
     ("ts: loadTemplate ignores the template length (B4b.6.1)",
      "sim/src/domain/Persistence.ts",
      "    this.engine.setBaseLengthFromStorage(\n"
@@ -220,18 +194,14 @@ MUTANTS = [
      "    return true;\n  }\n\n  /**\n   * Definit baseLength depuis le STOCKAGE",
      "    c.baseLength = length;\n"
      "    return true;\n  }\n\n  /**\n   * Definit baseLength depuis le STOCKAGE", "ts"),
-    ("ts: the stored bound falls back to the interface ceiling (ADR 0009)",
+    ("ts: the stored bound falls back to the historical cap (ADR 0009)",
      "sim/src/domain/SequencerEngine.ts",
      "export const MAX_STORED_LENGTH = Pattern.DEFAULT_TOTAL_STEPS;",
-     "export const MAX_STORED_LENGTH = MAX_LENGTH;", "ts"),
-    ("cpp: the stored bound falls back to the interface ceiling (ADR 0009)",
+     "export const MAX_STORED_LENGTH = 24;", "ts"),
+    ("cpp: the stored bound falls back to the historical cap (ADR 0009)",
      "include/flexseq/SequencerEngine.h",
      "    static constexpr uint8_t MAX_STORED_LENGTH = Pattern::DEFAULT_TOTAL_STEPS;",
-     "    static constexpr uint8_t MAX_STORED_LENGTH = MAX_LENGTH;", "cpp-all"),
-    ("cpp: the channel record restores the base through the manual entry point (ADR 0009)",
-     "src/domain/Persistence.cpp",
-     "        case 1: engine.setBaseLengthFromStorage(channel, value); break;",
-     "        case 1: engine.setBaseLength(channel, value); break;", "cpp-all"),
+     "    static constexpr uint8_t MAX_STORED_LENGTH = 24;", "cpp-all"),
     ("ts: the play path reads the shared template instead of the channel instance",
      "sim/src/domain/SequencerEngine.ts",
      "  patternForChannel(channel: number): Pattern | null {\n"
@@ -295,13 +265,17 @@ MUTANTS = [
     ("cpp: the offset cap moves one byte too far",
      "include/flexseq/SequencerEngine.h",
      "static constexpr uint8_t MAX_OFFSET = 255;", "static constexpr uint8_t MAX_OFFSET = 254;", "cpp-all"),
-    ("cpp: the length cap goes up to 36 steps",
+    ("cpp: the length cap falls back to the historical 24 steps",
      "include/flexseq/SequencerEngine.h",
-     "    static constexpr uint8_t MAX_LENGTH = 24;",
-     "    static constexpr uint8_t MAX_LENGTH = 36;", "cpp-all"),
+     "    static constexpr uint8_t MAX_LENGTH = 36;",
+     "    static constexpr uint8_t MAX_LENGTH = 24;", "cpp-all"),
+    ("ts: the length cap falls back to the historical 24 steps",
+     "sim/src/domain/SequencerEngine.ts",
+     "export const MAX_LENGTH = 36;",
+     "export const MAX_LENGTH = 24;", "ts"),
     ("cpp: the length cap falls to 20 steps",
      "include/flexseq/SequencerEngine.h",
-     "    static constexpr uint8_t MAX_LENGTH = 24;",
+     "    static constexpr uint8_t MAX_LENGTH = 36;",
      "    static constexpr uint8_t MAX_LENGTH = 20;", "cpp-all"),
     ("cpp: the offset cap disappears from setOffset",
      "src/domain/SequencerEngine.cpp",
@@ -641,10 +615,10 @@ MUTANTS = [
      "src/domain/Pattern.cpp",
      "    for (uint8_t i = 0; i < RATCHET_BYTES; ++i) {",
      "    for (uint8_t i = 0; i < 12; ++i) {", "cpp-pattern"),
-    ("cpp: the step cursor stops at the play length instead of the grid",
+    ("cpp: the step cursor stops at twenty four instead of the grid",
      "include/flexseq/UiController.h",
      "    static constexpr uint8_t STEP_COUNT = 36;",
-     "    static constexpr uint8_t STEP_COUNT = SequencerEngine::MAX_LENGTH;", "cpp-ui"),
+     "    static constexpr uint8_t STEP_COUNT = 24;", "cpp-ui"),
     ("cpp: the grid loses its third row",
      "include/flexseq/PatternScreen.h",
      "constexpr uint8_t GRID_ROWS = 3;",
@@ -653,10 +627,10 @@ MUTANTS = [
      "sim/src/domain/Pattern.ts",
      "  static readonly DEFAULT_TOTAL_STEPS = 36;",
      "  static readonly DEFAULT_TOTAL_STEPS = 24;", "ts-pattern"),
-    ("ts: the step cursor stops at the play length instead of the grid",
+    ("ts: the step cursor stops at twenty four instead of the grid",
      "sim/src/domain/UiController.ts",
      "export const STEP_COUNT = 36;",
-     "export const STEP_COUNT = MAX_LENGTH;", "ts-ui"),
+     "export const STEP_COUNT = 24;", "ts-ui"),
     ("ts: the projected grid falls back to twenty-four positions",
      "sim/src/sim/PatternView.ts",
      "export const GRID_STEPS = 36;",
@@ -934,10 +908,10 @@ MUTANTS = [
      'src/domain/Persistence.cpp',
      '        if (value < MIN_TEMPLATE_LENGTH || value > MAX_TEMPLATE_LENGTH) {\n            return false;\n        }',
      '        if (value < MIN_TEMPLATE_LENGTH || value > MAX_TEMPLATE_LENGTH) {\n            length = value;\n            return true;\n        }', 'cpp'),
-    ('cpp: the stored length is bounded by the engine cap instead of the format',
+    ('cpp: the stored length is bounded by the historical cap instead of the format',
      'src/domain/Persistence.cpp',
      '        if (value < MIN_TEMPLATE_LENGTH || value > MAX_TEMPLATE_LENGTH) {',
-     '        if (value < MIN_TEMPLATE_LENGTH || value > SequencerEngine::MAX_LENGTH) {', 'cpp'),
+     '        if (value < MIN_TEMPLATE_LENGTH || value > 24) {', 'cpp'),
     ('cpp: the length byte slips to offset 22 on load',
      'src/domain/Persistence.cpp',
      'bool applyTemplateByte(Pattern& pattern, uint8_t& length, uint8_t offset, uint8_t value) {\n    if (offset == RECORD_LENGTH_AT) {',
@@ -946,10 +920,10 @@ MUTANTS = [
      'src/domain/Persistence.cpp',
      'uint8_t templateByte(const Pattern& pattern, uint8_t length, uint8_t offset) {\n    if (offset == RECORD_LENGTH_AT) {',
      'uint8_t templateByte(const Pattern& pattern, uint8_t length, uint8_t offset) {\n    if (offset == RECORD_LENGTH_AT - 1) {', 'cpp'),
-    ('cpp: the format length bound becomes the engine cap',
+    ('cpp: the format length bound falls back to the historical cap',
      'include/flexseq/Persistence.h',
      'constexpr uint8_t MAX_TEMPLATE_LENGTH = Pattern::DEFAULT_TOTAL_STEPS;',
-     'constexpr uint8_t MAX_TEMPLATE_LENGTH = SequencerEngine::MAX_LENGTH;', 'cpp'),
+     'constexpr uint8_t MAX_TEMPLATE_LENGTH = 24;', 'cpp'),
     ('cpp: the format length floor falls to zero',
      'include/flexseq/Persistence.h',
      'constexpr uint8_t MIN_TEMPLATE_LENGTH = 1;',
