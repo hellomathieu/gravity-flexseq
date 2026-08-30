@@ -24,8 +24,10 @@ not. Each of the eight was verified by MUTATION.
 Lot B added twenty-four more, on the version 3 persistence codec: the layout of
 the 588-byte image, the twenty-three bytes of content, the twenty-four bytes of a
 template record, the four bits above the last step, and the length bound of 1 to
-36 -- the PATTERN CAPACITY, and not `MAX_LENGTH`, the interface cap that stays at
-24 until lot F. The version 2 format is untouched, and its own tests still assert
+36 -- the PATTERN CAPACITY, and not `MAX_LENGTH`, the interface cap. The two
+hold the same value since lot SF3, 2026-08-30, and they stay two bounds: the
+format keeps its own, and a mutant that swaps one for the other turns the suite
+red. The version 2 format is untouched, and its own tests still assert
 it, the version byte included, which stays at 2.
 
 The TypeScript mirror gained twenty. The gap of four is not a hole in the

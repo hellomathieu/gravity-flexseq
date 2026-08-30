@@ -35,9 +35,9 @@ npm run typecheck # tsc --noEmit
 ## State
 
 - [x] `Pattern` — shared content (36 steps + per-step ratchets, no length). The
-      EDIT grid still shows 24 of them until the three-row lot, so `STEP_COUNT`
-      and `GRID_STEPS` are 24 on both sides. `MAX_LENGTH` is still 24 too: the
-      steps above 23 are storable, but no length reaches them yet.
+      EDIT grid shows the 36 of them in three rows of twelve since lot F, so
+      `STEP_COUNT` and `GRID_STEPS` are 36 on both sides. `MAX_LENGTH` is 36
+      too since lot SF3, 2026-08-30: a channel plays every step it stores.
 - [x] `PatternBank` — **one shared bank of 16 patterns** (replaces the former 6×16).
 - [x] `SequencerEngine.selectedPattern` and **per-channel** LENGTH; shared pattern editing.
 - [x] Simulator UI — EDIT PATTERN skeleton, TS backend.
