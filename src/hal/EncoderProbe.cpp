@@ -100,28 +100,18 @@ bool pageChanged() {
     return result;
 }
 
-void writeReport(char* title, char* footer) {
+void writeReport(char* title) {
     switch (page) {
-        case 0:
-            line(title, PSTR("P<8 "), shown[PASS_UNDER_8]);
-            line(footer, PSTR("P<16 "), shown[PASS_UNDER_16]);
-            break;
-        case 1:
-            line(title, PSTR("P<32 "), shown[PASS_UNDER_32]);
-            line(footer, PSTR("P>=32 "), shown[PASS_OVER_32]);
-            break;
-        case 2:
-            line(title, PSTR("PMAXms "), shown[PASS_MAX_MS]);
-            line(footer, PSTR("C1 "), shown[CHANGE_1]);
-            break;
-        case 3:
-            line(title, PSTR("C2 "), shown[CHANGE_2]);
-            line(footer, PSTR("C3 "), shown[CHANGE_3]);
-            break;
-        default:
-            line(title, PSTR("C4+ "), shown[CHANGE_4PLUS]);
-            line(footer, PSTR("WINs "), PAGE_COUNT * (PAGE_MS / 1000u));
-            break;
+        case 0: line(title, PSTR("P<8 "),    shown[PASS_UNDER_8]);   break;
+        case 1: line(title, PSTR("P<16 "),   shown[PASS_UNDER_16]);  break;
+        case 2: line(title, PSTR("P<32 "),   shown[PASS_UNDER_32]);  break;
+        case 3: line(title, PSTR("P>=32 "),  shown[PASS_OVER_32]);   break;
+        case 4: line(title, PSTR("PMAXms "), shown[PASS_MAX_MS]);    break;
+        case 5: line(title, PSTR("C1 "),     shown[CHANGE_1]);       break;
+        case 6: line(title, PSTR("C2 "),     shown[CHANGE_2]);       break;
+        case 7: line(title, PSTR("C3 "),     shown[CHANGE_3]);       break;
+        case 8: line(title, PSTR("C4+ "),    shown[CHANGE_4PLUS]);   break;
+        default: line(title, PSTR("WINs "),  PAGE_COUNT * (PAGE_MS / 1000u)); break;
     }
 }
 

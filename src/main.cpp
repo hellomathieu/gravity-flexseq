@@ -85,7 +85,7 @@ void beginEditFrame(uint8_t channel) {
     uiFooter[UI_FOOTER_TEMPO + written + 3] = '\0';
 
 #if FLEXSEQ_ENCODER_PROBE
-    flexseq::probe::writeReport(uiTitle, uiFooter);
+    flexseq::probe::writeReport(uiTitle);
 #endif
 
     flexseq::PatternScreenModel model;
