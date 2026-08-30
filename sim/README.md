@@ -49,6 +49,16 @@ npm run typecheck # tsc --noEmit
 - [x] **2026-08-17 revision — one step is one time unit.** METER and MEASURES **removed**; bar separation is **purely graphical** (none/2/3/4/6, per channel).
 - [x] **Per-step RATCHETS** (`2·3·4·6` = N triggers inside the step; `▲` triplet = 3 over 2 units, stretching time). Ratchet 5 set aside: not representable at 96 PPQN.
 - [x] **EDIT PATTERN screen** aligned on the Wokwi proof of concept (`flexseq-oled-playground/sketch.ino`): 2×12, 10 px pitch, 5×5 `○`/`●` glyphs, `▲` triplet, `.` outside the pattern, ratchet digit, bar lines, 9×9 frame, centre pixel inverted for the step being played.
+- [x] **2026-08-30 revision — the engine no longer knows the bank.** The two
+      entries above that speak of *one shared bank* and of *shared pattern
+      editing* record what was delivered then, and the model has since changed.
+      `SequencerEngine` holds **six pattern instances**, one per channel, and
+      `patternForChannel()` returns the instance: editing one channel affects no
+      other. The templates live in EEPROM (PRD §5.0, ADR 0006). Lot B4b.7 removed
+      `setPatternBank()` and the resident bank from the firmware, which returned
+      **370 bytes of RAM**. ⚠️ The class `PatternBank` stays: `PersistentImage`
+      v2, `loadFactoryPatterns`, the image generator and `PATTERN_COUNT` use it,
+      so `PatternBank == 368 B` above is still true.
 - [ ] Real Transport layer (clock/MIDI); C++ port of the engine.
 - [ ] avr8js backend, wired onto the same `SimBackend` seam.
 
