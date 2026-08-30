@@ -78,8 +78,9 @@ of line, which is less than the cost of the call. Do not add the attribute to it
 
 ⚠️ **Most of the gain is not in the target of lot S.** `adjustFieldValue` goes
 from 598 to 502 bytes, so it returns 96. `UiController::handle` goes from 1042 to
-926 bytes, so it returns 116. The three new symbols cost 78 bytes. The arithmetic
-of the total is therefore −96 −116 +78, which is close to the measured −126.
+926 bytes, so it returns 116. The three new symbols cost 86 bytes: `oneStep` 22,
+`clampIndex` 30, and `wrapIndex` 34. The arithmetic of the total is therefore
+−96 −116 +86, which is the measured −126 exactly.
 
 **Stack cost: one byte, at worst.** The runtime probe gives 205 bytes before and
 after, with 6 of 6 vectors entered. That probe measures the paths the firmware
