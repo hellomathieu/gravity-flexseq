@@ -151,6 +151,23 @@ same frame could show different content.
   The always-empty band is why the predicate is named for the geometry
   (`belowGrid`) and not for the footer: calling it a footer band would have
   described only one of the two.
+  ⚠️ **SUPERSEDED ON 2026-08-30, lot F.** The footer left the EDIT screen and the
+  third row of the grid took the bands it freed. The skip loses its second route:
+  `belowGrid` can no longer be true, because `GRID_BOTTOM_Y` is 63. A routine
+  frame now sends **7 bands of the 8**, and the title band is the only one that
+  can be skipped. The paragraph above stays the state of 2026-08-22.
+  **Measured 2026-08-30, lot F.** Seven bands of the eight now draw, against five
+  before. **The contract of ADR 0001 applies to the duration of one main-loop
+  pass, and not to the accumulated duration of a frame. A frame is spread over
+  several passes; its total duration can therefore grow without a breach of the
+  contract, provided that no pass goes above the defined budget.**
+  The budget holds: p90 of the pass **6.61 ms** against 12, median 4.58 ms. No
+  band carries two rows, so the heaviest band does not get heavier. What grows is
+  the number of bands that work, and therefore the duration of a FRAME:
+  **23.5 → 33.0 ms** routine, 47.0 ms full. The frame duration stays a figure to
+  watch. It is not the safety bound of this decision.
+  The worst pass does not change in nature: **13.99 ms** on the periodic full
+  refresh, one frame in sixteen, a deliberate net.
   ⚠️ One mutation cannot be detected and it is an **equivalent mutant**: `>=` in
   place of `>` against y 47. No band starts at y 47 — they start at 0, 8, … 56 —
   so the two predicates are indistinguishable on the real set of bands. Recorded
