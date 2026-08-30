@@ -562,3 +562,14 @@ under `ROTATION_MUTATE` the line above the rule went from 0 to 15 pixels, and th
 last row from 12 to 0. Record the dependency in the harness, and re-run the
 counter-proof after the change. A green that was proved on another geometry proves
 nothing on this one.
+
+**An audit by reading does not find an equivalent mutant. Only a full pass does.**
+Lot SF3 raised a bound, and that made several mutations undetectable by
+construction. A reading of the probe found the mutants that name the CONSTANT and
+concluded that nine were affected. `--check-anchors` confirmed every anchor, so it
+saw nothing: an equivalent mutant applies cleanly, compiles, and leaves the suite
+green. The full pass then reported two more, both naming a FUNCTION rather than
+the bound. The class was five. Two rules follow. Sweep the probe for the FUNCTIONS
+that carry the property, not only for the constant. And treat the score of a lot
+that moves a bound as unknown until a full pass has run: the anchor guard cannot
+answer this question, and it does not claim to.
