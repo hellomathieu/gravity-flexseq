@@ -55,7 +55,6 @@ void beginFrame() {
     model.cursor = CURSOR;
     model.playhead = engine.effectiveStep(CH);
     model.barLength = static_cast<uint8_t>(engine.getBarLength(CH));
-    model.footer = "CH1  120BPM";
 
     screen.begin(gravity.display, model);
 }

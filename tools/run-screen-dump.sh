@@ -155,9 +155,12 @@ if main_ok:
 steps = re.search(r"(\d+) / (\d+) steps a leur place", txt)
 skipped = "ignoree (SKIP_GEOMETRY)" in txt
 ink = re.search(r"encre totale (\d+) pixels", txt)
-title = re.search(r"bande du titre \(panneau y (\d+)\.\.(\d+)\) : (\d+) pixels", txt)
-footer = re.search(r"pied de page \(panneau y (\d+)\.\.(\d+)\)\s+: (\d+) pixels", txt)
-gap = re.search(r"entre le pied et la grille \(y (\d+)\.\.(\d+)\) : (\d+) pixels", txt)
+c1 = re.search(r"C1 filet \(panneau y (\d+)\) : (\d+) pixels, seuil (\d+) ; "
+               r"ligne la plus encree y (\d+) \((\d+) px\) (OK|KO)", txt)
+c2 = re.search(r"C2 ligne vide \(panneau y (\d+)\) : (\d+) pixels (OK|KO)", txt)
+c3 = re.search(r"C3 titre \(panneau y (\d+)\.\.(\d+)\) : (\d+) pixels ; "
+               r"derniere rangee \(panneau y (\d+)\) : (\d+) pixels (OK|KO)", txt)
+mutated = "ROTATION_MUTATE actif" in txt
 geom_ok = "geometrie OK" in txt
 rot_ok = "rotation OK" in txt
 
@@ -168,19 +171,25 @@ if skipped:
 elif steps:
     print(f"  {mark(geom_ok)} Geometrie          {steps[1]}/{steps[2]} steps a leur place attendue "
           f"{DIM}(apres U8G2_R2){Z}")
-print(f"  {mark(rot_ok)} Rotation 180       titre en bas ({title[3] if title else '?'} px en "
-      f"y {title[1] if title else '?'}..{title[2] if title else '?'}), "
-      f"pied en haut ({footer[3] if footer else '?'} px en "
-      f"y {footer[1] if footer else '?'}..{footer[2] if footer else '?'})")
-print(f"  {mark(gap is not None and gap[3] == '0')} Bande intermediaire "
-      f"vide entre le pied et la grille "
-      f"{DIM}(y {gap[1] if gap else '?'}..{gap[2] if gap else '?'}, "
-      f"{gap[3] if gap else '?'} px){Z}")
+# Une ligne absente n'est jamais un succes : mark(False) et le verdict vient de
+# "rotation OK", produit par le harnais lui-meme.
+if mutated:
+    print(f"  {DIM}ROTATION_MUTATE actif : memoire lue a 180 degres (contre-epreuve){Z}")
+print(f"  {mark(c1 is not None and c1[6] == 'OK')} C1 filet           "
+      f"{c1[2] if c1 else '?'} px en y {c1[1] if c1 else '?'}, seuil {c1[3] if c1 else '?'} "
+      f"{DIM}(ligne la plus encree : y {c1[4] if c1 else '?'}, {c1[5] if c1 else '?'} px){Z}")
+print(f"  {mark(c2 is not None and c2[3] == 'OK')} C2 ligne vide      "
+      f"{c2[2] if c2 else '?'} px en y {c2[1] if c2 else '?'} {DIM}(doit valoir 0){Z}")
+print(f"  {mark(c3 is not None and c3[6] == 'OK')} C3 deux bords      "
+      f"titre {c3[3] if c3 else '?'} px en y {c3[1] if c3 else '?'}..{c3[2] if c3 else '?'}, "
+      f"derniere rangee {c3[5] if c3 else '?'} px en y {c3[4] if c3 else '?'}")
 print(f"{B}==========================================================={Z}")
 if ink:
     print(f"  {ink[1]} pixels d'encre au total.")
 if geom_ok and rot_ok:
     print("  Le firmware garde son U8G2_R2 : l'OLED monte tete en bas sur le")
     print("  module affiche donc a l'endroit. C'est ce que diagram.json modelise.")
+    print("  C1, C2 et C3 couvrent l'axe VERTICAL. L'axe horizontal est couvert")
+    print("  par la geometrie, qui teste la position colX de chaque step.")
 sys.exit(0 if (geom_ok and rot_ok and probe_status == 0) else 1)
 PY

@@ -67,10 +67,22 @@ static void twi_watch(struct avr_irq_t*, uint32_t value, void*)
 
 /* Un pixel de la memoire du panneau. Une page = 8 pixels VERTICAUX, bit 0 en
  * haut de la page. */
-static inline int panel(uint8_t x, uint8_t y)
+static int rotation_mutate = 0;
+
+static inline int panelRaw(uint8_t x, uint8_t y)
 {
     if (x >= PANEL_W || y >= PANEL_H) return 0;
     return (oled.vram[y / 8][x] >> (y % 8)) & 1;
+}
+
+/* ROTATION_MUTATE fait tourner de 180 degres la memoire lue, ce qui donne
+ * exactement l'image qu'un firmware en U8G2_R0 aurait produite. Contre-epreuve
+ * du controle de rotation : la dependance epinglee n'est pas touchee. */
+static inline int panel(uint8_t x, uint8_t y)
+{
+    if (!rotation_mutate) return panelRaw(x, y);
+    if (x >= PANEL_W || y >= PANEL_H) return 0;
+    return panelRaw((uint8_t)(PANEL_W - 1 - x), (uint8_t)(PANEL_H - 1 - y));
 }
 
 /* La transformation de U8G2_R2 : 180 degres. */
@@ -220,6 +232,7 @@ int main(int argc, char** argv)
      * SKIP_GEOMETRY=1 pour un firmware qui n'affiche pas l'ecran EDIT PATTERN
      * (env:bringup, par exemple) : seule la rotation reste verifiable. */
     const int skip_geometry = getenv("SKIP_GEOMETRY") != NULL;
+    rotation_mutate = getenv("ROTATION_MUTATE") != NULL;
     int placed = 0, missing = 0;
     for (uint8_t i = 0; !skip_geometry && i < scr::GRID_STEPS; ++i) {
         const uint8_t px = rotX(scr::colX(i));
@@ -260,13 +273,60 @@ int main(int argc, char** argv)
         return ok ? 0 : 1;
     }
 
-    /* --- 2. rotation : titre en BAS du panneau, pied de page en HAUT -------- */
-    const int inkTitleBand = inkInRows(rotY(scr::TITLE_BASELINE_Y) - 6,
-                                      (uint8_t)(rotY(scr::TITLE_BASELINE_Y) + 2));
-    const int inkFooterBand = inkInRows(rotY(scr::FOOTER_BASELINE_Y),
-                                        rotY(scr::FOOTER_TOP_Y));
-    const int inkGap = inkInRows((uint8_t)(rotY(scr::FOOTER_TOP_Y) + 1),
-                                 (uint8_t)(rotY(scr::GRID_BOTTOM_Y) - 1));
+    /* --- 2. rotation : trois assertions, toutes discriminantes --------------
+     *
+     * C1  la ligne du filet est la plus encree du panneau, et elle est a
+     *     rotY(HEADER_LINE_Y).
+     * C2  la ligne juste au-dessus du filet, rotY(HEADER_LINE_Y - 1), est vide.
+     * C3  le titre encre sa bande, et le centre de la derniere rangee encre la
+     *     sienne.
+     *
+     * Sous une rotation inverse, les trois basculent par trois mecanismes
+     * differents : une ligne pleine deplacee, une ligne vide remplie, un bord
+     * vide. L'axe HORIZONTAL n'est pas couvert ici : il l'est par le controle
+     * de geometrie, qui teste la position colX de chaque step.
+     *
+     * ATTENTION, dependance transitoire mesuree le 2026-08-30. Avec DEUX
+     * rangees, C2 ne discrimine PAS la rotation : la ligne qu'il lit sous
+     * ROTATION_MUTATE est vide des deux cotes. Et C3 discrimine par sa moitie
+     * TITRE, pas par sa moitie derniere rangee. Avec TROIS rangees les deux
+     * roles s'inversent. Refaire la contre-epreuve apres le lot F.6 : les
+     * quatre controles doivent rougir sous ROTATION_MUTATE=1. */
+    const uint8_t ruleRow = rotY(scr::HEADER_LINE_Y);
+    const uint8_t blankRow = rotY((uint8_t)(scr::HEADER_LINE_Y - 1));
+    /* rotY inverse : la ligne de base du titre devient le HAUT dans le panneau. */
+    const uint8_t titleTop = rotY(scr::TITLE_BASELINE_Y);
+    const uint8_t titleBottom = rotY((uint8_t)(scr::TITLE_BASELINE_Y - scr::GLYPH_ASCENT));
+    const uint8_t lastRow = rotY(scr::rowCY((uint8_t)(scr::GRID_STEPS - 1)));
+
+    /* Le seuil est un GARDE D'INTEGRITE DE L'ANCRE, pas le discriminant de
+     * rotation. Ce qui distingue R2 de R0 est la POSITION de la ligne la plus
+     * encree : sous une rotation inverse elle tombe ailleurs, quel que soit le
+     * seuil (contre-epreuve ROTATION_MIN_INK=0). Le seuil attrape l'autre
+     * defaut : un filet dessine mais ampute, qui laisserait l'ancre en place
+     * sans porter son encre. Le 20 est une marge, pas une dimension d'ecran :
+     * le filet porte HEADER_LINE_W pixels, une rangee de la grille en porte au
+     * plus PER_ROW * 5. */
+    const int ROTATION_INK_MARGIN = 20;
+    const int ruleMinInk = (int)scr::HEADER_LINE_W - ROTATION_INK_MARGIN;
+    const int ruleMinInkEnv = getenv("ROTATION_MIN_INK")
+                            ? atoi(getenv("ROTATION_MIN_INK")) : ruleMinInk;
+
+    const int inkRuleRow = inkInRows(ruleRow, ruleRow);
+    const int inkBlankRow = inkInRows(blankRow, blankRow);
+    const int inkTitleBand = inkInRows(titleTop, titleBottom);
+    const int inkLastRow = inkInRows(lastRow, lastRow);
+
+    uint8_t densestRow = 0;
+    int densestInk = -1;
+    for (uint8_t y = 0; y < PANEL_H; ++y) {
+        const int n = inkInRows(y, y);
+        if (n > densestInk) { densestInk = n; densestRow = y; }
+    }
+
+    const int c1_ok = (inkRuleRow >= ruleMinInkEnv) && (densestRow == ruleRow);
+    const int c2_ok = (inkBlankRow == 0);
+    const int c3_ok = (inkTitleBand > 0) && (inkLastRow >= (int)scr::PER_ROW);
 
     int watch_ok = 1;
     if (watch_period) {
@@ -291,16 +351,17 @@ int main(int argc, char** argv)
                (int)scr::GRID_STEPS, missing ? "  <-- INCOHERENT" : "");
     }
     printf("  encre totale %d pixels\n\n", total);
-    printf("=== ROTATION ===\n");
-    printf("  bande du titre (panneau y %u..%u) : %d pixels\n",
-           rotY(scr::TITLE_BASELINE_Y) - 6, rotY(scr::TITLE_BASELINE_Y) + 2, inkTitleBand);
-    printf("  pied de page (panneau y %u..%u)    : %d pixels\n",
-           rotY(scr::FOOTER_BASELINE_Y), rotY(scr::FOOTER_TOP_Y), inkFooterBand);
-    printf("  entre le pied et la grille (y %u..%u) : %d pixels\n",
-           rotY(scr::FOOTER_TOP_Y) + 1, rotY(scr::GRID_BOTTOM_Y) - 1, inkGap);
+    printf("=== ROTATION (U8G2_R2) ===\n");
+    if (rotation_mutate) printf("  ROTATION_MUTATE actif : memoire lue a 180 degres\n");
+    printf("  C1 filet (panneau y %u) : %d pixels, seuil %d ; ligne la plus encree y %u (%d px) %s\n",
+           ruleRow, inkRuleRow, ruleMinInkEnv, densestRow, densestInk, c1_ok ? "OK" : "KO");
+    printf("  C2 ligne vide (panneau y %u) : %d pixels %s\n",
+           blankRow, inkBlankRow, c2_ok ? "OK" : "KO");
+    printf("  C3 titre (panneau y %u..%u) : %d pixels ; derniere rangee (panneau y %u) : %d pixels %s\n",
+           titleTop, titleBottom, inkTitleBand, lastRow, inkLastRow, c3_ok ? "OK" : "KO");
 
     const int geometry_ok = skip_geometry || (missing == 0);
-    const int rotation_ok = (inkTitleBand > 0 && inkFooterBand > 0 && inkGap == 0);
+    const int rotation_ok = (c1_ok && c2_ok && c3_ok);
     printf("\n  geometrie %s   rotation %s\n",
            geometry_ok ? "OK" : "KO", rotation_ok ? "OK" : "KO");
     return (geometry_ok && rotation_ok && watch_ok) ? 0 : 1;

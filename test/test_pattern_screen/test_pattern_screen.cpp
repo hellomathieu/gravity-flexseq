@@ -108,7 +108,6 @@ static PatternScreenModel model(uint8_t length = 24, int8_t cursor = -1,
     m.cursor = cursor;
     m.playhead = playhead;
     m.barLength = bar;
-    m.footer = nullptr;
     return m;
 }
 
@@ -402,7 +401,6 @@ static PatternScreenModel richModel() {
 
     PatternScreenModel m = model(20, 5, 12, 3);
     m.title = "EDIT PATTERN A1";
-    m.footer = "CH1  120BPM";
     return m;
 }
 
@@ -433,63 +431,16 @@ void test_eight_bands_reunited_equal_the_whole_image(void) {
     TEST_ASSERT_EQUAL_UINT16(0, diff);
     TEST_ASSERT_EQUAL_UINT8_MESSAGE(whole.strCalls, banded.strCalls,
         "le texte n'est pas dessine le meme nombre de fois band par bande");
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(2, whole.strCalls, "titre + pied de page");
-}
-
-void test_footer_sits_on_the_last_baseline_below_the_grid() {
-    PatternScreenModel m = model();
-    m.footer = "CH1  120BPM";
-    drawPatternScreen(canvas, m);
-    TEST_ASSERT_EQUAL_STRING("CH1  120BPM", canvas.lastStr);
-    TEST_ASSERT_EQUAL_UINT8(screen::FOOTER_BASELINE_Y, canvas.lastStrY);
-    TEST_ASSERT_EQUAL_UINT8(screen::FOOTER_X, canvas.lastStrX);
-    TEST_ASSERT_GREATER_THAN_UINT8_MESSAGE(screen::GRID_BOTTOM_Y, screen::FOOTER_TOP_Y,
-        "le pied doit etre STRICTEMENT sous le dernier pixel de la grille");
-}
-
-// Le pied ne doit apparaitre que dans SA bande : c'est ce qui rend le saut de
-// bande legitime, et c'est aussi ce qui echouerait si sa hauteur debordait.
-void test_footer_is_drawn_in_exactly_one_band() {
-    PatternScreenModel m = model();
-    m.footer = "CH1  120BPM";
-
-    uint8_t bandsWithFooter = 0;
-    for (uint8_t row = 0; row < screen::HEIGHT / 8; ++row) {
-        canvas.reset();
-        const flexseq::Band band = {static_cast<uint8_t>(row * 8),
-                                    static_cast<uint8_t>(row * 8 + 7)};
-        drawPatternScreen(canvas, m, band);
-        if (canvas.strCalls > 0) {
-            ++bandsWithFooter;
-            TEST_ASSERT_EQUAL_UINT8(screen::FOOTER_TOP_Y / 8, row);
-        }
-    }
-    TEST_ASSERT_EQUAL_UINT8(1, bandsWithFooter);
-}
-
-// Sous la grille et au-dessus du pied, la bande reste vide quoi qu'il arrive :
-// c'est la seconde bande que le saut peut economiser.
-void test_the_band_between_the_grid_and_the_footer_is_always_empty() {
-    const PatternScreenModel m = richModel();
-    canvas.reset();
-    drawPatternScreen(canvas, m, flexseq::Band{48, 55});
-
-    uint16_t ink = 0;
-    for (uint8_t y = 0; y < screen::HEIGHT; ++y)
-        for (uint8_t x = 0; x < screen::WIDTH; ++x)
-            if (canvas.px[y][x]) ++ink;
-
-    TEST_ASSERT_EQUAL_UINT16(0, ink);
-    TEST_ASSERT_EQUAL_UINT8(0, canvas.strCalls);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, whole.strCalls, "titre");
 }
 
 // L'ecartement doit AGIR, pas seulement etre correct : une bande vide de tout
 // element ne doit rien poser du tout.
 void test_a_band_without_any_element_draws_nothing(void) {
     PatternScreenModel m = richModel();
-    m.footer = nullptr; // sans pied de page, la bande 7 ne porte plus rien
 
-    // Bande 7 (y 56..63) : sous la derniere ligne de chiffres (max y = 38+5+4=47).
+    // Bande 7 (y 56..63) : sous la derniere ligne de chiffres (max y = 38+5+4=47),
+    // et le pied a quitte l'ecran EDIT.
     canvas.reset();
     drawPatternScreen(canvas, m, flexseq::Band{56, 63});
 
@@ -533,9 +484,6 @@ int main() {
     RUN_TEST(test_title_is_centred_on_its_baseline);
 
     RUN_TEST(test_eight_bands_reunited_equal_the_whole_image);
-    RUN_TEST(test_footer_sits_on_the_last_baseline_below_the_grid);
-    RUN_TEST(test_footer_is_drawn_in_exactly_one_band);
-    RUN_TEST(test_the_band_between_the_grid_and_the_footer_is_always_empty);
     RUN_TEST(test_a_band_without_any_element_draws_nothing);
     return UNITY_END();
 }

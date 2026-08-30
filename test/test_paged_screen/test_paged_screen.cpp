@@ -178,7 +178,6 @@ PatternScreenModel modelOf(const Pattern& pattern) {
     model.cursor = 0;
     model.playhead = 0;
     model.barLength = 4;
-    model.footer = "CH1  120BPM";
     return model;
 }
 
@@ -299,41 +298,25 @@ void test_an_unchanged_title_skips_its_band(void) {
     TEST_ASSERT_FALSE_MESSAGE(display.sent[TITLE], "bande du titre renvoyee sans raison");
     TEST_ASSERT_EQUAL_UINT16_MESSAGE(0, display.opsPerPage[TITLE],
                                      "bande du titre redessinee sans raison");
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(FakeDisplay::PAGES - 3,
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(FakeDisplay::PAGES - 1,
         static_cast<uint8_t>(display.sendCalls - sendsBefore), "un envoi de trop");
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(FakeDisplay::PAGES - 3,
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(FakeDisplay::PAGES - 1,
         static_cast<uint8_t>(display.clearCalls - clearsBefore),
         "le tampon de la bande a ete efface alors qu'elle est sautee");
-    TEST_ASSERT_FALSE_MESSAGE(display.sent[0], "bande du pied renvoyee sans raison");
-    TEST_ASSERT_FALSE_MESSAGE(display.sent[1],
-        "bande sous la grille renvoyee alors qu'elle est toujours vide");
-}
-
-// Pied change : sa bande revient, et elle seule sous la grille.
-void test_a_changed_footer_redraws_its_band(void) {
-    reset();
-    static char footer[] = "CH1  120BPM";
-    PatternScreenModel m = modelOf(source);
-    m.footer = footer;
-
-    paged.begin(display, m);
-    finishFrame();
-
-    memset(display.sent, 0, sizeof(display.sent));
-    footer[2] = '4';                          // CH1 -> CH4
-    paged.begin(display, m);
-    finishFrame();
-
+    // Le pied a emporte la seconde voie de saut : les deux bandes sous la grille
+    // sont desormais envoyees, vides, a chaque image.
     TEST_ASSERT_TRUE_MESSAGE(display.sent[0],
-        "le pied a change et sa bande n'a pas ete refaite");
+        "sans pied, aucune bande sous la grille n'est plus sautee");
+    TEST_ASSERT_TRUE_MESSAGE(display.sent[1],
+        "sans pied, aucune bande sous la grille n'est plus sautee");
 }
 
-// Sans pied de page, aucune bande sous la grille n'est sautee : meme prudence
-// que pour un titre absent.
-void test_without_a_footer_no_band_below_the_grid_is_skipped(void) {
+// La bande du titre est la SEULE voie de saut : le pied a quitte l'ecran EDIT
+// avec la sienne. Une image de routine envoie donc exactement une bande de moins
+// que l'image complete.
+void test_only_the_title_band_is_ever_skipped(void) {
     reset();
     PatternScreenModel m = modelOf(source);
-    m.footer = nullptr;
 
     paged.begin(display, m);
     finishFrame();
@@ -488,26 +471,12 @@ void test_the_band_conversion_is_the_right_way_round(void) {
         opsPerBand[i] = static_cast<uint16_t>(display.ops - before);
     }
 
-    TEST_ASSERT_GREATER_THAN_UINT16_MESSAGE(0, opsPerBand[0],
-        "bande d'affichage 0 = logique 56..63, donc le PIED DE PAGE");
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(0, opsPerBand[0],
+        "bande d'affichage 0 = logique 56..63 : sous la grille, et le pied est parti");
     TEST_ASSERT_EQUAL_UINT16_MESSAGE(0, opsPerBand[1],
-        "bande d'affichage 1 = logique 48..55 : sous la grille, au-dessus du pied");
+        "bande d'affichage 1 = logique 48..55 : sous la grille");
     TEST_ASSERT_GREATER_THAN_UINT16_MESSAGE(0, opsPerBand[FakeDisplay::PAGES - 1],
         "la derniere bande porte le titre");
-}
-
-// Sans pied de page, la bande d'affichage 0 redevient vide. C'est ce qui prouve
-// que l'encre vue plus haut est bien le pied et non un debordement.
-void test_without_a_footer_the_first_display_band_is_empty(void) {
-    reset();
-    source.writeStep(0, true);
-    PatternScreenModel m = modelOf(source);
-    m.footer = nullptr;
-
-    paged.begin(display, m);
-
-    TEST_ASSERT_EQUAL_UINT16_MESSAGE(0, display.ops,
-        "bande d'affichage 0 sans pied de page : rien a dessiner");
 }
 
 // Une image complete laisse de l'encre : la reunion des bandes montre quelque
@@ -590,12 +559,10 @@ int main(int, char**) {
     RUN_TEST(test_editing_during_a_frame_does_not_tear_it);
     RUN_TEST(test_the_edit_shows_up_on_the_next_frame);
     RUN_TEST(test_the_band_conversion_is_the_right_way_round);
-    RUN_TEST(test_without_a_footer_the_first_display_band_is_empty);
     RUN_TEST(test_a_whole_frame_leaves_ink);
     RUN_TEST(test_an_unchanged_title_skips_its_band);
     RUN_TEST(test_a_changed_title_redraws_its_band);
-    RUN_TEST(test_a_changed_footer_redraws_its_band);
-    RUN_TEST(test_without_a_footer_no_band_below_the_grid_is_skipped);
+    RUN_TEST(test_only_the_title_band_is_ever_skipped);
     RUN_TEST(test_two_titles_with_the_same_character_sum_are_distinguished);
     RUN_TEST(test_the_safety_net_forces_a_full_frame_periodically);
 

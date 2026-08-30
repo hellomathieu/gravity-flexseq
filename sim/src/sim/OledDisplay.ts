@@ -15,7 +15,7 @@
  *   barre verticale dans la gouttiere : separation de mesure (GRAPHIQUE seule)
  */
 import type { CellView } from "./PatternView.js";
-import { GLYPH_HEIGHT, textPixels, textWidth } from "./oledFont.js";
+import { textPixels, textWidth } from "./oledFont.js";
 import { RATCHET_NONE, RATCHET_TRIPLET } from "../domain/Pattern.js";
 
 export const OLED_W = 128;
@@ -56,8 +56,6 @@ const HEADER_LINE_X = 4;
 const HEADER_LINE_W = 120;
 
 const GRID_BOTTOM_Y = ROW_CY[1]! + DIGIT_DY + 4;
-const FOOTER_TOP = OLED_H - GLYPH_HEIGHT;
-const FOOTER_X = HEADER_LINE_X;
 
 export interface StepCenter {
   x: number;
@@ -92,7 +90,6 @@ export interface OledModel {
    */
   barLength?: number;
   /** Pied de page d'EDIT PATTERN : channel et tempo. Absent = rien dessine. */
-  footer?: string;
 }
 
 /** Sous-ensemble de CanvasRenderingContext2D utilise (testable/mockable). */
@@ -214,10 +211,6 @@ export function drawOled(ctx: OledCtx, model: OledModel): void {
     frame(ctx, colX(model.cursor), ROW_CY[rowOf(model.cursor)]!);
   }
 
-  if (model.footer !== undefined && model.footer !== "") {
-    blitText(ctx, model.footer.toUpperCase(), FOOTER_X, FOOTER_TOP);
-  }
-
   // Step joue : pixel central inverse (blanc sur un step actif, noir sinon).
   const head = model.playhead;
   if (head !== undefined && head >= 0 && head < 24) {
@@ -230,5 +223,5 @@ export function drawOled(ctx: OledCtx, model: OledModel): void {
   }
 }
 
-/** Le pied tient STRICTEMENT sous le dernier pixel que la grille peut poser. */
-export const FOOTER_GEOMETRY = { top: FOOTER_TOP, x: FOOTER_X, gridBottom: GRID_BOTTOM_Y };
+/** Le dernier pixel que la grille peut poser. Le pied a quitte l'ecran EDIT. */
+export { GRID_BOTTOM_Y };

@@ -60,20 +60,11 @@ constexpr uint8_t HEADER_LINE_X = 4;
 constexpr uint8_t HEADER_LINE_Y = 10;
 constexpr uint8_t HEADER_LINE_W = 120;
 
+// Ascendante de la police 5x7 du titre. Elle a servi a placer le pied, qui a
+// quitte l'ecran EDIT ; elle reste parce que le controle de rotation delimite la
+// bande du titre avec elle.
 constexpr uint8_t GLYPH_ASCENT = 6;
 constexpr uint8_t GRID_BOTTOM_Y = ROW_CY_1 + DIGIT_DY + DIGIT_H - 1;
-constexpr uint8_t FOOTER_BASELINE_Y = HEIGHT - 1;
-constexpr uint8_t FOOTER_TOP_Y = FOOTER_BASELINE_Y - GLYPH_ASCENT;
-constexpr uint8_t FOOTER_X = HEADER_LINE_X;
-
-static_assert(
-    FOOTER_TOP_Y > GRID_BOTTOM_Y,
-    "the footer must sit strictly below every pixel the grid can draw"
-);
-static_assert(
-    FOOTER_TOP_Y / 8 == FOOTER_BASELINE_Y / 8,
-    "the footer must fit in a single 8-pixel band for the band skip to apply"
-);
 
 inline uint8_t colX(uint8_t index) {
     return static_cast<uint8_t>(COL_X0 + (index % PER_ROW) * COL_SPACING);
@@ -128,7 +119,6 @@ struct PatternScreenModel {
     int8_t cursor;     // step en cours d'edition, -1 pour masquer
     int8_t playhead;   // step joue, -1 pour masquer
     uint8_t barLength; // separation de mesure (0 = aucune) : GRAPHIQUE seule
-    const char* footer;
 };
 
 namespace detail {
@@ -306,11 +296,6 @@ void drawPatternScreen(Canvas& canvas, const PatternScreenModel& model,
                              static_cast<uint8_t>(cy - screen::SELECT_HALF),
                              screen::SELECT_SIZE, screen::SELECT_SIZE);
         }
-    }
-
-    if (model.footer != nullptr
-        && touches(band, screen::FOOTER_TOP_Y, screen::FOOTER_BASELINE_Y)) {
-        canvas.drawStr(screen::FOOTER_X, screen::FOOTER_BASELINE_Y, model.footer);
     }
 
     // Step joue : pixel central inverse (efface sur un step actif, encre sinon).

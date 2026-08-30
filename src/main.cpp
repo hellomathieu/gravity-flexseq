@@ -26,11 +26,6 @@ flexseq::Preferences preferences;
 flexseq::PersistentImageV3 persistentImage(engine, ui, preferences);
 flexseq::PersistenceScheduler persistence;
 flexseq::EepromStorage eeprom;
-// "CH1  120BPM" : le channel et le tempo, reecrits a chaque image.
-char uiFooter[13] = "CH1  120BPM";
-constexpr uint8_t UI_FOOTER_CHANNEL = 2;
-constexpr uint8_t UI_FOOTER_TEMPO = 5;
-
 // --- UI ---------------------------------------------------------------------
 // Rendu ETALE : UNE BANDE PAR PASSAGE de loop() (ADR 0001). Le mode _1_ de
 // libGravity n'alloue que 128 o de tampon pour un ecran de 1024 : U8g2 rend donc
@@ -76,14 +71,6 @@ void beginEditFrame(uint8_t channel) {
     uiTitle[UI_TITLE_BANK] = (selected < 8) ? 'A' : 'B';
     uiTitle[UI_TITLE_NUM] = static_cast<char>('1' + (selected % 8));
 
-    uiFooter[UI_FOOTER_CHANNEL] = static_cast<char>('1' + channel);
-    const uint8_t written =
-        flexseq::detail::writeUnsigned(uiFooter + UI_FOOTER_TEMPO, ui.tempo());
-    uiFooter[UI_FOOTER_TEMPO + written] = 'B';
-    uiFooter[UI_FOOTER_TEMPO + written + 1] = 'P';
-    uiFooter[UI_FOOTER_TEMPO + written + 2] = 'M';
-    uiFooter[UI_FOOTER_TEMPO + written + 3] = '\0';
-
 #if FLEXSEQ_ENCODER_PROBE
     flexseq::probe::writeReport(uiTitle);
 #endif
@@ -96,7 +83,6 @@ void beginEditFrame(uint8_t channel) {
     model.cursor = static_cast<int8_t>(ui.stepCursor());
     model.playhead = engine.effectiveStep(channel);
     model.barLength = static_cast<uint8_t>(engine.getBarLength(channel));
-    model.footer = uiFooter;
 
     uiScreen.begin(gravity.display, model);
 }
