@@ -146,6 +146,41 @@ ends that state: the base, the effective length and the grid all stop at 36.
 only writer of `effectiveLength`, and that property stays unprovable by
 behaviour while `LENGTH_CV_OFFSET` is 0.
 
+## Amendment — 2026-08-30 (lot LCV.4a)
+
+`LENGTH_CV_OFFSET` stops being a constant. Lot LCV gives each channel its own
+offset, driven by the Length CV, so the value varies per channel and over time.
+
+**The argument that made it a constant is spent.** This decision recorded that a
+field would cost RAM for a value that cannot vary. The value now varies. The
+constant becomes a per-channel state, and the RAM it costs buys a feature instead
+of nothing.
+
+**Three invariants survive, and they are why this amendment is short.**
+
+- `refreshEffectiveLength()` stays the **single writer** of `effectiveLength`. The
+  offset changes where the input comes from, never who writes the result;
+- `baseLength` stays the persisted value. The CV never writes it, and
+  `saveTemplate()` keeps reading the base;
+- the derivation keeps its shape, `clamp(baseLength + offset, MIN_LENGTH,
+  MAX_LENGTH)`. Only `offset` moves from an immediate to a field.
+
+**The single-writer property becomes falsifiable.** The amendment of lot SF3
+states the condition: while the offset is 0, a direct write to `effectiveLength`
+produces the value the derivation produces, so that mutant is equivalent. A
+varying offset separates the two, and the property can be tested.
+
+**The five equivalent mutants of lot SF3 become detectable again**, for the same
+reason: `baseLength` and `effectiveLength` can differ. They return to the series
+**once the engine seam exists, and not before**. A mutant restored earlier would
+go undetected because the feature is missing, and that figure would say nothing
+about the tests. The denominator goes from 226 to an expected 231, **to be
+measured, never declared**.
+
+**Out of scope of this amendment.** The mapping from CV to offset, which lot
+LCV.2 decides. The routing, which PRD §10.2 holds. The RECORDING freeze, which
+PRD §5.5 holds since 2026-08-30.
+
 ## Alternatives set aside
 
 **Write the contract, keep the code.** `saveTemplate()` would read
@@ -163,7 +198,8 @@ refused for the same reason: it becomes wrong in silence.
 
 ## References
 
-- PRD §5.2 (the base is persisted), §10 (the clamp formula), §11.1 (a template
+- PRD §5.2 (the base is persisted), §10 (the clamp formula), §10.2 (the CV
+  routing), §5.5 (LENGTH is frozen during a RECORDING), §11.1 (a template
   length runs from 1 to 36, `MAX_LENGTH` is 24 until lot SF3)
 - ADR 0006 (templates in EEPROM, instances in RAM), ADR 0007 (`sizeof(Pattern)`)
 - `include/flexseq/SequencerEngine.h`, `src/domain/SequencerEngine.cpp`
