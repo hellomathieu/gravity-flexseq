@@ -62,7 +62,8 @@ length, and its existing assertions must pass unmodified.
 accepts `[MIN_LENGTH, MAX_LENGTH]`, so `[1, 24]` today. A load from storage
 accepts `[MIN_LENGTH, MAX_TEMPLATE_LENGTH]`, so `[1, 36]`. The second entry point
 is named for where the value comes from, never for the absence of a check: it
-checks, against another bound.
+checks, against another bound. ⚠️ **The amendment of 2026-08-30 changes the two
+bounds to the same value. It does not change this rule.**
 
 **Measured cost of the field: RAM +6 bytes, Flash −2 bytes** (2026-08-29, commit
 `ee6ed26`). The 6 bytes are attributed rather than deduced: the whole gap sits in
@@ -79,7 +80,45 @@ zero.
 
 **Out of scope, and recorded so it is not discovered later.** The Length CV
 itself. And the screen, which will show 24 while the base holds 36: that belongs
-to the interface lot that raises `MAX_LENGTH` to 36.
+to lot SF3, which raises `MAX_LENGTH` to 36. See the amendment of 2026-08-30.
+
+## Amendment — 2026-08-30 (lot SF3)
+
+Lot SF3 moves `MAX_LENGTH` from 24 to 36. The two validation domains now hold the
+same value:
+
+```text
+setBaseLength()             [1, 24]  ->  [1, 36]
+setBaseLengthFromStorage()  [1, 36]  ->  [1, 36]
+```
+
+**The two entry points stay, and both bounds stay.** The distinction is no longer
+a distinction of value. It is a distinction of responsibility:
+
+- `setBaseLength()` is the user path. Its bound is the interface cap;
+- `setBaseLengthFromStorage()` is the codec path. Its bound is the pattern
+  capacity, through `MAX_STORED_LENGTH`.
+
+Do not merge the two functions, and do not delete `MAX_STORED_LENGTH`. Two facts
+make the convergence temporary. The persistence format must carry `baseLength`
+without the interface cap. And `LENGTH_CV_OFFSET` becomes variable with the
+Length CV. A merge would repair nothing and would remove a boundary the project
+needs again.
+
+⚠️ **The convergence costs one mutant, and the loss is recorded here rather than
+absorbed.** The mutant that replaced the storage call by the manual call in
+`Persistence.cpp` is now an **equivalent mutant**: the two functions have the
+same body and the same bound, so no value separates them. It leaves the
+denominator, which the lot keeps at 230 by adding a TypeScript mutant on
+`MAX_LENGTH`. That mutant closes a gap the C++ side never had.
+
+⚠️ **The screen no longer shows a length the channel cannot play.** The paragraph
+under Consequences said the screen would show 24 while the base held 36. Lot SF3
+ends that state: the base, the effective length and the grid all stop at 36.
+
+**The single-writer limit is unchanged.** `refreshEffectiveLength()` stays the
+only writer of `effectiveLength`, and that property stays unprovable by
+behaviour while `LENGTH_CV_OFFSET` is 0.
 
 ## Alternatives set aside
 
@@ -99,7 +138,7 @@ refused for the same reason: it becomes wrong in silence.
 ## References
 
 - PRD §5.2 (the base is persisted), §10 (the clamp formula), §11.1 (a template
-  length runs from 1 to 36, `MAX_LENGTH` is 24 until lot F)
+  length runs from 1 to 36, `MAX_LENGTH` is 24 until lot SF3)
 - ADR 0006 (templates in EEPROM, instances in RAM), ADR 0007 (`sizeof(Pattern)`)
 - `include/flexseq/SequencerEngine.h`, `src/domain/SequencerEngine.cpp`
 - Measurement: `tools/run-build-memory.sh`, 2026-08-29
