@@ -105,19 +105,29 @@ without the interface cap. And `LENGTH_CV_OFFSET` becomes variable with the
 Length CV. A merge would repair nothing and would remove a boundary the project
 needs again.
 
-⚠️ **The convergence costs three mutants, and the loss is recorded here rather
-than absorbed.** `baseLength` and `effectiveLength` now hold the same value at
-all times, because `LENGTH_CV_OFFSET` is 0 and the two bounds are equal. No test
-can separate them. Three mutants become **equivalent mutants**:
+⚠️ **The convergence costs five mutants, and the loss is recorded here rather
+than absorbed.** Two properties disappear together. `baseLength` and
+`effectiveLength` hold the same value at all times, because `LENGTH_CV_OFFSET`
+is 0. And the two entry points carry the same bound. No test separates either
+pair, so five mutants become **equivalent mutants**:
 
-- `cpp: the channel record restores the base through the manual entry point` —
-  the two entry points have the same body and the same bound;
-- `cpp: saveTemplate serialises the effective length (B4b.6.2)`;
-- `ts: saveTemplate serialises the effective length (B4b.6.2)`.
+- `cpp: the channel record restores the base through the manual entry point`;
+- `cpp: loadTemplate restores the length through the manual entry point`;
+- `ts: loadTemplate restores the length through the manual entry point`;
+- `cpp: saveTemplate serialises the effective length`;
+- `ts: saveTemplate serialises the effective length`.
 
-The three leave the denominator. Lot SF3 adds one TypeScript mutant on
+The five leave the denominator. Lot SF3 adds one TypeScript mutant on
 `MAX_LENGTH`, which closes a gap the C++ side never had. The denominator
-therefore goes from 230 to **228**.
+therefore goes from 230 to **226**.
+
+⚠️ **Three of the five were found by the probe, not by the audit.** The audit of
+lot SF3a read the mutants that name `MAX_LENGTH`, and it found the mutants that
+name a constant. It did not find the mutants that name a **function**. The sweep
+that finds the whole class searches the probe for `setBaseLengthFromStorage` and
+for `getBaseLength`, never for the bound. This is the same failure the method
+rules of `docs/open-risks.md` already describe: a search on a name does not find
+a dependence on an effect.
 
 ⚠️ **Two tests lose their discriminating power at the same time, and they were
 renamed rather than left to claim a proof they no longer carry.**
