@@ -11,13 +11,15 @@ namespace {
 void usage() {
     std::fprintf(stderr,
         "usage: eeprom-image --mode clock|seq [--steps 0,3,4,9,15] [--tempo 120]\n"
-        "                    [--ratchet 0:6,3:2] [--subdiv -8] [--per-channel]\n"
-        "                    [--format 2|3]\n"
+        "                    [--ratchet 0:6,3:2] [--subdiv -8] [--length 36]\n"
+        "                    [--per-channel] [--format 2|3]\n"
         "writes the persistent image to stdout, one byte per byte, no header\n"
         "--per-channel gives each channel its own template, and refuses\n"
         "--steps and --ratchet\n"
         "--format picks the EEPROM layout. It defaults to 2, the format the\n"
-        "firmware reads today. Format 3 is not emitted yet.\n");
+        "firmware reads today. Format 3 is not emitted yet.\n"
+        "--length sets the base length of the six channels. The engine keeps\n"
+        "its own bound, so an out-of-range value is refused here.\n");
 }
 
 struct PerChannelTemplate {
@@ -59,10 +61,10 @@ bool writePerChannelTemplates(PatternBank& bank) {
 bool parseSteps(const char* list, uint8_t* steps, int& count) {
     count = 0;
     const char* p = list;
-    while (*p != '\0' && count < 24) {
+    while (*p != '\0' && count < Pattern::DEFAULT_TOTAL_STEPS) {
         char* end = nullptr;
         const long value = std::strtol(p, &end, 10);
-        if (end == p || value < 0 || value >= 24) {
+        if (end == p || value < 0 || value >= Pattern::DEFAULT_TOTAL_STEPS) {
             return false;
         }
         steps[count++] = static_cast<uint8_t>(value);
@@ -77,10 +79,11 @@ bool parseSteps(const char* list, uint8_t* steps, int& count) {
 bool parseRatchets(const char* list, uint8_t* steps, uint8_t* codes, int& count) {
     count = 0;
     const char* p = list;
-    while (*p != '\0' && count < 24) {
+    while (*p != '\0' && count < Pattern::DEFAULT_TOTAL_STEPS) {
         char* end = nullptr;
         const long step = std::strtol(p, &end, 10);
-        if (end == p || step < 0 || step >= 24 || *end != ':') {
+        if (end == p || step < 0 || step >= Pattern::DEFAULT_TOTAL_STEPS
+            || *end != ':') {
             return false;
         }
         p = end + 1;
@@ -182,6 +185,7 @@ int main(int argc, char** argv) {
     const char* stepList = nullptr;
     const char* ratchetList = nullptr;
     const char* subdivText = nullptr;
+    const char* lengthText = nullptr;
     uint16_t tempo = UiController::DEFAULT_TEMPO;
     bool perChannel = false;
     uint8_t format = persist::FORMAT_VERSION;
@@ -195,6 +199,8 @@ int main(int argc, char** argv) {
             ratchetList = argv[++i];
         } else if (std::strcmp(argv[i], "--subdiv") == 0 && i + 1 < argc) {
             subdivText = argv[++i];
+        } else if (std::strcmp(argv[i], "--length") == 0 && i + 1 < argc) {
+            lengthText = argv[++i];
         } else if (std::strcmp(argv[i], "--tempo") == 0 && i + 1 < argc) {
             tempo = static_cast<uint16_t>(std::atoi(argv[++i]));
         } else if (std::strcmp(argv[i], "--per-channel") == 0) {
@@ -238,7 +244,7 @@ int main(int argc, char** argv) {
     PersistentImage image(bank, engine, ui, preferences);
 
     if (stepList != nullptr) {
-        uint8_t steps[24];
+        uint8_t steps[Pattern::DEFAULT_TOTAL_STEPS];
         int count = 0;
         if (!parseSteps(stepList, steps, count)) {
             std::fprintf(stderr, "eeprom-image: step list refused: %s\n", stepList);
@@ -255,8 +261,8 @@ int main(int argc, char** argv) {
     }
 
     if (ratchetList != nullptr) {
-        uint8_t steps[24];
-        uint8_t codes[24];
+        uint8_t steps[Pattern::DEFAULT_TOTAL_STEPS];
+        uint8_t codes[Pattern::DEFAULT_TOTAL_STEPS];
         int count = 0;
         if (!parseRatchets(ratchetList, steps, codes, count)) {
             std::fprintf(stderr, "eeprom-image: ratchet list refused: %s\n", ratchetList);
@@ -289,6 +295,16 @@ int main(int argc, char** argv) {
         for (uint8_t channel = 0; channel < SequencerEngine::CHANNEL_COUNT; ++channel) {
             if (!engine.setSubdiv(channel, subdiv)) {
                 std::fprintf(stderr, "eeprom-image: subdiv refused: %s\n", subdivText);
+                return 2;
+            }
+        }
+    }
+    if (lengthText != nullptr) {
+        const long wanted = std::strtol(lengthText, nullptr, 10);
+        for (uint8_t channel = 0; channel < SequencerEngine::CHANNEL_COUNT; ++channel) {
+            if (wanted < 0 || wanted > 255
+                || !engine.setBaseLength(channel, static_cast<uint8_t>(wanted))) {
+                std::fprintf(stderr, "eeprom-image: length refused: %s\n", lengthText);
                 return 2;
             }
         }

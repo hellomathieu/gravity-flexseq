@@ -76,10 +76,13 @@ static const struct { char port; uint8_t bit; const char *name; } LINES[LINE_COU
  * fabriquer l'image EEPROM : le harnais ne porte plus de copie du contenu.
  * Positions VOLONTAIREMENT IRREGULIERES cote appelant : un motif regulier
  * (0,4,8,12) serait indistinguable d'un compteur qui derive. */
-#define MAX_ACTIVE 24
+#define MAX_ACTIVE 36                /* Pattern::DEFAULT_TOTAL_STEPS */
 static uint8_t g_expected[MAX_ACTIVE];
 static int g_expected_count;
-#define PATTERN_LENGTH 16            /* SequencerEngine::DEFAULT_LENGTH */
+/* La longueur jouee arrive par la ligne de commande, comme le motif. Le
+ * harnais ne la deduit pas de l'image : l'appelant la donne, et il donne la
+ * meme valeur au generateur. Defaut SequencerEngine::DEFAULT_LENGTH. */
+static int g_pattern_length = 16;
 #define TICKS_PER_STEP 96            /* SUBDIV = /1 a 96 PPQN */
 #ifndef BPM
 #define BPM 120                      /* UiController::DEFAULT_TEMPO */
@@ -131,7 +134,7 @@ static int expected_gaps(int *gaps)
         gaps[i] = g_expected[i + 1] - g_expected[i];
     }
     gaps[g_expected_count - 1] =
-        PATTERN_LENGTH - g_expected[g_expected_count - 1] + g_expected[0];
+        g_pattern_length - g_expected[g_expected_count - 1] + g_expected[0];
     return g_expected_count;
 }
 
@@ -142,7 +145,7 @@ static int parse_steps(const char *list)
     while (*p && g_expected_count < MAX_ACTIVE) {
         char *end = NULL;
         const long v = strtol(p, &end, 10);
-        if (end == p || v < 0 || v >= 24) return 0;
+        if (end == p || v < 0 || v >= MAX_ACTIVE) return 0;
         g_expected[g_expected_count++] = (uint8_t)v;
         p = end;
         if (*p == ',') ++p;
@@ -176,6 +179,7 @@ int main(int argc, char **argv)
     const uint16_t ee_base = (argc > 4) ? (uint16_t)strtol(argv[4], NULL, 0) : 384;
     const char *mode = (argc > 5) ? argv[5] : "clock";
     const char *steps = (argc > 6) ? argv[6] : "0,3,4,9,15";
+    if (argc > 7) g_pattern_length = (int)strtol(argv[7], NULL, 10);
     const int seq = strcmp(mode, "seq") == 0;
     /* Course RATCHET : les onsets ne sont plus sur la grille des steps, donc
      * ni l ecart entre impulsions ni la gigue par rapport a cette grille ne
@@ -242,7 +246,7 @@ int main(int argc, char **argv)
     printf("firmware   %s\n", fw);
     printf("simulation %.1f s ; mode %s ; steps attendus", seconds, mode);
     for (int i = 0; i < g_expected_count; ++i) printf(" %u", g_expected[i]);
-    printf(" sur %d\n\n", PATTERN_LENGTH);
+    printf(" sur %d\n\n", g_pattern_length);
 
     /* Le firmware demarre A L'ARRET depuis le 2026-08-25, comme l'original. La
      * sonde doit donc APPUYER SUR PLAY, sinon elle mesurerait le silence et le

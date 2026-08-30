@@ -81,6 +81,13 @@ JITTER_BUDGET_PCT="${JITTER_BUDGET_PCT:-2}"
 # que « la duree de step suit le tempo » soit verifiable et pas seulement crue.
 TEMPO="${TEMPO:-120}"
 STEP_TOLERANCE_PCT="${STEP_TOLERANCE_PCT:-1}"
+# LENGTH change la longueur jouee dans l IMAGE ET l attente du harnais. La
+# meme valeur part aux deux, sinon l ecart de bouclage serait faux. Defaut
+# SequencerEngine::DEFAULT_LENGTH, donc le comportement nominal ne bouge pas.
+LENGTH="${LENGTH:-16}"
+# EXPECTED_LENGTH sert la contre-epreuve : donner au harnais une longueur
+# differente de celle de l image doit rougir.
+EXPECTED_LENGTH="${EXPECTED_LENGTH:-$LENGTH}"
 
 if [ -t 1 ]; then
   C_OK=$'\033[32m'; C_ERR=$'\033[31m'; C_DIM=$'\033[2m'; C_B=$'\033[1m'; C_0=$'\033[0m'; TTY=1
@@ -144,7 +151,7 @@ else
   printf '\n'; cat "$LOG"; die "compilation du generateur d'image en echec"
 fi
 
-STEPS="0,3,4,9,15"
+STEPS="${STEPS:-0,3,4,9,15}"
 IMAGE_STEPS="$STEPS"
 if [ -n "${MUTATE:-}" ]; then
   IMAGE_STEPS="$STEPS,$MUTATE"
@@ -167,6 +174,7 @@ for MODE in clock seq ratchet; do
     [ -n "${RATCHET_MUTATE:-}" ] && GEN_ARGS="$GEN_ARGS,$RATCHET_MUTATE"
   fi
   if ! "$GEN" $GEN_ARGS --format "$FLEXSEQ_FORMAT_VERSION" --steps "$IMAGE_STEPS" --tempo "$TEMPO" \
+       --length "$LENGTH" \
        > "$(dirname "$BIN")/ee-$MODE.bin" 2>"$LOG"; then
     cat "$LOG"; die "generation de l'image $MODE en echec"
   fi
@@ -186,7 +194,7 @@ for MODE in clock seq ratchet; do
   progress "simulation $MODE ($DURATION s)"
   set +e
   "$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$DURATION" \
-    "$(dirname "$BIN")/ee-$MODE.bin" 384 "$MODE" "$STEPS" > "$LOG" 2>&1
+    "$(dirname "$BIN")/ee-$MODE.bin" 384 "$MODE" "$STEPS" "$EXPECTED_LENGTH" > "$LOG" 2>&1
   PROBE=$?
   set -e
   if [ "$PROBE" -ne 0 ]; then
