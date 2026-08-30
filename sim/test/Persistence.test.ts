@@ -440,7 +440,7 @@ describe("Persistence — round trip", () => {
     expect(loaded.prefs.cvCalibration[1]).toBe(300);
   });
 
-  it("keeps a base length above the interface ceiling (ADR 0009)", () => {
+  it("keeps a base length of thirty six across a round trip (ADR 0009)", () => {
     const eeprom = new FakeEeprom();
     const saved = rig();
     expect(saved.engine.setBaseLengthFromStorage(0, 36)).toBe(true);
@@ -1154,7 +1154,7 @@ describe("saveTemplate — instance vers template EEPROM (ADR 0009)", () => {
     }
   });
 
-  it("ecrit baseLength et non effectiveLength", () => {
+  it("ecrit la longueur du canal dans l'enregistrement", () => {
     const ee = new FakeEeprom();
     const r = rigV3();
     expect(r.engine.setBaseLengthFromStorage(1, 36)).toBe(true);

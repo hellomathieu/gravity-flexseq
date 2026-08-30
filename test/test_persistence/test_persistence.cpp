@@ -487,7 +487,7 @@ void test_the_v3_length_bound_is_the_pattern_capacity_not_the_engine_cap() {
  * Aller-retour
  */
 
-void test_a_round_trip_keeps_a_base_length_above_the_interface_ceiling() {
+void test_a_round_trip_keeps_a_base_length_of_thirty_six() {
     eeprom.reset();
     Rig saved;
     TEST_ASSERT_TRUE(saved.engine.setBaseLengthFromStorage(0, 36));
@@ -1142,7 +1142,7 @@ void test_save_template_writes_the_instance_content_into_the_record() {
     }
 }
 
-void test_save_template_writes_the_base_length_not_the_effective_one() {
+void test_save_template_writes_the_channel_length_into_the_record() {
     FakeEeprom ee;
     RigV3 r;
     TEST_ASSERT_TRUE(r.engine.setBaseLengthFromStorage(1, 36));
@@ -1649,7 +1649,7 @@ int main() {
     RUN_TEST(test_the_v3_length_bound_is_the_pattern_capacity_not_the_engine_cap);
 
     RUN_TEST(test_a_round_trip_restores_the_state_byte_for_byte);
-    RUN_TEST(test_a_round_trip_keeps_a_base_length_above_the_interface_ceiling);
+    RUN_TEST(test_a_round_trip_keeps_a_base_length_of_thirty_six);
     RUN_TEST(test_an_all_zero_template_is_empty);
     RUN_TEST(test_one_active_step_makes_a_template_occupied);
     RUN_TEST(test_the_thirty_sixth_step_alone_makes_a_template_occupied);
@@ -1666,7 +1666,7 @@ int main() {
     RUN_TEST(test_the_image_scan_resumes_after_the_template);
     RUN_TEST(test_no_advance_ever_writes_more_than_one_byte);
     RUN_TEST(test_save_template_writes_the_instance_content_into_the_record);
-    RUN_TEST(test_save_template_writes_the_base_length_not_the_effective_one);
+    RUN_TEST(test_save_template_writes_the_channel_length_into_the_record);
     RUN_TEST(test_save_template_refuses_the_eight_frozen_slots_without_writing);
     RUN_TEST(test_save_template_accepts_the_eight_writable_slots);
     RUN_TEST(test_save_template_refuses_an_invalid_channel_or_index_without_writing);
