@@ -773,18 +773,18 @@ The instance a channel edits lives in RAM, and the firmware persists it. `SAVE` 
 7. the choice of the destination **never** destroys the edited instance before the save.
 The detailed design — the button in the header, the destination selector, the confirmation modal — belongs to lot E.
 ---
-## 13. Architecture logicielle & workflow
-Trois rôles séparés :
-- **TypeScript** — modèle de référence, tests, scénarios, **Gravity Simulator** visuel (feedback rapide).
-- **C++ AVR** — firmware réel, intégration libGravity, PlatformIO, cible ATmega328P.
-- **simavr / avr8js** — exécution du firmware AVR compilé pour validation avant hardware.
-Le modèle TypeScript et le C++ **ne doivent pas devenir deux spécifications indépendantes** : parité comportementale maintenue (Pattern, PatternBank, SequencerEngine).
+## 13. Software architecture and workflow
+Three separate roles:
+- **TypeScript** — the reference model, the tests, the scenarios, and the visual **Gravity Simulator**, for fast feedback.
+- **C++ AVR** — the real firmware, the libGravity integration, PlatformIO, and the ATmega328P target.
+- **simavr / avr8js** — they run the compiled AVR firmware, for a validation before the hardware.
+The TypeScript model and the C++ **must not become two independent specifications**: the project keeps a behavioural parity across Pattern, PatternBank and SequencerEngine.
 ```javascript
-Itération rapide : TypeScript → tests → Gravity Simulator → feedback
-Validation firmware : C++ → PlatformIO → .elf → simavr/avr8js
-Validation physique : C++ → flash → Gravity (au minimum)
+Fast iteration:        TypeScript → tests → Gravity Simulator → feedback
+Firmware validation:   C++ → PlatformIO → .elf → simavr/avr8js
+Physical validation:   C++ → flash → Gravity (at the minimum)
 ```
-Le simulateur reproduit l'écran OLED (police `velvetscreen` réelle décodée) pour juger le rendu final sans hardware.
+The simulator reproduces the OLED screen, with the real `velvetscreen` font decoded, so that a reader can judge the final render with no hardware.
 ---
 ## 14. Tests & vérification
 Tout code de domaine est testé unitairement.
