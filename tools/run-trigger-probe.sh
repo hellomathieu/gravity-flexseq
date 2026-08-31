@@ -70,7 +70,7 @@
 #
 # Reglages : DURATION (defaut 20 s de simulation), JITTER_BUDGET_PCT (defaut 2),
 # RATCHET_STEP et RATCHET_CODE (defaut 0 et 6).
-# Sortie 0 si les trois courses passent, 1 sinon, 127 si un outil manque.
+# Sortie 0 si les six courses passent, 1 sinon, 127 si un outil manque.
 
 set -u
 
@@ -88,21 +88,35 @@ LENGTH="${LENGTH:-16}"
 # EXPECTED_LENGTH sert la contre-epreuve : donner au harnais une longueur
 # differente de celle de l image doit rougir.
 EXPECTED_LENGTH="${EXPECTED_LENGTH:-$LENGTH}"
-# Injection CV, OPTIONNELLE. Fournir CV1_MV ou CV2_MV ajoute deux courses :
-# `cvzero` au zero mesure du module, et `cvlength` a la tension demandee.
-# EXPECTED_OFFSET est la zone attendue, un LITTERAL verifiable contre la
-# table figee du lot LCV.3a : le harnais ne recopie pas le quantizer.
+# Injection CV : NOMINALE depuis la decision D8, 2026-08-31. Trois courses de
+# plus, et elles exercent les DEUX sources :
+#   cvzero     les deux entrees au zero mesure du module, routage 1:2
+#   cv1length  CV1 a CV_NOMINAL_MV, routage 1:2
+#   cv2length  CV2 a CV_NOMINAL_MV, routage 2:2
+#
+# Pourquoi les deux. La preuve CV1 seule ne dit rien de CV2 : le routage nomme un
+# INDEX de source, et c'est l'index qui decide quelle voie est lue. Une course
+# CV2 obtenue a la main se perdrait au prochain lot, alors que la propriete
+# verrouillee est celle-ci :
+#   CV1 -> source 1 -> LENGTH   vert
+#   CV2 -> source 2 -> LENGTH   vert
+#   mauvais routage             rouge
+#   mauvais offset attendu      rouge
+#
+# EXPECTED_OFFSET est la zone attendue, un LITTERAL verifiable contre la table
+# figee du lot LCV.3a : le harnais ne recopie pas le quantizer.
+#
+# Leviers de contre-epreuve. CV_TARGET force le routage des TROIS courses, donc
+# `CV_TARGET=1:2` sur la course cv2length injecte sur CV2 en routant la source 1
+# et doit rougir. CV1_MV et CV2_MV forcent la tension injectee.
 CV_ZERO_MV="${CV_ZERO_MV:-2625}"
-CV1_MV="${CV1_MV:-}"
-CV2_MV="${CV2_MV:-}"
-EXPECTED_OFFSET="${EXPECTED_OFFSET:-0}"
+CV_NOMINAL_MV="${CV_NOMINAL_MV:-4150}"
+EXPECTED_OFFSET="${EXPECTED_OFFSET:-10}"
+CV1_MV="${CV1_MV:-$CV_NOMINAL_MV}"
+CV2_MV="${CV2_MV:-$CV_NOMINAL_MV}"
+CV_TARGET_FORCED="${CV_TARGET:-}"
 CV_TARGET="${CV_TARGET:-1:2}"
-COURSES="clock seq ratchet"
-if [ -n "$CV1_MV" ] || [ -n "$CV2_MV" ]; then
-  COURSES="$COURSES cvzero cvlength"
-fi
-CV1_MV="${CV1_MV:-$CV_ZERO_MV}"
-CV2_MV="${CV2_MV:-$CV_ZERO_MV}"
+COURSES="clock seq ratchet cvzero cv1length cv2length"
 
 if [ -t 1 ]; then
   C_OK=$'\033[32m'; C_ERR=$'\033[31m'; C_DIM=$'\033[2m'; C_B=$'\033[1m'; C_0=$'\033[0m'; TTY=1
@@ -181,7 +195,9 @@ for MODE in $COURSES; do
   GEN_ARGS="--mode seq"
   [ "$MODE" = "clock" ] && GEN_ARGS="--mode clock"
   case "$MODE" in
-    cvzero|cvlength) GEN_ARGS="--mode seq --cv-target $CV_TARGET" ;;
+    cvzero)    GEN_ARGS="--mode seq --cv-target ${CV_TARGET_FORCED:-1:2}" ;;
+    cv1length) GEN_ARGS="--mode seq --cv-target ${CV_TARGET_FORCED:-1:2}" ;;
+    cv2length) GEN_ARGS="--mode seq --cv-target ${CV_TARGET_FORCED:-2:2}" ;;
   esac
   # RATCHET_MUTATE=<step>:<code> ajoute un ratchet a l IMAGE et pas a l ATTENTE.
   # Avec un code dont N-1 ne divise pas celui du critere, la difference cesse
@@ -216,10 +232,14 @@ for MODE in $COURSES; do
   case "$MODE" in
     cvzero)
       PROBE_MODE="seq"; PROBE_CV="$CV_ZERO_MV $CV_ZERO_MV" ;;
-    cvlength)
+    cv1length)
       PROBE_MODE="seq"
       PROBE_LENGTH=$(( EXPECTED_LENGTH + EXPECTED_OFFSET ))
-      PROBE_CV="$CV1_MV $CV2_MV" ;;
+      PROBE_CV="$CV1_MV $CV_ZERO_MV" ;;
+    cv2length)
+      PROBE_MODE="seq"
+      PROBE_LENGTH=$(( EXPECTED_LENGTH + EXPECTED_OFFSET ))
+      PROBE_CV="$CV_ZERO_MV $CV2_MV" ;;
   esac
   set +e
   "$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$DURATION" \
@@ -384,10 +404,8 @@ if [ "$FAILED" -ne 0 ]; then
   printf '\n  %s❌%s Au moins une course echoue.\n' "$C_ERR" "$C_0"
   exit 1
 fi
-CV_NOTE=""
-if [ -n "${CV1_MV:-}" ] && [ "$COURSES" != "clock seq ratchet" ]; then
-  CV_NOTE=", CV LENGTH module"
-fi
-printf '\n  %s✅%s Les courses passent : CLOCK ignore, SEQ joue, RATCHET subdivise%s.\n' \
-  "$C_OK" "$C_0" "$CV_NOTE"
+printf '\n  %s✅%s Les courses passent : CLOCK ignore, SEQ joue, RATCHET subdivise,\n' \
+  "$C_OK" "$C_0"
+printf '     %sCV1 et CV2 modulent LENGTH chacune par son propre index de source.%s\n' \
+  "$C_DIM" "$C_0"
 exit 0
