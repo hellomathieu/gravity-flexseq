@@ -18,7 +18,7 @@ traps. Read `test_filter` in `platformio.ini` for the inventory.
 That is a removal of duplication, and not a synchronisation between two lists.
 Three documents used to enumerate by hand what `platformio.ini` already
 declares, so each one drifted at every lot: on 2026-08-31 this file named 14
-modules for `env:native` where the filter collected 20, and PRD section 14 named
+modules for `env:native` where the filter collected 19, and PRD section 14 named
 7.
 
 A directory `test/test_*` that appears in no `test_filter` is a CONFIGURATION
