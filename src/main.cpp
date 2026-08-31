@@ -99,8 +99,9 @@ void beginMainFrame() {
     model.patternIndex = channel >= 0
         ? engine.getSelectedPattern(static_cast<uint8_t>(channel))
         : -1;
+    // FIELD_LENGTH montre la longueur EDITABLE, jamais la longueur modulee.
     model.length = channel >= 0
-        ? engine.getEffectiveLength(static_cast<uint8_t>(channel))
+        ? engine.getBaseLength(static_cast<uint8_t>(channel))
         : 0;
     model.subdiv = channel >= 0 ? engine.getSubdiv(static_cast<uint8_t>(channel)) : 0;
     model.barLength = channel >= 0
@@ -221,6 +222,14 @@ void loop() {
     ticks = pendingTicks;
     pendingTicks = 0;
     interrupts();
+
+    // ADR 0002 : le domaine ne lit jamais le convertisseur. La valeur deja
+    // calibree est POUSSEE ici, et le moteur la consomme a la frontiere de
+    // step, jamais avant (PRD 10.3).
+    engine.setCvInput(flexseq::CV_SOURCE_1,
+                      flexseq::cv::latestCalibrated(flexseq::cv::CV1));
+    engine.setCvInput(flexseq::CV_SOURCE_2,
+                      flexseq::cv::latestCalibrated(flexseq::cv::CV2));
 
     if (ticks > 0) {
         transport.tick(ticks);
