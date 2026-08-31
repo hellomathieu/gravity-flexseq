@@ -31,10 +31,10 @@ no parallel French copy: that copy is what
 .claude/rules/knowledge-persistence.md forbids.
 -->
 
-**Firmware alternatif du module Eurorack Sitka Instruments Gravity — Trigger Sequencer dont les patterns ont une capacité de 36 steps, la longueur réglable à l'interface allant de 1 à 36 depuis le lot SF3, 2026-08-30.**
-> **Statut :** version normative — intègre les décisions validées par le POC TypeScript et l'alignement firmware C++ (tests natifs verts, vérification simavr, RAM mesurée sur ATmega328P).
-> **Base logicielle :** `libGravity` (Adam Wonak), résolu depuis le **fork du projet** `github.com/hellomathieu/libGravity`, figé au commit `4c5b4d0b4f38a9e04055ad48f1f7e2d90541c93c` — `platformio.ini` fait foi, et la charte de ce que le fork a le droit de réparer est l'**ADR 0008**. L'ancien pin `9be88be1f4` est obsolète.
-> **Hardware :** Gravity strictement inchangé.
+**An alternative firmware for the Sitka Instruments Gravity Eurorack module — a Trigger Sequencer whose patterns hold a capacity of 36 steps, with the length adjustable at the interface from 1 to 36 since lot SF3, 2026-08-30.**
+> **Status:** the normative version. It carries the decisions the TypeScript POC and the C++ firmware alignment validated: the native tests green, the simavr verification, and the RAM measured on the ATmega328P.
+> **Software base:** `libGravity` (Adam Wonak), resolved from the **fork of the project** `github.com/hellomathieu/libGravity`, frozen at the commit `4c5b4d0b4f38a9e04055ad48f1f7e2d90541c93c`. `platformio.ini` is the authority, and the charter of what the fork may repair is **ADR 0008**. The old pin `9be88be1f4` is obsolete.
+> **Hardware:** the Gravity, strictly unchanged.
 ---
 ## 1. Vision
 Gravity FlexSeq is an alternative firmware for the Gravity. The project develops it **without a change to the hardware**, and it builds technically on `libGravity`. It extends the original **Trigger Sequencer**, which holds 16 fixed steps. The patterns of the new sequencer hold a **capacity of 36 steps**. The interface adjusts the length from **1 to `MAX_LENGTH`**, which is **36 since lot SF3, 2026-08-30**. The temporal design is more general, and the module keeps its historical features.
