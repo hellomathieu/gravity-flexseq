@@ -11,6 +11,10 @@
 #     l'ensemble des echecs est EXACTEMENT celui audite (voir
 #     tools/run-libgravity-tests.sh).
 #
+# Le controle de COLLECTE tourne en premier : platformio.ini fait autorite sur
+# l'inventaire des tests (decision D5, 2026-08-31), et un repertoire absent de
+# tout test_filter rendrait la suite verte tout en etant incomplete.
+#
 # Usage :
 #   ./tools/run-all-tests.sh              # les trois suites, avec recap
 #   ./tools/run-all-tests.sh --ts         # TypeScript uniquement
@@ -40,6 +44,20 @@ tc_status="skip"
 lib_status="skip"
 img_status="skip"
 ad_status="skip"
+col_status="skip"
+
+# Collecte des tests. platformio.ini fait autorite sur l'inventaire (decision D5
+# du proprietaire, 2026-08-31) : un repertoire test/test_* absent de tout
+# test_filter n'est pas collecte, donc la suite sort verte en etant incomplete.
+echo "=========================================="
+echo "  Collecte des tests (inventaire D5)"
+echo "=========================================="
+if "$REPO_ROOT/tools/check-test-collection.py"; then
+  col_status="OK"
+else
+  col_status="ECHEC"
+fi
+echo
 
 if [ "$RUN_CPP" = "1" ]; then
   echo "=========================================="
@@ -117,6 +135,7 @@ if [ "$RUN_LIB" = "1" ]; then
 fi
 
 echo "=================== RECAP ==================="
+printf "  Collecte des tests (D5)    : %s\n" "$col_status"
 printf "  C++ acceptation (native)   : %s\n" "$cpp_status"
 printf "  Adaptateur d'entrees       : %s\n" "$ad_status"
 printf "  Image EEPROM generee       : %s\n" "$img_status"
@@ -126,9 +145,10 @@ printf "  libGravity caracterisation : %s\n" "$lib_status"
 echo "============================================"
 
 # Code de sortie : erreur si l'une des suites lancees a echoue.
-if [ "$cpp_status" = "ECHEC" ] || [ "$ad_status" = "ECHEC" ] \
-   || [ "$ts_status" = "ECHEC" ] || [ "$tc_status" = "ECHEC" ] \
-   || [ "$img_status" = "ECHEC" ] || [ "$lib_status" = "ECHEC" ]; then
+if [ "$col_status" = "ECHEC" ] || [ "$cpp_status" = "ECHEC" ] \
+   || [ "$ad_status" = "ECHEC" ] || [ "$ts_status" = "ECHEC" ] \
+   || [ "$tc_status" = "ECHEC" ] || [ "$img_status" = "ECHEC" ] \
+   || [ "$lib_status" = "ECHEC" ]; then
   exit 1
 fi
 exit 0
