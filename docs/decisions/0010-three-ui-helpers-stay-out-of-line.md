@@ -123,6 +123,57 @@ each is larger than the whole of lot S. They stay out of this decision, on the
 owner's instruction of 2026-08-30. A mixed perimeter would hide what QB3 gave.
 They are recorded as a separate opportunity.
 
+## Amendment — 2026-08-31, the stack bound
+
+**The bound of 206 bytes is passed, and lot LCV passes it.** The decision itself
+does not change: the three `noinline` attributes stay, and they still return 126
+bytes of Flash. This amendment corrects one number, and the reasoning that
+produced it stays valid for the firmware it measured.
+
+**Two reproducible measurements settle it**, both taken on 2026-08-31 with
+`tools/run-stack-probe.sh`, on the production firmware, with no instrumentation:
+
+| Commit | Firmware RAM | Stack peak | Vectors |
+|---|---:|---:|---|
+| `7b7e67a`, the commit that records this decision | 1338 B | **205 B** | 6 of 6 |
+| `327f9f1`, the head at the time of this amendment | 1357 B | **207 B** | 6 of 6, two identical runs |
+
+**The chronology explains everything, and no historical figure is wrong.** Three
+lots follow each other, and each one moves the peak:
+
+```text
+lot S     205 B    measured again on 7b7e67a, so this decision was right
+lot F     203 B    the three-row grid RETURNS 2 bytes: the rowCY() formula
+                   replaces a ternary that used one register more
+lot LCV   207 B    +4 bytes: advance() now reaches latestCalibrated() and the
+                   quantiser, two call levels deeper than before
+```
+
+⚠️ **The figures 203 and 205 never contradicted each other.** They describe two
+different firmwares, and the versioned record `tools/memory-baseline` proves it:
+the acceptance after lot S carries Flash 27320, and the acceptance after lot F
+carries RAM 1317 and Flash 27030, three hours later. A reader who applies the
+delta of lot LCV to the peak of lot S gets 209 and concludes wrongly that one of
+the two figures is false. The delta of lot LCV applies to lot F.
+
+**What is left of the bound.** The static bound of this decision reads the frame
+of each function in the disassembly, and it gave the deepest interface chain at
+26 bytes against 25. That reading is unchanged, and it stays valid: it bounds the
+interface path, and not the peak of the whole firmware. Lot LCV added depth
+somewhere else, on the engine path, which this decision never measured. The
+sentence "the peak therefore stays at or below 206 bytes" therefore holds for the
+firmware of 2026-08-30, and for that firmware only.
+
+**The reserve does not move.** `RAM_RESERVE` stays at 256 bytes, so the margin at
+the current peak is **49 bytes**, and the reserve covers the peak **1.2×**. The
+absolute condition holds widely: 207 bytes against 691 bytes of free RAM.
+`docs/open-risks.md` line 66 tracks that margin, and its figure of 207 is now
+verified.
+
+**A rule this amendment leaves.** A static bound on one call path does not bound
+the peak of the firmware. Only the runtime probe does that, and every lot that
+adds call depth must run it **before** it acknowledges its footprint.
+
 ## References
 
 - PRD §14 (measured footprint, engine constructor set aside)
@@ -130,3 +181,8 @@ They are recorded as a separate opportunity.
 - `CLAUDE.md`, memory discipline, for the `MAX_LENGTH` result at zero bytes
 - Measurement: `tools/run-build-memory.sh` and `tools/run-stack-probe.sh`,
   2026-08-30
+- Measurement of the amendment: `tools/run-stack-probe.sh`, 2026-08-31, on
+  `7b7e67a` and on `327f9f1`
+- `tools/memory-baseline`, the versioned record, for the chronology of the three
+  lots
+- `docs/open-risks.md` line 66, which tracks the margin
