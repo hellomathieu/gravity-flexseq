@@ -286,6 +286,35 @@ the first mutant and restores in a `finally` and on signal. The general shape is
 the one above: a tool must not depend on the good behaviour of the thing it
 measures.
 
+**A DOCUMENT must not suppose what it states either.** The rule above was written
+for a tool, and section 15 of the PRD broke it as a document. It announced its
+current figures "on the head `a190676`", while they came from five heads of the
+same day. What made the single head legitimate was never written: no commit of
+that day touched `src/`, `include/` or `platformio.ini`, so every memory figure
+described one binary. The proof is one command, and it now sits in the text. A
+figure that rests on an unstated condition is a figure a reader cannot check.
+
+**A REREAD AFTER A REWRITE FINDS WHAT THE REWRITE CREATED. Keep them as two
+steps.** The rebuild of section 15 on 2026-08-31 replaced twenty stale figures
+with measured ones, and it introduced a new defect while doing it: a list
+enumerated "494 · 12 · 14" and concluded 506, where the 14 are criteria of the
+EEPROM image check and not assertions. A reader who added the three terms got
+520. The rewrite could not see it, because the same pass that writes a sum is the
+pass that believes it. The separate reread found it. **Do not merge the rewrite
+and the reread of a document into one step**, and do not let the author of a
+rewrite validate it in the same breath.
+
+**A MEASUREMENT'S LABEL IS CHECKED AGAINST THE VERSIONED RECORD, never against
+memory.** Section 15 carried the figures RAM 1317 / Flash 27030 / stack 203 under
+the label "after lot S" for a day, and it attributed a second, different state to
+the same lot three lines below. `tools/memory-baseline` settled it in one read:
+the acceptance `e23f710` carries 1317 and 27030 and belongs to lot **F**, and the
+acceptance of lot S, `78c6be4`, carries 27320 three hours earlier. The figures
+were all correct. Only the label was wrong, and a wrong label makes a correct
+figure unusable — it sends the next lot to compute a delta against the wrong
+generation. That is exactly the mistake this session made on the stack, where
+205 + 4 gave 209 and looked like a contradiction.
+
 **A tool must not assume what it measures.** Four occurrences, all on the same
 probe. It grouped bands by eight and announced 504 ms frames the day there were
 only seven; groupings are now done by the **protocol** — U8g2 control byte,
