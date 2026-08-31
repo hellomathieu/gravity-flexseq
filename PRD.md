@@ -302,32 +302,32 @@ It is the same rule as the ratchet of an inactive step: **dormant, and never los
 **Engine API, tested:** `start()`, `stop()`, `reset()`, `advance(ticks=1)`, `setPatternBank(bank)`, `refreshTiming()`. Per channel: `selectedPattern`, `effectiveLength`, `subdiv` and `ticksPerStep`, `barLength`, `effectiveStep`, `hasStepped`, **`onsetCount`** (the triggers of the last `advance()`, ratchets included), `currentStepTicks`, `currentStepTriggers`.
 ---
 ## 8. Transport
-La conversion *événement horloge → progression* appartient à **Transport**. Source unifiée : le callback **96 PPQN de sortie** de libGravity (interne et externe y surfacent) → 1 tick.
+The conversion from a *clock event* to a *progression* belongs to **Transport**. The source is unified: the **96 PPQN output** callback of libGravity, where the internal and the external clock both surface, gives 1 tick.
 <table header-row="true">
 <tr>
-<td>Événement</td>
+<td>Event</td>
 <td>Transport</td>
-<td>Effet moteur</td>
+<td>Effect on the engine</td>
 </tr>
 <tr>
 <td>MIDI Start</td>
 <td>`start()`</td>
-<td>reset global puis run</td>
+<td>a global reset, and then run</td>
 </tr>
 <tr>
 <td>MIDI Continue</td>
 <td>`resume()`</td>
-<td>run sans reset</td>
+<td>run with no reset</td>
 </tr>
 <tr>
 <td>MIDI Stop</td>
 <td>`stop()`</td>
-<td>stop sans reset (phase conservée)</td>
+<td>stop with no reset, and the phase is kept</td>
 </tr>
 <tr>
 <td>External Reset</td>
 <td>`reset()`</td>
-<td>reset global (phase → 0)</td>
+<td>a global reset, the phase goes to 0</td>
 </tr>
 <tr>
 <td>MIDI / Ext Clock</td>
@@ -335,52 +335,52 @@ La conversion *événement horloge → progression* appartient à **Transport**.
 <td>`advance(n)`</td>
 </tr>
 </table>
-**Implémentation :** le callback ISR accumule un compteur `volatile` de ticks, drainé **atomiquement** dans la boucle principale → `Transport.tick(n)` (moteur muté uniquement en contexte main-loop).
-> **Différé :** les hooks distincts MIDI Start/Continue/Stop et External Reset ne sont pas exposés séparément par libGravity au commit figé (uClock gère start/stop en interne). `resume/stop/reset` sont implémentés et testés mais pas encore déclenchés (seuls `start()` au boot et `tick` sont câblés).
-### 8.1 Câblage — VALIDÉ le 2026-08-22
-Quatre câblages, dont un jamais posé :
+**Implementation:** the ISR callback accumulates a `volatile` counter of ticks. The main loop drains it **atomically** into `Transport.tick(n)`, so only the main-loop context mutates the engine.
+> **Deferred:** libGravity does not expose the separate hooks for MIDI Start, Continue and Stop, and none for External Reset, at the frozen commit. uClock handles start and stop internally. `resume`, `stop` and `reset` are implemented and tested, and nothing triggers them yet: only `start()` at the boot and `tick` are wired.
+### 8.1 Wiring — VALIDATED on 2026-08-22
+Four wirings, and one of them was never made:
 <table header-row="true">
 <tr>
-<td>Ce qu'on câble</td>
-<td>Comment</td>
+<td>What we wire</td>
+<td>How</td>
 </tr>
 <tr>
-<td>Sortie 96 PPQN vers le moteur</td>
-<td>`AttachIntHandler` — **déjà fait**</td>
+<td>The 96 PPQN output to the engine</td>
+<td>`AttachIntHandler` — **already done**</td>
 </tr>
 <tr>
-<td>Entrée d'horloge externe</td>
-<td>`AttachExtHandler(onExtClock)`, et `onExtClock` appelle `clock.Tick()`</td>
+<td>The external clock input</td>
+<td>`AttachExtHandler(onExtClock)`, and `onExtClock` calls `clock.Tick()`</td>
 </tr>
 <tr>
-<td>Marche / arrêt</td>
-<td>PLAY appui court (§12.1)</td>
+<td>Run and stop</td>
+<td>a short press on PLAY (§12.1)</td>
 </tr>
 <tr>
-<td>Tempo et source</td>
-<td>champs de l'onglet `◔` (§12.1)</td>
+<td>Tempo and source</td>
+<td>the fields of the `◔` tab (§12.1)</td>
 </tr>
 </table>
-⚠️ **`AttachExtHandler`**** attache l'interruption sur ****`EXT_PIN`****, mais le rappel est le NÔTRE.** libGravity n'appelle pas `uClock.clockMe()` lui-même — lu dans `clock.h` le 2026-08-22. Sans ce câblage, **une horloge externe ne produit rien**. C'est la pièce que `main.cpp` n'a jamais posée, et elle n'est visible ni dans les tests natifs ni en simulation.
-**PLAY repart de zéro — décidé par le propriétaire le 2026-08-22.** Un appui sur PLAY après un arrêt appelle `Transport::start()`, donc **reset global puis marche**, et non `resume()`. Deux raisons : c'est ce qu'on attend d'un séquenceur à motifs courts, et cela **donne un geste au réalignement des channels**, qui autrement n'en aurait aucun — un step en TRIOLET étire le temps, donc les channels dérivent et le §6.3 dit que seul un reset global les réaligne. `resume()` et `stop()` ne sont pas jetés : ils restent le point d'entrée de MIDI Continue quand les hooks seront exposés.
-**Source d'horloge : DEUX CHAMPS, ****`MODE`**** et ****`PPQN`**** — révisé le 2026-08-23.** La rédaction précédente exposait les six valeurs de libGravity dans un seul champ `SRC`. Le propriétaire a tranché pour la séparation de l'original : `MODE` porte **INT / EXT / MIDI**, et `PPQN` n'apparaît **qu'en EXT**.
-**`PPQN`**** expose les QUATRE cadences de libGravity** — 24, 4, 2 et 1 — là où l'original n'en offrait que deux. C'est une **addition assumée** : elle n'enlève rien, l'utilisateur de l'original retrouve `24` et `4` là où il les attend, et les deux autres sont des capacités que la dépendance sait déjà fournir.
-**`MODE`**** et ****`PPQN`**** sont DEUX VUES D'UN SEUL OCTET**, celui de la source. La grille de libGravity est exactement leur produit :
-- `SOURCE_INTERNAL` → `MODE = INT` ;
-- `SOURCE_EXTERNAL_PPQN_24` → `MODE = EXT`, `PPQN = 24` ;
-- `SOURCE_EXTERNAL_PPQN_4` → `MODE = EXT`, `PPQN = 4` ;
-- `SOURCE_EXTERNAL_PPQN_2` → `MODE = EXT`, `PPQN = 2` ;
-- `SOURCE_EXTERNAL_PPQN_1` → `MODE = EXT`, `PPQN = 1` ;
+⚠️ **`AttachExtHandler` attaches the interrupt on `EXT_PIN`, but the callback is OURS.** libGravity does not call `uClock.clockMe()` itself, which we read in `clock.h` on 2026-08-22. Without this wiring, **an external clock produces nothing**. It is the piece `main.cpp` never put in place, and neither the native tests nor the simulation show it.
+**PLAY starts from zero — decided by the owner on 2026-08-22.** A press on PLAY after a stop calls `Transport::start()`, so a **global reset and then run**, and not `resume()`. Two reasons. That is what a sequencer of short patterns is expected to do. And it **gives a gesture to the realignment of the channels**, which would otherwise have none. A step in TRIPLET stretches the time, so the channels drift, and §6.3 says that only a global reset realigns them. `resume()` and `stop()` are not thrown away: they stay the entry point of MIDI Continue when the hooks are exposed.
+**The clock source takes TWO FIELDS, `MODE` and `PPQN` — revised on 2026-08-23.** The previous text exposed the six values of libGravity in a single field `SRC`. The owner settled on the separation of the original: `MODE` carries **INT / EXT / MIDI**, and `PPQN` appears **only in EXT**.
+**`PPQN` exposes the FOUR rates of libGravity** — 24, 4, 2 and 1 — where the original offered two. It is an **accepted addition**, and it removes nothing. A user of the original finds `24` and `4` where they expect them. The two others are capabilities the dependency already provides.
+**`MODE` and `PPQN` are TWO VIEWS OF ONE BYTE**, the byte of the source. The grid of libGravity is exactly their product:
+- `SOURCE_INTERNAL` → `MODE = INT`;
+- `SOURCE_EXTERNAL_PPQN_24` → `MODE = EXT`, `PPQN = 24`;
+- `SOURCE_EXTERNAL_PPQN_4` → `MODE = EXT`, `PPQN = 4`;
+- `SOURCE_EXTERNAL_PPQN_2` → `MODE = EXT`, `PPQN = 2`;
+- `SOURCE_EXTERNAL_PPQN_1` → `MODE = EXT`, `PPQN = 1`;
 - `SOURCE_EXTERNAL_MIDI` → `MODE = MIDI`.
-Deux conséquences, et ce sont des conséquences et non des choix. **Aucun octet EEPROM n'est ajouté pour ****`PPQN`**, l'octet de source suffit. Et **aucun état incohérent n'est représentable** : stocker les deux séparément permettrait d'enregistrer `MODE = INT` avec `PPQN = 4`, qui ne veut rien dire, alors qu'une vue dérivée ne peut pas mentir.
-⚠️ **`PPQN`**** DÉSIGNE L'ENTRÉE, JAMAIS LE MOTEUR.** Le moteur tourne à **96 PPQN dans tous les modes**, y compris INT : `clock.h:59` appelle `setOutputPPQN(PPQN_96)` **une seule fois** et `SetSource()` n'y touche jamais. `SetSource()` n'appelle que `setInputPPQN`, et seulement pour les modes externes. Le champ dit donc combien d'impulsions par noire le **signal reçu** transporte, et uClock les multiplie jusqu'à 96 :
-- `PPQN = 24` → une impulsion reçue vaut **4** ticks internes ;
-- `PPQN = 4` → **24** ticks ;
-- `PPQN = 2` → **48** ticks ;
+Two consequences, and they are consequences and not choices. **No EEPROM byte is added for `PPQN`**, because the source byte is enough. And **no incoherent state is representable**: to store the two separately would allow `MODE = INT` with `PPQN = 4`, which means nothing, while a derived view cannot lie.
+⚠️ **`PPQN` NAMES THE INPUT, AND NEVER THE ENGINE.** The engine runs at **96 PPQN in every mode**, INT included: `clock.h:59` calls `setOutputPPQN(PPQN_96)` **once only**, and `SetSource()` never touches it. `SetSource()` calls `setInputPPQN` alone, and only for the external modes. The field therefore says how many pulses per quarter note the **received signal** carries, and uClock multiplies them up to 96:
+- `PPQN = 24` → one received pulse is worth **4** internal ticks;
+- `PPQN = 4` → **24** ticks;
+- `PPQN = 2` → **48** ticks;
 - `PPQN = 1` → **96** ticks.
-En **INT** il n'y a aucun signal à interpréter : le champ n'a pas de sujet, et ce n'est donc pas « `PPQN = 96` ». En **MIDI**, `clock.h:114` force l'entrée à 24 — la norme de l'horloge MIDI — donc le champ n'a pas de sujet non plus. C'est exactement pourquoi l'original n'affiche `PPQN` qu'en EXT et un seul champ en MIDI.
-⚠️ **Ne jamais passer ****`SOURCE_LAST`**** à ****`SetSource()`****.** C'est la sentinelle de fin d'énumération, et le `switch` de libGravity ne la traite pas — anomalie auditée, §18. Le champ doit donc s'arrêter sur les six valeurs valides sans jamais boucler par elle. À absorber dans `InputAdapter` (ADR 0002).
-**Tempo borné 30–300.** L'API accepte 1 à 400. Sous 30 le séquenceur n'est plus jouable ; au-delà de 300 les SUBDIV rapides tombent sous la milliseconde par step. L'original stockait le bpm sur un octet, donc ces bornes restent compatibles avec son format (§4.1).
+In **INT** there is no signal to interpret: the field has no subject, so it is not "`PPQN = 96`". In **MIDI**, `clock.h:114` forces the input to 24, the standard of the MIDI clock, so the field has no subject either. That is exactly why the original shows `PPQN` in EXT only, and one field in MIDI.
+⚠️ **Never pass `SOURCE_LAST` to `SetSource()`.** It is the sentinel that ends the enumeration, and the `switch` of libGravity does not handle it. This is an audited anomaly, §18. The field must therefore stop on the six valid values, and it must never wrap through the sentinel. `InputAdapter` absorbs it (ADR 0002).
+**The tempo is bounded 30–300.** The API accepts 1 to 400. Below 30 the sequencer is no longer playable. Above 300 the fast SUBDIV values fall below one millisecond per step. The original stored the bpm on one byte, so these bounds stay compatible with its format (§4.1).
 ---
 ## 9. Génération des triggers
 > **Décision validée.** Un channel émet un **trigger** quand il franchit l'onset d'un **step actif** de son pattern sélectionné : `triggered(ch) = onset(ch) ∧ pattern[selectedPattern(ch)].step(effectiveStep(ch))`. Le firmware traduit en impulsion sur la sortie (`DigitalOutput.Trigger()`, 5 ms par défaut).
