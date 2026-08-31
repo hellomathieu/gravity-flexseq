@@ -1062,6 +1062,23 @@ MUTANTS = [
      "sim/src/domain/Persistence.ts",
      "  if (offset >= V3_RECORD_STEPS_AT + FACTORY_MASK_BYTES) return 0;",
      "  if (offset >= V3_RECORD_STEPS_AT + 1) return 0;", "ts-factory"),
+
+    ("cpp: the zone is one unit wider, so every zone centre moves",
+     "include/flexseq/LengthCv.h",
+     "constexpr int16_t ZONE_WIDTH = 33;",
+     "constexpr int16_t ZONE_WIDTH = 34;", "cpp-lengthcv"),
+    ("ts: the zone is one unit wider, so every zone centre moves",
+     "sim/src/domain/LengthCv.ts",
+     "export const ZONE_WIDTH = 33;",
+     "export const ZONE_WIDTH = 34;", "ts-lengthcv"),
+    ("cpp: the DECLARED figure ZONE_COUNT drops to 30, with no calculated consequence",
+     "include/flexseq/LengthCv.h",
+     "constexpr uint8_t ZONE_COUNT = 31;",
+     "constexpr uint8_t ZONE_COUNT = 30;", "cpp-lengthcv"),
+    ("ts: the DECLARED figure ZONE_COUNT drops to 30, with no calculated consequence",
+     "sim/src/domain/LengthCv.ts",
+     "export const ZONE_COUNT = 31;",
+     "export const ZONE_COUNT = 30;", "ts-lengthcv"),
 ]
 
 SUITES = {
