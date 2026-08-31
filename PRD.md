@@ -382,9 +382,9 @@ In **INT** there is no signal to interpret: the field has no subject, so it is n
 ⚠️ **Never pass `SOURCE_LAST` to `SetSource()`.** It is the sentinel that ends the enumeration, and the `switch` of libGravity does not handle it. This is an audited anomaly, §18. The field must therefore stop on the six valid values, and it must never wrap through the sentinel. `InputAdapter` absorbs it (ADR 0002).
 **The tempo is bounded 30–300.** The API accepts 1 to 400. Below 30 the sequencer is no longer playable. Above 300 the fast SUBDIV values fall below one millisecond per step. The original stored the bpm on one byte, so these bounds stay compatible with its format (§4.1).
 ---
-## 9. Génération des triggers
-> **Décision validée.** Un channel émet un **trigger** quand il franchit l'onset d'un **step actif** de son pattern sélectionné : `triggered(ch) = onset(ch) ∧ pattern[selectedPattern(ch)].step(effectiveStep(ch))`. Le firmware traduit en impulsion sur la sortie (`DigitalOutput.Trigger()`, 5 ms par défaut).
-Chaîne vérifiée en **simavr** : `clock → Transport → SequencerEngine → TriggerSequencer → DigitalOutput → GPIO` (VCD CH1, période conforme au pattern de test).
+## 9. Trigger generation
+> **Decision validated.** A channel emits a **trigger** when it crosses the onset of an **active step** of its selected pattern: `triggered(ch) = onset(ch) ∧ pattern[selectedPattern(ch)].step(effectiveStep(ch))`. The firmware turns that into a pulse on the output (`DigitalOutput.Trigger()`, 5 ms by default).
+The chain is verified in **simavr**: `clock → Transport → SequencerEngine → TriggerSequencer → DigitalOutput → GPIO`, on VCD CH1, with a period that conforms to the test pattern.
 ---
 ## 10. CV
 > **Arbitré et validé le 2026-08-20.** La contradiction relevée le 2026-08-17 est **résolue** : LENGTH, RESET et STEP sont assumées comme des **extensions FlexSeq**. La conception Phase 2 reste la référence pour la *mécanique* — recentrage, offset additif puis clamp, exclusion mutuelle CV1/CV2, modulation BPM globale — mais **pas** pour la liste des destinations.
