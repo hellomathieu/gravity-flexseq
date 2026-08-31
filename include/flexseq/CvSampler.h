@@ -57,6 +57,12 @@ bool takeEdge(uint8_t channel);
 // a la frontiere de step (PRD 10.3).
 uint16_t latestRaw(uint8_t channel);
 
+// Derniere valeur connue dans la convention +/-512 de `AnalogInput::Read()`.
+// PRD 10.1 : le domaine ne voit JAMAIS le brut du convertisseur, donc la
+// calibration reste ici. L'arithmetique est celle de `calibratedFromRaw()`,
+// deja eprouvee : elle n'est pas recopiee.
+int16_t latestCalibrated(uint8_t channel);
+
 // Nombre de conversions achevees, pour verifier que l'echantillonnage tourne.
 uint32_t conversions();
 

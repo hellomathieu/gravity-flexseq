@@ -24,6 +24,12 @@ volatile uint16_t latest[flexseq::cv::COUNT] = {0, 0};
 volatile uint8_t pending = 0;  // un bit par voie : front vu, pas encore consomme
 volatile uint32_t completed = 0;
 
+// Calibration retenue par voie : `latestCalibrated()` en a besoin a chaque
+// lecture, la ou `configure()` ne s'en servait que pour les deux seuils.
+int16_t calLow[flexseq::cv::COUNT] = {0, 0};
+int16_t calHigh[flexseq::cv::COUNT] = {0, 0};
+int16_t calOffset[flexseq::cv::COUNT] = {0, 0};
+
 inline void startConversion(uint8_t channel) {
     converting = channel;
     ADMUX = static_cast<uint8_t>((1 << REFS0) | MUX_OF[channel]);  // reference AVCC
@@ -40,6 +46,9 @@ void configure(uint8_t channel, int16_t calibrationLow, int16_t calibrationHigh,
     if (channel >= COUNT) {
         return;
     }
+    calLow[channel] = calibrationLow;
+    calHigh[channel] = calibrationHigh;
+    calOffset[channel] = offset;
     gate[channel] = CvGate();
     gate[channel].configure(
         rawFromCalibrated(ARM_MV, calibrationLow, calibrationHigh, offset),
@@ -82,6 +91,14 @@ uint16_t latestRaw(uint8_t channel) {
     value = latest[channel];  // 16 bits : lecture non atomique sans ce verrou
     SREG = sreg;
     return value;
+}
+
+int16_t latestCalibrated(uint8_t channel) {
+    if (channel >= COUNT) {
+        return 0;
+    }
+    return calibratedFromRaw(latestRaw(channel), calLow[channel], calHigh[channel],
+                             calOffset[channel]);
 }
 
 uint32_t conversions() {
