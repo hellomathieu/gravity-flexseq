@@ -970,26 +970,26 @@ A change of version starts **from the defaults again**: the FlexSeq state writte
 - Do not make the firmware depend on the Mac, and not on Node.js. TypeScript2Cxx and avr8js are not runtime dependencies of the module.
 - **The PRD cycle:** design → prototype and tests → decision → a review of the PRD → a normative update → implementation.
 ---
-## 18. Dépendance libGravity — anomalies auditées
-`libGravity.cpp` (`Gravity::Process`) contient une boucle à index **non initialisé** : `for (int i; i < OUTPUT_COUNT; i++)` (comportement indéfini). libGravity étant figée et non modifiable, FlexSeq **contourne** en pilotant l'auto-extinction des sorties explicitement dans sa boucle principale. À remonter en amont si une évolution de la dépendance est envisagée.
-> **Suite de caractérisation — restaurée le 2026-08-20.** Les anomalies auditées ne sont plus décrites seulement par de la prose : l'environnement PlatformIO `native_libgravity` les **reproduit**, avec **7 assertions rouges par construction** sur 68, réparties sur `AnalogInput`, `Button`, `Encoder` et `DigitalOutput`. `test_gravity` porte en outre, depuis le 2026-08-20, la **caractérisation de ****`Gravity::Process()`** : elle lit exactement deux entrées analogiques — CV1 et CV2, une fois chacune — et scrute les deux boutons plus le bouton de l'encodeur. FlexSeq n'appelant plus cette fonction (§10.6), le risque n'est pas de rater une évolution amont — la dépendance est épinglée par décision — mais d'oublier de la re-auditer au prochain changement d'épingle. Un test jumeau vérifie que les morceaux appelés à la place couvrent les mêmes entrées avec **zéro** lecture analogique. Le script `tools/run-libgravity-tests.sh` vérifie que l'ensemble des échecs est **exactement** celui audité, et échoue sur toute dérive dans les deux sens — une anomalie qui disparaît comme un échec inattendu. Liste normative des anomalies : `CLAUDE.md` ; détail par test : `test/README`. Ces six tests avaient cessé de compiler pendant quatre mois sans émettre de signal, un `test_filter` les ayant retirés de la collecte dans le même commit qui supprimait leurs chemins d'inclusion. **Vérifié le 2026-08-20 :** aucune de ces anomalies n'est corrigée en amont, 3 commits après le commit épinglé.
+## 18. The libGravity dependency — audited anomalies
+`libGravity.cpp` (`Gravity::Process`) holds a loop whose index is **not initialised**: `for (int i; i < OUTPUT_COUNT; i++)`, so undefined behaviour. libGravity is frozen and not modifiable, so FlexSeq **works around** it, and it drives the auto-off of the outputs explicitly in its main loop. To report upstream if an evolution of the dependency ever comes up.
+> **The characterization suite — restored on 2026-08-20.** Prose alone no longer describes the audited anomalies: the PlatformIO environment `native_libgravity` **reproduces** them, with **7 red assertions by construction** out of 68, spread over `AnalogInput`, `Button`, `Encoder` and `DigitalOutput`. Since 2026-08-20, `test_gravity` also carries the **characterization of `Gravity::Process()`**: it reads exactly two analog inputs, CV1 and CV2, once each, and it polls both buttons plus the button of the encoder. FlexSeq no longer calls that function (§10.6), so the risk is not to miss an upstream evolution, because a decision pins the dependency. The risk is to forget to re-audit it at the next bump of the pin. A twin test checks that the pieces called instead cover the same inputs with **zero** analog read. The script `tools/run-libgravity-tests.sh` checks that the set of failures is **exactly** the audited one, and it fails on any drift in both directions: an anomaly that disappears counts as an unexpected failure. The normative list of the anomalies lives in `CLAUDE.md`, and the detail per test in `test/README`. Those six tests had stopped compiling for four months with no signal at all. A `test_filter` removed them from the collection, in the same commit that removed their include paths. **Verified on 2026-08-20:** none of these anomalies is fixed upstream, 3 commits after the pinned commit.
 >
-> **AUDIT D'ATTEIGNABILITÉ — 2026-08-21.** Reproduire une anomalie n'est pas la même chose que savoir si elle est **sur notre chemin d'exécution**. Vérifié par lecture du code appelé, en distinguant code actif et commentaire :
+> **REACHABILITY AUDIT — 2026-08-21.** To reproduce an anomaly is not the same thing as to know whether it sits **on our path of execution**. Verified by a read of the code that is called, and by a separation of the active code from the comments:
 >
-> \| Anomalie \| Sur le chemin du binaire de production ? \|
+> \| Anomaly \| On the path of the production binary? \|
 > \|---\|---\|
-> \| `AnalogInput::IsRisingEdge()` \| **non** — jamais appelée, `CvGate` la remplace (§10.5) \|
-> \| `Gravity::Process()` (index non initialisé) \| **non** dans `main.cpp` ; **oui** dans `wokwi_main.cpp`, seul appel actif restant \|
-> \| `Clock::SetSource()` (`SOURCE_LAST`) \| **non** — aucune source n'est choisie ; se manifeste comme avertissement du compilateur \|
-> \| `Button` (relâchement perdu au débounce) \| **latente** — `Process()` est appelé, mais aucun callback n'est relié \|
-> \| `Encoder` (faux premier mouvement) \| **latente** — idem \|
-> \| `DigitalOutput::Init()` (n'éteint pas) \| **latente** — voir ci-dessous \|
+> \| `AnalogInput::IsRisingEdge()` \| **no** — never called, and `CvGate` replaces it (§10.5) \|
+> \| `Gravity::Process()`, the uninitialised index \| **no** in `main.cpp` · **yes** in `wokwi_main.cpp`, the only active call left \|
+> \| `Clock::SetSource()`, `SOURCE_LAST` \| **no** — no source is chosen, and it shows up as a compiler warning \|
+> \| `Button`, a release lost at the debounce \| **latent** — `Process()` is called, and no callback is wired \|
+> \| `Encoder`, a false first movement \| **latent** — the same \|
+> \| `DigitalOutput::Init()`, it does not switch off \| **latent** — see below \|
 >
-> **Les trois « latentes » deviennent actives exactement au moment où l'UI et le transport seront reliés** (§12, §8) : c'est à la couche d'adaptation de les absorber, et c'est le piège à ne pas redécouvrir à ce moment-là.
+> **The three "latent" ones become active exactly when the UI and the transport are wired** (§12, §8). The adaptation layer must absorb them, and that is the trap not to rediscover at that moment.
 >
-> **`DigitalOutput::Init()`**** est inoffensive au démarrage à froid, pour une raison qu'il faut nommer** : un reset AVR laisse `PORT` à 0, donc `pinMode(pin, OUTPUT)` tire la broche au bas, et `gravity` est un objet **global** en `.bss`, donc `on_` part à faux. **Aucune sortie ne peut donc être bloquée haute au premier flash.** Elle devient réelle sur un **soft reset** — le firmware d'origine expose un `reboot()` — ou sur un second `Init()` : la broche resterait HAUTE alors que le firmware la croit éteinte, et rien ne l'éteindrait jamais. À traiter si un redémarrage logiciel est un jour ajouté.
+> **`DigitalOutput::Init()` is harmless on a cold start, and the reason must be named**: an AVR reset leaves `PORT` at 0, so `pinMode(pin, OUTPUT)` pulls the pin low, and `gravity` is a **global** object in `.bss`, so `on_` starts false. **No output can therefore stay stuck high at the first flash.** It becomes real on a **soft reset** — the original firmware exposes a `reboot()` — or on a second `Init()`: the pin would stay HIGH while the firmware believes it is off, and nothing would ever switch it off. To handle if a software restart is ever added.
 >
-> Suivi des actions correspondantes : `docs/open-risks.md`, lignes 14 à 16.
+> The matching actions are tracked in `docs/open-risks.md`, lines 14 to 16.
 ---
 ## 19. Critères de réussite
 Le firmware final doit : fonctionner sur le Gravity hardware **inchangé** ; conserver les fonctionnalités historiques retenues ; offrir des patterns 1–24 steps avec le modèle temporel `masterPhase` ; rester dans le budget RAM/Flash ; permettre la restauration du firmware original.
