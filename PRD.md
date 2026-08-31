@@ -200,16 +200,11 @@ A side gain, since the acceleration of the encoder disappeared: **180 detents** 
 - an **occupied** slot can be overwritten, after a confirmation on the screen (**decided on 2026-08-26**). "Empty" is computed: the 36 inactive cells;
 - **A1–A8 refuse** the write, as they do everywhere else;
 - the write holds 24 bytes, so about 82 ms spread by the persistence scheduler.
-### 5.1 Banque de patterns partagée
-⚠️ **This subsection stays in French, on purpose, and it is the only one.** Its nature is an open decision of the owner: the block is superseded by §5.0, it also holds current content, and its code fence carries a stale figure. To translate it would make a superseded block look maintained. The decision comes first, and the translation follows it.
-> **Décision validée.** Il existe **une banque unique de 16 patterns partagés** (A1–A8, B1–B8). Chaque channel possède un **sélecteur** `selectedPattern` (0–15). ⚠️ **SUPERSÉDÉ le 2026-08-23, voir §5.0.** Le modèle devient **template / instance** : les 16 patterns sont des **templates stockés en EEPROM**, et chaque channel travaille sur une **copie locale en RAM**. Éditer le pattern d'un channel n'affecte donc **aucun** autre channel.
-Ceci reprend le modèle du firmware Sitka original (16 tableaux partagés `seqA1..seqB8` + `channel.seqPattern`). Le modèle « 16 patterns privés par channel » est **abandonné** (divergeait de la référence et coûtait \~560 B de RAM).
-**Contenu d'un Pattern :** **36** steps binaires + **un code de ratchet par step, un nibble chacun** (décidé le 2026-08-23, `sizeof(Pattern) == 23` octets depuis le 2026-08-26, ADR 0007). **Aucune longueur** dans le Pattern, et **aucune séparation de mesure** (aide de lecture par channel).
-```javascript
-CHANNEL_COUNT = 6
-PATTERN_COUNT = 16     (banque partagée)
-STEP_COUNT    = 32     (grille)
-```
+### 5.1 Shared pattern bank — SUPERSEDED by §5.0
+> **A validated decision.** A single bank holds **16 shared patterns** (A1–A8, B1–B8). Each channel holds a **selector**, `selectedPattern`, from 0 to 15. ⚠️ **SUPERSEDED on 2026-08-23, see §5.0.** The model becomes **template and instance**: the 16 patterns are **templates stored in the EEPROM**, and each channel works on a **local copy in RAM**. To edit the pattern of a channel therefore affects **no** other channel.
+**This subsection keeps two facts that no other section carries.** Its current content moved to §5.0, and this block stays for its history and for those two facts.
+**The original shares its patterns the same way.** The Sitka firmware holds 16 shared arrays, `seqA1..seqB8`, plus one selector per channel, `channel.seqPattern`. §2 and §4.1 give the EEPROM layout of those arrays; the sharing model itself is stated here alone.
+**A private bank of 16 per channel is ABANDONED.** It diverged from the reference, and it cost about **560 B of RAM**. ADR 0006 sets the same alternative aside and takes its provenance from this section.
 ### 5.2 LENGTH — per channel
 > **Decision validated.** The **LENGTH is an execution state per channel**, and not a property of the Pattern. Two channels that play the same pattern can hold different lengths, which gives a polyrhythm out of common content.
 - `1 ≤ effectiveLength ≤ MAX_LENGTH` per channel — **`MAX_LENGTH` is 36 since lot SF3, 2026-08-30**, the capacity of the `Pattern`. ⚠️ **The storage capacity and the interface cap stay two distinct quantities, and they now hold the same value.** The two bounds converged at 36. They do not read each other, and the two entry points stay separate — see the amendment of ADR 0009. The length is **deduced from the template at the load**, from the last non-empty step. ⚠️ **That deduction now serves one case only: an EMPTY slot that receives content for the first time.** Everywhere else the length comes from the record of the template, which STORES it: 24 bytes, 23 of content plus 1 of length. See §5.0 point 3, which is the authority. The channel can then edit it.
