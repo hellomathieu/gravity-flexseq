@@ -434,121 +434,121 @@ The measurement drove the decision, in two steps. The CV was read once per pass 
 **Verified:** `tools/run-cv-capture-probe.sh` — pulses of 1 ms injected under a real load, with the OLED render active: **27/27 seen, 0 missed**. The edge detection itself, `CvGate`, is a pure component, tested natively with 13 assertions.
 ---
 ## 11. Persistence
-> **Impact du nouveau modèle (à concevoir).**
-- **Contenu :** 16 patterns partagés (**15 octets** chacun : 3 pour les steps + 12 pour les ratchets en quartets) sauvegardés **une seule fois** (**240 B**), et non 6×16.
-- **Par channel :** `selectedPattern` + **base de LENGTH** + `subdiv` + `barLength` + le **routage CV** (source et destination, §10). La longueur est sauvegardée **par channel**, plus « avec le pattern » ; et c'est la **base** qui est persistée, jamais la valeur modulée par le CV.
-- Sans allocation dynamique, dans le budget RAM/Flash. Format EEPROM **figé le 2026-08-22, implémenté le 2026-08-23** — voir 11.1.
-### 11.1 Format — FIGÉ le 2026-08-22
-⚠️ **Écraser l'EEPROM d'origine serait IRRÉVERSIBLE avec nos outils.** Le bootloader optiboot ne sait ni lire ni écrire l'EEPROM (§2). Si FlexSeq écrivait par-dessus les données du firmware d'origine, on ne pourrait pas les remettre sans un programmateur ISP ou un firmware de restauration à écrire. Or le §17 et le §19 posent la **restauration du firmware d'origine** comme contrainte de projet : restaurer le binaire, on sait faire, la sauvegarde flash existe ; restaurer ses réglages, non.
-**D'où la décision, qui ne coûte rien : FlexSeq écrit à partir de l'adresse 384.** Le firmware d'origine occupe **0 à 320** plus l'octet **1023** (disposition établie au §4.1). Il reste 702 octets libres ; FlexSeq en demande 304. Conséquence : on peut reflasher le firmware d'origine et **retrouver ses patterns, sa calibration et ses réglages intacts**, sans matériel supplémentaire.
-**LE FORMAT EST EN VERSION 2 — conçu le 2026-08-22, implémenté le 2026-08-23 (lot 10).** L'arrivée des trois modes (§4.2) et du second routage CV (§10.1) fait passer l'enregistrement par channel de **6 à 9 octets** : les 4 existants (pattern, LENGTH, index SUBDIV, séparation) plus **mode**, **offset**, **skip chance**, **cible CV1**, **cible CV2**. Aucun octet de plage — voir §10.1. L'image passe de **286 à 304 octets**, l'octet de version de **1 à 2**. À 384 + 304 = 688, on reste loin de l'octet 1023 de l'original.
-⚠️ **LE FORMAT PASSE EN VERSION 3 — décidé le 2026-08-23.** L'audit de conformité a rendu deux décisions qui touchent la zone globale (§16) : la séparation `MODE` + `PPQN` revient, et `RANGE` revient. `MODE` et `PPQN` sont **deux vues de l'octet de source** et ne coûtent donc rien (§8.1) ; seuls `MOD` et `RANGE` s'ajoutent. La zone globale passe de **3 à 5 octets** — tempo (2), source (1), `MOD` (1), `RANGE` (1). **L'octet de version passe de 2 à 3.**
-⚠️ **Le total de 306 octets annoncé ici est SUPERSÉDÉ.** Il datait d'avant la fondation 36 pas et d'avant le modèle template / instance. La zone globale à 5 octets, elle, est conservée telle quelle. **La taille de l'image v3 est fixée plus bas, à 588 octets**, et c'est ce tableau qui fait foi.
-**Les deux décisions partagent le même changement de version**, et c'est pourquoi elles sont prises ensemble : un seul retour aux défauts au lieu de deux.
-**Ce que le retour aux défauts emporte** : l'état FlexSeq écrit sur le module depuis le premier flash de production. Ce qu'il n'emporte pas : les réglages du firmware d'origine, sous l'adresse 320, qu'aucune écriture de FlexSeq n'atteint.
-**C'était à faire AVANT le premier flash de production, et c'est fait.** Un changement de format fait repartir des défauts et perd les patterns créés **dans FlexSeq** ; ceux du firmware d'origine, sous l'adresse 384, ne risquent rien. Le firmware de production n'ayant jamais tourné sur le module, aucune image v1 n'existe nulle part : le passage de 1 à 2 n'a rien perdu.
-**Trois faits établis à l'implémentation.**
-- **Les deux octets de cible CV sont réservés, pas vivants.** Ils rendent 0, et une valeur stockée est ignorée. C'est précisément la raison de les réserver maintenant : le routage CV (§10.2) les remplira **sans changer le format**, donc sans faire repartir des défauts.
-- **Un octet hors plage est refusé, jamais appliqué**, et le reste de l'enregistrement se charge quand même. Un mode à 3, une chance de saut à 99 : la valeur précédente reste, l'enregistrement voisin est lu normalement.
-- **`resetToDefaults()`**** remet les trois nouveaux champs à leur défaut.** Sans cela, un octet de version refusé laisserait le mode précédent en place.
-**L'offset tient sur UN octet, et la limite est conservée telle quelle.** Décision du propriétaire, 2026-08-23. Le firmware d'origine déclare `uint8_t offset` (`Gravity.ino:69`), donc le domaine stocke aussi un `uint8_t` : le plafond de 255 est le type. Conséquence assumée, **pas un défaut à corriger** : au-delà de SUBDIV `/2` un step dure plus de 256 ticks, et l'offset n'atteint plus la fin du step — exactement comme dans l'original.
-**Coût AVR du lot 10, mesuré :** RAM **−6 o** (l'offset passe à un octet, six channels), Flash **+236 o**. Empreinte 1725 / 28774 o, pile 207 o, 410 o sous le garde-fou. 32 mutants, 32 tués.
-**304 octets à partir de 384 — version 2, en service depuis le 2026-08-23 :**
+> **Impact of the new model, to design.**
+- **Content:** 16 shared patterns, **15 bytes** each, 3 for the steps plus 12 for the ratchets in nibbles. The firmware saves them **once only**, so **240 B**, and not 6×16.
+- **Per channel:** `selectedPattern` plus the **base of LENGTH** plus `subdiv` plus `barLength` plus the **CV routing**, the source and the destination (§10). The firmware saves the length **per channel**, and no longer "with the pattern". And it persists the **base**, and never the value the CV modulates.
+- No dynamic allocation, and inside the RAM and Flash budget. The EEPROM format is **frozen on 2026-08-22 and implemented on 2026-08-23** — see 11.1.
+### 11.1 Format — FROZEN on 2026-08-22
+⚠️ **To overwrite the EEPROM of the original would be IRREVERSIBLE with our tools.** The optiboot bootloader can neither read nor write the EEPROM (§2). If FlexSeq wrote over the data of the original firmware, nobody could put that data back. It would take an ISP programmer, or a restoration firmware still to write. And §17 and §19 set the **restoration of the original firmware** as a constraint of the project: we know how to restore the binary, because the Flash backup exists, and we do not know how to restore its settings.
+**Hence the decision, and it costs nothing: FlexSeq writes from the address 384.** The original firmware occupies **0 to 320** plus the byte **1023**, a layout established at §4.1. 702 bytes stay free, and FlexSeq asks for 304. The consequence: we can flash the original firmware again and **find its patterns, its calibration and its settings intact**, with no extra hardware.
+**THE FORMAT IS AT VERSION 2 — designed on 2026-08-22, implemented on 2026-08-23 (lot 10).** The arrival of the three modes (§4.2) and of the second CV routing (§10.1) takes the record per channel from **6 to 9 bytes**: the 4 that existed, the pattern, the LENGTH, the SUBDIV index and the separation, plus **mode**, **offset**, **skip chance**, **CV1 target** and **CV2 target**. No range byte — see §10.1. The image goes from **286 to 304 bytes**, and the version byte from **1 to 2**. At 384 + 304 = 688, we stay far from the byte 1023 of the original.
+⚠️ **THE FORMAT MOVES TO VERSION 3 — decided on 2026-08-23.** The conformity audit produced two decisions that touch the global zone (§16): the separation of `MODE` and `PPQN` comes back, and `RANGE` comes back. `MODE` and `PPQN` are **two views of the source byte**, so they cost nothing (§8.1). Only `MOD` and `RANGE` add themselves. The global zone goes from **3 to 5 bytes** — the tempo (2), the source (1), `MOD` (1) and `RANGE` (1). **The version byte goes from 2 to 3.**
+⚠️ **The total of 306 bytes announced here is SUPERSEDED.** It came from before the 36-step foundation, and from before the template / instance model. The global zone of 5 bytes is kept as it is. **The size of the v3 image is fixed further down, at 588 bytes**, and that table is the authority.
+**The two decisions share the same change of version**, and that is why the project takes them together: one return to the defaults instead of two.
+**What the return to the defaults takes away**: the FlexSeq state written on the module since the first production flash. What it does not take away: the settings of the original firmware, below the address 320, which no write of FlexSeq reaches.
+**This had to happen BEFORE the first production flash, and it is done.** A change of format starts from the defaults again and it loses the patterns created **inside FlexSeq**. Those of the original firmware, below the address 384, are not at risk. The production firmware never ran on the module, so no v1 image exists anywhere: the move from 1 to 2 lost nothing.
+**Three facts established at the implementation.**
+- **The two CV target bytes are reserved, and not live.** They return 0, and a stored value is ignored. That is exactly the reason to reserve them now: the CV routing (§10.2) will fill them **without a change of format**, so without a return to the defaults.
+- **A byte out of range is refused, and never applied**, and the rest of the record loads all the same. A mode at 3, a skip chance at 99: the previous value stays, and the neighbouring record reads normally.
+- **`resetToDefaults()` puts the three new fields back to their default.** Without that, a refused version byte would leave the previous mode in place.
+**The offset holds on ONE byte, and the project keeps that limit as it is.** A decision of the owner, 2026-08-23. The original firmware declares `uint8_t offset` (`Gravity.ino:69`), so the domain stores a `uint8_t` too: the cap of 255 is the type. An accepted consequence, and **not a defect to fix**: above SUBDIV `/2` a step lasts more than 256 ticks. The offset then no longer reaches the end of the step, exactly as in the original.
+**Measured AVR cost of lot 10:** RAM **−6 B**, because the offset moves to one byte over six channels, and Flash **+236 B**. The footprint is 1725 / 28774 B, the stack peak 207 B, and 410 B stay under the guard. 32 mutants, and 32 detected.
+**304 bytes from the address 384 — version 2, in service since 2026-08-23:**
 <table header-row="true">
 <tr>
 <td>Zone</td>
-<td>Taille</td>
-<td>Contenu</td>
+<td>Size</td>
+<td>Content</td>
 </tr>
 <tr>
-<td>En-tête</td>
-<td>1 o</td>
-<td>octet de version, vérifié avant tout chargement</td>
+<td>Header</td>
+<td>1 B</td>
+<td>the version byte, checked before any load</td>
 </tr>
 <tr>
 <td>Patterns</td>
-<td>240 o</td>
-<td>16 × 15 o, la banque partagée</td>
+<td>240 B</td>
+<td>16 × 15 B, the shared bank</td>
 </tr>
 <tr>
-<td>Par channel</td>
-<td>54 o</td>
-<td>6 × 9 o : pattern choisi, LENGTH de base, **index** de SUBDIV, séparation, mode, offset, chance de saut, cible CV1, cible CV2</td>
+<td>Per channel</td>
+<td>54 B</td>
+<td>6 × 9 B: the chosen pattern, the base LENGTH, the SUBDIV **index**, the separation, the mode, the offset, the skip chance, the CV1 target, the CV2 target</td>
 </tr>
 <tr>
 <td>Global</td>
-<td>3 o</td>
-<td>tempo sur 2 o, source d'horloge sur 1 o</td>
+<td>3 B</td>
+<td>the tempo on 2 B, the clock source on 1 B</td>
 </tr>
 <tr>
-<td>Préférences</td>
-<td>6 o</td>
-<td>rotation d'écran, sens de l'encodeur, décalage de calibration par voie</td>
+<td>Preferences</td>
+<td>6 B</td>
+<td>the screen rotation, the encoder direction, the calibration offset per input</td>
 </tr>
 </table>
-**Trois choix expliqués.** L'**octet de version** reprend le principe du `memCode` de l'original : si l'octet ne correspond pas, on ignore le contenu et on repart des défauts — sans lui, un changement de format lirait d'anciens octets comme s'ils étaient valides. **SUBDIV en index et non en valeur** : la liste compte 25 valeurs, un index tient sur un octet quand la valeur brute en demanderait deux, soit 6 de plus. **Calibration en décalage seul** : libGravity modélise `low`/`high`/`offset`, soit 6 octets par voie, mais le défaut mesuré sur le module est un décalage (−26 sur les deux voies, échelle correcte), donc 2 octets par voie suffisent — à confirmer au §10 quand la calibration sera implémentée.
-**Délai de calme : 3 secondes** après la dernière modification, décidé par le propriétaire le 2026-08-22. Assez long pour ne pas écrire pendant qu'on tourne l'encodeur, assez court pour qu'une coupure juste après une édition ne perde rien.
-- **Écriture différée (décidé 2026-08-20).** On conserve la sémantique de l'original : `EEPROM.put` d'Arduino **compare avant d'écrire** (`update()` octet par octet), donc seuls les octets réellement modifiés sont écrits et **l'usure n'est pas le problème** — un octet par nouveau step activé, sur 100 000 cycles par cellule. Le problème est le **temps** : une écriture EEPROM sur AVR prend \~3,4 ms **pendant lesquelles la boucle attend**, plus la relecture de comparaison à chaque appel. On écrit donc **après un délai de calme** suivant la dernière modification, **jamais dans la foulée d'un événement musical**. L'original appelait `saveState()` à chaque frappe d'enregistrement — et réécrivait tout l'état, plus de 300 octets relus à chaque fois — ce qui plaçait ce blocage au pire endroit.
-**⚠️ FORMAT EN SERVICE — version 3, arrêtée le 2026-08-26, ACTIVÉE LE 2026-08-28 par le commit ****`815546b`****.** Le tableau plus haut décrit la version 2, qui ne tourne plus. `main.cpp` construit un `PersistentImageV3` et appelle `bootstrap()` ; l'octet de version effectivement écrit est **3**, à l'adresse 384, constaté sur AVR simulé et non déduit.
-**Il n'y a pas de migration depuis la version 2.** Une image v2 valide est **refusée** et les défauts sont pris, ce qui fait repartir l'état FlexSeq de zéro une fois. Les réglages du firmware d'origine, sous l'adresse 320, ne sont jamais touchés.
-**L'image fait 588 octets physiques, mais le balayage périodique ne porte que sur 204 octets logiques** — en-tête, six instances, channels, global et préférences. Les **384 octets de modèles** restent HORS du balayage et sont lus ou écrits sur geste (ADR 0006). `PersistentImageV3::addressAt()` traduit un index logique en adresse et c'est le **seul** endroit où cette correspondance vit.
-**⚠️ La version occupe le DERNIER index logique, 203, donc la dernière écriture d'un balayage.** Elle valide l'image entière et pas seulement son propre octet : une coupure n'importe où laisse une version qui n'est pas 3, et le démarrage suivant recommence. La version 2 l'écrivait en **premier**, et ce contrat-là ne change pas pour la classe v2, que les tests exercent toujours.
+**Three choices explained.** The **version byte** takes the principle of the `memCode` of the original: if the byte does not match, the firmware ignores the content and starts from the defaults. Without it, a change of format would read old bytes as if they were valid. **SUBDIV as an index and not as a value**: the list holds 25 values, and an index fits one byte where the raw value would ask for two, so 6 more. **The calibration as an offset alone**: libGravity models `low`, `high` and `offset`, so 6 bytes per input. But the default measured on the module is an offset, −26 on both inputs with a correct scale, so 2 bytes per input are enough. That is to confirm at §10 when the calibration is implemented.
+**The quiet delay is 3 seconds** after the last change, decided by the owner on 2026-08-22. It is long enough not to write while somebody turns the encoder, and short enough that a power cut just after an edit loses nothing.
+- **A deferred write (decided 2026-08-20).** The project keeps the semantics of the original: the `EEPROM.put` of Arduino **compares before it writes** (`update()` byte by byte), so it writes only the bytes that really changed. **Wear is therefore not the problem** — one byte per newly activated step, against 100 000 cycles per cell. The problem is the **time**: an EEPROM write on AVR takes about 3.4 ms, **and the loop waits during them**, plus the read-back for the comparison at every call. The firmware therefore writes **after a quiet delay** that follows the last change, and **never right after a musical event**. The original called `saveState()` on every recording hit, and it rewrote the whole state. That meant more than 300 bytes read back each time, and it put the block at the worst place.
+**⚠️ FORMAT IN SERVICE — version 3, settled on 2026-08-26, ACTIVATED ON 2026-08-28 by the commit `815546b`.** The table above describes version 2, which no longer runs. `main.cpp` builds a `PersistentImageV3` and calls `bootstrap()`. The version byte actually written is **3**, at the address 384, observed on a simulated AVR and not deduced.
+**There is no migration from version 2.** A valid v2 image is **refused** and the defaults are taken, which starts the FlexSeq state from zero once. The settings of the original firmware, below the address 320, are never touched.
+**The image holds 588 physical bytes, and the periodic scan covers 204 logical bytes only.** Those are the header, the six instances, the channels, the global zone and the preferences. The **384 bytes of templates** stay OUT of the scan, and a gesture reads or writes them (ADR 0006). `PersistentImageV3::addressAt()` turns a logical index into an address, and it is the **only** place where that mapping lives.
+**⚠️ The version holds the LAST logical index, 203, so it is the last write of a scan.** It validates the whole image, and not only its own byte: a power cut anywhere leaves a version that is not 3, and the next start begins again. Version 2 wrote it **first**, and that contract does not change for the v2 class, which the tests still exercise.
 <table header-row="true">
 <tr>
 <td>Zone</td>
-<td>Taille</td>
-<td>Décalage</td>
-<td>Adresse</td>
+<td>Size</td>
+<td>Offset</td>
+<td>Address</td>
 </tr>
 <tr>
-<td>En-tête — l'octet de version</td>
-<td>1 o</td>
+<td>Header — the version byte</td>
+<td>1 B</td>
 <td>0</td>
 <td>384</td>
 </tr>
 <tr>
-<td>**Modèles** — 16 × **24 o** : 5 de steps, 18 de ratchets, **1 de longueur**</td>
-<td>**384 o**</td>
+<td>**Templates** — 16 × **24 B**: 5 of steps, 18 of ratchets, **1 of length**</td>
+<td>**384 B**</td>
 <td>1</td>
 <td>385 – 768</td>
 </tr>
 <tr>
-<td>**Instances** — 6 × **23 o**, le pattern que chaque channel joue, **sans longueur**</td>
-<td>**138 o**</td>
+<td>**Instances** — 6 × **23 B**, the pattern each channel plays, **with no length**</td>
+<td>**138 B**</td>
 <td>385</td>
 <td>769 – 906</td>
 </tr>
 <tr>
-<td>Par channel — 6 × 9 o, inchangé</td>
-<td>54 o</td>
+<td>Per channel — 6 × 9 B, unchanged</td>
+<td>54 B</td>
 <td>523</td>
 <td>907 – 960</td>
 </tr>
 <tr>
-<td>**Global** — tempo (2), source (1), **`MOD`**** (1)**, **`RANGE`**** (1)**</td>
-<td>**5 o**</td>
+<td>**Global** — the tempo (2), the source (1), **`MOD` (1)**, **`RANGE` (1)**</td>
+<td>**5 B**</td>
 <td>577</td>
 <td>961 – 965</td>
 </tr>
 <tr>
-<td>Préférences — inchangé</td>
-<td>6 o</td>
+<td>Preferences — unchanged</td>
+<td>6 B</td>
 <td>582</td>
 <td>966 – 971</td>
 </tr>
 <tr>
-<td>**Total, depuis l'adresse 384**</td>
-<td>**588 o**</td>
+<td>**Total, from the address 384**</td>
+<td>**588 B**</td>
 <td></td>
 <td>**384 – 971**</td>
 </tr>
 </table>
-**Il reste 51 octets libres, de 972 à 1022.** L'adresse **1023** porte le `memCode` du firmware d'origine et FlexSeq ne l'écrit jamais.
-**`MOD`**** et ****`RANGE`**** sont RÉSERVÉS, et c'est une décision de format — pas une conséquence arithmétique.** Décidée par le propriétaire le 2026-08-26. Les deux octets existent dans la version 3 dès maintenant, **inertes** : le firmware ne les lit pas et ne les écrit pas tant que l'onglet BPM (§16) n'existe pas. Le motif est explicite : la taille d'une image fait partie du contrat du format, donc réserver la place maintenant évite de refaire la disposition plus tard, et surtout **évite un second retour aux défauts**. C'est le même choix que les deux octets de cible CV du record de channel, réservés depuis la version 2 et toujours inertes.
-**Les instances sont persistées** (décidé le 2026-08-26). Une coupure ne perd donc pas le travail de l'utilisateur. Voir l'ADR 0006 et ses amendements.
-**Le contenu d'un pattern occupe 23 octets** — 5 de steps, 18 de ratchets. Les **bits 36 à 39** du cinquième octet n'appartiennent à aucun pas : ils sont **canoniquement à zéro**. Le codec les force à zéro à l'écriture et les masque à la lecture. Voir l'ADR 0007 et son amendement.
-**La longueur d'un modèle vaut de 1 à 36**, la borne haute étant la capacité du `Pattern` et **non** le plafond d'interface `MAX_LENGTH`, qui vaut 24 jusqu'au lot SF3. À l'émission, une longueur hors plage est **écrêtée** ; au chargement, elle est **refusée** sans que le contenu déjà lu soit perdu.
-**Exigence sur un format antérieur.** Le comportement du firmware devant une image d'une version différente doit être **explicite, déterministe et testé**. Il n'est pas laissé au hasard d'un chargement partiel.
+**51 bytes stay free, from 972 to 1022.** The address **1023** carries the `memCode` of the original firmware, and FlexSeq never writes it.
+**`MOD` and `RANGE` are RESERVED, and that is a decision of format, and not an arithmetic consequence.** The owner decided it on 2026-08-26. The two bytes exist in version 3 from now on, and they are **inert**: the firmware neither reads them nor writes them while the BPM tab (§16) does not exist. The reason is explicit. The size of an image is part of the contract of the format. To reserve the place now avoids a later rework of the layout, and above all it **avoids a second return to the defaults**. It is the same choice as the two CV target bytes of the channel record, reserved since version 2 and still inert.
+**The instances are persisted** (decided on 2026-08-26). A power cut therefore does not lose the work of the user. See ADR 0006 and its amendments.
+**The content of a pattern occupies 23 bytes** — 5 of steps, and 18 of ratchets. The **bits 36 to 39** of the fifth byte belong to no step: they are **canonically zero**. The codec forces them to zero on the write, and it masks them on the read. See ADR 0007 and its amendment.
+**The length of a template runs from 1 to 36.** The upper bound is the capacity of the `Pattern`, and **not** the interface cap `MAX_LENGTH`, which is 24 until lot SF3. On the write, a length out of range is **clamped**. On the load, it is **refused**, and the content already read is not lost.
+**A requirement on an earlier format.** The behaviour of the firmware in front of an image of a different version must be **explicit, deterministic and tested**. It is not left to the chance of a partial load.
 ---
 ## 12. UI
 ### 12.1 Modèle d'interaction — VALIDÉ le 2026-08-22
