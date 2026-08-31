@@ -750,6 +750,33 @@ void test_the_state_holds_one_pattern_and_one_length_per_channel() {
     TEST_ASSERT_EQUAL_UINT8(6, SequencerEngine::CHANNEL_COUNT);
     TEST_ASSERT_EQUAL_size_t(23 * 6, sizeof(flexseq::ModulatedPatternState().pattern));
     TEST_ASSERT_EQUAL_size_t(6, sizeof(flexseq::ModulatedPatternState().length));
+    TEST_ASSERT_EQUAL_size_t(6, sizeof(flexseq::ModulatedPatternState().loaded));
+}
+
+void test_a_fresh_state_carries_no_loaded_template() {
+    flexseq::ModulatedPatternState state;
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        TEST_ASSERT_EQUAL_UINT8(255, state.loaded[ch]);
+    }
+}
+
+void test_a_fresh_state_starts_the_round_robin_on_the_first_channel() {
+    flexseq::ModulatedPatternState state;
+    TEST_ASSERT_EQUAL_UINT8(0, state.cursor);
+}
+
+void test_a_fresh_state_carries_no_length() {
+    flexseq::ModulatedPatternState state;
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        TEST_ASSERT_EQUAL_UINT8(0, state.length[ch]);
+    }
+}
+
+void test_the_sentinel_names_no_pattern_of_the_bank() {
+    TEST_ASSERT_EQUAL_UINT8(255, flexseq::ModulatedPatternState::NOT_MODULATED);
+    TEST_ASSERT_EQUAL_UINT8(16, SequencerEngine::PATTERN_COUNT);
+    TEST_ASSERT_TRUE(flexseq::ModulatedPatternState::NOT_MODULATED
+                     > SequencerEngine::PATTERN_COUNT - 1);
 }
 
 void test_an_unwired_engine_still_plays_its_instance() {
@@ -774,6 +801,10 @@ int main() {
     RUN_TEST(test_a_fresh_engine_carries_no_modulation_state);
     RUN_TEST(test_the_engine_keeps_the_state_it_is_given);
     RUN_TEST(test_the_state_holds_one_pattern_and_one_length_per_channel);
+    RUN_TEST(test_a_fresh_state_carries_no_loaded_template);
+    RUN_TEST(test_a_fresh_state_starts_the_round_robin_on_the_first_channel);
+    RUN_TEST(test_a_fresh_state_carries_no_length);
+    RUN_TEST(test_the_sentinel_names_no_pattern_of_the_bank);
     RUN_TEST(test_an_unwired_engine_still_plays_its_instance);
     RUN_TEST(test_a_wired_engine_still_plays_its_instance);
     RUN_TEST(test_starts_stopped_at_phase_zero_with_defaults);

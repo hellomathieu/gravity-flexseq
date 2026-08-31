@@ -199,9 +199,25 @@ private:
 };
 
 struct ModulatedPatternState {
+    static constexpr uint8_t NOT_MODULATED = 0xFF;
+
+    constexpr ModulatedPatternState()
+        : pattern(), length{},
+          loaded{NOT_MODULATED, NOT_MODULATED, NOT_MODULATED,
+                 NOT_MODULATED, NOT_MODULATED, NOT_MODULATED},
+          cursor(0) {}
+
     Pattern pattern[SequencerEngine::CHANNEL_COUNT];
     uint8_t length[SequencerEngine::CHANNEL_COUNT];
+    uint8_t loaded[SequencerEngine::CHANNEL_COUNT];
+    uint8_t cursor;
 };
+
+static_assert(ModulatedPatternState::NOT_MODULATED
+                  > SequencerEngine::PATTERN_COUNT - 1,
+              "the sentinel must never name a pattern of the bank");
+static_assert(SequencerEngine::CHANNEL_COUNT == 6,
+              "the sentinel list of the constructor holds one entry per channel");
 
 }  // namespace flexseq
 
