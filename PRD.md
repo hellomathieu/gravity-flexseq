@@ -788,7 +788,7 @@ The simulator reproduces the OLED screen, with the real `velvetscreen` font deco
 ---
 ## 14. Tests and verification
 Every piece of domain code has a unit test.
-- **Native C++** (`pio test -e native`, with no hardware): Pattern, PatternBank, SequencerEngine, Transport, TriggerSequencer, Subdiv, PatternScreen. **It must be green.**
+- **Native C++** (`pio test -e native`, with no hardware): the pure domain, with no Arduino and no libGravity. **It must be green**: a phase is not finished while one of these fails. ⚠️ **This entry no longer names the modules — decision D5 of the owner, 2026-08-31.** `platformio.ini` is the normative source of the inventory, through the `test_filter` of each environment, and an execution proves what it collected. This section carries the validation requirement, and not the inventory. It named 7 modules where the filter collected 20.
 - **libGravity characterization** (`pio test -e native_libgravity`): it describes the **real** behaviour of the frozen dependency, anomalies included, so it is **partly red by construction** (§18). The criterion is the **conformity to the audit**, and not the absence of a failure.
 - **TypeScript** (vitest): the same contracts mirrored, plus the simulator.
 - **simavr**: the real AVR firmware → a VCD → assertions on the signals, CH1 for example. **It cannot show the screen**, because it checks GPIO signals and not an I2C render.
