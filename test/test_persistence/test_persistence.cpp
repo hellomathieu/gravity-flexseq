@@ -1188,6 +1188,24 @@ void test_save_template_writes_the_instance_content_into_the_record() {
     }
 }
 
+void test_save_template_writes_the_base_not_the_modulated_length() {
+    FakeEeprom ee;
+    RigV3 r;
+    TEST_ASSERT_TRUE(r.engine.setBaseLength(1, 18));
+    TEST_ASSERT_TRUE(r.engine.setCvDestination(1, flexseq::CV_SOURCE_1,
+                                               flexseq::CV_DEST_LENGTH));
+    r.engine.setCvInput(flexseq::CV_SOURCE_1, 330);
+    r.engine.start();
+    r.engine.advance(96);
+    TEST_ASSERT_EQUAL_UINT8(18, r.engine.getBaseLength(1));
+    TEST_ASSERT_EQUAL_UINT8(28, r.engine.getEffectiveLength(1));
+
+    TEST_ASSERT_TRUE(r.image.saveTemplate(ee, 1, 9));
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(
+        18, ee.read(persist::v3::templateAddress(9, persist::v3::RECORD_LENGTH_AT)),
+        "ADR 0009 : SAVE ecrit la base, jamais la longueur modulee par le CV");
+}
+
 void test_save_template_writes_the_channel_length_into_the_record() {
     FakeEeprom ee;
     RigV3 r;
@@ -1714,6 +1732,7 @@ int main() {
     RUN_TEST(test_the_image_scan_resumes_after_the_template);
     RUN_TEST(test_no_advance_ever_writes_more_than_one_byte);
     RUN_TEST(test_save_template_writes_the_instance_content_into_the_record);
+    RUN_TEST(test_save_template_writes_the_base_not_the_modulated_length);
     RUN_TEST(test_save_template_writes_the_channel_length_into_the_record);
     RUN_TEST(test_save_template_refuses_the_eight_frozen_slots_without_writing);
     RUN_TEST(test_save_template_accepts_the_eight_writable_slots);

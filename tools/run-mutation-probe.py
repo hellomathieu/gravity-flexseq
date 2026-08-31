@@ -148,10 +148,20 @@ MUTANTS = [
      "      storage.write(",
      "    if (this.templateIndex !== PersistenceScheduler.NO_TEMPLATE && !this.dirtyFlag) {\n"
      "      storage.write(", "ts"),
-    # ADR 0009, amendement du 2026-08-30 : baseLength et effectiveLength portent
-    # desormais toujours la meme valeur, et les deux points d entree portent la
-    # meme borne, donc CINQ mutations sont indetectables par construction. Elles
-    # sont retirees, pas masquees. Voir l ADR.
+    ("cpp: saveTemplate serialises the effective length (B4b.6.2)",
+     "include/flexseq/Persistence.h",
+     "        const uint8_t length = engine_.getBaseLength(channel);",
+     "        const uint8_t length = engine_.getEffectiveLength(channel);", "cpp-all"),
+    ("ts: saveTemplate serialises the effective length (B4b.6.2)",
+     "sim/src/domain/Persistence.ts",
+     "    const length = this.engine.getBaseLength(channel);",
+     "    const length = this.engine.getEffectiveLength(channel);", "ts"),
+    # ADR 0009, lot LCV.3c. Les deux points d entree portent la MEME BORNE depuis
+    # SF3, donc trois mutations restent indetectables par construction : celle du
+    # record de canal et les deux de loadTemplate. Elles sont retirees, pas
+    # masquees. Les deux mutations de saveTemplate, elles, sont REVENUES : le
+    # Length CV rend baseLength different de effectiveLength, et deux tests
+    # ajoutes par LCV.3c les rendent rouges. Voir l ADR.
     ("cpp: the freeze lets the eighth factory slot be written (B4b.6.2)",
      "include/flexseq/Persistence.h",
      "    bool saveTemplate(Storage& storage, uint8_t channel, uint8_t index) {\n"

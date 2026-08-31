@@ -1191,6 +1191,21 @@ describe("saveTemplate — instance vers template EEPROM (ADR 0009)", () => {
     }
   });
 
+  it("ecrit la base et non la longueur modulee par le CV", () => {
+    const ee = new FakeEeprom();
+    const r = rigV3();
+    expect(r.engine.setBaseLength(1, 18)).toBe(true);
+    expect(r.engine.setCvDestination(1, CV_SOURCE_1, CvDestination.LENGTH)).toBe(true);
+    r.engine.setCvInput(CV_SOURCE_1, 330);
+    r.engine.start();
+    r.engine.advance(96);
+    expect(r.engine.getBaseLength(1)).toBe(18);
+    expect(r.engine.getEffectiveLength(1)).toBe(28);
+
+    expect(r.image.saveTemplate(ee, 1, 9)).toBe(true);
+    expect(ee.read(v3.templateAddress(9, v3.RECORD_LENGTH_AT))).toBe(18);
+  });
+
   it("ecrit la longueur du canal dans l'enregistrement", () => {
     const ee = new FakeEeprom();
     const r = rigV3();
