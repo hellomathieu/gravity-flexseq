@@ -91,25 +91,25 @@ This rule **settles a question that was open**: the single font of FlexSeq (`set
 >
 > ⚠️ **Consequence for §10, and the distinction is exact: the calibration data is RECOVERABLE, and the calibration is NOT APPLIED.** The backup of 2026-08-21 holds the calibration of this module, and `docs/open-risks.md` line 17 closed on it. The data is therefore out of the EEPROM and readable. What does not exist is the path that applies it. `main.cpp` configures `CvSampler` from `gravity.cv1.GetCalibrationLow()` and `gravity.cv2.GetCalibrationLow()`, so from the defaults of libGravity, `CALIBRATED_LOW = -566` and `CALIBRATED_HIGH = 512`. The codec persists `Preferences::cvCalibration`, and **no other code reads that field**: `src/domain/Persistence.cpp` lines 76 and 91 are its only readers. libGravity holds **no** notion of EEPROM, and that is verified on the source of the pinned commit. ⚠️ **This paragraph said the calibration was out of reach, and it pointed at line 17 as an open item.** Line 17 closed on 2026-08-21. Do not read this paragraph as a working calibration: nothing applies the stored value.
 ---
-## 3. Base logicielle & architecture
-Le firmware est développé **à partir de ****`libGravity`**, pas en repartant du firmware Sitka original (qui reste une référence de comportement).
+## 3. Software base and architecture
+The project develops the firmware **from `libGravity`**, and it does not restart from the original Sitka firmware. That firmware stays a behavioural reference.
 ```javascript
 libGravity (hardware + clock)
    ↓
 Hardware Integration / Adapters
    ↓
 FlexSeq Domain
-   ├── Pattern            (contenu : 36 steps + 1 ratchet par step)
-   ├── PatternBank        (16 patterns partagés)
-   ├── SequencerEngine    (masterPhase, état par channel)
-   ├── Transport          (clock/MIDI → moteur)
-   ├── TriggerSequencer   (onset + step actif → trigger)
-   ├── Musical Grid        (SUBDIV ; séparation de mesure graphique)
+   ├── Pattern            (content: 36 steps and 1 ratchet per step)
+   ├── PatternBank        (16 shared patterns)
+   ├── SequencerEngine    (masterPhase, state per channel)
+   ├── Transport          (clock/MIDI → the engine)
+   ├── TriggerSequencer   (onset and active step → trigger)
+   ├── Musical Grid        (SUBDIV; graphical measure separation)
    ├── CV Mapping / Reset
    ├── UI Logic
    └── Persistence API
 ```
-Le domaine est **testable sans hardware** (tests natifs + simulateur). La conversion horloge → progression logique appartient à **Transport**, pas au Sequencer Engine.
+The domain is **testable without hardware**: the native tests and the simulator exercise it. The conversion from the clock to the logical progression belongs to **Transport**, and not to the Sequencer Engine.
 ---
 ## 4. Fonctionnalités conservées
 6 Multi-Mode Channels · Clock Mode · Random Skip Mode · 2 CV Inputs · External Clock · BPM interne · MIDI via MIDI Expander · Expansion/Connectivity · Settings · Calibration CV. Le MIDI Expander et l'Expansion Header ne sont pas modifiés.
