@@ -19,6 +19,7 @@
 namespace {
 
 flexseq::SequencerEngine engine;
+flexseq::ModulatedPatternState modulatedPatterns;
 flexseq::Transport transport(engine);
 flexseq::TriggerSequencer triggers(engine);
 flexseq::UiController ui(engine, transport);
@@ -154,6 +155,7 @@ void setup() {
     // Persistance : on relit l'image, et si l'octet de version ne repond pas on
     // repart des defauts EN LES ECRIVANT — le format est ainsi materialise des
     // le premier demarrage, pas a la premiere edition. Voir PRD 11.1.
+    engine.setModulatedPatterns(&modulatedPatterns);
     flexseq::bootstrap(eeprom, persistentImage, persistence, millis());
 
     flexseq::probe::instanceBase = engine.instanceForChannel(0);

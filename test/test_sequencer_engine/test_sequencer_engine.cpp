@@ -727,9 +727,55 @@ void test_an_invalid_channel_refuses_both_entry_points() {
     TEST_ASSERT_EQUAL_UINT8(0, e.getBaseLength(6));
 }
 
+// ---------------------------------------------------------------------------
+// O1 : le stockage de modulation vit HORS du moteur, qui n'en garde qu'un
+// pointeur. Un moteur non cable se comporte exactement comme avant.
+// ---------------------------------------------------------------------------
+
+void test_a_fresh_engine_carries_no_modulation_state() {
+    SequencerEngine e;
+    TEST_ASSERT_NULL(e.modulatedPatterns());
+}
+
+void test_the_engine_keeps_the_state_it_is_given() {
+    SequencerEngine e;
+    flexseq::ModulatedPatternState state;
+    e.setModulatedPatterns(&state);
+    TEST_ASSERT_EQUAL_PTR(&state, e.modulatedPatterns());
+    e.setModulatedPatterns(nullptr);
+    TEST_ASSERT_NULL(e.modulatedPatterns());
+}
+
+void test_the_state_holds_one_pattern_and_one_length_per_channel() {
+    TEST_ASSERT_EQUAL_UINT8(6, SequencerEngine::CHANNEL_COUNT);
+    TEST_ASSERT_EQUAL_size_t(23 * 6, sizeof(flexseq::ModulatedPatternState().pattern));
+    TEST_ASSERT_EQUAL_size_t(6, sizeof(flexseq::ModulatedPatternState().length));
+}
+
+void test_an_unwired_engine_still_plays_its_instance() {
+    SequencerEngine e;
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        TEST_ASSERT_EQUAL_PTR(e.instanceForChannel(ch), e.patternForChannel(ch));
+    }
+}
+
+void test_a_wired_engine_still_plays_its_instance() {
+    SequencerEngine e;
+    flexseq::ModulatedPatternState state;
+    e.setModulatedPatterns(&state);
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        TEST_ASSERT_EQUAL_PTR(e.instanceForChannel(ch), e.patternForChannel(ch));
+    }
+}
+
 int main() {
     UNITY_BEGIN();
 
+    RUN_TEST(test_a_fresh_engine_carries_no_modulation_state);
+    RUN_TEST(test_the_engine_keeps_the_state_it_is_given);
+    RUN_TEST(test_the_state_holds_one_pattern_and_one_length_per_channel);
+    RUN_TEST(test_an_unwired_engine_still_plays_its_instance);
+    RUN_TEST(test_a_wired_engine_still_plays_its_instance);
     RUN_TEST(test_starts_stopped_at_phase_zero_with_defaults);
     RUN_TEST(test_does_not_advance_while_stopped);
     RUN_TEST(test_advances_by_ticks_only_while_running);

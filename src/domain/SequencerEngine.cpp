@@ -11,7 +11,8 @@ SequencerEngine::SequencerEngine()
     : phase_(0),
       beatTick_(0),
       running_(false),
-      stepped_(0) {
+      stepped_(0),
+      modulated_(nullptr) {
     for (uint8_t s = 0; s < CV_SOURCE_COUNT; ++s) {
         cvInput_[s] = 0;
     }
@@ -486,6 +487,14 @@ uint8_t SequencerEngine::currentStepTriggers(uint8_t channel) const {
         return 0;
     }
     return channels_[channel].triggers;
+}
+
+void SequencerEngine::setModulatedPatterns(ModulatedPatternState* state) {
+    modulated_ = state;
+}
+
+ModulatedPatternState* SequencerEngine::modulatedPatterns() const {
+    return modulated_;
 }
 
 int8_t SequencerEngine::effectiveStep(uint8_t channel) const {

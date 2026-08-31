@@ -25,6 +25,8 @@ namespace flexseq {
 //    durations (it stretches time and pushes the rest of the pattern later).
 //
 // Out of scope (deferred): Transport (clock->progression), CV modulation.
+struct ModulatedPatternState;
+
 class SequencerEngine {
 public:
     static constexpr uint8_t PPQN = 96;
@@ -110,6 +112,9 @@ public:
     // Logical position of the channel, in [0, effectiveLength). -1 if invalid.
     int8_t effectiveStep(uint8_t channel) const;
 
+    void setModulatedPatterns(ModulatedPatternState* state);
+    ModulatedPatternState* modulatedPatterns() const;
+
     // True if the channel crossed a STEP boundary during the last advance().
     bool hasStepped(uint8_t channel) const;
 
@@ -184,6 +189,12 @@ private:
     int16_t cvInput_[CV_SOURCE_COUNT];
     ChannelState channels_[CHANNEL_COUNT];
     Pattern instances_[CHANNEL_COUNT];
+    ModulatedPatternState* modulated_;
+};
+
+struct ModulatedPatternState {
+    Pattern pattern[SequencerEngine::CHANNEL_COUNT];
+    uint8_t length[SequencerEngine::CHANNEL_COUNT];
 };
 
 }  // namespace flexseq
