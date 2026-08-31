@@ -847,28 +847,49 @@ Levels: the Domain → the Virtual and the Simulator → the AVR firmware (simav
 ---
 ## 15. Memory footprint (measured)
 The build is `nanoatmega328`, with `libGravity` frozen at the commit `4c5b4d0b4f38…` of the fork of the project.
-**⚠️ CURRENT FIGURES, measured on 2026-08-30 after lot S.** Everything that follows is earlier, and it is kept as history.
-**RAM 1317 / 2048 (64.3 %)**, 731 B free · **Flash 27030 / 30720 (88.0 %)**, **2154 B** before the guard of 95 %, which sits at 29184 B · **stack peak 203 B**, a margin of 528 B, covered 1.3× by the reserve of 256 · C++ tests 458, adapter 12, EEPROM image 14, TypeScript 452, a clean typecheck, and the libGravity characterization conforming · **mutation 230/230** · the probes: gestures 103, drift 222/222, EEPROM boundary 588/588, and the render **36/36 steps at 808 pixels of ink** · 7 AVR environments compile.
-**Lot S returns 126 B of Flash and costs 0 B of RAM**, measured on 2026-08-30. It is a **targeted de-inlining**: `clampIndex`, `wrapIndex` and `oneStep` carry `noinline`, and `clampRange` stays inline. The stack peak does not move. The decision, the variants tried and the counter-proofs live in **ADR 0010**, and this paragraph does not copy them.
-**The deltas of the last two lots do not merge.** Lot **F**, the 3 × 12 grid: RAM **+0 B**, Flash **+0 B**, and the stack **−2 B**. The third row stores nothing, and the `rowCY()` formula replaces a ternary that used one register more. Lot **F.5.5**, the removal of the footer: RAM **−21 B**, Flash **−290 B**. Do not read the −21 and the −290 as the cost of the row.
-The figures they replace: after lot S, RAM 1338 and Flash 27320. After lot B4b.7, RAM 1338 and Flash 27446.
+**✅ CURRENT FIGURES, measured on 2026-08-31 on the head `a190676`.** Every figure below carries the tool that produced it. Everything after this block is earlier, and the document keeps it as history.
+**Memory**, by `tools/run-build-memory.sh` and `tools/run-stack-probe.sh`:
+- **RAM 1357 / 2048 (66.3 %)**, so **691 B free** · **Flash 27708 / 30720 (90.2 %)**, so **1476 B** before the guard of 95 %, which sits at 29184 B.
+- **Stack peak 207 B**, over two identical runs, with 6 of 6 watched vectors entered. The EEPROM write of the persistence is inside that measurement, and the probe asserts the version byte 3 at the address 384.
+- **Drift RAM +0 B, Flash +0 B** against `tools/memory-baseline`, acknowledged by the commit `637e90b` and recorded by `1b59407`.
+⚠️ **THE TWO MARGINS ARE SEPARATE, AND THIS SECTION NO LONGER JUDGES THEM TOGETHER.** An earlier wording said the RAM constraint went "from critical to comfortable". That mixed two budgets, and it dated from a peak of 159 B.
+- the **static RAM margin** is **691 B free**, which is wide;
+- the **stack margin** is **49 B**, so 207 B against the reserve of 256, and the reserve covers the peak **1.2×**. It covered it 2.1× when the reserve was decided on 2026-08-20;
+- the **absolute margin** is **484 B**, so the free RAM minus the measured peak.
+Read the two margins apart. `docs/open-risks.md` line 66 tracks the second one.
+**Tests**, by `tools/run-all-tests.sh` and `tools/run-mutation-probe.py`:
+- **C++ acceptance 494** on `env:native` · **adapter 12** on `env:native_adapter` · **EEPROM image 14** · so **506 assertions outside the characterization**.
+- **libGravity characterization 68 assertions, of which 7 are red by construction.** The criterion is the conformity to the audit, and not the absence of a failure (§18). ⚠️ **Never add these 68 to the 506**: the total of 574 measures a pinned dependency as well as FlexSeq.
+- **TypeScript 488 tests over 22 files** · a clean typecheck.
+- **Mutation 232/232**, with the 232 anchors present exactly once.
+- **Collection 27 directories, 0 orphan, 0 stale entry**, by `tools/check-test-collection.py`. `platformio.ini` owns the inventory (D5).
+**Behavioural probes**, each one on the production firmware, and none of them instruments it:
+- trigger **46 criteria over 6 courses**, and CV1 and CV2 are both exercised · drift **222/222** fronts, 0 tick of cumulative drift, 0 ambiguous · EEPROM boundary **588/588** bytes inside the window, 0 difference below and 0 above, `memCode` 212.
+- render **36/36 steps at 808 pixels of ink**, and the three rotation criteria green · CV capture **27/27** pulses of 1 ms, 0 missed, with the OLED render active.
+- gestures **103 criteria, 0 defect**. ⚠️ **Do not read a PASS of that probe from before 2026-08-31 as a proof on R10**: the harness wrapped the cursor on 24 where the grid holds 36, so R10 passed for the wrong reason. `docs/open-risks.md` line 68.
+- main loop **p90 6.76 ms** against a budget of 12 ms, with a median of 4.68 ms. ⚠️ Two figures of that run are **not** reference values: the ADC artefact at 5.2 % and the routine frame at 33.8 ms come from ONE course each. The probe computes them from a ratio of measured CPU fractions.
+**Seven AVR environments compile**, and each one was built on 2026-08-31: `nanoatmega328` 27708 B · `encoderprobe` 28402 B · `wokwi` 20488 B · `mainscreen` 20236 B · `bringup` 18142 B · `simavr` 14546 B · `eepromdump` 1844 B.
+⚠️ **A CORRECTED ATTRIBUTION, 2026-08-31.** This block carried the figures RAM 1317 / Flash 27030 / stack 203 under the label "after lot S". `tools/memory-baseline` shows they belong to **lot F**: its acceptance `e23f710` carries 1317 and 27030, and the acceptance of lot S, `78c6be4`, carries 27320 three hours earlier. The same section attributed two different states to lot S.
+**Lot S returns 126 B of Flash and costs 0 B of RAM**, measured on 2026-08-30. It is a **targeted de-inlining**: `clampIndex`, `wrapIndex` and `oneStep` carry `noinline`, and `clampRange` stays inline. The stack peak does not move, at 205 B before and after. The decision, the variants tried and the counter-proofs live in **ADR 0010**, and this paragraph does not copy them. ⚠️ **The bound of 206 B that ADR 0010 derives is passed since lot LCV**, and its amendment of 2026-08-31 records that.
+**The deltas of the last lots do not merge.** Lot **F**, the 3 × 12 grid: RAM **+0 B**, Flash **+0 B**, and the stack **−2 B**, so 205 to 203. The third row stores nothing, and the `rowCY()` formula replaces a ternary that used one register more. Lot **F.5.5**, the removal of the footer: RAM **−21 B**, Flash **−290 B**. Do not read the −21 and the −290 as the cost of the row. Lot **LCV** adds **4 B of stack**, so 203 to 207: `advance()` now reaches `latestCalibrated()` and the quantiser.
+The figures they replace: after lot S, RAM 1338 and Flash 27320. After lot B4b.7, RAM 1338 and Flash 27446. After lot F, RAM 1317 and Flash 27030.
 The figures of 2026-08-28 they replace: RAM 1699 / 2048 (83.0 %), 349 B free · Flash 27164 / 30720 (88.4 %), a margin of 144 B · C++ tests 422 and TypeScript 415.
-**⚠️ The transitional peak of lot B4b is OVER since 2026-08-30.** The resident bank of 368 B and the six instances of 138 B coexisted from B4b.3 to B4b.7. Nothing is removed before the tests prove that it can be. **B4b.7 returns 370 measured B, and not 230**: 368 B for the bank and 2 B for the pointer field `bank_`, which leaves only with the API itself. The drift record was acknowledged on 2026-08-30, commit `4e2a24d`, and the guard of `run-build-memory.sh` is green.
-**⚠️ `PatternBank` stays in the repository.** The lot removes the dependency of the engine on the bank, and not the bank from the project: `PersistentImage` v2, `loadFactoryPatterns`, the image generator, `gestureRecipes` and `PATTERN_COUNT` still use it.
+**⚠️ The transitional peak of lot B4b is OVER since 2026-08-30.** The resident bank of 368 B and the six instances of 138 B coexisted from B4b.3 to B4b.7. Nothing is removed before the tests prove that it can be. **B4b.7 returns 370 measured B, and not 230**: 368 B for the bank and 2 B for the pointer field `bank_`, which leaves only with the API itself.
+**⚠️ `PatternBank` stays in the repository.** The lot removes the dependency of the engine on the bank, and not the bank from the project: `PersistentImage` v2, `loadFactoryPatterns`, the image generator, `gestureRecipes` and `PATTERN_COUNT` still use it. Verified in the code on 2026-08-31.
 Figures **re-measured on 2026-08-22**, on the **complete** firmware: two screens, the eight gestures, the transport and the persistence, all wired.
-Figures **re-measured on 2026-08-23**, after lot 9, the three channel modes: **RAM 1731 / 2048 (84.5 %)**, 317 B free · **Flash 28538 / 30720 (92.9 %)** · **stack peak 207 B**, covered 1.2× by the reserve of 256 · drift +0/+0 · **269 C++ assertions**, and 226 TypeScript.
-Figures **re-measured on 2026-08-23**, after the lots 20 and 21, the coverage of the rates and then the placement of the sub-onsets: **RAM 1713 / 2048 (83.6 %)**, 335 B free · **Flash 28916 / 30720 (94.1 %)** · **stack peak 210 B**, covered 1.2× by the reserve of 256 · drift +0/+0 · **297 C++ assertions**, 254 TypeScript, and a **mutation score of 54/54**. **79 B** of RAM stay above the reserve, and **268 B** of Flash under the guard.
-Lot 21 cost **Flash +142 B** and **RAM −12 B**. The RAM falls because the field `slotTicks` leaves the engine, two bytes per channel.
+Figures **re-measured on 2026-08-23**, after lot 9, the three channel modes: **RAM 1731 / 2048 (84.5 %)**, 317 B free · **Flash 28538 / 30720 (92.9 %)** · **stack peak 207 B** · drift +0/+0 · **269 C++ assertions** and 226 TypeScript · 61 B of RAM above the reserve and 646 B of Flash under the guard. ⚠️ **This paragraph replaces two entries that carried the same figures twice.**
+Figures **re-measured on 2026-08-23**, after the lots 20 and 21, the coverage of the rates and then the placement of the sub-onsets: **RAM 1713 / 2048 (83.6 %)**, 335 B free · **Flash 28916 / 30720 (94.1 %)** · **stack peak 210 B** · drift +0/+0 · **297 C++ assertions**, 254 TypeScript, and a **mutation score of 54/54**. **79 B** of RAM stay above the reserve, and **268 B** of Flash under the guard.
+Lot 21 cost **Flash +142 B** and **RAM −12 B**. The RAM falls because the field `slotTicks` leaves the engine, two bytes per channel. ⚠️ That field has **0 occurrence** in the code since then, verified on 2026-08-31.
 The figures of lot 10 they replace: RAM 1725 (84.2 %), Flash 28774 (93.7 %), the stack 207 B, and 278 C++ assertions and 235 TypeScript. The lot cost **RAM −6 B / Flash +236 B**. The RAM falls because the offset moves to one byte, over six channels. **67 B** of RAM stay above the reserve, and **410 B** of Flash under the guard.
-The figures of lot 9 they replace: RAM 1731 (84.5 %) · Flash 28538 (92.9 %) · 269 C++ assertions and 226 TypeScript · 61 B of RAM above the reserve and 646 B of Flash under the guard. That guard sits at **95 %** since 2026-08-22, and no longer at 90 %: everywhere the rest of this section writes 90 %, read 95 %.
 The figures of 2026-08-22 they replace: RAM 1699 (83.0 %), Flash 28228 (91.9 %), the stack 206 B, and 245 C++ assertions and 202 TypeScript.
+**The guard sits at 95 % since 2026-08-22, and no longer at 90 %**: everywhere the rest of this section writes 90 %, read 95 %.
 ⚠️ **Everything that follows in this section dates from 2026-08-21, and it describes a firmware where the UI was not wired.** Measurements can now replace the estimates there: the wired UI cost **RAM +26 B / Flash +1224 B**, estimated at about 16 B · the persistence **+10 B / +1044 B**, estimated at about 8 B · the transport **+10 B / +1126 B**, estimated at about 0 B because the `clock` object was already allocated, but `Clock::SetSource` was not. The announced margin "of about 5×" did not hold: **93 B** of RAM stay above the reserve, and not 264.
 >
 > **THE BUDGET IS SIZED, AND NOT ONLY WATCHED (2026-08-21).** This document said "under guard" without ever saying how much was left, and for what. That left the question open at every feature.
 >
-> **Static RAM: 1528 B out of 2048, so 520 B free.** The stack reserve is 256 B, with a measured peak of **159 B**, covered 1.6×, so **264 B stay for new static data**. Where the 1528 went, by size: `gravity` **300 B**, the libGravity object · `patternBank` **240 B**, 16 × 15 · `NeoSerial` **159 B** · the U8g2 page buffer **128 B** · the four TWI buffers **128 B** · `engine` **110 B** · `uClock` **67 B** · the u8x8 init sequence **53 B** · `uiScreen` **34 B**.
+> **Static RAM: 1528 B out of 2048, so 520 B free.** The stack reserve is 256 B, with a measured peak of **159 B**, covered 1.6×, so **264 B stay for new static data**. Where the 1528 went, by size: `gravity` **300 B**, the libGravity object · `patternBank` **240 B**, 16 × 15 · `NeoSerial` **159 B** · the U8g2 page buffer **128 B** · the four TWI buffers **128 B** · `engine` **110 B** · `uClock` **67 B** · the u8x8 init sequence **53 B** · `uiScreen` **34 B**. ⚠️ **The line `patternBank` 240 B no longer exists in the firmware**: lot B4b.7 removed the resident bank on 2026-08-30.
 >
-> **What is left to build fits there, with a margin of about 5×.** This is an estimate, its base is given, and nobody must confuse it with the measurements above:
+> **What is left to build fits there, with a margin of about 5×.** This is an estimate, its base is given, and nobody must confuse it with the measurements above. ⚠️ **One line of the table is DONE and measured**: the CV destinations, estimated at about 24 B, cost 4 B per channel over six channels, so 24 B, and lot LCV delivered them.
 >
 > \| To build \| Estimated RAM \| Base of the estimate \|
 > \|---\|---\|---\|
@@ -883,15 +904,16 @@ The figures of 2026-08-22 they replace: RAM 1699 (83.0 %), Flash 28228 (91.9 %),
 >
 > **The trigger is explicit**, so nobody judges it case by case any more: a failure above **+16 B of RAM** or **+512 B of Flash** unacknowledged, with ceilings at **256 B free** or **90 % of Flash**. `--accept` never happens without a look at the diagnostic by symbols.
 >
-> ⚠️ **The single hole of the stack measurement, and its obligation.** The probe measures what the firmware **executes during the run**. The EEPROM write of the persistence is not there because it does not exist. And it will not be there **automatically** on the day it exists either: the run will have to **provoke** it. That is the one thing not to forget while implementing §11. The old values "Pattern 4 B / 384 B / 578 B free" are **void**.
+> ⚠️ **The hole of the stack measurement is CLOSED since 2026-08-28, and the paragraph below is kept for its rule.** The probe measures what the firmware **executes during the run**. The EEPROM write of the persistence was not there because it did not exist. It was not going to appear **automatically** on the day it existed: the run had to **provoke** it. It does now, and the probe asserts the version byte 3 at the address 384. The rule stays for the next path the firmware does not take yet. The old values "Pattern 4 B / 384 B / 578 B free" are **void**.
 > ⚠️ **Always the AVR measurement, and never the native one.** `sizeof(SequencerEngine)` is 120 B compiled on an x86 host, and **110 B on AVR**, read with `avr-nm` on the `.elf`. The second one is the authority, under the rule of `CLAUDE.md`.
 > The jump of Flash from 16316 B comes first from the **OLED render**, the U8g2 primitives plus the `u8g2_font_5x7_tf` font. Then it comes from the CV sampling under interrupt (§10.6), and then from the band skip (§12).
 > ⚠️ **A drift guard exists since 2026-08-20**: every build is compared to `tools/memory-baseline`, which is versioned, and a growth above 16 B of RAM or 512 B of Flash **fails**. To accept it is a deliberate act (`--accept`). A ceiling that fires at 90 % of Flash alone let a feature of 3 kB pass without a word.
+⚠️ **THE TABLE BELOW COMPARES TWO MODELS THAT THE PROJECT HAS BOTH ABANDONED.** The 6×16 model went first. The resident bank of 16 went next, in two steps: the template and instance model of lot B4b, and then the removal of the bank from the engine by B4b.7 on 2026-08-30. The table is kept because its figures explain how the RAM was won, and it describes no current state.
 <table header-row="true">
 <tr>
 <td></td>
 <td>The old model (6×16)</td>
-<td>The current model (a bank of 16)</td>
+<td>The model of 2026-08-21 (a bank of 16)</td>
 </tr>
 <tr>
 <td>`sizeof(Pattern)`</td>
@@ -924,11 +946,10 @@ The figures of 2026-08-22 they replace: RAM 1699 (83.0 %), Flash 28228 (91.9 %),
 <td>**21404 B (69.7 %)**</td>
 </tr>
 </table>
-The RAM constraint goes from **critical to comfortable**.
 ### The stack — measured, and no longer estimated (2026-08-20)
-> **Measured peak: 159 bytes**, out of 520 free, so **361 B of margin**. It is read at run time on the **production** firmware, with no line of instrumentation (`tools/run-stack-probe.sh`).
+> **Measured peak on 2026-08-20: 159 bytes**, out of 520 free, so **361 B of margin**. It is read at run time on the **production** firmware, with no line of instrumentation (`tools/run-stack-probe.sh`). ⚠️ **The current peak is 207 B**, and the block at the head of this section carries it.
 >
-> ⚠️ **Re-measure after every structural change**: the peak moved at each one of them, 120 → 154 → 159 B.
+> ⚠️ **Re-measure after every structural change**: the peak moved at each one of them, 120 → 154 → 159 → 205 → 203 → 207 B.
 >
 > **Method:** a C harness writes a pattern into the free RAM of the simulated machine **before the first cycle**. It lets the firmware run while it injects interrupt traffic, and it then reads back the boundary of the intact pattern. The scan starts from the **top**: `__heap_start` is `_end`, so an allocation would dirty the bottom and would make a reader conclude wrongly that the stack went down there.
 >
@@ -936,11 +957,11 @@ The RAM constraint goes from **critical to comfortable**.
 >
 > **The coverage is verified, and not supposed.** The verdict requires that **the six families of ISR were entered**: PCINT1 and PCINT2 of the encoder · uClock · millis · MIDI on reception · the ADC. Those two PCINT pins are the only pins under PCINT in libGravity, because the buttons are polled. A silent vector fails the measurement, because that is exactly how it was incomplete in silence.
 >
-> ⚠️ **Still out of the measurement:** the paths the firmware does not take yet, and first of all the EEPROM write of the persistence (§11), which does not exist.
+> ⚠️ **Still out of the measurement:** the paths the firmware does not take yet.
 >
-> **A consequence — the reserve threshold falls to 256 B (decided 2026-08-20).** The threshold of `tools/run-build-memory.sh` was 512 B, set by estimation before any measurement: it announced 46 B of margin while the real consumption sat well below the threshold itself. At 256 B, the really available budget is **264 B**, and the reserve covers the peak **1.6×**. The margin shrank as the measurements became complete, and it did not become narrow. Do not raise it without a **new measurement**.
+> **A consequence — the reserve threshold falls to 256 B (decided 2026-08-20).** The threshold of `tools/run-build-memory.sh` was 512 B, set by estimation before any measurement: it announced 46 B of margin while the real consumption sat well below the threshold itself. At 256 B, the really available budget was **264 B**, and the reserve covered the peak of 159 B **1.6×**. ⚠️ **That ratio is now 1.2×**, at the peak of 207 B. Do not raise the reserve, and do not lower it, without a **new measurement**.
 >
-> **A lever held in reserve:** `NeoHWSerial` guards its buffer sizes with `#if !defined(...)`, so `-DSERIAL_TX_BUFFER_SIZE=16 -DSERIAL_RX_BUFFER_SIZE=32` returns **80 B** through a compile option alone, with no change to the dependency. Two other levers would on the contrary need a patch of the dependencies, which is out of scope without a separate decision: the 160 B of `Wire` buffers, of which two are for reception and useless for a screen nobody reads · the 77 B of U8g2 tables declared with no `PROGMEM`.
+> ⚠️ **A lever that was held in reserve is now SPENT.** `NeoHWSerial` guards its buffer sizes with `#if !defined(...)`, so two compile options returned **96 B of RAM** on 2026-08-25, and §12 records that campaign. The buffers hold 16 bytes each since then, so nothing more is available there. Two other levers would need a patch of the dependencies, which is out of scope without a separate decision: the 160 B of `Wire` buffers, of which two are for reception and useless for a screen nobody reads · the 77 B of U8g2 tables declared with no `PROGMEM`.
 ---
 ## 16. Decisions — validated against open
 ⚠️ **The review of the reference version of 2026-08-23 (§5.0) supersedes five entries of this list**: the resident shared bank · the 24 steps · the LENGTH as a property of the channel alone · the three modes · `SHIFT` plus `PLAY` reserved for RECORDING. The decisions in force are the decisions of §5.0.
