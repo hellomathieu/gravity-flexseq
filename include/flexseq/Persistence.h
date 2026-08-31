@@ -454,6 +454,24 @@ private:
 };
 
 template <typename Storage>
+bool loadTemplateIntoModulationBuffer(Storage& storage, ModulatedPatternState& state,
+                                      uint8_t channel, uint8_t index) {
+    if (channel >= SequencerEngine::CHANNEL_COUNT
+        || index >= persist::v3::TEMPLATE_COUNT) {
+        return false;
+    }
+    bool accepted = true;
+    for (uint8_t offset = 0; offset < persist::v3::TEMPLATE_RECORD; ++offset) {
+        if (!persist::v3::applyTemplateByte(
+                state.pattern[channel], state.length[channel], offset,
+                storage.read(persist::v3::templateAddress(index, offset)))) {
+            accepted = false;
+        }
+    }
+    return accepted;
+}
+
+template <typename Storage>
 bool bootstrap(Storage& storage, PersistentImageV3& image,
                PersistenceScheduler& scheduler, uint32_t nowMs) {
     if (scheduler.load(storage, image)) {

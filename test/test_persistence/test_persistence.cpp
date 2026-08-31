@@ -1655,9 +1655,174 @@ void test_the_v2_version_sits_at_the_first_logical_index() {
     TEST_ASSERT_EQUAL_UINT8(2, r.image.byteAt(flexseq::PersistentImage::VERSION_INDEX));
 }
 
+// ---------------------------------------------------------------------------
+// E3.6.4.2 : le chargeur template -> tampon de modulation.
+// Il ne touche ni l'instance, ni baseLength, ni selectedPattern. Son bool dit
+// que le record a ete accepte, PAS que le remplacement fut atomique.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+void writeTemplateRecord(FakeEeprom& ee, uint8_t index, const uint8_t* content,
+                         uint8_t length) {
+    for (uint8_t offset = 0; offset < persist::v3::CONTENT_BYTES; ++offset) {
+        ee.cell[persist::v3::templateAddress(index, offset)] = content[offset];
+    }
+    ee.cell[persist::v3::templateAddress(index, persist::v3::RECORD_LENGTH_AT)] = length;
+}
+
+}  // namespace
+
+void test_the_loader_refuses_a_channel_out_of_range() {
+    FakeEeprom ee;
+    flexseq::ModulatedPatternState state;
+    state.length[0] = 7;
+    TEST_ASSERT_FALSE(flexseq::loadTemplateIntoModulationBuffer(ee, state, 6, 0));
+    TEST_ASSERT_EQUAL_UINT8(7, state.length[0]);
+}
+
+void test_the_loader_refuses_a_template_out_of_range() {
+    FakeEeprom ee;
+    // Le garde d'index doit etre DISCRIMINANT. Sans cette preparation, retirer le
+    // garde faisait lire la sentinelle 0x5A, donc une longueur de 90, refusee par
+    // applyTemplateByte : la fonction rendait false pour la mauvaise raison et le
+    // test passait quand meme. On ecrit donc un record VALIDE a l'adresse que
+    // l'index 16 atteindrait.
+    //
+    // Cette adresse appartient normalement a une AUTRE zone de l'image, celle des
+    // instances. On ne l'ecrit ici que dans le FakeEeprom, et uniquement pour cette
+    // contre-epreuve. Le firmware n'ecrit jamais un record de template la.
+    uint8_t content[persist::v3::CONTENT_BYTES];
+    memset(content, 0x7F, sizeof(content));
+    writeTemplateRecord(ee, 16, content, 24);
+
+    flexseq::ModulatedPatternState state;
+    state.length[0] = 7;
+    state.pattern[0].setStepByte(0, 0x11);
+
+    TEST_ASSERT_FALSE(flexseq::loadTemplateIntoModulationBuffer(ee, state, 0, 16));
+    TEST_ASSERT_EQUAL_UINT8(7, state.length[0]);
+    TEST_ASSERT_EQUAL_UINT8(0x11, state.pattern[0].stepByte(0));
+}
+
+void test_the_loader_brings_the_content_and_the_length() {
+    FakeEeprom ee;
+    uint8_t content[persist::v3::CONTENT_BYTES];
+    memset(content, 0, sizeof(content));
+    content[0] = 0x81;   // steps 0 et 7
+    content[4] = 0x0F;   // steps 32 a 35
+    content[persist::v3::STEP_BYTES] = 0x23;  // ratchets des steps 0 et 1
+    writeTemplateRecord(ee, 9, content, 12);
+
+    flexseq::ModulatedPatternState state;
+    TEST_ASSERT_TRUE(flexseq::loadTemplateIntoModulationBuffer(ee, state, 3, 9));
+
+    TEST_ASSERT_EQUAL_UINT8(12, state.length[3]);
+    bool active = false;
+    TEST_ASSERT_TRUE(state.pattern[3].readStep(0, active));
+    TEST_ASSERT_TRUE(active);
+    TEST_ASSERT_TRUE(state.pattern[3].readStep(7, active));
+    TEST_ASSERT_TRUE(active);
+    TEST_ASSERT_TRUE(state.pattern[3].readStep(1, active));
+    TEST_ASSERT_FALSE(active);
+    TEST_ASSERT_TRUE(state.pattern[3].readStep(35, active));
+    TEST_ASSERT_TRUE(active);
+    TEST_ASSERT_EQUAL_UINT8(3, state.pattern[3].getRatchet(0));
+    TEST_ASSERT_EQUAL_UINT8(2, state.pattern[3].getRatchet(1));
+}
+
+void test_the_loader_masks_the_four_bits_above_the_last_step() {
+    FakeEeprom ee;
+    uint8_t content[persist::v3::CONTENT_BYTES];
+    memset(content, 0, sizeof(content));
+    content[4] = 0xFF;   // les bits 36 a 39 ne portent aucun step
+    writeTemplateRecord(ee, 8, content, 36);
+
+    flexseq::ModulatedPatternState state;
+    TEST_ASSERT_TRUE(flexseq::loadTemplateIntoModulationBuffer(ee, state, 0, 8));
+    TEST_ASSERT_EQUAL_UINT8(0x0F, state.pattern[0].stepByte(4));
+}
+
+void test_the_loader_refuses_a_length_out_of_range_and_keeps_the_content() {
+    FakeEeprom ee;
+    uint8_t content[persist::v3::CONTENT_BYTES];
+    memset(content, 0, sizeof(content));
+    content[0] = 0x05;
+    writeTemplateRecord(ee, 10, content, 99);   // hors de [1, 36]
+
+    flexseq::ModulatedPatternState state;
+    state.length[1] = 20;
+    TEST_ASSERT_FALSE(flexseq::loadTemplateIntoModulationBuffer(ee, state, 1, 10));
+    TEST_ASSERT_EQUAL_UINT8(20, state.length[1]);   // la longueur d'avant reste
+    TEST_ASSERT_EQUAL_UINT8(0x05, state.pattern[1].stepByte(0));  // le contenu est la
+}
+
+void test_the_loader_touches_one_channel_only() {
+    FakeEeprom ee;
+    uint8_t content[persist::v3::CONTENT_BYTES];
+    memset(content, 0xFF, sizeof(content));
+    writeTemplateRecord(ee, 11, content, 24);
+
+    flexseq::ModulatedPatternState state;
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        state.length[ch] = 5;
+    }
+    TEST_ASSERT_TRUE(flexseq::loadTemplateIntoModulationBuffer(ee, state, 2, 11));
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        if (ch == 2) {
+            TEST_ASSERT_EQUAL_UINT8(24, state.length[ch]);
+            continue;
+        }
+        TEST_ASSERT_EQUAL_UINT8(5, state.length[ch]);
+        TEST_ASSERT_EQUAL_UINT8(0, state.pattern[ch].stepByte(0));
+    }
+}
+
+void test_the_loader_writes_nothing_to_the_eeprom() {
+    FakeEeprom ee;
+    uint8_t content[persist::v3::CONTENT_BYTES];
+    memset(content, 0, sizeof(content));
+    writeTemplateRecord(ee, 12, content, 16);
+    ee.writes = 0;
+
+    flexseq::ModulatedPatternState state;
+    TEST_ASSERT_TRUE(flexseq::loadTemplateIntoModulationBuffer(ee, state, 0, 12));
+    TEST_ASSERT_EQUAL_UINT16(0, ee.writes);
+}
+
+void test_the_loader_leaves_the_instance_and_the_base_alone() {
+    FakeEeprom ee;
+    uint8_t content[persist::v3::CONTENT_BYTES];
+    memset(content, 0xAA, sizeof(content));
+    writeTemplateRecord(ee, 13, content, 30);
+
+    SequencerEngine engine;
+    engine.setBaseLength(4, 18);
+    engine.setSelectedPattern(4, 5);
+    engine.instanceForChannel(4)->writeStep(2, true);
+
+    flexseq::ModulatedPatternState state;
+    TEST_ASSERT_TRUE(flexseq::loadTemplateIntoModulationBuffer(ee, state, 4, 13));
+
+    TEST_ASSERT_EQUAL_UINT8(18, engine.getBaseLength(4));
+    TEST_ASSERT_EQUAL_INT8(5, engine.getSelectedPattern(4));
+    bool active = false;
+    TEST_ASSERT_TRUE(engine.instanceForChannel(4)->readStep(2, active));
+    TEST_ASSERT_TRUE(active);
+    TEST_ASSERT_EQUAL_UINT8(0x04, engine.instanceForChannel(4)->stepByte(0));
+}
+
 int main() {
     UNITY_BEGIN();
 
+    RUN_TEST(test_the_loader_refuses_a_channel_out_of_range);
+    RUN_TEST(test_the_loader_refuses_a_template_out_of_range);
+    RUN_TEST(test_the_loader_brings_the_content_and_the_length);
+    RUN_TEST(test_the_loader_masks_the_four_bits_above_the_last_step);
+    RUN_TEST(test_the_loader_refuses_a_length_out_of_range_and_keeps_the_content);
+    RUN_TEST(test_the_loader_touches_one_channel_only);
+    RUN_TEST(test_the_loader_writes_nothing_to_the_eeprom);
+    RUN_TEST(test_the_loader_leaves_the_instance_and_the_base_alone);
     RUN_TEST(test_the_first_boot_seeds_the_templates_and_fills_the_instances_from_a1);
     RUN_TEST(test_a_nominal_boot_restores_the_instances_and_never_overwrites_them);
     RUN_TEST(test_a_valid_version_two_image_is_refused_without_migration);
