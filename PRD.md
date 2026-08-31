@@ -551,226 +551,227 @@ The measurement drove the decision, in two steps. The CV was read once per pass 
 **A requirement on an earlier format.** The behaviour of the firmware in front of an image of a different version must be **explicit, deterministic and tested**. It is not left to the chance of a partial load.
 ---
 ## 12. UI
-### 12.1 Modèle d'interaction — VALIDÉ le 2026-08-22
-**Principe retenu : hybride.** On garde la structure de l'original, et on ne redéfinit l'édition que là où le nouveau modèle l'exige (24 steps, ratchets par step, LENGTH par channel). Motif : le §4 demande de conserver les fonctionnalités historiques, et l'original a déjà résolu le problème de trois contrôles pour beaucoup de fonctions. Contrainte posée par le propriétaire : **effort cognitif minimal** — créer ou éditer un motif doit demander le moins de gestes possible.
-**La barre d'onglets EST la navigation**, comme dans l'original :
+### 12.1 Interaction model — VALIDATED on 2026-08-22
+**The chosen principle is hybrid.** The project keeps the structure of the original, and it redefines the edit only where the new model requires it: 24 steps, ratchets per step, and LENGTH per channel. The reason: §4 asks to keep the historical features, and the original already solved the problem of three controls for many functions. A constraint the owner set: **minimal cognitive effort** — to create or edit a pattern must ask for the fewest gestures possible.
+**The tab bar IS the navigation**, as in the original:
 ```javascript
 ────────────────────────────
 ◔  [1] 2 3 4 5 6            ■
 ```
-`◔` = onglet horloge et paramètres globaux · `1` à `6` = les six channels, l'actif en inversé · `⚙` = **page de configuration globale** · `▶`/`■` = **indicateur Play/Stop, HORS navigation**.
-⚠️ **NAVIGATION ARRÊTÉE LE 2026-08-23, sur le module.** La barre porte **huit onglets navigables** — horloge, les six channels, puis la **configuration globale** — et, **tout à droite et hors de la navigation**, l'**indicateur Play/Stop**. L'encodeur ne s'arrête jamais sur l'indicateur.
-**Ce qui manquait, et ce que le code fait aujourd'hui.** FlexSeq dessine huit onglets navigables dont le huitième est un `drawBox(cx - 2, cy - 2, 5, 5)`, soit un **carré plein de 5x5**. Le propriétaire l'a lu comme un indicateur Play/Stop sur le module : c'est exactement à quoi ressemble un indicateur d'arrêt, et le nom dans le code (`drawSettingsGlyph`) portait une intention que les pixels ne portaient pas. Il manque donc **deux** choses : la roue crantée, et l'indicateur.
-**L'original, pour référence, lu dans son code de dessin.** Sept onglets — glyphe `w` puis les chiffres `1` à `6` — et un glyphe de statut **séparé** à `x = 121` : `t` à l'arrêt, `r` en lecture, dessiné **seulement quand l'horloge est interne** (`masterClockMode == 0`).
-**L'ONGLET DE L'HORLOGE — disposition arrêtée le 2026-08-23.** Le nombre de champs **change avec le mode**, comme dans l'original, dont le `lastMenuItem` vaut 1, 2 ou 3 selon l'état :
-- **`INT`** : paramètre principal = le **tempo** ; champs = `MOD`, puis `RANGE` **si ****`MOD`**** n'est pas à ****`OFF`** ;
-- **`EXT`** : paramètre principal = `EXT` écrit en gros à la place du nombre ; champ = `PPQN` ;
-- **`MIDI`** : paramètre principal = `MIDI` ; **aucun champ**.
-La raison pour laquelle `PPQN` disparaît en INT et en MIDI n'est pas cosmétique : dans ces deux modes le champ **n'a pas de sujet**, l'entrée étant absente ou imposée à 24 par la norme MIDI. Voir §8.1.
-**LES GESTES DE L'ENCODEUR — conservés tels quels, 2026-08-23.** Relevés sur la carte d'origine fournie par le propriétaire :
-- **tourner** : parcourir le menu courant ou les valeurs du paramètre sélectionné ;
-- **appuyer** : entrer dans l'onglet, ou en édition de la valeur du paramètre sélectionné ;
-- **appui long** (\~1 s) : revenir en arrière ;
-- **SHIFT + tourner** : changer vite le paramètre sélectionné — **ou le paramètre PRINCIPAL de l'onglet quand on est sur la barre d'onglets**, **ou le RATCHET du pas quand on est dans EDIT PATTERN sur un pas sélectionné ET actif**.
-⚠️ **LES RATCHETS PASSENT SUR UN GESTE DE L'ORIGINAL — décidé le 2026-08-23.** Le geste inventé pour eux, `appui + tourner`, est **abandonné**. Les ratchets et le triolet se règlent désormais par `SHIFT` + tourner, dans EDIT, sur un pas **actif**.
-**Ce n'est pas une économie de geste, c'est une lecture de la carte.** Elle dit que `SHIFT` + tourner change « le paramètre sélectionné ». Dans EDIT, le paramètre sélectionné **est** le pas sous le curseur, et le ratchet est sa valeur. FlexSeq n'a donc plus besoin d'un geste neuf, et la règle du §1 n'a plus d'exception à porter : **l'évolution du mode SEQ se fait avec les gestes de l'original**.
-**Deux conséquences à trancher à l'audit, et non à découvrir ensuite.**
-1. `SHIFT` + tourner dans EDIT **change de channel** aujourd'hui — une addition FlexSeq absente de la carte. La combinaison étant prise, ce geste disparaît ou se déplace.
-2. **La condition « actif » n'existe pas dans le code.** `adjustRatchet()` ne lit pas l'état du pas, et `toggleStep()` n'efface pas le ratchet quand il désactive un pas. Un pas inactif porte donc un ratchet en silence, et le §11.1 le persiste. Ce que devient ce ratchet — effacé à la désactivation, ou gardé et rendu avec le pas — est une **décision produit** à poser.
-⚠️ **LE CHANGEMENT DE CHANNEL DANS EDIT DISPARAÎT — décidé le 2026-08-23.** `SHIFT` + tourner y servait à changer de channel, une addition FlexSeq absente de la carte d'origine et dont la combinaison est désormais prise par les ratchets. Rien dans le firmware d'origine ne change de channel depuis l'éditeur de pattern, donc ce retrait **restitue** la navigation d'origine. Prix assumé : depuis EDIT, changer de channel demande appui long, appui long, tourner, appuyer, appuyer.
-**LE RACCOURCI DE L'ORIGINAL VERS LES RÉGLAGES EST CONSERVÉ — décidé le 2026-08-23.** `Interactions.ino:84` ouvre les SETTINGS par **SHIFT + un appui de plus de 2 s sur l'encodeur**. Ce geste reste, **en plus** de l'onglet à roue crantée : deux chemins vers la même page, dont un venu de l'original.
-**RETOUR À LA PAGE PRÉCÉDENTE — VALIDÉ le 2026-08-23.** L'appui long garde son sens de « remonter d'un niveau », et la règle ci-dessous ne concerne que le raccourci :
-- le **raccourci** `SHIFT` + 2 s mémorise l'onglet et le niveau quittés — **un octet** ;
-- l'appui long sur la page des réglages **y retourne**, au lieu de tomber sur la barre d'onglets ;
-- arriver aux réglages **en tournant** la barre ne mémorise rien : l'appui long remonte normalement ;
-- la règle existante reste **première** : l'appui long ferme d'abord un champ ouvert ;
-- quitter les réglages **en tournant** oublie le point de retour.
-**Un seul point de retour est mémorisé**, celui du dernier raccourci. Ce n'est pas un historique de navigation : l'historique général a été **écarté**, parce qu'il coûte de la RAM par niveau et rend le geste « revenir » imprévisible — il cesserait d'être « remonter d'un niveau », ce que la carte des gestes annonce.
-⚠️ **Un geste manque, et il explique un constat du module.** `SHIFT + tourner` **sur la barre d'onglets ne fait rien** : `handleTabBar()` ne traite que `EVENT_ROTATE` et `EVENT_PRESS`. Le propriétaire a signalé le 2026-08-23 que SHIFT semblait ne pas réagir ; sur la barre, il ne réagit effectivement pas. Ligne 31 de `docs/open-risks.md`.
-**Deux écarts mineurs à vérifier à l'audit.** L'appui long de FlexSeq dure **750 ms** quand la carte dit \~1 s — à mesurer dans l'original, pas à déduire de la carte. Et deux gestes de FlexSeq ne figurent pas sur la carte : `SHIFT + tourner` dans EDIT change de **channel**, `SHIFT + appui long` dans EDIT **efface le pattern**. Si ce sont des additions, elles doivent être assumées ici.
-**Les glyphes de navigation sont ceux de l'ORIGINAL.** Décision du propriétaire, 2026-08-23 : on reprend les formes de l'original pour l'horloge et pour Play/Stop, et on **crée** un glyphe pour la configuration globale, une **roue crantée**, l'original n'ayant pas d'onglet pour cette page. Les formes d'origine sont récupérables : `tools/decode-velvetscreen.py` décode la police `velvetscreen` du firmware d'origine glyphe par glyphe. **Provenance à conserver** — la police est GPLv3, comme FlexSeq lui-même, donc la réutilisation est compatible et seule l'attribution est due.
-⚠️ **QUATRE ÉCRANS À PARTIR DU 2026-08-22, ET NON TROIS.** Le propriétaire **renverse** la phrase ci-dessous « il n'existe pas d'écran CONFIG PATTERN séparé » : il en veut un. Le compte devient **principal · EDIT PATTERN · CONFIG PATTERN · réglages**.
-**La page d'un channel reprend la forme du legacy** — un gros paramètre à gauche avec son étiquette dessous, **trois** lignes à droite — et ce gros paramètre **change de nature selon le mode**, comme dans l'original :
+`◔` is the clock tab and the global parameters · `1` to `6` are the six channels, and the active one is inverted · `⚙` is the **global configuration page** · `▶` and `■` are the **Play/Stop indicator, OUT of the navigation**.
+⚠️ **NAVIGATION SETTLED ON 2026-08-23, on the module.** The bar carries **eight navigable tabs**: the clock, the six channels, and then the **global configuration**. **At the far right, and out of the navigation, sits the Play/Stop indicator.** The encoder never stops on the indicator.
+**What was missing, and what the code does today.** FlexSeq draws eight navigable tabs, and the eighth is a `drawBox(cx - 2, cy - 2, 5, 5)`, so a **filled square of 5x5**. The owner read it as a Play/Stop indicator on the module: that is exactly what a stop indicator looks like, and the name in the code, `drawSettingsGlyph`, carried an intent the pixels did not. **Two** things are therefore missing: the cogwheel, and the indicator.
+**The original, for reference, read in its drawing code.** Seven tabs — the glyph `w` and then the digits `1` to `6` — and a **separate** status glyph at `x = 121`: `t` when stopped, `r` when playing, and drawn **only while the clock is internal** (`masterClockMode == 0`).
+**THE CLOCK TAB — layout settled on 2026-08-23.** The number of fields **changes with the mode**, as in the original, whose `lastMenuItem` holds 1, 2 or 3 depending on the state:
+- **`INT`**: the main parameter is the **tempo**. The fields are `MOD`, and then `RANGE` **if `MOD` is not `OFF`**;
+- **`EXT`**: the main parameter is `EXT`, written large in place of the number. The field is `PPQN`;
+- **`MIDI`**: the main parameter is `MIDI`, and there is **no field**.
+The reason `PPQN` disappears in INT and in MIDI is not cosmetic: in those two modes the field **has no subject**, because the input is absent, or the MIDI standard forces it to 24. See §8.1.
+**THE GESTURES OF THE ENCODER — kept as they are, 2026-08-23.** Taken from the original card the owner supplied:
+- **turn**: move through the current menu, or through the values of the selected parameter;
+- **press**: enter the tab, or enter the edit of the value of the selected parameter;
+- **long press** (about 1 s): go back;
+- **SHIFT plus turn**: change the selected parameter quickly. **On the tab bar it changes the MAIN parameter of the tab.** **In EDIT PATTERN, on a step that is selected AND active, it changes the RATCHET of that step.**
+⚠️ **THE RATCHETS MOVE ONTO A GESTURE OF THE ORIGINAL — decided on 2026-08-23.** The gesture invented for them, `press plus turn`, is **abandoned**. The ratchets and the triplet are now set by `SHIFT` plus turn, in EDIT, on an **active** step.
+**This is not a saving of a gesture: it is a reading of the card.** The card says that `SHIFT` plus turn changes "the selected parameter". In EDIT, the selected parameter **is** the step under the cursor, and the ratchet is its value. FlexSeq therefore no longer needs a new gesture, and the rule of §1 no longer carries an exception: **the evolution of the SEQ mode happens with the gestures of the original**.
+**Two consequences to settle at the audit, and not to discover afterwards.**
+1. `SHIFT` plus turn in EDIT **changes the channel** today, a FlexSeq addition absent from the card. The combination is taken, so that gesture disappears or moves.
+2. **The condition "active" does not exist in the code.** `adjustRatchet()` does not read the state of the step, and `toggleStep()` does not clear the ratchet when it deactivates a step. An inactive step therefore carries a ratchet in silence, and §11.1 persists it. What becomes of that ratchet — cleared at the deactivation, or kept and rendered with the step — is a **product decision** to take.
+⚠️ **THE CHANNEL CHANGE INSIDE EDIT DISAPPEARS — decided on 2026-08-23.** `SHIFT` plus turn served there to change the channel, a FlexSeq addition absent from the original card, and the ratchets now take that combination. Nothing in the original firmware changes channel from the pattern editor, so this removal **restores** the navigation of the original. An accepted price: from EDIT, to change channel asks for a long press, a long press, a turn, a press and a press.
+**THE SHORTCUT OF THE ORIGINAL TO THE SETTINGS IS KEPT — decided on 2026-08-23.** `Interactions.ino:84` opens the SETTINGS with **SHIFT plus a press longer than 2 s on the encoder**. That gesture stays, **on top of** the cogwheel tab: two paths to the same page, and one of them comes from the original.
+**RETURN TO THE PREVIOUS PAGE — VALIDATED on 2026-08-23.** The long press keeps its meaning of "go up one level", and the rule below concerns the shortcut alone:
+- the **shortcut** `SHIFT` plus 2 s stores the tab and the level it left — **one byte**;
+- a long press on the settings page **returns there**, instead of falling onto the tab bar;
+- to arrive at the settings **by turning** the bar stores nothing, and the long press goes up normally;
+- the existing rule stays **first**: the long press closes an open field before anything else;
+- to leave the settings **by turning** forgets the return point.
+**One return point only is stored**, the one of the last shortcut. This is not a navigation history: the general history was **set aside**, because it costs RAM per level and it makes the "go back" gesture unpredictable. It would stop being "go up one level", which is what the card of the gestures announces.
+⚠️ **One gesture is missing, and it explains an observation on the module.** `SHIFT plus turn` **does nothing on the tab bar**: `handleTabBar()` handles `EVENT_ROTATE` and `EVENT_PRESS` alone. The owner reported on 2026-08-23 that SHIFT seemed not to react, and on the bar it indeed does not. Line 31 of `docs/open-risks.md`.
+**Two minor differences to check at the audit.** The long press of FlexSeq lasts **750 ms** where the card says about 1 s. Measure that in the original, and do not deduce it from the card. And two gestures of FlexSeq do not appear on the card: `SHIFT plus turn` in EDIT changes the **channel**, and `SHIFT plus a long press` in EDIT **clears the pattern**. If they are additions, this document must accept them.
+**The navigation glyphs are the glyphs of the ORIGINAL.** A decision of the owner, 2026-08-23: the project takes the shapes of the original for the clock and for Play/Stop. And it **creates** a glyph for the global configuration, a **cogwheel**, because the original has no tab for that page. The original shapes are recoverable: `tools/decode-velvetscreen.py` decodes the `velvetscreen` font of the original firmware glyph by glyph. **The provenance must be kept** — the font is GPLv3, like FlexSeq itself, so the reuse is compatible and only the attribution is due.
+⚠️ **FOUR SCREENS FROM 2026-08-22, AND NOT THREE.** The owner **reverses** the sentence below, "no separate CONFIG PATTERN screen exists": they want one. The count becomes **the main screen · EDIT PATTERN · CONFIG PATTERN · the settings**.
+**The page of a channel takes the shape of the legacy**: one large parameter on the left with its label under it, and **three** lines on the right. That large parameter **changes its nature with the mode**, as in the original:
 \| \| CLOCK \| RANDOM \| SEQ \|
 \|---\|---\|---\|---\|
-\| gros + étiquette \| SUBDIV · `SUBDIVISION` \| skip · `SKIP CHANCE` \| `A1` · `PATTERN` \|
+\| large plus label \| SUBDIV · `SUBDIVISION` \| skip · `SKIP CHANCE` \| `A1` · `PATTERN` \|
 \| 1 \| `MODE:` \| `MODE:` \| `MODE:` \|
 \| 2 \| `OFFSET:` \| `SUBDIV:` \| `EDIT` \|
 \| 3 \| `MOD:` \| `MOD:` \| `CONFIG` \|
-**`CONFIG`**** ouvre la quatrième page**, qui porte `LENGTH`, `SUBDIV` et `MOD`. Conséquence heureuse : la page SEQ n'expose plus SUBDIV, ce qui la **rapproche** de l'original, qui n'en avait pas non plus.
-**LE RENDU D'UN PAS — validé le 2026-08-23.** Cinq cas, dans cet ordre de priorité :
-- **actif + triolet** : triangle **plein** ;
-- **actif, autre ratchet** : disque plein **et le chiffre** sous le pas ;
-- **inactif + triolet** : triangle **vide** — le seul glyphe à créer ;
-- **inactif, tout autre cas** : anneau ;
-- **le chiffre n'est jamais dessiné sur un pas inactif**, ni quand la cadence du channel rend le ratchet impossible (§6.3.1).
-**L'asymétrie est voulue** : un triolet agit sur le temps même éteint, donc le cacher tromperait ; un ratchet `2/3/4/6` éteint n'agit sur rien, donc l'afficher encombrerait. L'écran montre alors exactement ce qui a un effet.
-**Coût à prévoir** : `PatternScreenModel` ne porte pas la cadence du channel aujourd'hui. Il lui faut **un champ de plus** pour appliquer la dernière règle.
-**La séparation de mesure descend dans EDIT PATTERN** : c'est une aide de lecture de la grille, une addition FlexSeq que l'original n'a pas.
-**Le glyphe de droite dans la barre est ****`▶`**, comme l'original, et non le `■` écrit plus bas.
-**Le gros nom de pattern est dessiné par nos propres glyphes** — dix suffisent, `A`, `B`, `1` à `8` — comme les chiffres de ratchet le sont déjà. \~500 o estimés contre 2646 pour `logisoso26`, et aucune donnée GPLv3.
-État : **conçu, non implémenté**, sauf le format v2, qui l'est depuis le 2026-08-23 (§11.1, lot 10). Les mises en page de CLOCK et RANDOM et la navigation **dans** CONFIG sont **assemblées par Claude à partir de l'original** et attendent une validation d'ensemble. Découpage dans `WORKPLAN.md` (lots 11 à 14).
-— *rédaction précédente, partiellement remplacée :*
-**Trois écrans**, exactement ceux de l'original :
-1. **Écran principal** — la barre d'onglets et les paramètres de l'onglet actif. Il n'existe **pas** d'écran « CONFIG PATTERN » séparé : les réglages d'un channel sont le contenu de son onglet.
-2. **EDIT PATTERN** — la grille de 24 steps, atteinte depuis l'entrée `EDIT PATTERN` de l'onglet d'un channel.
-3. **Réglages** — atteints par l'onglet `■`. Différés : rotation d'écran, sens de l'encodeur, calibration CV (§4.1).
-**Deux niveaux dans l'écran principal**, comme l'original : on est soit **sur** la barre d'onglets, soit **dans** un onglet.
-**Les huit gestes :**
+**`CONFIG` opens the fourth page**, which carries `LENGTH`, `SUBDIV` and `MOD`. A happy consequence: the SEQ page no longer exposes SUBDIV, which brings it **closer** to the original, which had none either.
+**THE RENDER OF A STEP — validated on 2026-08-23.** Five cases, in this order of priority:
+- **active plus triplet**: a **filled** triangle;
+- **active, another ratchet**: a filled disc **and the digit** under the step;
+- **inactive plus triplet**: an **empty** triangle, and it is the only glyph to create;
+- **inactive, every other case**: a ring;
+- **the digit is never drawn on an inactive step**, and never when the rate of the channel makes the ratchet impossible (§6.3.1).
+**The asymmetry is wanted**: a triplet acts on the time even when it is off, so to hide it would mislead. A ratchet `2/3/4/6` that is off acts on nothing, so to show it would clutter. The screen then shows exactly what has an effect.
+**A cost to plan**: `PatternScreenModel` does not carry the rate of the channel today. It needs **one more field** to apply the last rule.
+**The measure separation goes down into EDIT PATTERN**: it is a reading aid of the grid, a FlexSeq addition the original does not have.
+**The glyph on the right of the bar is `▶`**, as in the original, and not the `■` written further down.
+**Our own glyphs draw the large pattern name**, as they already draw the ratchet digits. Ten are enough: `A`, `B` and `1` to `8`. About 500 B estimated against 2646 for `logisoso26`, and no GPLv3 data.
+State: **designed, and not implemented**, except the v2 format, which is implemented since 2026-08-23 (§11.1, lot 10). The layouts of CLOCK and RANDOM, and the navigation **inside** CONFIG, are **assembled by Claude from the original**. They wait for a validation of the whole. `WORKPLAN.md` holds the breakdown, lots 11 to 14.
+— *the previous wording, partly replaced:*
+**Three screens**, exactly those of the original:
+1. **The main screen** — the tab bar and the parameters of the active tab. **No** separate "CONFIG PATTERN" screen exists: the settings of a channel are the content of its tab.
+2. **EDIT PATTERN** — the grid of 24 steps, reached from the entry `EDIT PATTERN` of the tab of a channel.
+3. **The settings** — reached through the `■` tab. Deferred: the screen rotation, the encoder direction, and the CV calibration (§4.1).
+**Two levels inside the main screen**, as in the original: you are either **on** the tab bar, or **inside** a tab.
+**The eight gestures:**
 <table header-row="true">
 <tr>
-<td>Geste</td>
-<td>Sur la barre</td>
-<td>Dans un onglet</td>
-<td>Dans EDIT PATTERN</td>
+<td>Gesture</td>
+<td>On the bar</td>
+<td>Inside a tab</td>
+<td>Inside EDIT PATTERN</td>
 </tr>
 <tr>
-<td>Tourner</td>
-<td>change d'onglet</td>
-<td>change de champ</td>
-<td>déplace le curseur</td>
+<td>Turn</td>
+<td>changes the tab</td>
+<td>changes the field</td>
+<td>moves the cursor</td>
 </tr>
 <tr>
-<td>Appui court encodeur</td>
-<td>entre dans l'onglet</td>
-<td>ouvre le champ, ou entre dans EDIT</td>
-<td>active / désactive le step</td>
+<td>Short press on the encoder</td>
+<td>enters the tab</td>
+<td>opens the field, or enters EDIT</td>
+<td>activates / deactivates the step</td>
 </tr>
 <tr>
-<td>**Appui long encodeur**</td>
+<td>**Long press on the encoder**</td>
 <td>—</td>
-<td>revient à la barre</td>
-<td>revient à l'onglet</td>
+<td>returns to the bar</td>
+<td>returns to the tab</td>
 </tr>
 <tr>
-<td>Tourner en appuyant</td>
-<td>—</td>
-<td>—</td>
-<td>règle le ratchet du step sous le curseur</td>
-</tr>
-<tr>
-<td>SHIFT tenu + tourner</td>
-<td>—</td>
-<td>change la valeur du champ</td>
-<td>change de channel</td>
-</tr>
-<tr>
-<td>SHIFT appui long</td>
+<td>Turn while pressing</td>
 <td>—</td>
 <td>—</td>
-<td>vide le pattern (identique à l'original, §5.5)</td>
+<td>sets the ratchet of the step under the cursor</td>
 </tr>
 <tr>
-<td>PLAY appui court</td>
-<td>marche / arrêt</td>
-<td>marche / arrêt</td>
-<td>marche / arrêt</td>
+<td>SHIFT held plus turn</td>
+<td>—</td>
+<td>changes the value of the field</td>
+<td>changes the channel</td>
+</tr>
+<tr>
+<td>SHIFT long press</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>it empties the pattern, identical to the original, §5.5</td>
+</tr>
+<tr>
+<td>PLAY short press</td>
+<td>run / stop</td>
+<td>run / stop</td>
+<td>run / stop</td>
 </tr>
 </table>
-`SHIFT` appui court **reste libre** : aucun emploi ne lui est donné plutôt que de l'occuper sans raison.
-**L'appui long remonte d'UN niveau, partout — validé le 2026-08-22.** La table ci-dessus ne disait pas ce que font les gestes quand un champ est **ouvert**, et c'est le cœur de la machine d'états. La règle tranchée par le propriétaire est unique et vaut aux trois niveaux :
-- champ ouvert → l'appui long **referme le champ** et laisse dans l'onglet ;
-- champ fermé, dans un onglet → l'appui long revient à la **barre d'onglets** ;
-- dans EDIT PATTERN → l'appui long revient à **l'onglet**.
-L'appui court fait l'inverse : il descend d'un niveau, ou bascule le step dans EDIT. Une seule règle à apprendre au lieu de trois — c'est la contrainte d'**effort cognitif minimal**. `SHIFT` tenu + tourner reste un **raccourci** : il change la valeur **sans ouvrir** le champ.
-**Les positions bouclent, les valeurs s'arrêtent aux bornes — validé le 2026-08-22.** Boucler un tempo de 300 à 30 serait un accident musical ; refuser d'avancer au dernier onglet serait un cul-de-sac. Donc : onglet, curseur de champ, curseur de step et changement de channel **bouclent** ; tempo, source, pattern, LENGTH, SUBDIV, séparation et ratchet **s'écrêtent**.
-⚠️ **L'écrêtage n'est pas redondant avec les contrôles du moteur, et une mutation l'a prouvé.** libGravity **accélère** une rotation rapide (×3 sous 16 ms, ×2 sous 32 ms), donc un cran vaut parfois 3. Sans écrêtage, +3 depuis LENGTH 23 est **refusé** par `SequencerEngine::setEffectiveLength` et la valeur ne bouge pas ; avec écrêtage elle atterrit sur 24. Deux mutations avaient survécu à la première passe exactement pour cette raison.
-**L'onglet ****`■`**** est inerte tant que son contenu est différé.** Un appui sur un onglet sans champ ne fait **rien**, plutôt que d'entrer dans un niveau vide qui aurait l'air cassé.
-**`selectedChannel`**** est dérivé de l'onglet courant, jamais stocké.** La barre d'onglets et le changement de channel dans EDIT ne peuvent donc pas se contredire, et c'est un octet de moins.
-**État mesuré (2026-08-22).** `UiController` existe en C++ et en TypeScript, 35 assertions de chaque côté, **22 mutations sur 22 tuées** de chaque côté. Coût AVR mesuré avec un point d'appel temporaire dans `main.cpp` : **RAM +26 o, Flash +1224 o** — à comparer aux 15 o estimés par l'ADR 0002 et aux 2 à 4 ko estimés au §15 pour l'UI complète. Rien ne l'appelle encore, donc le build livré reste à 1528 / 21404.
-⚠️ **`SHIFT`**** tenu se lit en ÉTAT, pas en rappel.** Les callbacks de `Button` se déclenchent au relâchement — c'est la condition pour distinguer appui court et long. Un modificateur tenu exige donc `On()`, qui lit la broche. Vérifié sur le module.
-⚠️ **L'appui long de l'encodeur n'existe pas dans l'API de libGravity** au commit épinglé : `Encoder` expose l'appui court, la rotation et la rotation-pendant-appui, et son `Button` interne est privé. Il faut donc **notre propre ****`Button`** sur `ENCODER_SW_PIN`. Les deux ne se gênent pas : `Encoder` ne déclenche que sur `CHANGE_RELEASED`, le nôtre que sur `CHANGE_RELEASED_LONG`. Coexistence **raisonnée sur le code, pas mesurée** — test natif et vérification sur le module exigés ; repli, lire la broche directement. Voir ADR 0002.
-**Contenu de l'onglet d'un channel :** pattern sélectionné, **LENGTH**, **SUBDIV** (affichée façon Gravity original : `/N` division, `xN` multiplication), **SÉPARATION de mesure** (graphique : aucune/2/3/4/6), et l'entrée `EDIT PATTERN`. Plus tard la source et la destination CV (§10.2). **Aucun réglage global dans un onglet de channel**, pour qu'aucune confusion ne soit possible — décision du propriétaire. Pas de champ SPEED, pas de METER ni de MEASURES (supprimés — voir §6.2).
-**Contenu de l'onglet ****`◔`**** :** tempo, borné **30–300**, et source d'horloge. Voir §8.
-**MISE EN PAGE TRANCHÉE le 2026-08-22 — CINQ champs tiennent sans défilement.** La question restée ouverte au découpage est résolue par **deux colonnes** sous la grande police : `LEN` et `SUB` sur une rangée, `SEP` et `EDIT PATTERN` sur la suivante. La grande police est **elle-même le champ 0**, donc les 30 px qu'elle occupe sont sélectionnables et non décoratifs — nom du pattern sur un onglet de channel, **tempo** sur l'onglet `◔`. Aucun défilement, donc aucun geste supplémentaire à apprendre.
-Géométrie : barre d'onglets en **bas**, huit cases de 16 px, l'onglet actif en inversé · filet à y 52 · rangées de champs à y 32 et y 40 · grande police centrée, ligne de base y 28. Curseur = cadre ; champ ouvert = **inversé**. Sur la barre d'onglets, aucun curseur de champ n'est dessiné.
-**Libellés des six sources d'horloge, à confirmer** : `INT`, `EXT24`, `EXT4`, `EXT2`, `EXT1`, `MIDI`. Ils correspondent à l'énumération de libGravity (`SOURCE_INTERNAL`, `SOURCE_EXTERNAL_PPQN_24/4/2/1`, `SOURCE_EXTERNAL_MIDI`) et `SOURCE_LAST` n'est jamais atteignable (§8.1). Choix de nommage fait à l'implémentation, pas encore validé par le propriétaire.
-**Les polices restent hors du renderer** : le modèle porte deux poignées de police, donc le composant est pur et un test lui passe des sentinelles au lieu de tables U8g2. La largeur de la grande chaîne est portée comme celle du titre d'EDIT, `getStrWidth()` coûtant \~1 ms par appel.
-⚠️ **Un ****`switch`**** coûte de la RAM sur avr-gcc, et c'est mesuré une seconde fois.** Le compilateur émet une table `CSWTCH` en `.data` — donc en RAM — pour un `switch` sur de petites valeurs. `PatternScreen.h` documentait déjà le piège pour ses chiffres de ratchet ; il a coûté ici **10 o** pour les libellés de source, récupérés en repassant à des comparaisons `if` contre 12 o de Flash. Les deux tables de choix d'`UiController` ont été converties pour la même raison.
-⚠️ **LA GRANDE POLICE EST RETIRÉE — décision du propriétaire le 2026-08-22, qui REMPLACE celle prise quelques heures plus tôt et rapportée ci-dessous.** Le premier arbitrage s'appuyait sur une mesure **incomplète** : elle couvrait l'écran principal et la police, mais **ni la persistance ni le câblage de l'UI**. Ensemble, le tout mesure **28242 o, 91,9 %**, au-dessus du garde-fou. Le nom du pattern et le tempo s'affichent donc dans la même police 5×7 que le reste, et le renderer **ne change plus jamais de police** : les deux poignées quittent le modèle.
-**Mesuré, tout câblé : Flash 25510 / 30720 (83,0 %)**, soit **2138 o** de marge, et **RAM 1639** avec 409 o libres contre une réserve de 256. Mieux que les 25596 o prédits par l'arithmétique, parce que retirer la police retire aussi le code de décodage de glyphes qu'elle mobilisait dans U8g2.
-**Ce qui est perdu, sans l'enjoliver** : le nom du pattern ne se lit plus d'un coup d'œil à distance, et c'était précisément l'objet de la décision sur `logisoso26`. Les replis restent chiffrés ci-dessous si le budget se desserrait, et la ligne 24 de `docs/open-risks.md` rendrait à elle seule 1536 o si elle était vérifiée.
-**La mise en page se resserre** plutôt que de laisser un trou là où étaient les glyphes de 26 px : l'en-tête passe à 10 px et les deux rangées de champs remontent à y 14 et y 22. Ce qui reste dessous n'est pas du vide mais **la place des champs de source et destination CV du §10.2** — un test assertionne qu'il y tient exactement deux rangées de plus, donc ces champs n'exigeront pas de refonte.
-**Décision REMPLACÉE, conservée parce que ses chiffres restent utiles :** Mesuré sur le build de production avec les **deux** écrans câblés puis reverté : **RAM 1607 / 2048 (78,5 %)**, **Flash 26060 / 30720 (84,8 %)**, dont **2646 o** pour la police elle-même. Il reste **1588 o** avant le refus du garde-fou à 90 %, et les lots 2 (adaptateurs), 5 (transport) et 6 (persistance) restent à construire — estimés 1200 à 1500 o. Ça passe, **sans marge**.
-✅ **ÉTAT FINAL, mesuré le 2026-08-22 sur le firmware complet** — deux écrans, huit gestes, transport, persistance, tout câblé : **RAM 1699 / 2048 (83,0 %)**, **Flash 28050 / 30720 (91,3 %)**, pile **206 o** (80 % de la réserve de 256).
-⚠️ **CES CHIFFRES SONT PÉRIMÉS. Mesuré le 2026-08-25 : RAM 1429 / 2048 (69,8 %), Flash 27170 / 30720 (88,4 %), pile toujours 206 o, marge 413 o, et 2014 o sous le garde-fou de 95 %.** Trois changements du même jour, et le premier pèse plus que tout ce qui précède. **Le transport de l'écran** : le SSD1306 est en écriture seule, mais Arduino Wire apportait un pilote bidirectionnel, sous interruption, capable de mode esclave. Un transport TWI scruté, sens unique, a rendu **1678 o de Flash et 216 o de RAM**, et la boucle est devenue **plus rapide** — p90 8,80 puis 6,50 ms, une bande d'écran 4,88 puis 3,36 ms. Il a fallu une ligne **additive** dans le fork, plus l'interrupteur `U8X8_NO_HW_I2C` d'u8g2 : sans lui l'objet global Wire restait, son constructeur étant dans `.init_array`, que l'éditeur de liens ne retire jamais. **Les tampons série**, 64 → 16 octets chacun : **96 o de RAM**, aucun coût en Flash. Et `adjustFieldValue`, qui a cessé de répéter son garde et ses conversions : **94 o**. ⚠️ Ces 94 o appartiennent à cette campagne du 2026-08-25 et sont **distincts** des 126 o du lot S, mesurés le 2026-08-30.
-**Le plafond Flash passe de 90 à 95 %**, décidé par le propriétaire sur ce chiffre. Ce n'est pas un plafond repoussé pour se donner de l'air : la **vraie** limite est 30720 o, et 95 % avertit encore 1134 o avant elle. Ce qu'on accepte est une réserve plus petite, jamais un risque de brique — l'éditeur de liens refuserait bien avant. Le garde-fou de **dérive** reste à +512 o : cela ne devient pas un droit de grossir en silence.
-**Deux campagnes d'économies ont précédé la décision, pas suivi**, et rendu **1378 o** : `-mcall-prologues` (534 o, coût mesuré sur les quatre sondes — pile 161 → 175 o, p90 8,52 → 8,96 ms) · le jeu de glyphes réduit `u8g2_font_5x7_tr` au lieu de `_tf` (808 o, et le panneau prouve le rendu identique : **863 pixels d'encre avant comme après**) · un formateur de nombres partagé (36 o).
-**Mesuré et écarté, pour que personne ne le retente** : le constructeur du moteur ne vaut que **88 o** sur les 1646 o de code de constructeurs globaux, et l'ELF le confirme le 2026-08-30 — il n'a **aucun symbole**, LTO l'inline dans `main`.
-**⚠️ Une phrase de ce paragraphe est CORRIGÉE le 2026-08-30, parce qu'une mesure la réfute.** Elle disait : « **tous** les leviers d'inlining rendent zéro ou pire sous `-Os` avec LTO ». Ce qui est établi, et rien de plus :
-- les **réglages globaux d'inlining du compilateur** essayés pendant la campagne Flash du 2026-08-25 n'ont produit aucune économie exploitable sous `-Os` avec LTO — **fait mesuré** ;
-- un **désinlining ciblé** de trois helpers de `UiController.cpp` produit une économie de **126 o** — **fait mesuré**, 2026-08-30, ADR 0010 ;
-- les deux expériences portent sur des **mécanismes différents** — **fait technique**. Un réglage global agit sur tout le binaire ; `noinline` sur une fonction nommée matérialise **plus** de fonctions et réduit pourtant la taille, parce que la duplication du code inliné coûtait plus cher que les appels ;
-- la portée exacte que la formulation d'origine voulait donner à « tous » — **inconnue**, et ce texte ne la reconstruit pas.
+A **short press on `SHIFT` stays free**: the project gives it no use rather than occupying it without a reason.
+**A long press goes up ONE level, everywhere — validated on 2026-08-22.** The table above did not say what the gestures do while a field is **open**, and that is the heart of the state machine. The rule the owner settled is single, and it holds at the three levels:
+- a field is open → the long press **closes the field** and it leaves you in the tab;
+- a field is closed, inside a tab → the long press returns to the **tab bar**;
+- inside EDIT PATTERN → the long press returns to **the tab**.
+The short press does the opposite: it goes down one level, or it toggles the step in EDIT. One rule to learn instead of three, and that is the constraint of **minimal cognitive effort**. `SHIFT` held plus a turn stays a **shortcut**: it changes the value **without opening** the field.
+**The positions wrap, and the values stop at the bounds — validated on 2026-08-22.** To wrap a tempo from 300 to 30 would be a musical accident. To refuse to advance at the last tab would be a dead end. So: the tab, the field cursor, the step cursor and the channel change **wrap**. The tempo, the source, the pattern, the LENGTH, the SUBDIV, the separation and the ratchet **clamp**.
+⚠️ **The clamp is not redundant with the controls of the engine, and a mutation proved it.** libGravity **accelerates** a fast turn, ×3 under 16 ms and ×2 under 32 ms, so one detent is sometimes worth 3. Without a clamp, +3 from LENGTH 23 is **refused** by `SequencerEngine::setEffectiveLength` and the value does not move. With the clamp it lands on 24. Two mutations had survived the first pass for exactly that reason.
+**The `■` tab is inert while its content is deferred.** A press on a tab that holds no field does **nothing**, rather than entering an empty level that would look broken.
+**`selectedChannel` derives from the current tab, and nothing stores it.** The tab bar and the channel change inside EDIT therefore cannot contradict each other, and it is one byte less.
+**Measured state (2026-08-22).** `UiController` exists in C++ and in TypeScript, with 35 assertions on each side, and **22 mutations out of 22 detected** on each side. The AVR cost was measured with a temporary call site in `main.cpp`: **RAM +26 B, Flash +1224 B**. Compare that to the 15 B that ADR 0002 estimated, and to the 2 to 4 kB that §15 estimates for the complete UI. Nothing calls it yet, so the delivered build stays at 1528 / 21404.
+⚠️ **`SHIFT` held is read as a STATE, and not through a callback.** The callbacks of `Button` fire on the release, which is the condition for separating a short press from a long one. A held modifier therefore needs `On()`, which reads the pin. Verified on the module.
+⚠️ **The long press of the encoder does not exist in the API of libGravity** at the pinned commit: `Encoder` exposes the short press, the rotation and the rotation during a press, and its internal `Button` is private. FlexSeq therefore needs **its own `Button`** on `ENCODER_SW_PIN`. The two do not get in each other's way: `Encoder` fires on `CHANGE_RELEASED` alone, and ours on `CHANGE_RELEASED_LONG` alone. The coexistence is **reasoned on the code, and not measured** — a native test and a check on the module are required. The fallback is to read the pin directly. See ADR 0002.
+**Content of the tab of a channel:** the selected pattern · the **LENGTH** · the **SUBDIV**, displayed as the original Gravity does, `/N` for a division and `xN` for a multiplication · the **measure SEPARATION**, graphical, none/2/3/4/6 · the entry `EDIT PATTERN`. Later the CV source and destination (§10.2). **No global setting inside the tab of a channel**, so that no confusion is possible — a decision of the owner. No SPEED field, and no METER and no MEASURES, which are removed — see §6.2.
+**Content of the `◔` tab:** the tempo, bounded **30–300**, and the clock source. See §8.
+**LAYOUT SETTLED on 2026-08-22 — FIVE fields fit with no scrolling.** The question that stayed open at the breakdown is resolved by **two columns** under the large font: `LEN` and `SUB` on one row, `SEP` and `EDIT PATTERN` on the next. The large font **is itself the field 0**, so the 30 px it occupies are selectable and not decorative: the pattern name on the tab of a channel, and the **tempo** on the `◔` tab. No scrolling, so no extra gesture to learn.
+Geometry: the tab bar at the **bottom**, eight cells of 16 px, and the active tab inverted · a rule at y 52 · the field rows at y 32 and y 40 · the large font centred, with the baseline at y 28. The cursor is a frame, and an open field is **inverted**. On the tab bar, no field cursor is drawn.
+**Labels of the six clock sources, to confirm**: `INT`, `EXT24`, `EXT4`, `EXT2`, `EXT1`, `MIDI`. They match the enumeration of libGravity (`SOURCE_INTERNAL`, `SOURCE_EXTERNAL_PPQN_24/4/2/1`, `SOURCE_EXTERNAL_MIDI`), and `SOURCE_LAST` is never reachable (§8.1). The naming was chosen at the implementation, and the owner has not validated it yet.
+**The fonts stay out of the renderer**: the model carries two font handles, so the component is pure and a test passes it sentinels instead of U8g2 tables. The width of the large string is carried like the width of the EDIT title, because `getStrWidth()` costs about 1 ms per call.
+⚠️ **A `switch` costs RAM on avr-gcc, and that is measured a second time.** The compiler emits a `CSWTCH` table in `.data`, so in RAM, for a `switch` over small values. `PatternScreen.h` already documented the trap for its ratchet digits. Here it cost **10 B** for the source labels, and comparisons with `if` returned them against 12 B of Flash. The two choice tables of `UiController` were converted for the same reason.
+⚠️ **THE LARGE FONT IS REMOVED — a decision of the owner on 2026-08-22.** It **REPLACES** the one taken a few hours earlier and reported below. The first arbitration rested on an **incomplete** measurement: it covered the main screen and the font, but **neither the persistence nor the wiring of the UI**. Together the whole measures **28242 B, 91.9 %**, above the guard. The pattern name and the tempo therefore appear in the same 5×7 font as the rest, and the renderer **never changes font again**: the two handles leave the model.
+**Measured, everything wired: Flash 25510 / 30720 (83.0 %)**, so **2138 B** of margin, and **RAM 1639** with 409 B free against a reserve of 256. That is better than the 25596 B the arithmetic predicted. The removal of the font also removes the glyph decoding code it used inside U8g2.
+**What is lost, and no embellishment**: the pattern name no longer reads at a glance from a distance, and that was exactly the object of the decision on `logisoso26`. The fallbacks stay costed below if the budget loosens, and line 24 of `docs/open-risks.md` would return 1536 B on its own if somebody verified it.
+**The layout tightens** rather than leaving a hole where the 26 px glyphs were: the header goes to 10 px, and the two field rows move up to y 14 and y 22. What stays below is not empty space: it is **the place of the CV source and destination fields of §10.2**. A test asserts that exactly two more rows fit there, so those fields will not require a rework.
+**A REPLACED decision, kept because its figures stay useful:** measured on the production build with **both** screens wired and then reverted: **RAM 1607 / 2048 (78.5 %)**, **Flash 26060 / 30720 (84.8 %)**, of which **2646 B** for the font itself. 1588 B stay before the refusal of the guard at 90 %. Three lots are still to build — 2 the adapters, 5 the transport, 6 the persistence — estimated at 1200 to 1500 B. It passes, **with no margin**.
+✅ **FINAL STATE, measured on 2026-08-22 on the complete firmware** — two screens, eight gestures, the transport, the persistence, everything wired: **RAM 1699 / 2048 (83.0 %)** · **Flash 28050 / 30720 (91.3 %)** · a stack peak of **206 B**, so 80 % of the reserve of 256.
+⚠️ **THESE FIGURES ARE STALE. Measured on 2026-08-25: RAM 1429 / 2048 (69.8 %) · Flash 27170 / 30720 (88.4 %) · the stack still 206 B · a margin of 413 B · 2014 B under the guard of 95 %.** Three changes of the same day, and the first weighs more than everything before it. **The transport of the screen**: the SSD1306 is write only, but Arduino Wire brought a bidirectional driver, under interrupt, and able to act as a slave. A polled, one-way TWI transport returned **1678 B of Flash and 216 B of RAM**, and the loop became **faster**. Measured: p90 8.80 then 6.50 ms, and one display band 4.88 then 3.36 ms. It needed one **additive** line in the fork, plus the `U8X8_NO_HW_I2C` switch of u8g2: without it the global Wire object stayed, because its constructor sits in `.init_array`, which the linker never removes. **The serial buffers**, 64 → 16 bytes each: **96 B of RAM**, and no cost in Flash. And `adjustFieldValue`, which stopped repeating its guard and its conversions: **94 B**. ⚠️ Those 94 B belong to this campaign of 2026-08-25, and they are **distinct** from the 126 B of lot S, measured on 2026-08-30.
+**The Flash ceiling moves from 90 to 95 %**, decided by the owner on that figure. It is not a ceiling pushed back for comfort: the **real** limit is 30720 B, and 95 % still warns 1134 B before it. What the project accepts is a smaller reserve, and never a risk of bricking, because the linker would refuse long before. The **drift** guard stays at +512 B: this does not become a right to grow in silence.
+**Two savings campaigns preceded the decision, and did not follow it**, and they returned **1378 B**: `-mcall-prologues` (534 B, with the cost measured on the four probes — the stack 161 → 175 B, and p90 8.52 → 8.96 ms) · the reduced glyph set `u8g2_font_5x7_tr` instead of `_tf` (808 B, and the panel proves the render identical: **863 pixels of ink before and after**) · a shared number formatter (36 B).
+**Measured and set aside, so that nobody retries it**: the constructor of the engine is worth **88 B** out of the 1646 B of global constructor code. The ELF confirms it on 2026-08-30: it has **no symbol**, because LTO inlines it into `main`.
+**⚠️ One sentence of this paragraph is CORRECTED on 2026-08-30, because a measurement refutes it.** It said: "**every** inlining lever returns zero or worse under `-Os` with LTO". What is established, and nothing more:
+- the **global inlining settings of the compiler**, tried during the Flash campaign of 2026-08-25, produced no usable saving under `-Os` with LTO. **A measured fact**;
+- a **targeted de-inlining** of three helpers of `UiController.cpp` produces a saving of **126 B** — **a measured fact**, 2026-08-30, ADR 0010;
+- the two experiments act on **different mechanisms** — **a technical fact**. A global setting acts on the whole binary. `noinline` on a named function materialises **more** functions and still reduces the size, because the duplication of the inlined code cost more than the calls;
+- the exact scope the original wording gave to "every" — **unknown**, and this text does not rebuild it.
 
-**Réglage global du compilateur et désinlining ciblé d'une fonction sont deux stratégies distinctes, et un résultat sur l'une ne dit rien de l'autre.**
-**Une économie annoncée doit reposer sur une taille mesurée.** Avant d'annoncer ou de conserver une estimation d'économie, identifier le symbole dans l'ELF et mesurer sa taille avec `avr-nm`. Si le compilateur inline le code, le symbole n'existe pas et aucune économie ne doit lui être attribuée. Une taille de symbole ne constitue pas une économie à elle seule : le gain doit être démontré par une comparaison de builds. Une estimation réfutée reste réfutée dans le document de décision.
-**Également réfuté par le lot S** : une table `PROGMEM` des bornes à la place du `switch` de `adjustFieldValue`. Les bornes ne coûtent rien — chacune est un immédiat dans un clamp — et les sept cas ne sont pas uniformes, donc une table ne peut pas les porter.
-**Deux gros consommateurs sont mesurés et NON qualifiés** : `main` (**5976 o**) et `PagedScreen::renderFrom` (**2490 o**), lus à l'`avr-nm` le 2026-08-30, soit 8466 o ensemble et 31 % de la Flash occupée. Ce sont des **tailles, pas des économies** : aucune analyse de leur contenu n'existe et aucun gain ne leur est attribué. Suivi en ligne 61 de `docs/open-risks.md`.
-⚠️ **La liste qui suit est celle du 2026-08-25 et elle est PÉRIMÉE sur un point** : les 574 o de `Wire` sont partis avec tout le chemin de son transport le 2026-08-25. Ce qui reste est soit la dépendance épinglée — ISR d'uClock 974 o, Wire 574 o, u8g2 \~1500 o, et **586 o d'allocateur** qu'uClock impose en allouant quatre octets à l'init — soit les deux renderers dont l'interface a besoin.
-⚠️ **Conséquence assumée par le propriétaire** : la Flash se mesure à **chaque** lot restant, pas seulement à la fin. Le repli est une ligne de code et la décision se reprend alors sur le chiffre réel : `logisoso22_tr` rend 420 o (même famille, 22 px au lieu de 26), `profont22_tr` rend 984 o (autre famille, l'allure change). Le garde-fou à 90 % n'est **pas** levé : le lever ne créerait pas de place, il retirerait un avertissement. ⚠️ **Ce seuil de 90 % est HISTORIQUE** : le propriétaire l'a porté à **95 %** le 2026-08-22, sur le chiffre réel du firmware complet. Levier non vérifié : `docs/open-risks.md` ligne 24.
-**Contrôle de rendu de bout en bout** : `run-screen-dump.sh` couvre cet écran et déduit lequel des deux il vérifie depuis l'environnement, les critères n'ayant rien en commun. Lu dans la mémoire du panneau : **8/8** cases d'onglet à leur place après `U8G2_R2`, barre d'onglets en panneau y 0..7, grande police en panneau y 33..62, filet en y 11. Vérifié **rouge** en supprimant la grande police : 379 px → 0.
-**Pied de page d'EDIT PATTERN.** La grille laisse la **bande 7** libre : le pixel dessiné le plus bas de la seconde rangée est son chiffre de ratchet à **y 47**, et la bande 7 couvre **y 56 à 63**. Une ligne dont la ligne de base est à 63 y tient avec 8 pixels de dégagement. Elle portera le channel et le tempo. **L'en-tête ne change donc pas** : il reste `EDIT PATTERN A1`, 15 caractères, et la décision du 2026-08-20 de le garder explicite n'est pas touchée. Le saut de bande devient **bilatéral** — même argument géométrique qu'en haut, voir ADR 0001 amendé.
-**IMPLÉMENTÉ ET MESURÉ le 2026-08-22, et le saut économise DEUX bandes, pas une.** Le critère est « la bande est entièrement sous le pixel le plus bas que la grille puisse poser », et **deux** des huit bandes y répondent : celle du pied de page (y 56–63) et celle qui sépare la grille du pied (y 48–55), qui ne porte rien et n'en portera jamais. Les deux dépendent de la même chaîne de pied, donc les deux sautent ensemble. Une image courante envoie **5 bandes au lieu de 7** : image **44,2 → 32,1 ms**, p90 corrigé **8,46 ms** contre un budget de 12 ms, médiane 6,82 ms. Coût **RAM +11 o, Flash +184 o**, dérive acquittée ; pic de pile remesuré à 160 o.
-⚠️ **PÉRIMÉ DEPUIS LE 2026-08-30, lot F.** Le pied a quitté l'écran EDIT et la troisième rangée occupe les bandes qu'il libérait. Le saut perd sa seconde voie : `belowGrid` ne peut plus être vrai, `GRID_BOTTOM_Y` valant 63. **Une image courante envoie 7 bandes sur 8**, la seule sautable étant celle du titre. Mesuré : image courante **33,0 ms**, p90 du passage **6,61 ms** contre un budget de 12, pire passage 13,99 ms sur le rafraîchissement complet. Le paragraphe ci-dessus reste l'état du 2026-08-22.
-**Le contrôle de rotation repose sur trois assertions, toutes discriminantes — refondu le 2026-08-30.** L'ancien critère épinglait le titre en bas du panneau et le **pied** en haut ; le pied a quitté EDIT, et la grille atteint désormais la dernière ligne logique, donc le haut du panneau n'est plus vide. Le critère est reconstruit sur des constantes de mise en page, sans aucune coordonnée littérale dans le harnais :
-**C1** — la ligne `rotY(HEADER_LINE_Y)` est la plus encrée du panneau et porte au moins `HEADER_LINE_W − 20` pixels. La **position** de cette ligne est le discriminant ; le seuil est un **garde d'intégrité de l'ancre**, pas ce qui distingue R2 de R0.
-**C2** — la ligne `rotY(HEADER_LINE_Y − 1)` est vide.
-**C3** — le titre encre sa bande, et le centre de la dernière rangée encre la sienne.
-Les trois échouent sous `ROTATION_MUTATE=1`, qui lit la mémoire du panneau tournée de 180° — l'image qu'un firmware en `U8G2_R0` aurait produite. La dépendance épinglée n'est pas touchée. Mesuré le 2026-08-30 : nominal 36/36 steps et C1 C2 C3 verts ; sous mutation, 16/36 steps, C1 3 px au lieu de 120, C2 15 px au lieu de 0, C3 dernière rangée 0 px au lieu de 15.
-⚠️ **L'axe horizontal n'est pas couvert par ces trois assertions** : il l'est par le contrôle de géométrie, qui teste la position `colX` de chaque step. Ni l'un ni l'autre ne couvre les deux axes seul.
-⚠️ **Le pied a quitté l'écran EDIT le 2026-08-30**, conformément au §7 point 8. Le paragraphe qui suit décrit son état jusqu'à cette date, et il reste valable pour les écrans qui gardent le leur.
-Le pied était **aligné à gauche** à x = 4, comme le filet d'en-tête : centrer aurait exigé un `getStrWidth()` de plus, \~1 ms par appel sur ce MCU. Son contenu était **fourni par l'appelant** — le renderer restait pur et ne connaissait ni channel ni tempo.
-**Ce que sa disparition retire de l'écran EDIT** : le canal en cours et le tempo, qu'il affichait sous la forme `CH1  120BPM`. C'est la conformité voulue à l'original, pas une perte accidentelle.
-**Grande police pour le nom du pattern — décidé le 2026-08-22, coût MESURÉ.** L'original affiche `A1` en gros. FlexSeq fait de même avec `u8g2_font_logisoso26_tr`, jamais avec la police de l'original (données GPLv3, écartées). Mesuré par build de production : **+2688 octets de Flash**, dont 2646 pour le tableau de la police et 42 pour le code que U8g2 mobilise ; **0 octet de RAM**. Flash portée à 24092 / 30720 (78,4 %), soit **3556 octets avant le refus du garde-fou à 90 %** — contre une UI complète estimée 2 à 4 ko au §15. La borne haute dépasserait le seuil d'environ 450 octets, ce qui exigerait un acquittement explicite. **Choix délibérément réversible** : `profont22_tr` coûte 1704 o et `logisoso22_tr` 2268 o, si le budget se tend. Les variantes chiffres seuls (387 à 548 o) ne suffisent pas : dix glyphes sont nécessaires, `A`, `B` et `1` à `8`.
-**EDIT PATTERN** — **36 positions en 3 lignes de 12** depuis le 2026-08-30, lot F ; 24 en 2 lignes jusque-là. **Révision complète (2026-08-17)** : la représentation suit le POC Wokwi et les glyphes du firmware d'origine.
-⚠️ **La grille, la capacité du ****`Pattern`**** et l'EXÉCUTION valent toutes 36 depuis le lot SF3, 2026-08-30.** `screen::GRID_STEPS`, `UiController::STEP_COUNT` et `SequencerEngine::MAX_LENGTH` valent **36**, et **aucune de ces trois constantes ne lit les autres** : cinq mutants tiennent cette indépendance, chacun ramenant une constante à 24 pendant que les autres restent à 36.
+**A global compiler setting and a targeted de-inlining of one function are two distinct strategies, and a result on one says nothing about the other.**
+**An announced saving must rest on a measured size.** Before you announce or keep an estimate of a saving, identify the symbol in the ELF and measure its size with `avr-nm`. If the compiler inlines the code, the symbol does not exist and no saving belongs to it. A symbol size is not a saving on its own: a comparison of builds must demonstrate the gain. A refuted estimate stays refuted in the decision document.
+**Also refuted by lot S**: a `PROGMEM` table of the bounds in place of the `switch` of `adjustFieldValue`. The bounds cost nothing, because each one is an immediate value in a clamp. And the seven cases are not uniform, so a table cannot carry them.
+**Two large consumers are measured and NOT qualified**: `main` (**5976 B**) and `PagedScreen::renderFrom` (**2490 B**), read with `avr-nm` on 2026-08-30, so 8466 B together and 31 % of the Flash in use. These are **sizes, and not savings**: no analysis of their content exists, and no gain belongs to them. Tracked at line 61 of `docs/open-risks.md`.
+⚠️ **The list that follows is the list of 2026-08-25, and it is STALE on one point**: the 574 B of `Wire` left with the whole path of its transport on 2026-08-25. What stays is either the pinned dependency, or the two renderers the interface needs. The dependency holds the uClock ISR at 974 B · Wire at 574 B · u8g2 at about 1500 B · **586 B of allocator** that uClock imposes by allocating four bytes at the init.
+⚠️ **A consequence the owner accepts**: the Flash is measured at **every** remaining lot, and not only at the end. The fallback is one line of code, and the decision is then taken again on the real figure: `logisoso22_tr` returns 420 B (the same family, 22 px instead of 26), and `profont22_tr` returns 984 B (another family, and the look changes). The guard at 90 % is **not** lifted: to lift it would not create space, it would remove a warning. ⚠️ **That threshold of 90 % is HISTORICAL**: the owner raised it to **95 %** on 2026-08-22, on the real figure of the complete firmware. An unverified lever: `docs/open-risks.md` line 24.
+**An end-to-end render check**: `run-screen-dump.sh` covers this screen, and it deduces which of the two it checks from the environment, because the criteria have nothing in common. Read in the memory of the panel: **8/8** tab cells at their place after `U8G2_R2` · the tab bar at panel y 0..7 · the large font at panel y 33..62 · the rule at y 11. Verified **red** by removing the large font: 379 px → 0.
+**The footer of EDIT PATTERN.** The grid leaves the **band 7** free: the lowest pixel the second row draws is its ratchet digit at **y 47**, and the band 7 covers **y 56 to 63**. A line whose baseline sits at 63 fits there with 8 pixels of clearance. It will carry the channel and the tempo. **The header therefore does not change**: it stays `EDIT PATTERN A1`, 15 characters, and the decision of 2026-08-20 to keep it explicit is untouched. The band skip becomes **two-sided**, on the same geometric argument as at the top — see ADR 0001, amended.
+**IMPLEMENTED AND MEASURED on 2026-08-22, and the skip saves TWO bands, and not one.** The criterion is "the band sits entirely below the lowest pixel the grid can place", and **two** of the eight bands answer it: the band of the footer (y 56–63) and the band that separates the grid from the footer (y 48–55), which carries nothing and never will. Both depend on the same footer chain, so both skip together. A routine frame sends **5 bands instead of 7**: the frame goes **44.2 → 32.1 ms**, the corrected p90 **8.46 ms** against a budget of 12 ms, and the median 6.82 ms. Cost **RAM +11 B, Flash +184 B**, with the drift acknowledged, and the stack peak re-measured at 160 B.
+⚠️ **STALE SINCE 2026-08-30, lot F.** The footer left the EDIT screen, and the third row occupies the bands it freed. The skip loses its second path: `belowGrid` can no longer be true, because `GRID_BOTTOM_Y` is 63. **A routine frame sends 7 bands out of 8**, and the only skippable one is the band of the title. Measured: a routine frame **33.0 ms** · the p90 of the pass **6.61 ms** against a budget of 12 · the worst pass 13.99 ms on the full refresh. The paragraph above stays the state of 2026-08-22.
+**The rotation check rests on three assertions, and all three discriminate — rebuilt on 2026-08-30.** The old criterion pinned the title at the bottom of the panel and the **footer** at the top. The footer left EDIT, and the grid now reaches the last logical line, so the top of the panel is no longer empty. The criterion is rebuilt on layout constants, with no literal coordinate in the harness:
+**C1** — the line `rotY(HEADER_LINE_Y)` is the most inked line of the panel, and it carries at least `HEADER_LINE_W − 20` pixels. The **position** of that line is the discriminant. The threshold is a **guard on the integrity of the anchor**, and not what separates R2 from R0.
+**C2** — the line `rotY(HEADER_LINE_Y − 1)` is empty.
+**C3** — the title inks its band, and the centre of the last row inks its own.
+All three fail under `ROTATION_MUTATE=1`, which reads the memory of the panel turned by 180°, so the image a firmware in `U8G2_R0` would have produced. The pinned dependency is untouched. Measured on 2026-08-30: nominally 36/36 steps and C1, C2 and C3 green. Under the mutation: 16/36 steps, C1 3 px instead of 120, C2 15 px instead of 0, and C3 the last row 0 px instead of 15.
+⚠️ **The horizontal axis is not covered by these three assertions**: the geometry check covers it, and it tests the `colX` position of every step. Neither of the two covers both axes alone.
+⚠️ **The footer left the EDIT screen on 2026-08-30**, as §7 point 8 requires. The paragraph that follows describes its state until that date, and it stays valid for the screens that keep theirs.
+The footer was **aligned left** at x = 4, like the header rule: to centre it would have needed one more `getStrWidth()`, at about 1 ms per call on this MCU. **The caller supplied its content**, so the renderer stayed pure and knew neither the channel nor the tempo.
+**What its removal takes off the EDIT screen**: the current channel and the tempo, which it showed as `CH1  120BPM`. That is the wanted conformity to the original, and not an accidental loss.
+**A large font for the pattern name — decided on 2026-08-22, and the cost is MEASURED.** The original shows `A1` in a large font. FlexSeq does the same with `u8g2_font_logisoso26_tr`, and never with the font of the original, whose data is GPLv3 and set aside. Measured on a production build: **+2688 bytes of Flash**, and **0 bytes of RAM**. Of those, 2646 go to the table of the font, and 42 to the code U8g2 pulls in. The Flash goes to 24092 / 30720 (78.4 %), so **3556 bytes before the refusal of the guard at 90 %**. §15 estimates a complete UI at 2 to 4 kB. The upper bound would pass the threshold by about 450 bytes, which would need an explicit acknowledgement. **A deliberately reversible choice**: `profont22_tr` costs 1704 B and `logisoso22_tr` costs 2268 B, if the budget tightens. The digits-only variants, 387 to 548 B, are not enough: ten glyphs are necessary, `A`, `B` and `1` to `8`.
+**EDIT PATTERN** — **36 positions in 3 rows of 12** since 2026-08-30, lot F, and 24 in 2 rows before that. **A complete revision (2026-08-17)**: the representation follows the Wokwi POC and the glyphs of the original firmware.
+⚠️ **The grid, the capacity of the `Pattern` and the EXECUTION all hold 36 since lot SF3, 2026-08-30.** `screen::GRID_STEPS`, `UiController::STEP_COUNT` and `SequencerEngine::MAX_LENGTH` hold **36**, and **none of these three constants reads the others**: five mutants hold that independence, and each one brings one constant back to 24 while the others stay at 36.
 
-⚠️ **Le paragraphe ci-dessous décrit l'état ENTRE le lot F et le lot SF3, et il est conservé parce qu'il explique la séparation.** Du 2026-08-30, lot F, au 2026-08-30, lot SF3, `MAX_LENGTH` valait **24** pendant que la grille valait 36. Les steps 24 à 35 étaient alors **visibles, éditables et persistés, mais jamais joués** : l'écran les dessinait comme des points isolés, la représentation d'un step au-delà de la longueur. Quatre mutants tenaient cette séparation dans les deux sens.
+⚠️ **The paragraph below describes the state BETWEEN lot F and lot SF3, and it is kept because it explains the separation.** From 2026-08-30, lot F, to 2026-08-30, lot SF3, `MAX_LENGTH` was **24** while the grid was 36. The steps 24 to 35 were then **visible, editable and persisted, but never played**: the screen drew them as single dots, the representation of a step beyond the length. Four mutants held that separation in both directions.
 
-**L'exécution réelle des steps 24 à 35 est MESURÉE, et pas seulement déduite des tests de domaine.** `tools/run-trigger-probe.sh`, avec `LENGTH=36` et un step actif à 26, observe **20 écarts sur 20** formant une rotation cyclique des écarts du motif, sur les broches du firmware simulé. L'écart de bouclage vaut `36 − 26 + 0 = 10` : un moteur qui jouerait encore 24 steps ne déclencherait jamais le step 26 et rendrait une autre suite.
+**The real execution of the steps 24 to 35 is MEASURED, and not only deduced from the domain tests.** `tools/run-trigger-probe.sh` runs with `LENGTH=36` and an active step at 26. It observes **20 gaps out of 20**, forming a cyclic rotation of the gaps of the pattern, on the pins of the simulated firmware. The wrap gap is `36 − 26 + 0 = 10`: an engine that still played 24 steps would never fire the step 26, and it would give another sequence.
 >
-> **Géométrie de référence = le POC Wokwi** `flexseq-oled-playground/sketch.ino` (SSD1306 128×64, rotation R2) : pas horizontal de **10 px**, grille **centrée**, glyphes **5×5** identiques au firmware d'origine, cadre de sélection **9×9**. ⚠️ **Le POC portait 24 steps en 2 lignes de 12 ; FlexSeq en porte 36 en 3 lignes depuis le lot F.** Ce qui reste emprunté au POC est l'axe horizontal et la forme des glyphes, pas le nombre de rangées.
+> **The reference geometry is the Wokwi POC** `flexseq-oled-playground/sketch.ino` (SSD1306 128×64, rotation R2): a horizontal pitch of **10 px**, a **centred** grid, **5×5** glyphs identical to the original firmware, and a **9×9** selection frame. ⚠️ **The POC carried 24 steps in 2 rows of 12. FlexSeq carries 36 in 3 rows since lot F.** What stays borrowed from the POC is the horizontal axis and the shape of the glyphs, and not the number of rows.
 >
-> ⚙️ **Portée du sketch — précision (2026-08-19).** Le sketch fait foi pour la **géométrie et les glyphes uniquement**. Son objet d'affichage (`U8G2_..._2_HW_I2C`, buffer 256 B) n'était qu'un **test visuel expérimental** et n'est **pas** normatif.
+> ⚙️ **Scope of the sketch — a precision (2026-08-19).** The sketch is the authority for the **geometry and the glyphs only**. Its display object (`U8G2_..._2_HW_I2C`, a buffer of 256 B) was an **experimental visual test** alone, and it is **not** normative.
 >
-> **Contrainte d'implémentation (décision validée) :** le firmware **réutilise l'objet de libGravity** — `gravity.display`, de type `U8G2_SSD1306_128X64_NONAME_1_HW_I2C` (**mode ****`_1_`**, buffer de **128 B déjà payé** dans l'empreinte mesurée). **Ne jamais instancier un second objet U8G2** : ce serait +256 B de RAM pour rien. On garde ce que libGravity permet ; le mode `_1_` implique simplement davantage d'itérations `firstPage()/nextPage()`. **Coût RAM de l'objet d'affichage : 0 B supplémentaire** — à ne pas lire comme « le rendu ne coûte rien » : l'étalement en 8 bandes, ci-dessous, coûte 24 o de gel.
+> **An implementation constraint (a validated decision):** the firmware **reuses the object of libGravity**, `gravity.display`, of type `U8G2_SSD1306_128X64_NONAME_1_HW_I2C`. That is the **`_1_` mode**, with a buffer of **128 B already paid** in the measured footprint. **Never instantiate a second U8G2 object**: that would be +256 B of RAM for nothing. The project keeps what libGravity allows, and the `_1_` mode simply implies more `firstPage()/nextPage()` iterations. **RAM cost of the display object: 0 B more** — and do not read that as "the render costs nothing": the spread over 8 bands, below, costs 24 B of freeze.
 >
-> **Écartement par bande (2026-08-20).** Le renderer ne dessine plus que les éléments qui tombent dans la bande en cours : il reçoit celle-ci en paramètre (`Band{y0, y1}`, par défaut tout l'écran). Sans cela les 24 steps, leurs chiffres et le titre étaient recalculés **huit fois** — U8g2 découpe ce qu'on lui envoie, mais l'appel a lieu quand même.
+> **Spacing by band (2026-08-20).** The renderer draws only the elements that fall inside the current band: it receives that band as a parameter (`Band{y0, y1}`, and the whole screen by default). Without that, the 24 steps, their digits and the title were computed **eight times**. U8g2 cuts what we send it, but the call happens all the same.
 >
-> ⚠️ **La bande reçue est en coordonnées d'AFFICHAGE, le renderer travaille en coordonnées LOGIQUES.** `U8G2_R2` fait tourner de 180° *avant* le découpage : `PagedScreen` applique donc l'inverse. Omettre cette inversion donnait à chaque bande la **moitié inverse** de ce qu'elle affiche, et l'écran restait quasi blanc — défaut qui a vécu un commit, trouvé en lisant la mémoire du panneau (§14), invisible aux tests natifs qui fournissaient la bande déjà en coordonnées logiques.
+> ⚠️ **The band arrives in DISPLAY coordinates, and the renderer works in LOGICAL coordinates.** `U8G2_R2` turns the image by 180° *before* the cut, so `PagedScreen` applies the inverse. To omit that inversion gave each band the **inverse half** of what it displays, and the screen stayed almost blank. The defect lived one commit, and a read of the memory of the panel found it (§14). The native tests could not see it, because they supplied the band already in logical coordinates.
 >
-> **Gain mesuré, rendu correct des deux côtés** (§14) : passage médian **8,52 → 6,48 ms**, image entière **74,0 → 59,1 ms** — soit −24 % et −20 %, et non le facteur 2 annoncé d'abord. Le **pire** passage ne bouge quasiment pas (16,16 → 15,32 ms) : il était porté par le **titre**, que l'écartement ne rend pas moins cher — il ne l'évite pas. Coût : **+522 o de Flash, 0 o de RAM**. Propriété vérifiée par test : la réunion des 8 bandes rend **exactement** l'image complète, pixel pour pixel.
+> **Measured gain, with a correct render on both sides** (§14): the median pass **8.52 → 6.48 ms**, and the whole frame **74.0 → 59.1 ms**. That is −24 % and −20 %, and not the factor of 2 announced first. The **worst** pass hardly moves, 16.16 → 15.32 ms: the **title** carried it, and the spacing does not make the title cheaper, because it does not avoid it. Cost: **+522 B of Flash, 0 B of RAM**. A test verifies the property: the union of the 8 bands renders **exactly** the complete image, pixel for pixel.
 >
-> **L'EN-TÊTE RESTE EXPLICITE — décidé 2026-08-20.** `EDIT PATTERN A1` est conservé en entier. Sa rastérisation coûtait 8,8 ms par image (§14), et deux voies ont été **écartées** par le propriétaire du PRD : raccourcir l'en-tête (≤ 9 caractères auraient suffi à tenir le budget, mais au prix de la clarté) et mettre la bande rendue en **cache RAM** (128 o, refusé : la RAM doit rester disponible pour des fonctionnalités).
+> **THE HEADER STAYS EXPLICIT — decided 2026-08-20.** `EDIT PATTERN A1` is kept whole. Its rasterisation cost 8.8 ms per frame (§14), and the owner of the PRD **set aside** two paths: to shorten the header, where 9 characters or fewer would have been enough to hold the budget, but at the price of the clarity. And to put the rendered band in a **RAM cache** of 128 B, refused because the RAM must stay available for features.
 >
-> **Saut de la bande inchangée (2026-08-20).** La solution retenue ne coûte **aucune RAM** : le titre ne changeant qu'au changement de pattern sélectionné, sa bande n'est ni effacée, ni dessinée, ni envoyée quand il est identique. Le SSD1306 étant un écran à mémoire, une bande non envoyée continue d'afficher ce qu'elle affichait. La condition est **géométrique** — une bande entièrement au-dessus du filet d'en-tête ne peut contenir que le titre — donc solidaire de la mise en page. Deux points de conception détaillés dans l'**ADR 0001** : le cycle effacer‑dessiner‑envoyer est **indivisible**, et une image sur seize est rendue intégralement en filet contre un défaut de notre propre logique. Gain : passage courant **15,4 → 8,44 ms**, image **56 → 44,2 ms**, pour **+9 o de RAM et +160 o de Flash**. La ligne de base du titre passe de 8 à **7** pour qu'il tienne dans une seule bande, et sa largeur n'est plus mesurée qu'une fois par image.
+> **The skip of the unchanged band (2026-08-20).** The chosen solution costs **no RAM**: the title changes only when the selected pattern changes, so its band is neither cleared, nor drawn, nor sent while it is identical. The SSD1306 is a screen with memory, so a band that is not sent keeps showing what it showed. The condition is **geometric** — a band entirely above the header rule can hold the title only — so it is tied to the layout. **ADR 0001** details two design points: the clear-draw-send cycle is **indivisible**, and one frame in sixteen is rendered whole, as a net against a defect of our own logic. Gain: the routine pass **15.4 → 8.44 ms**, and the frame **56 → 44.2 ms**, for **+9 B of RAM and +160 B of Flash**. The baseline of the title moves from 8 to **7**, so that it fits inside a single band. Its width is measured once per frame only.
 >
-> **Rendu étalé — ADR 0001 (2026-08-20).** Ces 8 itérations ne s'enchaînent plus dans un seul appel, et la boucle de pages est désormais **manuelle** (`setBufferCurrTileRow` + `clearBuffer` + dessin + `sendBuffer`) puisque `firstPage()/nextPage()` ne permet pas de sauter une bande : **une bande par passage** de la boucle principale, le modèle étant **gelé** au début de l'image (`PatternScreenModel` 8 o + copie du `Pattern` 15 o = **23 o**, plus un drapeau d'état, soit **24 o** mesurés au build ; nécessaire puisque le contenu est partagé et éditable en lecture — §6.3). Motif : le bus I2C tourne à **400 kHz** (déclaré par le descripteur U8g2 du SSD1306, appliqué à chaque transfert ; ni libGravity ni FlexSeq ne le fixent), et une image pleine représente \~25 ms de bus — pendant lesquelles la boucle est bloquée, donc les ticks s'accumulent et les onsets se tassent. Voir `docs/decisions/0001-boucle-principale-non-bloquante.md`.
+> **The spread render — ADR 0001 (2026-08-20).** These 8 iterations no longer follow each other inside one call. The page loop is now **manual**: `setBufferCurrTileRow` · `clearBuffer` · the drawing · `sendBuffer`. `firstPage()/nextPage()` does not allow a band to be skipped: **one band per pass** of the main loop, with the model **frozen** at the start of the frame. The freeze holds `PatternScreenModel` 8 B plus a copy of the `Pattern` 15 B, so **23 B**. A state flag brings it to **24 B**, measured at the build. The freeze is necessary, because the content is shared and editable while the transport plays — §6.3. The reason: the I2C bus runs at **400 kHz**, declared by the U8g2 descriptor of the SSD1306 and applied at every transfer. Neither libGravity nor FlexSeq sets it. A full frame is therefore about 25 ms of bus, and the loop is blocked during them. The ticks then pile up, and the onsets bunch together. See `docs/decisions/0001-boucle-principale-non-bloquante.md`.
 >
-> **Espacement vertical de la grille — TRANCHÉ (2026-08-20) :** `cy = 20 / 38`, et non le `22 / 35` du POC Wokwi. L'écart (18 px au lieu de 13) est imposé par le chiffre de ratchet logé sous le step ; revenir au POC exigerait des chiffres de 4 px de haut.
+> **Vertical spacing of the grid — SETTLED (2026-08-20):** `cy = 20 / 38`, and not the `22 / 35` of the Wokwi POC. The gap, 18 px instead of 13, is imposed by the ratchet digit that sits under the step. To go back to the POC would need digits 4 px high.
 >
-> **Légende (validée 2026-08-17) :**
-> - `○` anneau 5×5 — step **non sélectionné**
-> - `●` disque plein 5×5 — step **sélectionné** (actif)
-> - `▲` triangle plein 5×5 — step actif en **TRIOLET** (3 déclenchements sur 2 unités : on « ralentit »)
-> - `.` 1 pixel — position **au-delà de LENGTH**
-> - **chiffre sous le step** — **ratchet** `2/3/4/6` (N déclenchements dans la durée du step)
-> - **barre verticale** dans la gouttière — **séparation de mesure** (graphique seule)
-> - **cadre 9×9** — step en cours d'**édition**
-> - **pixel central inversé** — **step joué** (blanc sur un step actif, noir sur un step vide)
+> **Legend (validated 2026-08-17):**
+> - `○` a ring 5×5 — a step that is **not selected**
+> - `●` a filled disc 5×5 — a **selected** step, and it is active
+> - `▲` a filled triangle 5×5 — an active step in **TRIPLET**, so 3 triggers over 2 units, and the tempo "slows down"
+> - `.` 1 pixel — a position **beyond LENGTH**
+> - **a digit under the step** — the **ratchet** `2/3/4/6`, so N triggers inside the duration of the step
+> - **a vertical bar** in the gutter — the **measure separation**, graphical only
+> - **a 9×9 frame** — the step under **edit**
+> - **the central pixel inverted** — the **played step**, white on an active step and black on an empty one
 >
-> Aucun numéro de step, **aucune position ajoutée**. Le rendu précédent « légende de note + marques » (glyphes ronde→quadruple-croche en en-tête) est **abandonné** : la valeur de note n'est plus une notion du modèle — un step est une unité de temps, la SUBDIV fait le tempo.
-### 12.9 Enregistrer un pattern — flux `SAVE`, décidé le 2026-08-26
-L'instance qu'un channel édite vit en RAM et elle est persistée. `SAVE` sert à **publier** cette instance vers un modèle, pour que les autres channels puissent la charger.
-1. l'instance éditée est une **copie locale** du modèle chargé ;
-2. elle peut être enregistrée dans **n'importe quel slot ****`B1`**** à ****`B8`** ;
-3. un slot `B` **occupé** est remplacé **après une confirmation à l'écran** ;
-4. `A1` à `A8` refusent toujours l'écriture ;
-5. `SAVE` n'apparaît que lorsque l'instance a été **modifiée** ;
-6. après un enregistrement réussi, le channel **adopte le slot de destination** comme nouveau modèle de référence, et le drapeau de modification retombe ;
-7. le choix de la destination ne détruit **jamais** l'instance éditée avant l'enregistrement.
-La conception détaillée — bouton dans l'en-tête, sélecteur de destination, modale de confirmation — appartient au lot E.
+> No step number, and **no added position**. The previous render, a "note legend plus marks" with glyphs from the whole note to the demisemiquaver in the header, is **abandoned**: the note value is no longer a notion of the model. A step is a unit of time, and the SUBDIV makes the tempo.
+### 12.9 To save a pattern — the `SAVE` flow, decided on 2026-08-26
+The instance a channel edits lives in RAM, and the firmware persists it. `SAVE` exists to **publish** that instance into a template, so that the other channels can load it.
+1. the edited instance is a **local copy** of the loaded template;
+2. the firmware can save it into **any slot `B1` to `B8`**;
+3. an **occupied** `B` slot is replaced **after a confirmation on the screen**;
+4. `A1` to `A8` always refuse the write;
+5. `SAVE` appears only when the instance has **changed**;
+6. after a successful save, the channel **adopts the destination slot** as its new reference template, and the change flag falls back;
+7. the choice of the destination **never** destroys the edited instance before the save.
+The detailed design — the button in the header, the destination selector, the confirmation modal — belongs to lot E.
 ---
 ## 13. Architecture logicielle & workflow
 Trois rôles séparés :
