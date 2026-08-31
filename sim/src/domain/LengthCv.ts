@@ -1,4 +1,4 @@
-import { MIN_LENGTH, MAX_LENGTH } from "./SequencerEngine.js";
+import { MIN_LENGTH, MAX_LENGTH, PATTERN_COUNT } from "./SequencerEngine.js";
 
 export const CV_MIN = -512;
 export const CV_MAX = 512;
@@ -34,6 +34,13 @@ export function zoneWithHysteresis(cv: number, current: number): number {
     return current;
   }
   return zoneFor(cv);
+}
+
+export function patternIndexFor(base: number, offset: number): number {
+  const wanted = base + offset;
+  if (wanted < 0) return 0;
+  if (wanted > PATTERN_COUNT - 1) return PATTERN_COUNT - 1;
+  return wanted;
 }
 
 export function effectiveLengthFor(base: number, offset: number): number {

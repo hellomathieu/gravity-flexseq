@@ -34,7 +34,7 @@ import {
   CV_SOURCE_COUNT,
   DEFAULT_CV_DESTINATION,
 } from "./CvDestination.js";
-import { zoneWithHysteresis } from "./LengthCv.js";
+import { zoneWithHysteresis, patternIndexFor } from "./LengthCv.js";
 
 import {
   Pattern,
@@ -451,15 +451,31 @@ export class SequencerEngine {
     return c.cvTarget[source]!;
   }
 
-  /** Somme des zones des sources routees vers LENGTH, dans [-30, +30]. */
-  lengthCvOffset(channel: number): number {
+  private cvZoneSum(channel: number, destination: number): number {
     const c = this.channel(channel);
     if (!c) return 0;
     let sum = 0;
     for (let source = 0; source < CV_SOURCE_COUNT; ++source) {
-      if (c.cvTarget[source] === CvDestination.LENGTH) sum += c.cvZone[source]!;
+      if (c.cvTarget[source] === destination) sum += c.cvZone[source]!;
     }
     return sum;
+  }
+
+  /** Somme des zones des sources routees vers LENGTH, dans [-30, +30]. */
+  lengthCvOffset(channel: number): number {
+    const c = this.channel(channel);
+    if (!c) return 0;
+    return this.cvZoneSum(channel, CvDestination.LENGTH);
+  }
+
+  /**
+   * Index de pattern que le CV designe, clamp(base + somme, 0, 15). PRD 10.2.
+   * C'est une DERIVATION : aucun etat ne la porte. -1 si le canal est invalide.
+   */
+  patternCvIndex(channel: number): number {
+    const c = this.channel(channel);
+    if (!c) return -1;
+    return patternIndexFor(c.selectedPattern, this.cvZoneSum(channel, CvDestination.PATTERN));
   }
 
   /** Consomme les valeurs CV poussees, a la frontiere de step et la seule. */
@@ -467,7 +483,8 @@ export class SequencerEngine {
     const c = this.channel(channel);
     if (!c) return;
     for (let source = 0; source < CV_SOURCE_COUNT; ++source) {
-      if (c.cvTarget[source] !== CvDestination.LENGTH) continue;
+      const target = c.cvTarget[source];
+      if (target !== CvDestination.LENGTH && target !== CvDestination.PATTERN) continue;
       c.cvZone[source] = zoneWithHysteresis(this.cvInput[source]!, c.cvZone[source]!);
     }
     this.refreshEffectiveLength(channel);

@@ -302,6 +302,104 @@ void test_the_playhead_folds_at_most_once_per_boundary() {
     TEST_ASSERT_EQUAL_INT8(27 % 15, e.effectiveStep(0)); // 12, un seul modulo
 }
 
+/*
+ * Famille 8 — PATTERN CV, l'index effectif
+ */
+
+static void routePattern(SequencerEngine& e, uint8_t channel, uint8_t source) {
+    TEST_ASSERT_TRUE(e.setCvDestination(channel, source, CV_DEST_PATTERN));
+}
+
+void test_a_new_engine_reports_the_selected_pattern_as_the_index() {
+    SequencerEngine e;
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        TEST_ASSERT_EQUAL_INT8(0, e.patternCvIndex(ch));
+    }
+    e.setSelectedPattern(2, 9);
+    TEST_ASSERT_EQUAL_INT8(9, e.patternCvIndex(2));
+    TEST_ASSERT_EQUAL_INT8(-1, e.patternCvIndex(SequencerEngine::CHANNEL_COUNT));
+}
+
+void test_a_pushed_value_alone_does_not_move_the_index() {
+    SequencerEngine e;
+    e.setSelectedPattern(0, 3);
+    routePattern(e, 0, CV_SOURCE_1);
+    e.setCvInput(CV_SOURCE_1, 330);
+    TEST_ASSERT_EQUAL_INT8(3, e.patternCvIndex(0));
+}
+
+void test_the_step_boundary_moves_the_pattern_index() {
+    SequencerEngine e;
+    e.setSelectedPattern(0, 3);
+    routePattern(e, 0, CV_SOURCE_1);
+    e.setCvInput(CV_SOURCE_1, 330); // zone +10
+    e.start();
+    e.advance(STEP);
+    TEST_ASSERT_EQUAL_INT8(13, e.patternCvIndex(0));
+}
+
+void test_the_pattern_index_never_moves_the_selected_pattern() {
+    SequencerEngine e;
+    e.setSelectedPattern(0, 10);
+    routePattern(e, 0, CV_SOURCE_1);
+    e.setCvInput(CV_SOURCE_1, 330); // zone +10, donc 20 ecrete a 15
+    e.start();
+    e.advance(STEP);
+    TEST_ASSERT_EQUAL_INT8(15, e.patternCvIndex(0));
+    TEST_ASSERT_EQUAL_INT8(10, e.getSelectedPattern(0));
+}
+
+void test_two_sources_on_the_pattern_are_clamped_once_and_not_twice() {
+    SequencerEngine e;
+    e.setSelectedPattern(0, 15);
+    routePattern(e, 0, CV_SOURCE_1);
+    routePattern(e, 0, CV_SOURCE_2);
+    e.setCvInput(CV_SOURCE_1, 330);  // +10
+    e.setCvInput(CV_SOURCE_2, -330); // -10
+    e.start();
+    e.advance(STEP);
+    // Deux ecretages successifs rendraient 5. La somme d'abord rend 15.
+    TEST_ASSERT_EQUAL_INT8(15, e.patternCvIndex(0));
+}
+
+void test_a_source_routed_to_the_length_does_not_move_the_index() {
+    SequencerEngine e;
+    e.setSelectedPattern(0, 3);
+    e.setBaseLength(0, 18);
+    routeLength(e, 0, CV_SOURCE_1);
+    e.setCvInput(CV_SOURCE_1, 330);
+    e.start();
+    e.advance(STEP);
+    TEST_ASSERT_EQUAL_INT8(3, e.patternCvIndex(0));
+    TEST_ASSERT_EQUAL_UINT8(28, e.getEffectiveLength(0));
+}
+
+void test_a_source_routed_to_the_pattern_does_not_move_the_length() {
+    SequencerEngine e;
+    e.setSelectedPattern(0, 3);
+    e.setBaseLength(0, 18);
+    routePattern(e, 0, CV_SOURCE_1);
+    e.setCvInput(CV_SOURCE_1, 330);
+    e.start();
+    e.advance(STEP);
+    TEST_ASSERT_EQUAL_INT8(13, e.patternCvIndex(0));
+    TEST_ASSERT_EQUAL_UINT8(18, e.getEffectiveLength(0));
+    TEST_ASSERT_EQUAL_INT8(0, e.lengthCvOffset(0));
+}
+
+void test_removing_the_pattern_routing_returns_to_the_base_index() {
+    SequencerEngine e;
+    e.setSelectedPattern(0, 3);
+    routePattern(e, 0, CV_SOURCE_1);
+    e.setCvInput(CV_SOURCE_1, 330);
+    e.start();
+    e.advance(STEP);
+    TEST_ASSERT_EQUAL_INT8(13, e.patternCvIndex(0));
+
+    TEST_ASSERT_TRUE(e.setCvDestination(0, CV_SOURCE_1, CV_DEST_NONE));
+    TEST_ASSERT_EQUAL_INT8(3, e.patternCvIndex(0));
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_the_five_destination_codes_hold_their_persisted_values);
@@ -324,5 +422,14 @@ int main() {
     RUN_TEST(test_a_reset_never_folds_the_playhead);
     RUN_TEST(test_reset_preserves_the_cv_state);
     RUN_TEST(test_the_playhead_folds_at_most_once_per_boundary);
+
+    RUN_TEST(test_a_new_engine_reports_the_selected_pattern_as_the_index);
+    RUN_TEST(test_a_pushed_value_alone_does_not_move_the_index);
+    RUN_TEST(test_the_step_boundary_moves_the_pattern_index);
+    RUN_TEST(test_the_pattern_index_never_moves_the_selected_pattern);
+    RUN_TEST(test_two_sources_on_the_pattern_are_clamped_once_and_not_twice);
+    RUN_TEST(test_a_source_routed_to_the_length_does_not_move_the_index);
+    RUN_TEST(test_a_source_routed_to_the_pattern_does_not_move_the_length);
+    RUN_TEST(test_removing_the_pattern_routing_returns_to_the_base_index);
     return UNITY_END();
 }

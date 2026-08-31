@@ -287,24 +287,37 @@ CvDestination SequencerEngine::getCvDestination(uint8_t channel, uint8_t source)
     return static_cast<CvDestination>(channels_[channel].cvTarget[source]);
 }
 
-int8_t SequencerEngine::lengthCvOffset(uint8_t channel) const {
-    if (!validChannel(channel)) {
-        return 0;
-    }
+int8_t SequencerEngine::cvZoneSum(uint8_t channel, uint8_t destination) const {
     const ChannelState& c = channels_[channel];
     int16_t sum = 0;
     for (uint8_t source = 0; source < CV_SOURCE_COUNT; ++source) {
-        if (c.cvTarget[source] == CV_DEST_LENGTH) {
+        if (c.cvTarget[source] == destination) {
             sum = static_cast<int16_t>(sum + c.cvZone[source]);
         }
     }
     return static_cast<int8_t>(sum);
 }
 
+int8_t SequencerEngine::lengthCvOffset(uint8_t channel) const {
+    if (!validChannel(channel)) {
+        return 0;
+    }
+    return cvZoneSum(channel, CV_DEST_LENGTH);
+}
+
+int8_t SequencerEngine::patternCvIndex(uint8_t channel) const {
+    if (!validChannel(channel)) {
+        return -1;
+    }
+    return static_cast<int8_t>(lengthcv::patternIndexFor(
+        channels_[channel].selectedPattern, cvZoneSum(channel, CV_DEST_PATTERN)));
+}
+
 void SequencerEngine::applyCvAtStepBoundary(uint8_t channel) {
     ChannelState& c = channels_[channel];
     for (uint8_t source = 0; source < CV_SOURCE_COUNT; ++source) {
-        if (c.cvTarget[source] != CV_DEST_LENGTH) {
+        const uint8_t target = c.cvTarget[source];
+        if (target != CV_DEST_LENGTH && target != CV_DEST_PATTERN) {
             continue;
         }
         c.cvZone[source] =

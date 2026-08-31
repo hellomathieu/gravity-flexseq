@@ -6,6 +6,7 @@
 using flexseq::lengthcv::zoneFor;
 using flexseq::lengthcv::zoneWithHysteresis;
 using flexseq::lengthcv::effectiveLengthFor;
+using flexseq::lengthcv::patternIndexFor;
 
 void setUp() {}
 void tearDown() {}
@@ -134,6 +135,23 @@ void test_the_effective_length_saturates_at_one_and_thirty_six() {
     TEST_ASSERT_EQUAL_UINT8(36, effectiveLengthFor(35, 15));
 }
 
+void test_the_offset_moves_the_pattern_index() {
+    TEST_ASSERT_EQUAL_UINT8(8, patternIndexFor(8, 0));
+    TEST_ASSERT_EQUAL_UINT8(9, patternIndexFor(8, 1));
+    TEST_ASSERT_EQUAL_UINT8(7, patternIndexFor(8, -1));
+    TEST_ASSERT_EQUAL_UINT8(15, patternIndexFor(0, 15));
+    TEST_ASSERT_EQUAL_UINT8(0, patternIndexFor(15, -15));
+}
+
+void test_the_pattern_index_saturates_at_zero_and_fifteen() {
+    TEST_ASSERT_EQUAL_UINT8(0, patternIndexFor(0, -15));
+    TEST_ASSERT_EQUAL_UINT8(15, patternIndexFor(15, 15));
+    TEST_ASSERT_EQUAL_UINT8(0, patternIndexFor(1, -15));
+    TEST_ASSERT_EQUAL_UINT8(15, patternIndexFor(14, 15));
+    TEST_ASSERT_EQUAL_UINT8(15, patternIndexFor(8, 15));
+    TEST_ASSERT_EQUAL_UINT8(0, patternIndexFor(8, -15));
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_the_contract_constants_hold_their_decided_values);
@@ -147,5 +165,7 @@ int main() {
     RUN_TEST(test_a_rising_ramp_never_steps_backwards);
     RUN_TEST(test_the_offset_shortens_and_lengthens);
     RUN_TEST(test_the_effective_length_saturates_at_one_and_thirty_six);
+    RUN_TEST(test_the_offset_moves_the_pattern_index);
+    RUN_TEST(test_the_pattern_index_saturates_at_zero_and_fifteen);
     return UNITY_END();
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { zoneWithHysteresis, effectiveLengthFor } from "../src/domain/LengthCv.js";
+import { zoneWithHysteresis, effectiveLengthFor, patternIndexFor } from "../src/domain/LengthCv.js";
 
 /**
  * Vecteurs d'or de la specification CV du lot E3.
@@ -72,13 +72,6 @@ function loadVectors(): Vector[] {
 const vectors = loadVectors();
 const of = (family: Family) => vectors.filter((v) => v.family === family);
 
-function referencePattern(base: number, offsetOne: number, offsetTwo: number): number {
-  const wanted = base + offsetOne + offsetTwo;
-  if (wanted < 0) return 0;
-  if (wanted > 15) return 15;
-  return wanted;
-}
-
 function referenceReadStep(localStep: number, offsetSum: number, length: number): number {
   return (((localStep + offsetSum) % length) + length) % length;
 }
@@ -114,13 +107,15 @@ describe("Vecteurs CV — familles implementees en production", () => {
   });
 });
 
-describe("Vecteurs CV — familles non encore implementees", () => {
-  it("P suit le modele de reference", () => {
+describe("Vecteurs CV — famille P, contre la production", () => {
+  it("P suit l'ecretage de production", () => {
     for (const v of of("P")) {
-      expect(referencePattern(v.a, v.b, v.c as number), v.id).toBe(v.expected);
+      expect(patternIndexFor(v.a, v.b + (v.c as number)), v.id).toBe(v.expected);
     }
   });
+});
 
+describe("Vecteurs CV — familles non encore implementees", () => {
   it("S suit le modele de reference", () => {
     for (const v of of("S")) {
       expect(referenceReadStep(v.a, v.b, v.c as number), v.id).toBe(v.expected);
@@ -159,7 +154,7 @@ describe("Invariants exhaustifs", () => {
     for (let base = 0; base <= 15; ++base) {
       for (let one = -15; one <= 15; ++one) {
         for (let two = -15; two <= 15; ++two) {
-          expect(referencePattern(base, one, two)).toBe(referencePattern(base, two, one));
+          expect(patternIndexFor(base, one + two)).toBe(patternIndexFor(base, two + one));
         }
       }
     }
@@ -181,7 +176,7 @@ describe("Invariants exhaustifs", () => {
     }
     for (let base = 0; base <= 15; ++base) {
       for (let amount = 0; amount <= 15; ++amount) {
-        expect(referencePattern(base, amount, -amount)).toBe(base);
+        expect(patternIndexFor(base, amount - amount)).toBe(base);
       }
     }
   });

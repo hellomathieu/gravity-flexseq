@@ -106,17 +106,6 @@ bool load() {
     return true;
 }
 
-int referencePattern(int base, int offsetOne, int offsetTwo) {
-    int wanted = base + offsetOne + offsetTwo;
-    if (wanted < 0) {
-        wanted = 0;
-    }
-    if (wanted > 15) {
-        wanted = 15;
-    }
-    return wanted;
-}
-
 int referenceReadStep(int localStep, int offsetSum, int effectiveLength) {
     const int raw = (localStep + offsetSum) % effectiveLength;
     return (raw + effectiveLength) % effectiveLength;
@@ -188,7 +177,7 @@ void test_family_L_matches_the_production_clamp() {
     TEST_ASSERT_TRUE(seen > 0);
 }
 
-void test_family_P_matches_the_reference_model() {
+void test_family_P_matches_the_production_clamp() {
     size_t seen = 0;
     for (size_t i = 0; i < vectors.size(); ++i) {
         const Vector& v = vectors[i];
@@ -196,8 +185,9 @@ void test_family_P_matches_the_reference_model() {
             continue;
         }
         ++seen;
-        TEST_ASSERT_EQUAL_INT_MESSAGE(v.expected, referencePattern(v.a, v.b, v.c),
-                                      v.id.c_str());
+        const uint8_t got = flexseq::lengthcv::patternIndexFor(
+            static_cast<uint8_t>(v.a), static_cast<int8_t>(v.b + v.c));
+        TEST_ASSERT_EQUAL_INT_MESSAGE(v.expected, got, v.id.c_str());
     }
     TEST_ASSERT_TRUE(seen > 0);
 }
@@ -246,8 +236,11 @@ void test_the_two_sources_commute_on_the_pattern() {
     for (int base = 0; base <= 15; ++base) {
         for (int one = -15; one <= 15; ++one) {
             for (int two = -15; two <= 15; ++two) {
-                TEST_ASSERT_EQUAL_INT(referencePattern(base, one, two),
-                                      referencePattern(base, two, one));
+                const uint8_t direct = flexseq::lengthcv::patternIndexFor(
+                    static_cast<uint8_t>(base), static_cast<int8_t>(one + two));
+                const uint8_t swapped = flexseq::lengthcv::patternIndexFor(
+                    static_cast<uint8_t>(base), static_cast<int8_t>(two + one));
+                TEST_ASSERT_EQUAL_INT(direct, swapped);
             }
         }
     }
@@ -278,7 +271,9 @@ void test_two_opposite_offsets_give_the_base_back() {
     }
     for (int base = 0; base <= 15; ++base) {
         for (int amount = 0; amount <= 15; ++amount) {
-            TEST_ASSERT_EQUAL_INT(base, referencePattern(base, amount, -amount));
+            TEST_ASSERT_EQUAL_INT(base, flexseq::lengthcv::patternIndexFor(
+                                            static_cast<uint8_t>(base),
+                                            static_cast<int8_t>(amount - amount)));
         }
     }
 }
@@ -292,7 +287,7 @@ int main() {
         RUN_TEST(test_every_identifier_is_unique);
         RUN_TEST(test_family_A_matches_the_production_quantiser);
         RUN_TEST(test_family_L_matches_the_production_clamp);
-        RUN_TEST(test_family_P_matches_the_reference_model);
+        RUN_TEST(test_family_P_matches_the_production_clamp);
         RUN_TEST(test_family_S_matches_the_reference_model);
     }
     RUN_TEST(test_the_read_step_stays_inside_the_length_for_every_input);

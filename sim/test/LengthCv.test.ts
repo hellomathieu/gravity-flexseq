@@ -11,6 +11,7 @@ import {
   zoneFor,
   zoneWithHysteresis,
   effectiveLengthFor,
+  patternIndexFor,
 } from "../src/domain/LengthCv";
 
 describe("Length CV — constantes du contrat", () => {
@@ -128,5 +129,24 @@ describe("Length CV — longueur effective", () => {
     expect(effectiveLengthFor(36, -15)).toBe(21);
     expect(effectiveLengthFor(2, -15)).toBe(1);
     expect(effectiveLengthFor(35, 15)).toBe(36);
+  });
+});
+
+describe("Pattern CV — index effectif", () => {
+  it("deplace l'index", () => {
+    expect(patternIndexFor(8, 0)).toBe(8);
+    expect(patternIndexFor(8, 1)).toBe(9);
+    expect(patternIndexFor(8, -1)).toBe(7);
+    expect(patternIndexFor(0, 15)).toBe(15);
+    expect(patternIndexFor(15, -15)).toBe(0);
+  });
+
+  it("sature a zero et a quinze", () => {
+    expect(patternIndexFor(0, -15)).toBe(0);
+    expect(patternIndexFor(15, 15)).toBe(15);
+    expect(patternIndexFor(1, -15)).toBe(0);
+    expect(patternIndexFor(14, 15)).toBe(15);
+    expect(patternIndexFor(8, 15)).toBe(15);
+    expect(patternIndexFor(8, -15)).toBe(0);
   });
 });

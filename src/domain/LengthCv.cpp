@@ -42,6 +42,17 @@ int8_t zoneWithHysteresis(int16_t cv, int8_t current) {
     return zoneFor(cv);
 }
 
+uint8_t patternIndexFor(uint8_t base, int8_t offset) {
+    int16_t wanted = static_cast<int16_t>(static_cast<int16_t>(base) + offset);
+    if (wanted < 0) {
+        wanted = 0;
+    }
+    if (wanted > static_cast<int16_t>(SequencerEngine::PATTERN_COUNT - 1)) {
+        wanted = static_cast<int16_t>(SequencerEngine::PATTERN_COUNT - 1);
+    }
+    return static_cast<uint8_t>(wanted);
+}
+
 uint8_t effectiveLengthFor(uint8_t base, int8_t offset) {
     int16_t wanted = static_cast<int16_t>(static_cast<int16_t>(base) + offset);
     if (wanted < static_cast<int16_t>(SequencerEngine::MIN_LENGTH)) {

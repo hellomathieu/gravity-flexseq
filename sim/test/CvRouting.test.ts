@@ -246,3 +246,87 @@ describe("Length CV — invariants", () => {
     expect(e.effectiveStep(0)).toBe(27 % 15);
   });
 });
+
+
+describe("PATTERN CV — l'index effectif", () => {
+  function routedPattern(selected: number, source = CV_SOURCE_1): SequencerEngine {
+    const e = new SequencerEngine();
+    e.setSelectedPattern(0, selected);
+    e.setCvDestination(0, source, CvDestination.PATTERN);
+    return e;
+  }
+
+  it("rend le pattern selectionne quand rien n'est route", () => {
+    const e = new SequencerEngine();
+    for (let ch = 0; ch < 6; ++ch) expect(e.patternCvIndex(ch)).toBe(0);
+    e.setSelectedPattern(2, 9);
+    expect(e.patternCvIndex(2)).toBe(9);
+    expect(e.patternCvIndex(6)).toBe(-1);
+  });
+
+  it("ne bouge pas sur une valeur poussee seule", () => {
+    const e = routedPattern(3);
+    e.setCvInput(CV_SOURCE_1, 330);
+    expect(e.patternCvIndex(0)).toBe(3);
+  });
+
+  it("bouge a la frontiere de step", () => {
+    const e = routedPattern(3);
+    e.setCvInput(CV_SOURCE_1, 330);
+    e.start();
+    e.advance(STEP);
+    expect(e.patternCvIndex(0)).toBe(13);
+  });
+
+  it("ne mute jamais le pattern selectionne", () => {
+    const e = routedPattern(10);
+    e.setCvInput(CV_SOURCE_1, 330);
+    e.start();
+    e.advance(STEP);
+    expect(e.patternCvIndex(0)).toBe(15);
+    expect(e.getSelectedPattern(0)).toBe(10);
+  });
+
+  it("ecrete une seule fois pour deux sources", () => {
+    const e = routedPattern(15);
+    e.setCvDestination(0, CV_SOURCE_2, CvDestination.PATTERN);
+    e.setCvInput(CV_SOURCE_1, 330);
+    e.setCvInput(CV_SOURCE_2, -330);
+    e.start();
+    e.advance(STEP);
+    expect(e.patternCvIndex(0)).toBe(15);
+  });
+
+  it("ignore une source routee vers la longueur", () => {
+    const e = new SequencerEngine();
+    e.setSelectedPattern(0, 3);
+    e.setBaseLength(0, 18);
+    e.setCvDestination(0, CV_SOURCE_1, CvDestination.LENGTH);
+    e.setCvInput(CV_SOURCE_1, 330);
+    e.start();
+    e.advance(STEP);
+    expect(e.patternCvIndex(0)).toBe(3);
+    expect(e.getEffectiveLength(0)).toBe(28);
+  });
+
+  it("ne touche pas la longueur quand la source vise le pattern", () => {
+    const e = routedPattern(3);
+    e.setBaseLength(0, 18);
+    e.setCvInput(CV_SOURCE_1, 330);
+    e.start();
+    e.advance(STEP);
+    expect(e.patternCvIndex(0)).toBe(13);
+    expect(e.getEffectiveLength(0)).toBe(18);
+    expect(e.lengthCvOffset(0)).toBe(0);
+  });
+
+  it("revient a l'index de base quand le routage part", () => {
+    const e = routedPattern(3);
+    e.setCvInput(CV_SOURCE_1, 330);
+    e.start();
+    e.advance(STEP);
+    expect(e.patternCvIndex(0)).toBe(13);
+    e.setCvDestination(0, CV_SOURCE_1, CvDestination.NONE);
+    expect(e.patternCvIndex(0)).toBe(3);
+  });
+});

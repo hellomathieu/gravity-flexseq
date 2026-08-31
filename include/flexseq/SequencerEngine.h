@@ -137,6 +137,10 @@ public:
     // Somme des zones des sources routees vers LENGTH, dans [-30, +30].
     int8_t lengthCvOffset(uint8_t channel) const;
 
+    // Index de pattern que le CV designe, clamp(base + somme, 0, 15). PRD 10.2.
+    // C'est une DERIVATION : aucun etat ne la porte. -1 si le canal est invalide.
+    int8_t patternCvIndex(uint8_t channel) const;
+
 private:
     struct ChannelState {
         uint8_t selectedPattern;
@@ -161,6 +165,8 @@ private:
     };
 
     bool validChannel(uint8_t channel) const { return channel < CHANNEL_COUNT; }
+
+    int8_t cvZoneSum(uint8_t channel, uint8_t destination) const;
 
     // Tick, inside the step, at which sub-onset k fires (k in 1..triggers-1).
     static uint16_t subOnsetTick(uint16_t stepTicks, uint8_t triggers, uint8_t k);
