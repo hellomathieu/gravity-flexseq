@@ -1,0 +1,103 @@
+# Golden vectors — the CV specification of lot E3
+
+`cv_spec_vectors.tsv` holds the expected results of the CV chain. The C++ suite
+and the TypeScript suite read the **same file**, so the two languages cannot
+diverge in silence.
+
+This directory holds **data only**. It is not a test module: its name does not
+start with `test_`, so no `test_filter` collects it, and that is deliberate.
+
+## What the file is, and is not
+
+It holds **inputs and the expected output**, and nothing else. It holds no
+formula, no model, no invariant and no code.
+
+The expected values were derived **by hand** from the design decisions of lot E3.
+They were never produced by running an implementation. A vector produced by the
+code it checks proves nothing.
+
+Exhaustive properties — the bounds, the commutativity of the two sources, the
+absence of mutation — are **not** in this file. They live in the test suites,
+because they apply to every case rather than to one.
+
+## Format
+
+A tab separated file. The first line is the header.
+
+```text
+family	id	a	b	c	expected
+```
+
+- `family` decides how to read the line. **The reader takes its decision from
+  this column alone.**
+- `id` is a stable name, for a human to read. ⚠️ **The reader must never parse
+  it.** It carries no data.
+- `a`, `b`, `c` are the inputs. Their meaning depends on the family.
+- `expected` is the awaited result.
+- `-` marks a column the family does not use. ⚠️ **The reader must refuse a line
+  that holds `-` in a column its family needs.** A missing field must never read
+  as a zero.
+
+Numbers are signed decimal integers. There is exactly one tab between two
+fields, and no space around a value.
+
+## The four families
+
+### `A` — quantisation of a CV value into a zone
+
+| Column | Meaning |
+|---|---|
+| `a` | the CV value, already calibrated, in `AnalogInput::Read()` units, `-512` to `+512` |
+| `b` | the zone the channel holds **before** the reading |
+| `c` | unused |
+| `expected` | the zone after the reading, `-15` to `+15` |
+
+The hysteresis is measured from the **centre** of the current zone.
+
+### `L` — the effective length of a channel
+
+| Column | Meaning |
+|---|---|
+| `a` | `baseLength`, 1 to 36 |
+| `b` | the offset of the first source routed to `LENGTH` |
+| `c` | the offset of the second source routed to `LENGTH` |
+| `expected` | `effectiveLength`, 1 to 36 |
+
+The two offsets are **added, and the result is clamped once**. A clamp per
+source would give another answer, and some lines exist only to show it.
+
+### `P` — the pattern index of a channel
+
+| Column | Meaning |
+|---|---|
+| `a` | `basePattern`, 0 to 15 |
+| `b` | the offset of the first source routed to `PATTERN` |
+| `c` | the offset of the second source routed to `PATTERN` |
+| `expected` | the effective index, 0 to 15 |
+
+Same rule: add, then clamp once.
+
+### `S` — the step a channel reads
+
+| Column | Meaning |
+|---|---|
+| `a` | `localStep`, the position the clock drives |
+| `b` | the **sum** of the offsets routed to `STEP` |
+| `c` | `effectiveLength` |
+| `expected` | `readStep`, always `0 <= readStep < effectiveLength` |
+
+The offset is **absolute, in steps**: `+N` moves N steps, whatever the length.
+
+⚠️ **The modulus must be mathematically positive.** C++ and TypeScript both
+truncate towards zero, so a plain `%` returns a negative value for a negative
+offset. Several lines exist only to hold that rule.
+
+## What a reader must refuse
+
+- a file that is absent, or that holds no case;
+- a line with the wrong number of fields;
+- a `-` in a column the family needs;
+- an unknown family.
+
+⚠️ **A suite that loads zero vector must FAIL.** A green suite that checked
+nothing is worse than a red one.
