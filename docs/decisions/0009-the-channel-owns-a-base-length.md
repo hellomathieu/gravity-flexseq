@@ -170,12 +170,30 @@ states the condition: while the offset is 0, a direct write to `effectiveLength`
 produces the value the derivation produces, so that mutant is equivalent. A
 varying offset separates the two, and the property can be tested.
 
-**The five equivalent mutants of lot SF3 become detectable again**, for the same
-reason: `baseLength` and `effectiveLength` can differ. They return to the series
-**once the engine seam exists, and not before**. A mutant restored earlier would
-go undetected because the feature is missing, and that figure would say nothing
-about the tests. The denominator goes from 226 to an expected 231, **to be
-measured, never declared**.
+⚠️ **TWO of the five equivalent mutants of lot SF3 come back, not five, and the
+measurement of lot LCV.3c is what says so.** This paragraph announced five, for
+one reason. The five depend on **two different properties**, and only one of them
+changes with the Length CV.
+
+- `cpp` and `ts: saveTemplate serialises the effective length` depend on
+  `baseLength` differing from `effectiveLength`. The Length CV makes that
+  reachable, so **these two come back**;
+- `cpp: the channel record restores the base through the manual entry point` and
+  the two `loadTemplate` ones swap `setBaseLengthFromStorage()` for
+  `setBaseLength()`. They depend on the two entry points having **different
+  bounds**. Lot SF3 made those bounds equal, both `[1, 36]`, and lot LCV did not
+  undo it: the two functions still have the same body and the same domain. **These
+  three stay equivalent.**
+
+⚠️ **And the two that came back did not come back on their own.** Restored, they
+survived — not because they were equivalent, but because **no test exercised
+`saveTemplate()` under an active modulation**. That is a coverage gap, not an
+equivalence: an equivalent mutant can never be red, this one only needed the
+test. Two tests, one per language, now assert that a base of 18 modulated to 28
+still stores 18. They are the first tests of this decision's own rule — SAVE
+writes the base — and they were **impossible to write before the seam existed**.
+
+The denominator is **232, measured** on 2026-08-30 with a full pass at 232/232.
 
 **Out of scope of this amendment.** The mapping from CV to offset, which lot
 LCV.2 decides. The routing, which PRD §10.2 holds. The RECORDING freeze, which
