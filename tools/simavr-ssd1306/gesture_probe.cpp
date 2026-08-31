@@ -25,6 +25,11 @@ static const uint8_t DIAGNOSTIC_MEASURES_THE_POLICY = burst::NO_EMPIRICAL_LIMIT;
 #include <flexseq/PatternScreen.h>
 #include <flexseq/FactoryPatterns.h>
 #include <flexseq/Persistence.h>
+
+// La grille du domaine, jamais une copie. Le harnais bouclait le curseur modulo
+// 24 alors que le lot F l'a portee a 36 : R10 visait le step 28 en croyant viser
+// le 4, et R12 posait son triolet sur le step 33. Mesure du 2026-08-31.
+static const int GRID_MODULO = (int)flexseq::screen::GRID_STEPS;
 #include <flexseq/Transport.h>
 #include <flexseq/UiController.h>
 
@@ -1008,7 +1013,7 @@ int main(int argc, char **argv)
     {
         const char *text = getenv("R10_STEP");
         if (text != NULL) r10Step = (int)strtol(text, NULL, 0);
-        if (r10Step < 0 || r10Step >= 24) {
+        if (r10Step < 0 || r10Step >= GRID_MODULO) {
             fprintf(stderr, "R10_STEP hors de la grille : %d\n", r10Step);
             return 2;
         }
@@ -2049,7 +2054,7 @@ int main(int argc, char **argv)
         printf("rA_r9_retour       octet6 %02x ecarts %u twi %u\n",
                byteOfInstance(vu, canalA, STEP_BYTES + 2), ecarts, g_twi_bytes - marque);
 
-        const int versR10 = (r10Step - 5 + 24) % 24;
+        const int versR10 = (r10Step - 5 + GRID_MODULO) % GRID_MODULO;
         rotate(avr, versR10 == 0 ? 24 : versR10, 1);
         marque = g_twi_bytes;
         shiftRotate(avr, 4, 1, harness::STEP_BURST_LIMIT, false);
@@ -2059,7 +2064,7 @@ int main(int argc, char **argv)
                r10Step, versR10 == 0 ? 24 : versR10, byteOfInstance(vu, canalA, STEP_BYTES + 2), ecarts,
                g_twi_bytes - marque);
 
-        rotate(avr, (9 - r10Step + 24) % 24, 1);
+        rotate(avr, (9 - r10Step + GRID_MODULO) % GRID_MODULO, 1);
         marque = g_twi_bytes;
         shiftRotate(avr, 5, 1, harness::RATCHET_BURST_LIMIT, false);
         readInstances(avr, vu);
