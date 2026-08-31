@@ -408,8 +408,42 @@ Destinations: `none / PATTERN / LENGTH / RESET / STEP`. The choice is **explicit
 The boundary of a **step**, rather than the end of a **pattern**, is a deliberate choice. "The end of the pattern" is not a shared moment: each channel holds its LENGTH and its SUBDIV, and a TRIPLET ratchet **stretches its time** (§6.3), so the ends of the loops drift independently. To wait for the end of the pattern would mean to wait for an unpredictable delay. That delay reaches `MAX_LENGTH` steps — 24 today, and 36 at lot SF3.
 **RESET is the exception: it is immediate.** A reset that waits is not a reset. It also puts the step clock of the channel back in phase, which is the hard synchronisation people expect. The step 0 is however **armed**, and it comes out on the **next onset**, and never in the instant: to fire at once would send a burst of triggers on a jittery input, and it would break §9.
 ### 10.4 Quantisation (PATTERN, LENGTH, STEP)
-Uniform zones over the range, with a **hysteresis** of about a quarter of a zone: a value must cross a boundary clearly to change, and it must come back as far to change again. That is the idiom of the Eurorack quantisers. For PATTERN, ±5 V covers a shift of −15 to +15, so 31 zones over 1024 steps. That is about **33 steps (~0.32 V) per zone**, well above the noise of the converter. Combined with the lock per step, the jitter cannot produce more than one change per step.
-A consequence of the "base + offset" model: at the base A1, which is 0, the negative half of the CV has **no** effect, because the clamp crushes it. The project therefore puts the base **in the middle of the bank**, to hold both directions.
+**The mechanism is common to the three destinations.** The firmware quantises the CV into zones, and a **hysteresis** holds the current zone. A value must cross a boundary clearly to change, and it must come back as far to change again. That is the idiom of the Eurorack quantisers. ⚠️ The implementation computes that condition from the **centre of the current zone**, and the two forms are equivalent. A check over the 31 zones and the 1025 CV values found **0 divergence**.
+**The grid is dimensioned from PATTERN.** The bank holds 16 patterns, so the indices run 0 to 15. To reach any index from any base, the offset must run **−15 to +15**, which gives **31 zones**. LENGTH and STEP reuse that grid.
+**The real geometry: 31 zones covering the range −512 to +512.** 29 zones are **33 ADC units** wide, so about 0.32 V. The two clamped extreme zones are **34** units wide. The coverage is exact: the range holds 1025 values, and every one falls in exactly one zone. ⚠️ **These are not uniform zones**, and the two wider ones are the effect of the clamp. They are what puts ±512 inside a zone.
+**The hysteresis is bounded by the measured noise, and not by a figure this document fixes.** The noise at rest is **−26 ± 3** on both inputs (§10.5). The hysteresis must therefore stay well above ±3, and the current realisation is **about a quarter of a zone**. That is well above the noise of the converter. The value lives in `lengthcv::HYSTERESIS`, and the tests hold it.
+⚠️ **The full-range alternative of 71 zones is SET ASIDE, and the reason must survive.** Its zones would be about 14 units wide, so its hysteresis would be about 3.6, which is the order of the noise itself. A later optimisation must not bring it back without meeting that objection.
+Combined with the lock per step (§10.3), the jitter cannot produce more than one change per step.
+**PATTERN: the 31 offsets cover the whole bank from any base.** A consequence of the "base + offset" model: at the base A1, which is 0, the negative half of the CV has **no** effect, because the clamp crushes it. The project therefore puts the base **in the middle of the bank**, to hold both directions.
+**LENGTH: the same grid, and the reach is PARTIAL.** The lengths run 1 to 36, so 36 values against 31 offsets. The CV therefore **cannot reach every length from every base**:
+<table header-row="true">
+<tr>
+<td>Base</td>
+<td>Lengths the CV reaches</td>
+</tr>
+<tr>
+<td>1</td>
+<td>1 to 16</td>
+</tr>
+<tr>
+<td>8</td>
+<td>1 to 23</td>
+</tr>
+<tr>
+<td>18</td>
+<td>3 to 33</td>
+</tr>
+<tr>
+<td>21</td>
+<td>6 to 36</td>
+</tr>
+<tr>
+<td>36</td>
+<td>21 to 36</td>
+</tr>
+</table>
+⚠️ **Do not read "±15" as a full sweep of the length range.** To reach every length from every base would need offsets −35 to +35, so 71 zones, and the paragraph above sets that option aside.
+**STEP: the destination is planned, and its offset range is OPEN.** §10.2 defines `readStep = (localStep + f(cv)) % effectiveLength`, and it does not bound `f(cv)`. The grid above comes from PATTERN, so its application to STEP waits for that bound. The decision belongs to the lot that implements STEP, and this document does not anticipate it.
 ### 10.5 RESET — edge detection
 `AnalogInput::IsRisingEdge()` **must not be used**. `old_read_` is declared `uint16_t` there while `read_` is `int16_t`: a negative previous value becomes a large positive one. So "it was high" is true **every time it was in fact negative**, and a crossing from negative to positive produces **no** edge. That is the most natural case on a bipolar input. The anomaly is audited, `test_analog_input` reproduces it, and it is **not fixed upstream** — verified on 2026-08-20: `analog_input.h` is identical 3 commits after the pinned commit.
 FlexSeq therefore implements its own detection:
