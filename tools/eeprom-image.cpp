@@ -1,3 +1,4 @@
+#include <flexseq/CvDestination.h>
 #include <flexseq/Persistence.h>
 
 #include <cstdio>
@@ -12,6 +13,7 @@ void usage() {
     std::fprintf(stderr,
         "usage: eeprom-image --mode clock|seq [--steps 0,3,4,9,15] [--tempo 120]\n"
         "                    [--ratchet 0:6,3:2] [--subdiv -8] [--length 36]\n"
+        "                    [--cv-target 1:2,2:2]\n"
         "                    [--per-channel] [--format 2|3]\n"
         "writes the persistent image to stdout, one byte per byte, no header\n"
         "--per-channel gives each channel its own template, and refuses\n"
@@ -19,7 +21,10 @@ void usage() {
         "--format picks the EEPROM layout. It defaults to 2, the format the\n"
         "firmware reads today. Format 3 is not emitted yet.\n"
         "--length sets the base length of the six channels. The engine keeps\n"
-        "its own bound, so an out-of-range value is refused here.\n");
+        "its own bound, so an out-of-range value is refused here.\n"
+        "--cv-target routes a CV source to a destination on the six channels.\n"
+        "The source is 1 or 2; the destination is the PRD 10.2 code, so 2 is\n"
+        "LENGTH. Several pairs are separated by a comma.\n");
 }
 
 struct PerChannelTemplate {
@@ -186,6 +191,7 @@ int main(int argc, char** argv) {
     const char* ratchetList = nullptr;
     const char* subdivText = nullptr;
     const char* lengthText = nullptr;
+    const char* cvTargetText = nullptr;
     uint16_t tempo = UiController::DEFAULT_TEMPO;
     bool perChannel = false;
     uint8_t format = persist::FORMAT_VERSION;
@@ -201,6 +207,8 @@ int main(int argc, char** argv) {
             subdivText = argv[++i];
         } else if (std::strcmp(argv[i], "--length") == 0 && i + 1 < argc) {
             lengthText = argv[++i];
+        } else if (std::strcmp(argv[i], "--cv-target") == 0 && i + 1 < argc) {
+            cvTargetText = argv[++i];
         } else if (std::strcmp(argv[i], "--tempo") == 0 && i + 1 < argc) {
             tempo = static_cast<uint16_t>(std::atoi(argv[++i]));
         } else if (std::strcmp(argv[i], "--per-channel") == 0) {
@@ -299,6 +307,37 @@ int main(int argc, char** argv) {
             }
         }
     }
+    if (cvTargetText != nullptr) {
+        const char* p = cvTargetText;
+        while (*p != '\0') {
+            char* end = nullptr;
+            const long source = std::strtol(p, &end, 10);
+            if (end == p || source < 1 || source > CV_SOURCE_COUNT || *end != ':') {
+                std::fprintf(stderr, "eeprom-image: cv target refused: %s\n", cvTargetText);
+                return 2;
+            }
+            p = end + 1;
+            const long destination = std::strtol(p, &end, 10);
+            if (end == p || destination < 0 || destination >= CV_DESTINATION_COUNT) {
+                std::fprintf(stderr, "eeprom-image: cv target refused: %s\n", cvTargetText);
+                return 2;
+            }
+            for (uint8_t channel = 0; channel < SequencerEngine::CHANNEL_COUNT; ++channel) {
+                if (!engine.setCvDestination(channel,
+                                             static_cast<uint8_t>(source - 1),
+                                             static_cast<CvDestination>(destination))) {
+                    std::fprintf(stderr, "eeprom-image: cv target refused on channel %u\n",
+                                 channel);
+                    return 2;
+                }
+            }
+            p = end;
+            if (*p == ',') {
+                ++p;
+            }
+        }
+    }
+
     if (lengthText != nullptr) {
         const long wanted = std::strtol(lengthText, nullptr, 10);
         for (uint8_t channel = 0; channel < SequencerEngine::CHANNEL_COUNT; ++channel) {

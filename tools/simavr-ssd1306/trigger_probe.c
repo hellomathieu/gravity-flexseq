@@ -47,6 +47,7 @@
 #include <sim_elf.h>
 #include <sim_hex.h>
 #include <sim_irq.h>
+#include <avr_adc.h>
 #include <avr_twi.h>
 #include <avr_ioport.h>
 #include <avr_eeprom.h>
@@ -87,6 +88,14 @@ static int g_pattern_length = 16;
 #ifndef BPM
 #define BPM 120                      /* UiController::DEFAULT_TEMPO */
 #endif
+
+/* Injection CV. La voie 1 est ADC7, la voie 2 ADC6 (peripherials.h de
+ * libGravity). On ne s'abonne QUE si l'appelant fournit une tension : sans
+ * cela les trois courses nominales ne changent pas de regime. */
+static avr_irq_t *g_adc_irq[2];
+static int g_cv_mv[2];
+static int g_inject;
+static uint32_t g_adc_replies[2];
 
 #define MAX_EDGES 4096
 
@@ -171,6 +180,15 @@ static int load_eeprom(avr_t *avr, const char *path, uint16_t base)
     return 1;
 }
 
+static void adc_trigger_hook(struct avr_irq_t *irq, uint32_t value, void *param)
+{
+    (void)irq; (void)param;
+    avr_adc_mux_t mux;
+    memcpy(&mux, &value, sizeof(mux) < sizeof(value) ? sizeof(mux) : sizeof(value));
+    if (mux.src == 7) { ++g_adc_replies[0]; avr_raise_irq(g_adc_irq[0], g_cv_mv[0]); }
+    else if (mux.src == 6) { ++g_adc_replies[1]; avr_raise_irq(g_adc_irq[1], g_cv_mv[1]); }
+}
+
 int main(int argc, char **argv)
 {
     const char *fw = (argc > 1) ? argv[1] : ".pio/build/nanoatmega328/firmware.hex";
@@ -180,6 +198,11 @@ int main(int argc, char **argv)
     const char *mode = (argc > 5) ? argv[5] : "clock";
     const char *steps = (argc > 6) ? argv[6] : "0,3,4,9,15";
     if (argc > 7) g_pattern_length = (int)strtol(argv[7], NULL, 10);
+    if (argc > 9) {
+        g_cv_mv[0] = (int)strtol(argv[8], NULL, 10);
+        g_cv_mv[1] = (int)strtol(argv[9], NULL, 10);
+        g_inject = 1;
+    }
     const int seq = strcmp(mode, "seq") == 0;
     /* Course RATCHET : les onsets ne sont plus sur la grille des steps, donc
      * ni l ecart entre impulsions ni la gigue par rapport a cette grille ne
@@ -233,6 +256,14 @@ int main(int argc, char **argv)
     avr_connect_irq(twi_out, oled.irq + IRQ_SSD1306_TWI_OUT);
     avr_connect_irq(oled.irq + IRQ_SSD1306_TWI_IN, twi_in);
 
+    if (g_inject) {
+        g_adc_irq[0] = avr_io_getirq(avr, AVR_IOCTL_ADC_GETIRQ, ADC_IRQ_ADC7);
+        g_adc_irq[1] = avr_io_getirq(avr, AVR_IOCTL_ADC_GETIRQ, ADC_IRQ_ADC6);
+        avr_irq_register_notify(
+            avr_io_getirq(avr, AVR_IOCTL_ADC_GETIRQ, ADC_IRQ_OUT_TRIGGER),
+            adc_trigger_hook, NULL);
+    }
+
     for (int i = 0; i < LINE_COUNT; ++i) {
         g_lines[i].last = -1;
         avr_irq_t *pin = avr_io_getirq(avr, AVR_IOCTL_IOPORT_GETIRQ(LINES[i].port),
@@ -247,6 +278,9 @@ int main(int argc, char **argv)
     printf("simulation %.1f s ; mode %s ; steps attendus", seconds, mode);
     for (int i = 0; i < g_expected_count; ++i) printf(" %u", g_expected[i]);
     printf(" sur %d\n\n", g_pattern_length);
+    if (g_inject) {
+        printf("injection CV   CV1 %d mV ; CV2 %d mV\n\n", g_cv_mv[0], g_cv_mv[1]);
+    }
 
     /* Le firmware demarre A L'ARRET depuis le 2026-08-25, comme l'original. La
      * sonde doit donc APPUYER SUR PLAY, sinon elle mesurerait le silence et le

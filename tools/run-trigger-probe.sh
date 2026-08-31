@@ -88,6 +88,21 @@ LENGTH="${LENGTH:-16}"
 # EXPECTED_LENGTH sert la contre-epreuve : donner au harnais une longueur
 # differente de celle de l image doit rougir.
 EXPECTED_LENGTH="${EXPECTED_LENGTH:-$LENGTH}"
+# Injection CV, OPTIONNELLE. Fournir CV1_MV ou CV2_MV ajoute deux courses :
+# `cvzero` au zero mesure du module, et `cvlength` a la tension demandee.
+# EXPECTED_OFFSET est la zone attendue, un LITTERAL verifiable contre la
+# table figee du lot LCV.3a : le harnais ne recopie pas le quantizer.
+CV_ZERO_MV="${CV_ZERO_MV:-2625}"
+CV1_MV="${CV1_MV:-}"
+CV2_MV="${CV2_MV:-}"
+EXPECTED_OFFSET="${EXPECTED_OFFSET:-0}"
+CV_TARGET="${CV_TARGET:-1:2}"
+COURSES="clock seq ratchet"
+if [ -n "$CV1_MV" ] || [ -n "$CV2_MV" ]; then
+  COURSES="$COURSES cvzero cvlength"
+fi
+CV1_MV="${CV1_MV:-$CV_ZERO_MV}"
+CV2_MV="${CV2_MV:-$CV_ZERO_MV}"
 
 if [ -t 1 ]; then
   C_OK=$'\033[32m'; C_ERR=$'\033[31m'; C_DIM=$'\033[2m'; C_B=$'\033[1m'; C_0=$'\033[0m'; TTY=1
@@ -162,9 +177,12 @@ fi
 # cycle partiel.
 RATCHET_STEP="${RATCHET_STEP:-0}"
 RATCHET_CODE="${RATCHET_CODE:-6}"
-for MODE in clock seq ratchet; do
+for MODE in $COURSES; do
   GEN_ARGS="--mode seq"
   [ "$MODE" = "clock" ] && GEN_ARGS="--mode clock"
+  case "$MODE" in
+    cvzero|cvlength) GEN_ARGS="--mode seq --cv-target $CV_TARGET" ;;
+  esac
   # RATCHET_MUTATE=<step>:<code> ajoute un ratchet a l IMAGE et pas a l ATTENTE.
   # Avec un code dont N-1 ne divise pas celui du critere, la difference cesse
   # d etre un multiple exact et la course rougit. DROP ne peut pas jouer ce role :
@@ -190,11 +208,22 @@ fi
 # --- 4. Simulations : une course par mode -----------------------------------
 FAILED=0
 SEQ_PULSES=0
-for MODE in clock seq ratchet; do
+for MODE in $COURSES; do
   progress "simulation $MODE ($DURATION s)"
+  PROBE_MODE="$MODE"
+  PROBE_LENGTH="$EXPECTED_LENGTH"
+  PROBE_CV=""
+  case "$MODE" in
+    cvzero)
+      PROBE_MODE="seq"; PROBE_CV="$CV_ZERO_MV $CV_ZERO_MV" ;;
+    cvlength)
+      PROBE_MODE="seq"
+      PROBE_LENGTH=$(( EXPECTED_LENGTH + EXPECTED_OFFSET ))
+      PROBE_CV="$CV1_MV $CV2_MV" ;;
+  esac
   set +e
   "$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$DURATION" \
-    "$(dirname "$BIN")/ee-$MODE.bin" 384 "$MODE" "$STEPS" "$EXPECTED_LENGTH" > "$LOG" 2>&1
+    "$(dirname "$BIN")/ee-$MODE.bin" 384 "$PROBE_MODE" "$STEPS" "$PROBE_LENGTH" $PROBE_CV > "$LOG" 2>&1
   PROBE=$?
   set -e
   if [ "$PROBE" -ne 0 ]; then
@@ -211,7 +240,7 @@ for MODE in clock seq ratchet; do
 
   set +e
   JITTER_BUDGET_PCT="$JITTER_BUDGET_PCT" STEP_TOLERANCE_PCT="$STEP_TOLERANCE_PCT" \
-    MODE="$MODE" SEQ_PULSES="$SEQ_PULSES" STEPS="$STEPS" \
+    MODE="$PROBE_MODE" SEQ_PULSES="$SEQ_PULSES" STEPS="$STEPS" \
     RATCHET_CODE="$RATCHET_CODE" python3 - "$LOG" <<'PY'
 import os, re, sys
 
@@ -352,9 +381,13 @@ PY
 done
 
 if [ "$FAILED" -ne 0 ]; then
-  printf '\n  %s❌%s Au moins une des trois courses echoue.\n' "$C_ERR" "$C_0"
+  printf '\n  %s❌%s Au moins une course echoue.\n' "$C_ERR" "$C_0"
   exit 1
 fi
-printf '\n  %s✅%s Les trois courses passent : CLOCK ignore, SEQ joue, RATCHET subdivise.\n' \
-  "$C_OK" "$C_0"
+CV_NOTE=""
+if [ -n "${CV1_MV:-}" ] && [ "$COURSES" != "clock seq ratchet" ]; then
+  CV_NOTE=", CV LENGTH module"
+fi
+printf '\n  %s✅%s Les courses passent : CLOCK ignore, SEQ joue, RATCHET subdivise%s.\n' \
+  "$C_OK" "$C_0" "$CV_NOTE"
 exit 0
