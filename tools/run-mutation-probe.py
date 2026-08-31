@@ -1101,6 +1101,11 @@ SUITES = {
     "cpp-subdiv": (["./tools/run-cpp-tests.sh", "test_subdiv_phase"], ROOT),
     "ts-subdiv": (["npx", "vitest", "run", "test/SubdivPhase.test.ts"],
                   os.path.join(ROOT, "sim")),
+    "cpp-lengthcv": (["./tools/run-cpp-tests.sh", "test_length_cv"], ROOT),
+    "ts-lengthcv": (["npx", "vitest", "run", "test/LengthCv.test.ts"],
+                    os.path.join(ROOT, "sim")),
+    "ts-lengthcv-noise": (["./tools/run-ts-filtered-test.sh", "test/LengthCv.test.ts",
+                           "ne cede jamais au bruit mesure"], ROOT),
 }
 
 _restore = {}
