@@ -193,7 +193,10 @@ test. Two tests, one per language, now assert that a base of 18 modulated to 28
 still stores 18. They are the first tests of this decision's own rule — SAVE
 writes the base — and they were **impossible to write before the seam existed**.
 
-The denominator is **232, measured** on 2026-08-30 with a full pass at 232/232.
+The denominator is **232, measured** on 2026-08-31 with a full pass at 232/232.
+⚠️ **This line said 2026-08-30 until 2026-08-31.** The two mutants that make the
+denominator 232 were restored by commit `0de899c`, dated 2026-08-31, so the pass
+that counts them cannot precede it.
 
 **Out of scope of this amendment.** The mapping from CV to offset, which lot
 LCV.2 decides. The routing, which PRD §10.2 holds. The RECORDING freeze, which
