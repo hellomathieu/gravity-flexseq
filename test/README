@@ -4,13 +4,32 @@ This directory holds THREE categories of test that must never be mixed. They liv
 in three distinct PlatformIO environments, and that is deliberately structural:
 it is what lets the acceptance suite stay a reliable signal.
 
+AUTHORITY OVER THE INVENTORY -- decision D5 of the owner, 2026-08-31.
+
+`platformio.ini` is the normative source of the inventory: its `test_filter`
+defines which modules each environment MUST collect. An execution of the suite
+PROVES what it did collect, and it never defines the inventory: a suite that
+fails to collect a module by mistake goes green while it is incomplete.
+
+THIS FILE NO LONGER HOLDS A LIST OF MODULES. It carries what no other source
+carries: what each category MEANS, the rules for reading a verdict, and the
+traps. Read `test_filter` in `platformio.ini` for the inventory.
+
+That is a removal of duplication, and not a synchronisation between two lists.
+Three documents used to enumerate by hand what `platformio.ini` already
+declares, so each one drifted at every lot: on 2026-08-31 this file named 14
+modules for `env:native` where the filter collected 20, and PRD section 14 named
+7.
+
+A directory `test/test_*` that appears in no `test_filter` is a CONFIGURATION
+DEFECT, and not an inventory question: nothing collects it, and it stays silent.
+Commit `f0d6134` produced exactly that, and six tests stayed silent for four
+months. Measured on 2026-08-31: 27 directories, and 0 collected by no filter.
+
 -------------------------------------------------------------------------------
 1. FlexSeq acceptance / regression  ->  env `native`
 -------------------------------------------------------------------------------
-    test_cv_gate, test_main_screen, test_paged_screen, test_pattern,
-    test_pattern_bank, test_pattern_screen, test_persistence,
-    test_ratchet_matrix, test_sequencer_engine, test_subdiv, test_transport,
-    test_subdiv_phase, test_trigger_sequencer, test_ui_controller
+    The inventory lives in `test_filter` of `[env:native]`.
 
 Pure C++ domain, no Arduino and no libGravity. MUST be green: a phase is not
 finished while one of these fails. 384 assertions as of 2026-08-26, counted
@@ -106,7 +125,7 @@ rule this produced lives in `docs/open-risks.md`, under the method rules.
 -------------------------------------------------------------------------------
 2. Input-adapter acceptance  ->  env `native_adapter`
 -------------------------------------------------------------------------------
-    test_input_adapter
+    The inventory lives in `test_filter` of `[env:native_adapter]`.
 
 `./tools/run-adapter-tests.sh`. OUR glue code, compiled against the Arduino stubs
 in test/mocks/ and libGravity's headers. MUST be green.
@@ -136,8 +155,7 @@ the UI is still on the tab bar.
 -------------------------------------------------------------------------------
 3. libGravity characterization  ->  env `native_libgravity`
 -------------------------------------------------------------------------------
-    test_analog_input, test_button, test_clock, test_digital_output,
-    test_encoder, test_gravity
+    The inventory lives in `test_filter` of `[env:native_libgravity]`.
 
 libGravity headers, at the commit platformio.ini pins, compiled against the Arduino
 stubs in `test/mocks/`. These tests describe the REAL behaviour of the pinned
