@@ -845,76 +845,76 @@ Two findings reported and not asserted. The pulse was measured at **8.8 ms** on 
 > Two habits stay, on their own merit and not as a workaround: the statistics arrays are **static**, because nothing would be gained by allocating them. And the script reports an abnormal exit rather than throwing away a complete report. A corollary that still holds: a redirected `stdout` is buffered in blocks, so an unbuffered output is indispensable. Without it the report disappears at the crash, and somebody looks for the defect where it is not.
 Levels: the Domain → the Virtual and the Simulator → the AVR firmware (simavr for the signals, Wokwi for the screen) → the real Hardware.
 ---
-## 15. Empreinte mémoire (mesurée)
-Build `nanoatmega328`, `libGravity` figé au commit `4c5b4d0b4f38…` du fork du projet.
-**⚠️ CHIFFRES COURANTS, mesurés le 2026-08-30 après le lot S.** Tout ce qui suit est antérieur et conservé comme historique.
-**RAM 1317 / 2048 (64,3 %)**, 731 o libres · **Flash 27030 / 30720 (88,0 %)**, **2154 o** avant le garde-fou de 95 % qui est à 29184 o · **pic de pile 203 o**, marge 528 o, couvert 1,3× par la réserve de 256 · tests C++ 458, adaptateur 12, image EEPROM 14, TypeScript 452, typage propre, caractérisation libGravity conforme · **mutation 230/230** · sondes : gestes 103, dérive 222/222, frontière EEPROM 588/588, rendu **36/36 steps à 808 pixels d'encre** · 7 environnements AVR compilent.
-**Le lot S rend 126 o de Flash et coûte 0 o de RAM**, mesuré le 2026-08-30. Un **désinlining ciblé** : `clampIndex`, `wrapIndex` et `oneStep` portent `noinline`, et `clampRange` reste inline. Le pic de pile ne bouge pas. La décision, les variantes essayées et les contre-épreuves vivent dans l'**ADR 0010** ; ce paragraphe ne les recopie pas.
-**Les deltas des deux derniers lots ne se confondent pas.** Lot **F** (grille 3 × 12) : RAM **+0 o**, Flash **+0 o**, pile **−2 o** — la troisième rangée ne stocke rien, et la formule `rowCY()` remplace un ternaire qui mobilisait un registre de plus. Lot **F.5.5** (retrait du pied) : RAM **−21 o**, Flash **−290 o**. Ne pas lire les −21 / −290 comme le coût de la rangée.
-Les chiffres qu'ils remplacent : après le lot S, RAM 1338 et Flash 27320 ; après le lot B4b.7, RAM 1338 et Flash 27446.
-Les chiffres du 2026-08-28 qu'ils remplacent : RAM 1699 / 2048 (83,0 %), 349 o libres, Flash 27164 / 30720 (88,4 %), marge 144 o, tests C++ 422 et TypeScript 415.
-**⚠️ Le pic transitoire du lot B4b est TERMINÉ depuis le 2026-08-30.** La banque résidente de 368 o et les six instances de 138 o ont coexisté de B4b.3 à B4b.7, parce que rien n'est retiré avant que les tests aient prouvé qu'il peut l'être. **B4b.7 rend 370 o mesurés, et non 230** : 368 o pour la banque et 2 o pour le champ pointeur `bank_`, qui ne part qu'avec l'API elle-même. Le relevé de dérive a été acquitté le 2026-08-30, commit `4e2a24d`, et le garde de `run-build-memory.sh` est vert.
-**⚠️ ****`PatternBank`**** reste dans le dépôt.** Le lot retire la dépendance du moteur à la banque, pas la banque du projet : `PersistentImage` v2, `loadFactoryPatterns`, le générateur d'image, `gestureRecipes` et `PATTERN_COUNT` s'en servent encore.
-Chiffres **remesurés le 2026-08-22**, firmware **complet** : deux écrans, les huit gestes, le transport, la persistance, tout câblé.
-Chiffres **remesurés le 2026-08-23**, après le lot 9 (les trois modes de channel) : **RAM 1731 / 2048 (84,5 %)**, 317 o libres · **Flash 28538 / 30720 (92,9 %)** · **pic de pile 207 o**, couvert 1,2× par la réserve de 256 · dérive +0/+0 · **269 assertions C++**, 226 TypeScript.
-Chiffres **remesurés le 2026-08-23**, après les lots 20 et 21 (couverture des cadences, puis placement des sous-déclenchements) : **RAM 1713 / 2048 (83,6 %)**, 335 o libres · **Flash 28916 / 30720 (94,1 %)** · **pic de pile 210 o**, couvert 1,2× par la réserve de 256 · dérive +0/+0 · **297 assertions C++**, 254 TypeScript, **score de mutation 54/54**. Il reste **79 o** de RAM au-dessus de la réserve et **268 o** de Flash sous le garde-fou.
-Le lot 21 a coûté **Flash +142 o** et **RAM −12 o** : la RAM baisse parce que le champ `slotTicks` disparaît du moteur, deux octets par channel.
-Les chiffres du lot 10 qu'ils remplacent : RAM 1725 (84,2 %), Flash 28774 (93,7 %), pile 207 o, 278 assertions C++ et 235 TypeScript. Le lot a coûté **RAM −6 o / Flash +236 o** : la RAM baisse parce que l'offset passe à un octet, six channels. Il reste **67 o** de RAM au-dessus de la réserve et **410 o** de Flash sous le garde-fou.
-Les chiffres du lot 9 qu'ils remplacent : RAM 1731 (84,5 %), Flash 28538 (92,9 %), 269 assertions C++ et 226 TypeScript, 61 o de RAM au-dessus de la réserve et 646 o de Flash sous le garde-fou. Ce garde-fou est à **95 %** depuis le 2026-08-22, non plus à 90 % : partout où la suite de cette section écrit 90 %, lire 95 %.
-Les chiffres du 2026-08-22 qu'ils remplacent : RAM 1699 (83,0 %), Flash 28228 (91,9 %), pile 206 o, 245 assertions C++ et 202 TypeScript.
-⚠️ **Tout ce qui suit dans cette section date du 2026-08-21 et décrit un firmware où l'UI n'était pas câblée.** Les estimations y sont désormais remplaçables par des mesures : l'UI reliée a coûté **RAM +26 o / Flash +1224 o** (estimée \~16 o), la persistance **+10 o / +1044 o** (estimée \~8 o), le transport **+10 o / +1126 o** (estimé \~0 o, l'objet `clock` étant déjà alloué — mais `Clock::SetSource` ne l'était pas). La marge « d'environ 5× » annoncée ne s'est pas vérifiée : il reste **93 o** de RAM au-dessus de la réserve, pas 264.
+## 15. Memory footprint (measured)
+The build is `nanoatmega328`, with `libGravity` frozen at the commit `4c5b4d0b4f38…` of the fork of the project.
+**⚠️ CURRENT FIGURES, measured on 2026-08-30 after lot S.** Everything that follows is earlier, and it is kept as history.
+**RAM 1317 / 2048 (64.3 %)**, 731 B free · **Flash 27030 / 30720 (88.0 %)**, **2154 B** before the guard of 95 %, which sits at 29184 B · **stack peak 203 B**, a margin of 528 B, covered 1.3× by the reserve of 256 · C++ tests 458, adapter 12, EEPROM image 14, TypeScript 452, a clean typecheck, and the libGravity characterization conforming · **mutation 230/230** · the probes: gestures 103, drift 222/222, EEPROM boundary 588/588, and the render **36/36 steps at 808 pixels of ink** · 7 AVR environments compile.
+**Lot S returns 126 B of Flash and costs 0 B of RAM**, measured on 2026-08-30. It is a **targeted de-inlining**: `clampIndex`, `wrapIndex` and `oneStep` carry `noinline`, and `clampRange` stays inline. The stack peak does not move. The decision, the variants tried and the counter-proofs live in **ADR 0010**, and this paragraph does not copy them.
+**The deltas of the last two lots do not merge.** Lot **F**, the 3 × 12 grid: RAM **+0 B**, Flash **+0 B**, and the stack **−2 B**. The third row stores nothing, and the `rowCY()` formula replaces a ternary that used one register more. Lot **F.5.5**, the removal of the footer: RAM **−21 B**, Flash **−290 B**. Do not read the −21 and the −290 as the cost of the row.
+The figures they replace: after lot S, RAM 1338 and Flash 27320. After lot B4b.7, RAM 1338 and Flash 27446.
+The figures of 2026-08-28 they replace: RAM 1699 / 2048 (83.0 %), 349 B free · Flash 27164 / 30720 (88.4 %), a margin of 144 B · C++ tests 422 and TypeScript 415.
+**⚠️ The transitional peak of lot B4b is OVER since 2026-08-30.** The resident bank of 368 B and the six instances of 138 B coexisted from B4b.3 to B4b.7. Nothing is removed before the tests prove that it can be. **B4b.7 returns 370 measured B, and not 230**: 368 B for the bank and 2 B for the pointer field `bank_`, which leaves only with the API itself. The drift record was acknowledged on 2026-08-30, commit `4e2a24d`, and the guard of `run-build-memory.sh` is green.
+**⚠️ `PatternBank` stays in the repository.** The lot removes the dependency of the engine on the bank, and not the bank from the project: `PersistentImage` v2, `loadFactoryPatterns`, the image generator, `gestureRecipes` and `PATTERN_COUNT` still use it.
+Figures **re-measured on 2026-08-22**, on the **complete** firmware: two screens, the eight gestures, the transport and the persistence, all wired.
+Figures **re-measured on 2026-08-23**, after lot 9, the three channel modes: **RAM 1731 / 2048 (84.5 %)**, 317 B free · **Flash 28538 / 30720 (92.9 %)** · **stack peak 207 B**, covered 1.2× by the reserve of 256 · drift +0/+0 · **269 C++ assertions**, and 226 TypeScript.
+Figures **re-measured on 2026-08-23**, after the lots 20 and 21, the coverage of the rates and then the placement of the sub-onsets: **RAM 1713 / 2048 (83.6 %)**, 335 B free · **Flash 28916 / 30720 (94.1 %)** · **stack peak 210 B**, covered 1.2× by the reserve of 256 · drift +0/+0 · **297 C++ assertions**, 254 TypeScript, and a **mutation score of 54/54**. **79 B** of RAM stay above the reserve, and **268 B** of Flash under the guard.
+Lot 21 cost **Flash +142 B** and **RAM −12 B**. The RAM falls because the field `slotTicks` leaves the engine, two bytes per channel.
+The figures of lot 10 they replace: RAM 1725 (84.2 %), Flash 28774 (93.7 %), the stack 207 B, and 278 C++ assertions and 235 TypeScript. The lot cost **RAM −6 B / Flash +236 B**. The RAM falls because the offset moves to one byte, over six channels. **67 B** of RAM stay above the reserve, and **410 B** of Flash under the guard.
+The figures of lot 9 they replace: RAM 1731 (84.5 %) · Flash 28538 (92.9 %) · 269 C++ assertions and 226 TypeScript · 61 B of RAM above the reserve and 646 B of Flash under the guard. That guard sits at **95 %** since 2026-08-22, and no longer at 90 %: everywhere the rest of this section writes 90 %, read 95 %.
+The figures of 2026-08-22 they replace: RAM 1699 (83.0 %), Flash 28228 (91.9 %), the stack 206 B, and 245 C++ assertions and 202 TypeScript.
+⚠️ **Everything that follows in this section dates from 2026-08-21, and it describes a firmware where the UI was not wired.** Measurements can now replace the estimates there: the wired UI cost **RAM +26 B / Flash +1224 B**, estimated at about 16 B · the persistence **+10 B / +1044 B**, estimated at about 8 B · the transport **+10 B / +1126 B**, estimated at about 0 B because the `clock` object was already allocated, but `Clock::SetSource` was not. The announced margin "of about 5×" did not hold: **93 B** of RAM stay above the reserve, and not 264.
 >
-> **LE BUDGET EST DIMENSIONNÉ, PAS SEULEMENT SURVEILLÉ (2026-08-21).** Il était dit « sous garde » sans jamais dire combien il restait ni pour quoi faire, ce qui laissait la question ouverte à chaque fonctionnalité.
+> **THE BUDGET IS SIZED, AND NOT ONLY WATCHED (2026-08-21).** This document said "under guard" without ever saying how much was left, and for what. That left the question open at every feature.
 >
-> **RAM statique : 1528 o sur 2048, donc 520 o libres.** La réserve de pile étant de 256 o (pic mesuré **159 o**, couvert 1,6×), il reste **264 o pour de nouvelles données statiques**. Où sont passés les 1528, par ordre de taille : `gravity` **300 o** (l'objet libGravity), `patternBank` **240 o** (16 × 15), `NeoSerial` **159 o**, le tampon de page U8g2 **128 o**, les quatre tampons TWI **128 o**, `engine` **110 o**, `uClock` **67 o**, la séquence d'init u8x8 **53 o**, `uiScreen` **34 o**.
+> **Static RAM: 1528 B out of 2048, so 520 B free.** The stack reserve is 256 B, with a measured peak of **159 B**, covered 1.6×, so **264 B stay for new static data**. Where the 1528 went, by size: `gravity` **300 B**, the libGravity object · `patternBank` **240 B**, 16 × 15 · `NeoSerial` **159 B** · the U8g2 page buffer **128 B** · the four TWI buffers **128 B** · `engine` **110 B** · `uClock` **67 B** · the u8x8 init sequence **53 B** · `uiScreen` **34 B**.
 >
-> **Ce qu'il reste à construire y tient, avec une marge d'environ 5×** — estimation, base indiquée, à ne pas confondre avec les mesures ci-dessus :
+> **What is left to build fits there, with a margin of about 5×.** This is an estimate, its base is given, and nobody must confuse it with the measurements above:
 >
-> \| À construire \| RAM estimée \| Base de l'estimation \|
+> \| To build \| Estimated RAM \| Base of the estimate \|
 > \|---\|---\|---\|
-> \| UI reliée (§12) \| \~16 o \| curseur, mode d'édition, index de menu, accumulateur d'encodeur \|
-> \| Transport, EXT et MIDI (§8) \| \~0 o \| `uClock` et l'objet `clock` sont **déjà** alloués \|
-> \| Persistance (§11) \| \~8 o \| la banque est **déjà** en RAM : l'écriture EEPROM la lit sur place, sans copie \|
-> \| Destinations CV (§10.2) \| \~24 o \| 6 channels × 2 entrées × 1 octet de cible, plus l'état de quantification \|
-> \| RECORDING (§5.5) \| \~4 o \| un drapeau et un step en attente \|
-> \| **Total** \| **\~52 o** \| contre **264 o** disponibles \|
+> \| The wired UI (§12) \| \~16 B \| the cursor, the edit mode, the menu index, the encoder accumulator \|
+> \| Transport, EXT and MIDI (§8) \| \~0 B \| `uClock` and the `clock` object are **already** allocated \|
+> \| Persistence (§11) \| \~8 B \| the bank is **already** in RAM, and the EEPROM write reads it in place, with no copy \|
+> \| CV destinations (§10.2) \| \~24 B \| 6 channels × 2 inputs × 1 target byte, plus the quantisation state \|
+> \| RECORDING (§5.5) \| \~4 B \| one flag and one pending step \|
+> \| **Total** \| **\~52 B** \| against **264 B** available \|
 >
-> **Flash : 21404 o sur 30720.** Le garde-fou refuse à 90 %, soit 27648 o : il reste **6244 o** avant refus et 9316 o avant la limite dure. Points de comparaison mesurés dans ce dépôt — l'échantillonnage CV a coûté **+354 o**, l'écartement par bande **+522 o**, `PagedScreen` **+160 o**. Une UI complète avec ses menus est le seul poste vraiment coûteux à venir, de l'ordre de **2 à 4 ko** : cela passe, et chaque étape est rapportée par le garde-fou.
+> **Flash: 21404 B out of 30720.** The guard refuses at 90 %, so at 27648 B: **6244 B** stay before the refusal, and 9316 B before the hard limit. Points of comparison measured in this repository: the CV sampling cost **+354 B**, the spacing by band **+522 B**, and `PagedScreen` **+160 B**. A complete UI with its menus is the only really expensive item to come, of the order of **2 to 4 kB**. That passes, and the guard reports every step.
 >
-> **Le déclencheur est explicite**, il n'y a plus à en juger au cas par cas : échec au-delà de **+16 o de RAM** ou **+512 o de Flash** non acquittés, plafonds à **256 o libres** ou **90 % de Flash**. `--accept` ne se fait jamais sans regarder le diagnostic par symboles.
+> **The trigger is explicit**, so nobody judges it case by case any more: a failure above **+16 B of RAM** or **+512 B of Flash** unacknowledged, with ceilings at **256 B free** or **90 % of Flash**. `--accept` never happens without a look at the diagnostic by symbols.
 >
-> ⚠️ **L'unique trou de la mesure de pile, et son obligation.** La sonde mesure ce que le firmware **exécute pendant le run**. L'écriture EEPROM de la persistance n'y est pas parce qu'elle n'existe pas — mais elle n'y sera pas non plus **automatiquement** le jour où elle existera : il faudra que le run la **provoque**. C'est la seule chose à ne pas oublier en implantant le §11. Les anciennes valeurs « Pattern 4 B / 384 B / 578 B libres » sont **caduques**.
-> ⚠️ **Toujours la mesure AVR, jamais la mesure native.** `sizeof(SequencerEngine)` vaut 120 B compilé sur hôte x86 mais **110 B sur AVR** (relevé à `avr-nm` sur le `.elf`) : c'est cette dernière qui fait foi (règle `CLAUDE.md`).
-> Le saut de Flash depuis 16316 B vient d'abord du **rendu OLED** (primitives U8g2 + police `u8g2_font_5x7_tf`), puis de l'échantillonnage CV sous interruption (§10.6) et du saut de bande (§12).
-> ⚠️ **Un garde-fou de dérive existe depuis le 2026-08-20** : chaque build est comparé à `tools/memory-baseline`, versionné, et une croissance au-delà de 16 o de RAM ou 512 o de Flash **échoue**. L'accepter est un acte délibéré (`--accept`). Un plafond ne se déclenchant qu'à 90 % de Flash, il laissait passer une fonctionnalité de 3 ko sans un mot.
+> ⚠️ **The single hole of the stack measurement, and its obligation.** The probe measures what the firmware **executes during the run**. The EEPROM write of the persistence is not there because it does not exist. And it will not be there **automatically** on the day it exists either: the run will have to **provoke** it. That is the one thing not to forget while implementing §11. The old values "Pattern 4 B / 384 B / 578 B free" are **void**.
+> ⚠️ **Always the AVR measurement, and never the native one.** `sizeof(SequencerEngine)` is 120 B compiled on an x86 host, and **110 B on AVR**, read with `avr-nm` on the `.elf`. The second one is the authority, under the rule of `CLAUDE.md`.
+> The jump of Flash from 16316 B comes first from the **OLED render**, the U8g2 primitives plus the `u8g2_font_5x7_tf` font. Then it comes from the CV sampling under interrupt (§10.6), and then from the band skip (§12).
+> ⚠️ **A drift guard exists since 2026-08-20**: every build is compared to `tools/memory-baseline`, which is versioned, and a growth above 16 B of RAM or 512 B of Flash **fails**. To accept it is a deliberate act (`--accept`). A ceiling that fires at 90 % of Flash alone let a feature of 3 kB pass without a word.
 <table header-row="true">
 <tr>
 <td></td>
-<td>Ancien modèle (6×16)</td>
-<td>Modèle actuel (banque 16)</td>
+<td>The old model (6×16)</td>
+<td>The current model (a bank of 16)</td>
 </tr>
 <tr>
 <td>`sizeof(Pattern)`</td>
 <td>7 B</td>
-<td>**15 B** (3 steps + 12 ratchets)</td>
+<td>**15 B** (3 of steps plus 12 of ratchets)</td>
 </tr>
 <tr>
-<td>Stockage patterns</td>
+<td>Pattern storage</td>
 <td>672 B</td>
 <td>**240 B**</td>
 </tr>
 <tr>
 <td>`SequencerEngine`</td>
 <td>—</td>
-<td>**110 B** (dont le cache de timing par channel)</td>
+<td>**110 B**, and it holds the timing cache per channel</td>
 </tr>
 <tr>
-<td>**RAM firmware**</td>
+<td>**Firmware RAM**</td>
 <td>1758 B (85.8 %)</td>
 <td>**1528 B (74.6 %)**</td>
 </tr>
 <tr>
-<td>**RAM libre**</td>
+<td>**Free RAM**</td>
 <td>\~290 B</td>
 <td>**520 B**</td>
 </tr>
@@ -924,23 +924,23 @@ Les chiffres du 2026-08-22 qu'ils remplacent : RAM 1699 (83,0 %), Flash 28228 (9
 <td>**21404 B (69.7 %)**</td>
 </tr>
 </table>
-La contrainte RAM passe de **critique à confortable**.
-### Pile — mesurée, et non plus estimée (2026-08-20)
-> **Pic mesuré : 159 octets**, sur 520 libres — **361 o de marge**. Relevé à l'exécution sur le firmware **de production**, sans une ligne d'instrumentation (`tools/run-stack-probe.sh`).
+The RAM constraint goes from **critical to comfortable**.
+### The stack — measured, and no longer estimated (2026-08-20)
+> **Measured peak: 159 bytes**, out of 520 free, so **361 B of margin**. It is read at run time on the **production** firmware, with no line of instrumentation (`tools/run-stack-probe.sh`).
 >
-> ⚠️ **À remesurer après chaque changement structurant** : le pic a bougé à chacun d'eux (120 → 154 → 159 o).
+> ⚠️ **Re-measure after every structural change**: the peak moved at each one of them, 120 → 154 → 159 B.
 >
-> **Méthode :** un harnais C écrit un motif dans la RAM libre de la machine simulée **avant le premier cycle**, laisse tourner le firmware en injectant du trafic d'interruption, puis relit la frontière du motif intact. Le balayage part du **haut** : `__heap_start` valant `_end`, une allocation salirait le bas et ferait conclure à tort que la pile est descendue jusque-là.
+> **Method:** a C harness writes a pattern into the free RAM of the simulated machine **before the first cycle**. It lets the firmware run while it injects interrupt traffic, and it then reads back the boundary of the intact pattern. The scan starts from the **top**: `__heap_start` is `_end`, so an allocation would dirty the bottom and would make a reader conclude wrongly that the stack went down there.
 >
-> **Les deux angles morts sont FERMÉS (2026-08-20), et ils valaient 43 o.** La version précédente peignait depuis le firmware au début de `setup()` et publiait le résultat en largeur d'impulsion, faute de pouvoir lire la mémoire du simulateur : elle annonçait 120 o, ignorait la pile d'avant `setup()` (constructeurs globaux, `init()` d'Arduino : **+24 o**) et n'exerçait aucune ISR d'entrée (**+19 o**). Elle exigeait une sonde dans `main.cpp` et un environnement dédié ; les deux sont supprimés.
+> **The two blind spots are CLOSED (2026-08-20), and they were worth 43 B.** The previous version painted from inside the firmware at the top of `setup()`. It published the result as a pulse width, for want of a way to read the memory of the simulator. It announced 120 B. It ignored the stack used before `setup()`, so the global constructors and the `init()` of Arduino: **+24 B**. And it exercised no input ISR: **+19 B**. It needed a probe in `main.cpp` and a dedicated environment, and both are removed.
 >
-> **Couverture vérifiée, pas supposée.** Le verdict exige que **les six familles d'ISR aient été parcourues** — PCINT1/PCINT2 de l'encodeur (les seules broches sous PCINT dans libGravity ; les boutons sont scrutés), uClock, millis, MIDI en réception, et l'ADC. Un vecteur muet fait échouer la mesure, puisque c'est précisément ainsi qu'elle était incomplète en silence.
+> **The coverage is verified, and not supposed.** The verdict requires that **the six families of ISR were entered**: PCINT1 and PCINT2 of the encoder · uClock · millis · MIDI on reception · the ADC. Those two PCINT pins are the only pins under PCINT in libGravity, because the buttons are polled. A silent vector fails the measurement, because that is exactly how it was incomplete in silence.
 >
-> ⚠️ **Restent hors mesure :** les chemins que le firmware n'emprunte pas encore — l'écriture EEPROM de la persistance (§11) au premier chef, qui n'existe pas.
+> ⚠️ **Still out of the measurement:** the paths the firmware does not take yet, and first of all the EEPROM write of the persistence (§11), which does not exist.
 >
-> **Conséquence — seuil de réserve ramené à 256 o (décidé 2026-08-20).** Le seuil de `tools/run-build-memory.sh` valait 512 o, posé à l'estime avant toute mesure : il annonçait 46 o de marge alors que la consommation réelle était bien en dessous du seuil lui-même. À 256 o, le budget réellement disponible est de **264 o** et la réserve couvre le pic **1,6×** — la marge s'est réduite au fil des mesures complètes, sans devenir étroite. Ne pas le relever sans une **nouvelle mesure**.
+> **A consequence — the reserve threshold falls to 256 B (decided 2026-08-20).** The threshold of `tools/run-build-memory.sh` was 512 B, set by estimation before any measurement: it announced 46 B of margin while the real consumption sat well below the threshold itself. At 256 B, the really available budget is **264 B**, and the reserve covers the peak **1.6×**. The margin shrank as the measurements became complete, and it did not become narrow. Do not raise it without a **new measurement**.
 >
-> **Levier tenu en réserve :** `NeoHWSerial` protège ses tailles de tampons par `#if !defined(...)`, donc `-DSERIAL_TX_BUFFER_SIZE=16 -DSERIAL_RX_BUFFER_SIZE=32` récupère **80 o** par simple option de compilation, sans toucher à la dépendance. Les 160 o de tampons de `Wire` (dont deux en réception, inutiles pour un écran qu'on ne lit jamais) et les 77 o de tables U8g2 déclarées sans `PROGMEM` exigeraient au contraire de patcher des dépendances — hors décision séparée.
+> **A lever held in reserve:** `NeoHWSerial` guards its buffer sizes with `#if !defined(...)`, so `-DSERIAL_TX_BUFFER_SIZE=16 -DSERIAL_RX_BUFFER_SIZE=32` returns **80 B** through a compile option alone, with no change to the dependency. Two other levers would on the contrary need a patch of the dependencies, which is out of scope without a separate decision: the 160 B of `Wire` buffers, of which two are for reception and useless for a screen nobody reads · the 77 B of U8g2 tables declared with no `PROGMEM`.
 ---
 ## 16. Décisions — validées vs ouvertes
 ⚠️ **La revue de la version de référence du 2026-08-23 (§5.0) supersède cinq entrées de cette liste** : la banque partagée résidente, les 24 steps, la LENGTH comme propriété du seul channel, les trois modes, et `SHIFT` + `PLAY` réservé à RECORDING. Les décisions en vigueur sont celles du §5.0.
