@@ -28,6 +28,7 @@ import {
 } from "../src/domain/SequencerEngine.js";
 import { RATCHET_CODES, RATCHET_NONE, RATCHET_2, RATCHET_3, RATCHET_TRIPLET } from "../src/domain/Pattern.js";
 import { DEFAULT_SUBDIV, SUBDIVS } from "../src/domain/subdiv.js";
+import { CvDestination, CV_SOURCE_1 } from "../src/domain/CvDestination.js";
 
 function rig() {
   const engine = new SequencerEngine();
@@ -231,6 +232,39 @@ describe("UiController — inside a tab", () => {
     expect(engine.getSelectedPattern(0)).toBe(PATTERN_COUNT - 1);
     for (let i = 0; i < PATTERN_COUNT + 5; i += 1) ui.handle(UiEvent.ShiftRotate, -1);
     expect(engine.getSelectedPattern(0)).toBe(0);
+  });
+
+  it("edite la BASE et jamais la valeur derivee (risque 64)", () => {
+    const { ui, engine, enterTab, gotoField } = rig();
+    enterTab();
+    gotoField(UiField.Length);
+    engine.setBaseLength(0, 18);
+    engine.setCvDestination(0, CV_SOURCE_1, CvDestination.LENGTH);
+    engine.setCvInput(CV_SOURCE_1, 330);
+    engine.start();
+    engine.advance(96);
+    expect(engine.getBaseLength(0)).toBe(18);
+    expect(engine.getEffectiveLength(0)).toBe(28);
+
+    ui.handle(UiEvent.ShiftRotate, 1);
+    expect(engine.getBaseLength(0)).toBe(19);
+    expect(engine.getEffectiveLength(0)).toBe(29);
+  });
+
+  it("laisse la modulation en place pendant l'edition", () => {
+    const { ui, engine, enterTab, gotoField } = rig();
+    enterTab();
+    gotoField(UiField.Length);
+    engine.setBaseLength(0, 18);
+    engine.setCvDestination(0, CV_SOURCE_1, CvDestination.LENGTH);
+    engine.setCvInput(CV_SOURCE_1, -330);
+    engine.start();
+    engine.advance(96);
+    expect(engine.getEffectiveLength(0)).toBe(8);
+
+    for (let i = 0; i < 3; i += 1) ui.handle(UiEvent.ShiftRotate, -1);
+    expect(engine.getBaseLength(0)).toBe(15);
+    expect(engine.getEffectiveLength(0)).toBe(5);
   });
 
   it("the length field is clamped to one and thirty six", () => {

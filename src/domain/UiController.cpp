@@ -309,7 +309,7 @@ void UiController::adjustFieldValue(Field target, int8_t raw) {
         }
         case FIELD_LENGTH:
             engine_.setBaseLength(ch, static_cast<uint8_t>(clampRange(
-                static_cast<int16_t>(engine_.getEffectiveLength(ch) + delta),
+                static_cast<int16_t>(engine_.getBaseLength(ch) + delta),
                 static_cast<int16_t>(SequencerEngine::MIN_LENGTH),
                 static_cast<int16_t>(SequencerEngine::MAX_LENGTH))));
             break;

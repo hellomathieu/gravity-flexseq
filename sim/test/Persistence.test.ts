@@ -21,6 +21,7 @@ import {
   type Storage,
 } from "../src/domain/Persistence.js";
 import { PatternBank } from "../src/domain/PatternBank.js";
+import { CvDestination, CV_SOURCE_1, CV_SOURCE_2 } from "../src/domain/CvDestination.js";
 import {
   CHANNEL_COUNT,
   ChannelMode,
@@ -438,6 +439,42 @@ describe("Persistence — round trip", () => {
     expect(loaded.ui.clockSource).toBe(4);
     expect(loaded.prefs.cvCalibration[0]).toBe(-26);
     expect(loaded.prefs.cvCalibration[1]).toBe(300);
+  });
+
+  it("restaure les destinations CV des deux sources", () => {
+    const eeprom = new FakeEeprom();
+    const saved = rig();
+    expect(saved.engine.setCvDestination(0, CV_SOURCE_1, CvDestination.LENGTH)).toBe(true);
+    expect(saved.engine.setCvDestination(0, CV_SOURCE_2, CvDestination.STEP)).toBe(true);
+    expect(saved.engine.setCvDestination(3, CV_SOURCE_1, CvDestination.RESET)).toBe(true);
+    saved.scheduler.markDirty(0);
+    finishWrite(saved, eeprom, QUIET_MS);
+
+    const loaded = rig();
+    expect(loaded.scheduler.load(eeprom, loaded.image)).toBe(true);
+    expect(loaded.engine.getCvDestination(0, CV_SOURCE_1)).toBe(CvDestination.LENGTH);
+    expect(loaded.engine.getCvDestination(0, CV_SOURCE_2)).toBe(CvDestination.STEP);
+    expect(loaded.engine.getCvDestination(3, CV_SOURCE_1)).toBe(CvDestination.RESET);
+    expect(loaded.engine.getCvDestination(3, CV_SOURCE_2)).toBe(CvDestination.NONE);
+  });
+
+  it("ne restaure jamais une zone d'hysteresis", () => {
+    const eeprom = new FakeEeprom();
+    const saved = rig();
+    expect(saved.engine.setBaseLength(0, 18)).toBe(true);
+    expect(saved.engine.setCvDestination(0, CV_SOURCE_1, CvDestination.LENGTH)).toBe(true);
+    saved.engine.setCvInput(CV_SOURCE_1, 330);
+    saved.engine.start();
+    saved.engine.advance(96);
+    expect(saved.engine.lengthCvOffset(0)).toBe(10);
+    saved.scheduler.markDirty(0);
+    finishWrite(saved, eeprom, QUIET_MS);
+
+    const loaded = rig();
+    expect(loaded.scheduler.load(eeprom, loaded.image)).toBe(true);
+    expect(loaded.engine.getCvDestination(0, CV_SOURCE_1)).toBe(CvDestination.LENGTH);
+    expect(loaded.engine.lengthCvOffset(0)).toBe(0);
+    expect(loaded.engine.getEffectiveLength(0)).toBe(18);
   });
 
   it("keeps a base length of thirty six across a round trip (ADR 0009)", () => {

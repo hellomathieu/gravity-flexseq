@@ -317,7 +317,7 @@ export class UiController {
       }
       case UiField.Length: {
         if (channel < 0) break;
-        const current = this.engine.getEffectiveLength(channel);
+        const current = this.engine.getBaseLength(channel);
         this.engine.setBaseLength(channel, clampRange(current + delta, MIN_LENGTH, MAX_LENGTH));
         break;
       }
