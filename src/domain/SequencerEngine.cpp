@@ -1,5 +1,7 @@
 #include <flexseq/SequencerEngine.h>
 
+#include <flexseq/LengthCv.h>
+
 #include <flexseq/Pattern.h>
 
 namespace flexseq {
@@ -10,8 +12,15 @@ SequencerEngine::SequencerEngine()
       beatTick_(0),
       running_(false),
       stepped_(0) {
+    for (uint8_t s = 0; s < CV_SOURCE_COUNT; ++s) {
+        cvInput_[s] = 0;
+    }
     for (uint8_t ch = 0; ch < CHANNEL_COUNT; ++ch) {
         onsets_[ch] = 0;
+        for (uint8_t s = 0; s < CV_SOURCE_COUNT; ++s) {
+            channels_[ch].cvTarget[s] = DEFAULT_CV_DESTINATION;
+            channels_[ch].cvZone[s] = 0;
+        }
         channels_[ch].selectedPattern = 0;
         channels_[ch].baseLength = DEFAULT_LENGTH;
         channels_[ch].subdiv = DEFAULT_SUBDIV;
@@ -160,6 +169,7 @@ void SequencerEngine::advance(uint16_t ticks) {
                 c.acc = static_cast<uint16_t>(c.acc - c.stepTicks);
                 c.localStep = static_cast<uint8_t>((c.localStep + 1) % c.effectiveLength);
                 stepped_ = static_cast<uint8_t>(stepped_ | (1u << ch));
+                applyCvAtStepBoundary(ch);
                 refreshStepTiming(ch); // new step -> new duration / trigger count
                 if (c.mode != MODE_CLOCK || c.offset == 0) {
                     ++onsets_[ch];     // the step's own onset
@@ -242,9 +252,69 @@ uint8_t SequencerEngine::getBaseLength(uint8_t channel) const {
     return channels_[channel].baseLength;
 }
 
+bool SequencerEngine::setCvInput(uint8_t source, int16_t value) {
+    if (source >= CV_SOURCE_COUNT) {
+        return false;
+    }
+    cvInput_[source] = value;
+    return true;
+}
+
+int16_t SequencerEngine::getCvInput(uint8_t source) const {
+    return source < CV_SOURCE_COUNT ? cvInput_[source] : 0;
+}
+
+bool SequencerEngine::setCvDestination(uint8_t channel, uint8_t source,
+                                       CvDestination destination) {
+    if (!validChannel(channel) || source >= CV_SOURCE_COUNT
+        || static_cast<uint8_t>(destination) >= CV_DESTINATION_COUNT) {
+        return false;
+    }
+    ChannelState& c = channels_[channel];
+    if (c.cvTarget[source] == static_cast<uint8_t>(destination)) {
+        return true;
+    }
+    c.cvTarget[source] = static_cast<uint8_t>(destination);
+    c.cvZone[source] = 0;
+    return true;
+}
+
+CvDestination SequencerEngine::getCvDestination(uint8_t channel, uint8_t source) const {
+    if (!validChannel(channel) || source >= CV_SOURCE_COUNT) {
+        return CV_DEST_NONE;
+    }
+    return static_cast<CvDestination>(channels_[channel].cvTarget[source]);
+}
+
+int8_t SequencerEngine::lengthCvOffset(uint8_t channel) const {
+    if (!validChannel(channel)) {
+        return 0;
+    }
+    const ChannelState& c = channels_[channel];
+    int16_t sum = 0;
+    for (uint8_t source = 0; source < CV_SOURCE_COUNT; ++source) {
+        if (c.cvTarget[source] == CV_DEST_LENGTH) {
+            sum = static_cast<int16_t>(sum + c.cvZone[source]);
+        }
+    }
+    return static_cast<int8_t>(sum);
+}
+
+void SequencerEngine::applyCvAtStepBoundary(uint8_t channel) {
+    ChannelState& c = channels_[channel];
+    for (uint8_t source = 0; source < CV_SOURCE_COUNT; ++source) {
+        if (c.cvTarget[source] != CV_DEST_LENGTH) {
+            continue;
+        }
+        c.cvZone[source] =
+            lengthcv::zoneWithHysteresis(cvInput_[source], c.cvZone[source]);
+    }
+    refreshEffectiveLength(channel);
+}
+
 void SequencerEngine::refreshEffectiveLength(uint8_t channel) {
     ChannelState& c = channels_[channel];
-    int16_t wanted = static_cast<int16_t>(c.baseLength) + LENGTH_CV_OFFSET;
+    int16_t wanted = static_cast<int16_t>(c.baseLength) + lengthCvOffset(channel);
     if (wanted < static_cast<int16_t>(MIN_LENGTH)) {
         wanted = static_cast<int16_t>(MIN_LENGTH);
     }

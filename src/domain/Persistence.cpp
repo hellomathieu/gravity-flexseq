@@ -34,6 +34,10 @@ uint8_t channelRecordByte(const SequencerEngine& engine, uint8_t channel, uint8_
             return static_cast<uint8_t>(engine.getOffset(channel) & 0xFF);
         case 6:
             return engine.getSkipChance(channel);
+        case 7:
+            return static_cast<uint8_t>(engine.getCvDestination(channel, CV_SOURCE_1));
+        case 8:
+            return static_cast<uint8_t>(engine.getCvDestination(channel, CV_SOURCE_2));
         default:
             return 0;
     }
@@ -49,6 +53,14 @@ void applyChannelRecordByte(SequencerEngine& engine, uint8_t channel, uint8_t of
         case 4: engine.setChannelMode(channel, static_cast<ChannelMode>(value)); break;
         case 5: engine.setOffset(channel, value); break;
         case 6: engine.setSkipChance(channel, value); break;
+        case 7:
+            engine.setCvDestination(channel, CV_SOURCE_1,
+                                    static_cast<CvDestination>(value));
+            break;
+        case 8:
+            engine.setCvDestination(channel, CV_SOURCE_2,
+                                    static_cast<CvDestination>(value));
+            break;
         default: break;
     }
 }

@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include <flexseq/ChannelMode.h>
+#include <flexseq/CvDestination.h>
 #include <flexseq/Pattern.h>
 #include <flexseq/Subdiv.h>
 
@@ -30,7 +31,6 @@ public:
     static constexpr uint16_t TICKS_PER_SIXTEENTH = PPQN / 4; // 24
     static constexpr uint8_t MIN_LENGTH = 1;
     static constexpr uint8_t MAX_LENGTH = 36;
-    static constexpr int8_t LENGTH_CV_OFFSET = 0;
     static constexpr uint8_t MAX_STORED_LENGTH = Pattern::DEFAULT_TOTAL_STEPS;
     static constexpr uint8_t DEFAULT_LENGTH = 16;
     static constexpr uint8_t CHANNEL_COUNT = 6;
@@ -117,6 +117,21 @@ public:
     // a ratchet. Used to drive the outputs. Reset at every advance().
     uint8_t onsetCount(uint8_t channel) const;
 
+    // CV. ADR 0002 : le domaine recoit une valeur DEJA calibree, en unites
+    // AnalogInput::Read(), et n'appelle jamais le materiel. La valeur est
+    // poussee par l'appelant et conservee entre deux frontieres de step.
+    bool setCvInput(uint8_t source, int16_t value);
+    int16_t getCvInput(uint8_t source) const;
+
+    // Routage par channel et par source. Un changement remet a zero la zone
+    // d'hysteresis de cette source : une source non routee vers LENGTH porte
+    // toujours une zone nulle.
+    bool setCvDestination(uint8_t channel, uint8_t source, CvDestination destination);
+    CvDestination getCvDestination(uint8_t channel, uint8_t source) const;
+
+    // Somme des zones des sources routees vers LENGTH, dans [-30, +30].
+    int8_t lengthCvOffset(uint8_t channel) const;
+
 private:
     struct ChannelState {
         uint8_t selectedPattern;
@@ -136,6 +151,8 @@ private:
         uint16_t stepTicks; // ticksPerStep x span
         uint8_t triggers;   // onsets inside this step
         uint8_t subOnset;   // sub-onsets already fired in this step
+        uint8_t cvTarget[CV_SOURCE_COUNT];
+        int8_t cvZone[CV_SOURCE_COUNT];
     };
 
     bool validChannel(uint8_t channel) const { return channel < CHANNEL_COUNT; }
@@ -151,6 +168,9 @@ private:
     // ADR 0009: the single writer of effectiveLength.
     void refreshEffectiveLength(uint8_t channel);
 
+    // Consomme les valeurs CV poussees, a la frontiere de step et la seule.
+    void applyCvAtStepBoundary(uint8_t channel);
+
     bool onBeat() const { return beatTick_ == 0; }
     void scheduleTicks(uint8_t channel, uint16_t ticks);
     void applyTicks(uint8_t channel, uint16_t ticks);
@@ -161,6 +181,7 @@ private:
     bool running_;
     uint8_t stepped_; // bitmask: channels that crossed a step in the last advance()
     uint8_t onsets_[CHANNEL_COUNT];
+    int16_t cvInput_[CV_SOURCE_COUNT];
     ChannelState channels_[CHANNEL_COUNT];
     Pattern instances_[CHANNEL_COUNT];
 };

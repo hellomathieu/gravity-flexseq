@@ -28,6 +28,13 @@
  */
 
 import { subdivToTicks, DEFAULT_SUBDIV } from "./subdiv.js";
+import {
+  CvDestination,
+  CV_DESTINATION_COUNT,
+  CV_SOURCE_COUNT,
+  DEFAULT_CV_DESTINATION,
+} from "./CvDestination.js";
+import { zoneWithHysteresis } from "./LengthCv.js";
 
 import {
   Pattern,
@@ -56,8 +63,6 @@ export const DEFAULT_LENGTH = 16;
 
 /** ADR 0009 : plafond d'une longueur venue du stockage, la capacite du Pattern. */
 export const MAX_STORED_LENGTH = Pattern.DEFAULT_TOTAL_STEPS;
-/** ADR 0009 : contribution du Length CV, nulle tant que le CV n'existe pas. */
-export const LENGTH_CV_OFFSET = 0;
 
 /** masterPhase est un uint32 : il boucle a 2^32 ticks. */
 const PHASE_MODULO = 0x1_0000_0000;
@@ -114,10 +119,13 @@ interface ChannelState {
   /** Cadence choisie mais pas encore jouee, en ticksPerStep. 0 = aucune. */
   pendingTicks: number;
   stepped: boolean; // a franchi une frontiere de step lors du dernier advance()
+  cvTarget: number[]; // destination de CV1 et CV2, persistee
+  cvZone: number[]; // zone d'hysteresis courante, jamais persistee
 }
 
 export class SequencerEngine {
   private phase = 0; // masterPhase, en ticks (uint32)
+  private cvInput: number[] = new Array<number>(CV_SOURCE_COUNT).fill(0);
   private beatTick = 0; // ticks depuis la derniere noire, dans [0, PPQN)
   private running = false;
   private readonly onsets: number[];
@@ -143,6 +151,8 @@ export class SequencerEngine {
       acc: 0,
       pendingTicks: 0,
       stepped: false,
+      cvTarget: [DEFAULT_CV_DESTINATION, DEFAULT_CV_DESTINATION],
+      cvZone: [0, 0],
     }));
     this.onsets = new Array<number>(this.channels.length).fill(0);
     for (let ch = 0; ch < this.channels.length; ++ch) this.refreshStepTiming(ch);
@@ -331,6 +341,7 @@ export class SequencerEngine {
           c.acc -= c.stepTicks;
           c.localStep = (c.localStep + 1) % c.effectiveLength;
           c.stepped = true;
+          this.applyCvAtStepBoundary(ch);
           this.refreshStepTiming(ch); // nouveau step -> nouvelle duree
           if (c.mode !== ChannelMode.CLOCK || c.offset === 0) {
             this.onsets[ch] = (this.onsets[ch] ?? 0) + 1;
@@ -407,11 +418,66 @@ export class SequencerEngine {
     return this.channel(channel)?.baseLength ?? 0;
   }
 
+  /**
+   * ADR 0002 : le domaine recoit une valeur DEJA calibree, en unites
+   * AnalogInput::Read(). Elle est poussee par l'appelant et conservee entre
+   * deux frontieres de step.
+   */
+  setCvInput(source: number, value: number): boolean {
+    if (!Number.isInteger(source) || source < 0 || source >= CV_SOURCE_COUNT) return false;
+    this.cvInput[source] = value;
+    return true;
+  }
+
+  getCvInput(source: number): number {
+    return source >= 0 && source < CV_SOURCE_COUNT ? this.cvInput[source]! : 0;
+  }
+
+  /** Un changement de destination remet a zero la zone de cette source. */
+  setCvDestination(channel: number, source: number, destination: number): boolean {
+    const c = this.channel(channel);
+    if (!c || !Number.isInteger(source) || source < 0 || source >= CV_SOURCE_COUNT) return false;
+    if (!Number.isInteger(destination) || destination < 0
+        || destination >= CV_DESTINATION_COUNT) return false;
+    if (c.cvTarget[source] === destination) return true;
+    c.cvTarget[source] = destination;
+    c.cvZone[source] = 0;
+    return true;
+  }
+
+  getCvDestination(channel: number, source: number): number {
+    const c = this.channel(channel);
+    if (!c || source < 0 || source >= CV_SOURCE_COUNT) return CvDestination.NONE;
+    return c.cvTarget[source]!;
+  }
+
+  /** Somme des zones des sources routees vers LENGTH, dans [-30, +30]. */
+  lengthCvOffset(channel: number): number {
+    const c = this.channel(channel);
+    if (!c) return 0;
+    let sum = 0;
+    for (let source = 0; source < CV_SOURCE_COUNT; ++source) {
+      if (c.cvTarget[source] === CvDestination.LENGTH) sum += c.cvZone[source]!;
+    }
+    return sum;
+  }
+
+  /** Consomme les valeurs CV poussees, a la frontiere de step et la seule. */
+  private applyCvAtStepBoundary(channel: number): void {
+    const c = this.channel(channel);
+    if (!c) return;
+    for (let source = 0; source < CV_SOURCE_COUNT; ++source) {
+      if (c.cvTarget[source] !== CvDestination.LENGTH) continue;
+      c.cvZone[source] = zoneWithHysteresis(this.cvInput[source]!, c.cvZone[source]!);
+    }
+    this.refreshEffectiveLength(channel);
+  }
+
   /** ADR 0009 : l'unique ecrivain de effectiveLength. */
   private refreshEffectiveLength(channel: number): void {
     const c = this.channel(channel);
     if (!c) return;
-    let wanted = c.baseLength + LENGTH_CV_OFFSET;
+    let wanted = c.baseLength + this.lengthCvOffset(channel);
     if (wanted < MIN_LENGTH) wanted = MIN_LENGTH;
     if (wanted > MAX_LENGTH) wanted = MAX_LENGTH;
     c.effectiveLength = wanted;

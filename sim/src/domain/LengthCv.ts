@@ -1,4 +1,4 @@
-import { MIN_LENGTH, MAX_LENGTH } from "./SequencerEngine";
+import { MIN_LENGTH, MAX_LENGTH } from "./SequencerEngine.js";
 
 export const CV_MIN = -512;
 export const CV_MAX = 512;

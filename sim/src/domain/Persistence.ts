@@ -5,6 +5,7 @@ import {
 } from "./FactoryPatterns.js";
 import { PATTERN_COUNT, type PatternBank } from "./PatternBank.js";
 import { isValidRatchet, Pattern, RATCHET_NONE } from "./Pattern.js";
+import { CV_SOURCE_1, CV_SOURCE_2 } from "./CvDestination.js";
 import {
   CHANNEL_COUNT,
   ChannelMode,
@@ -255,6 +256,10 @@ function channelRecordByte(engine: SequencerEngine, channel: number, offset: num
       return engine.getOffset(channel) & 0xff;
     case 6:
       return engine.getSkipChance(channel);
+    case 7:
+      return engine.getCvDestination(channel, CV_SOURCE_1);
+    case 8:
+      return engine.getCvDestination(channel, CV_SOURCE_2);
     default:
       return 0;
   }
@@ -287,6 +292,12 @@ function applyChannelRecordByte(
       break;
     case 6:
       engine.setSkipChance(channel, value);
+      break;
+    case 7:
+      engine.setCvDestination(channel, CV_SOURCE_1, value);
+      break;
+    case 8:
+      engine.setCvDestination(channel, CV_SOURCE_2, value);
       break;
     default:
       break;

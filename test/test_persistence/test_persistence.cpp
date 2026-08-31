@@ -487,6 +487,52 @@ void test_the_v3_length_bound_is_the_pattern_capacity_not_the_engine_cap() {
  * Aller-retour
  */
 
+void test_a_round_trip_restores_the_cv_destinations() {
+    eeprom.reset();
+    Rig saved;
+    TEST_ASSERT_TRUE(saved.engine.setCvDestination(0, flexseq::CV_SOURCE_1,
+                                                   flexseq::CV_DEST_LENGTH));
+    TEST_ASSERT_TRUE(saved.engine.setCvDestination(0, flexseq::CV_SOURCE_2,
+                                                   flexseq::CV_DEST_STEP));
+    TEST_ASSERT_TRUE(saved.engine.setCvDestination(3, flexseq::CV_SOURCE_1,
+                                                   flexseq::CV_DEST_RESET));
+    saved.scheduler.markDirty(0);
+    finishWrite(saved, eeprom, persist::QUIET_MS);
+
+    Rig loaded;
+    TEST_ASSERT_TRUE(loaded.scheduler.load(eeprom, loaded.image));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::CV_DEST_LENGTH,
+                            loaded.engine.getCvDestination(0, flexseq::CV_SOURCE_1));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::CV_DEST_STEP,
+                            loaded.engine.getCvDestination(0, flexseq::CV_SOURCE_2));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::CV_DEST_RESET,
+                            loaded.engine.getCvDestination(3, flexseq::CV_SOURCE_1));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::CV_DEST_NONE,
+                            loaded.engine.getCvDestination(3, flexseq::CV_SOURCE_2));
+}
+
+void test_a_round_trip_never_restores_a_hysteresis_zone() {
+    eeprom.reset();
+    Rig saved;
+    TEST_ASSERT_TRUE(saved.engine.setBaseLength(0, 18));
+    TEST_ASSERT_TRUE(saved.engine.setCvDestination(0, flexseq::CV_SOURCE_1,
+                                                   flexseq::CV_DEST_LENGTH));
+    saved.engine.setCvInput(flexseq::CV_SOURCE_1, 330);
+    saved.engine.start();
+    saved.engine.advance(96);
+    TEST_ASSERT_EQUAL_INT8(10, saved.engine.lengthCvOffset(0));
+    saved.scheduler.markDirty(0);
+    finishWrite(saved, eeprom, persist::QUIET_MS);
+
+    Rig loaded;
+    TEST_ASSERT_TRUE(loaded.scheduler.load(eeprom, loaded.image));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::CV_DEST_LENGTH,
+                            loaded.engine.getCvDestination(0, flexseq::CV_SOURCE_1));
+    TEST_ASSERT_EQUAL_INT8_MESSAGE(0, loaded.engine.lengthCvOffset(0),
+        "les zones ne sont pas persistees : seule la destination revient");
+    TEST_ASSERT_EQUAL_UINT8(18, loaded.engine.getEffectiveLength(0));
+}
+
 void test_a_round_trip_keeps_a_base_length_of_thirty_six() {
     eeprom.reset();
     Rig saved;
@@ -1649,6 +1695,8 @@ int main() {
     RUN_TEST(test_the_v3_length_bound_is_the_pattern_capacity_not_the_engine_cap);
 
     RUN_TEST(test_a_round_trip_restores_the_state_byte_for_byte);
+    RUN_TEST(test_a_round_trip_restores_the_cv_destinations);
+    RUN_TEST(test_a_round_trip_never_restores_a_hysteresis_zone);
     RUN_TEST(test_a_round_trip_keeps_a_base_length_of_thirty_six);
     RUN_TEST(test_an_all_zero_template_is_empty);
     RUN_TEST(test_one_active_step_makes_a_template_occupied);
