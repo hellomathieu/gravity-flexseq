@@ -991,6 +991,6 @@ A change of version starts **from the defaults again**: the FlexSeq state writte
 >
 > The matching actions are tracked in `docs/open-risks.md`, lines 14 to 16.
 ---
-## 19. Critères de réussite
-Le firmware final doit : fonctionner sur le Gravity hardware **inchangé** ; conserver les fonctionnalités historiques retenues ; offrir des patterns 1–24 steps avec le modèle temporel `masterPhase` ; rester dans le budget RAM/Flash ; permettre la restauration du firmware original.
+## 19. Criteria of success
+The final firmware must run on the **unchanged** Gravity hardware · keep the historical features the project retained · offer patterns of 1 to 24 steps with the `masterPhase` temporal model · stay inside the RAM and Flash budget · allow the restoration of the original firmware.
 <page url="https://app.notion.com/p/3c7d2c2576ce813fa814eb6259949d5f">Conception — fractionnement des salves SHIFT</page>
