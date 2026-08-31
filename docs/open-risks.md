@@ -1,6 +1,6 @@
 # Open risks and watch items
 
-**Last review: 2026-08-31.** Thirty-seven open lines, thirty-four closed or accepted.
+**Last review: 2026-08-31.** Forty-one open lines, thirty-one closed or accepted.
 
 ## What this document is, and is not
 
@@ -19,7 +19,7 @@ either closed without anyone noting it, or accepted without anyone saying so.
 
 ## What is still open
 
-Thirty-seven lines, and each one states **what it is waiting for and from whom**. A line
+Forty-one lines, and each one states **what it is waiting for and from whom**. A line
 that waits for nothing from nobody no longer belongs here: it is in the table
 below.
 
