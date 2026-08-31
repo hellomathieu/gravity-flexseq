@@ -847,7 +847,8 @@ Levels: the Domain → the Virtual and the Simulator → the AVR firmware (simav
 ---
 ## 15. Memory footprint (measured)
 The build is `nanoatmega328`, with `libGravity` frozen at the commit `4c5b4d0b4f38…` of the fork of the project.
-**✅ CURRENT FIGURES, measured on 2026-08-31 on the head `a190676`.** Every figure below carries the tool that produced it. Everything after this block is earlier, and the document keeps it as history.
+**✅ CURRENT FIGURES, measured on 2026-08-31.** Every figure below carries the tool that produced it. Everything after this block is earlier, and the document keeps it as history.
+⚠️ **The figures come from five heads of the same day, and they describe ONE binary.** `git diff 1b59407..HEAD -- src/ include/ platformio.ini` is empty, so no commit of that day touched the firmware. The memory figures therefore hold across the window, and the reader does not have to suppose it.
 **Memory**, by `tools/run-build-memory.sh` and `tools/run-stack-probe.sh`:
 - **RAM 1357 / 2048 (66.3 %)**, so **691 B free** · **Flash 27708 / 30720 (90.2 %)**, so **1476 B** before the guard of 95 %, which sits at 29184 B.
 - **Stack peak 207 B**, over two identical runs, with 6 of 6 watched vectors entered. The EEPROM write of the persistence is inside that measurement, and the probe asserts the version byte 3 at the address 384.
@@ -858,7 +859,7 @@ The build is `nanoatmega328`, with `libGravity` frozen at the commit `4c5b4d0b4f
 - the **absolute margin** is **484 B**, so the free RAM minus the measured peak.
 Read the two margins apart. `docs/open-risks.md` line 66 tracks the second one.
 **Tests**, by `tools/run-all-tests.sh` and `tools/run-mutation-probe.py`:
-- **C++ acceptance 494** on `env:native` · **adapter 12** on `env:native_adapter` · **EEPROM image 14** · so **506 assertions outside the characterization**.
+- **C++ acceptance 494** on `env:native` and **adapter 12** on `env:native_adapter`, so **506 assertions outside the characterization**. ⚠️ The EEPROM image check adds **14 criteria**, and they are not assertions: do not add them to the 506.
 - **libGravity characterization 68 assertions, of which 7 are red by construction.** The criterion is the conformity to the audit, and not the absence of a failure (§18). ⚠️ **Never add these 68 to the 506**: the total of 574 measures a pinned dependency as well as FlexSeq.
 - **TypeScript 488 tests over 22 files** · a clean typecheck.
 - **Mutation 232/232**, with the 232 anchors present exactly once.
