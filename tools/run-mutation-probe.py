@@ -1079,6 +1079,14 @@ MUTANTS = [
      "sim/src/domain/LengthCv.ts",
      "export const ZONE_COUNT = 31;",
      "export const ZONE_COUNT = 30;", "ts-lengthcv"),
+    ("cpp: the hysteresis falls to 3, and the measured noise crosses a boundary",
+     "include/flexseq/LengthCv.h",
+     "constexpr int16_t HYSTERESIS = 8;",
+     "constexpr int16_t HYSTERESIS = 3;", "cpp-lengthcv"),
+    ("ts: the hysteresis falls to 3, and the measured noise crosses a boundary",
+     "sim/src/domain/LengthCv.ts",
+     "export const HYSTERESIS = 8;",
+     "export const HYSTERESIS = 3;", "ts-lengthcv-noise"),
 ]
 
 SUITES = {
