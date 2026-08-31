@@ -573,3 +573,12 @@ the bound. The class was five. Two rules follow. Sweep the probe for the FUNCTIO
 that carry the property, not only for the constant. And treat the score of a lot
 that moves a bound as unknown until a full pass has run: the anchor guard cannot
 answer this question, and it does not claim to.
+
+**A shared C++/TypeScript vector must cover zero, and both approaches to it.** In
+TypeScript a negative division or floor can produce `-0`, and `Object.is(-0, 0)`
+is false, so a test that expects `0` fails on a value that is numerically correct.
+The C++ side has no such value. Lot LCV.4c met this on `zoneFor(-16)`: the two
+implementations agreed on every other point of the vector. ⚠️ **The vector found
+the defect; no reading would have.** Normalise the output in the implementation,
+never in the expectation, and keep zero and its two neighbours in every shared
+vector.
