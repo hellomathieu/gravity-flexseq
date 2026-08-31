@@ -1,23 +1,34 @@
 <!--
-SOURCE NORMATIVE DU PRD — ELLE VIT DANS CE DEPOT DEPUIS LE 2026-08-30.
+THE NORMATIVE SOURCE OF THE PRD. IT LIVES IN THIS REPOSITORY SINCE 2026-08-30.
 
-Decision du proprietaire, 2026-08-30 : le PRD vit dans le depot. Ce fichier
-remplace la page Notion comme source normative des exigences et des decisions
-produit.
+Decision of the owner, 2026-08-30: the PRD lives in the repository. This file
+replaces the Notion page as the normative source of the product requirements and
+the product decisions.
 
-Importe depuis Notion le 2026-08-30T09:29:24Z, page
+Imported from Notion on 2026-08-30T09:29:24Z, page
 https://app.notion.com/p/3bed2c2576ce80459448cc525a929d9d
-La page Notion devient une source HISTORIQUE. Ne plus l'editer, et ne plus s'y
-referer pour trancher : en cas de divergence, ce fichier fait foi.
+The Notion page becomes a HISTORICAL source. Do not edit it. Do not consult it to
+settle a question. On a divergence, this file is the authority.
 
-Routage : .claude/rules/knowledge-persistence.md
-Hierarchie des sources : CLAUDE.md, section "Source hierarchy"
+Routing: .claude/rules/knowledge-persistence.md
+Source hierarchy: CLAUDE.md, section "Source hierarchy"
 
-DECISION EN ATTENTE, inscrite ici pour ne pas etre perdue : ce fichier est en
-francais, et la regle 3 de .claude/rules/github-conventions.md demande l'anglais
-pour toute documentation poussee sur GitHub. Cette regle exemptait le PRD parce
-qu'il n'etait pas pousse. La premise a disparu. Traduire, ou inscrire une
-exception explicite : le proprietaire tranche.
+LANGUAGE — DECIDED on 2026-08-31, decision D4 of the owner. This file moves to
+English. Rule 3 of .claude/rules/github-conventions.md requires English for every
+document that the project pushes to GitHub. That rule exempted the PRD because
+the PRD was not pushed. The premise disappeared on 2026-08-30. The owner chose to
+translate, and not to record an exception.
+
+The translation runs section by section, one commit per section, and the owner
+validates each section before the next one starts. The section numbers stay
+frozen: 86 references of the form "PRD §N" live in the pushed documents. A
+translation commit carries NO content change: a stale fact gets its own commit,
+before or after. The method and the glossary live in
+.claude/rules/prd-translation.md, and that file is not pushed.
+
+The French text stays recoverable through the Git history only. The project keeps
+no parallel French copy: that copy is what
+.claude/rules/knowledge-persistence.md forbids.
 -->
 
 **Firmware alternatif du module Eurorack Sitka Instruments Gravity — Trigger Sequencer dont les patterns ont une capacité de 36 steps, la longueur réglable à l'interface allant de 1 à 36 depuis le lot SF3, 2026-08-30.**
