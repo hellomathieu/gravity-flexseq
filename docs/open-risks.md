@@ -296,6 +296,30 @@ that day touched `src/`, `include/` or `platformio.ini`, so every memory figure
 described one binary. The proof is one command, and it now sits in the text. A
 figure that rests on an unstated condition is a figure a reader cannot check.
 
+**A REWRITE ALSO ACTIVATES DORMANT INCONSISTENCIES, and those are not defects it
+created.** The rule below covers what a rewrite writes wrong. This one covers what
+it wakes up. The rewrite of PRD section 10.4 on 2026-08-31 did both, and the two
+outcomes needed different handling.
+
+It **created** one defect: section 10.1 summarised 10.4 as "uniform zones over the
+full scale", which was true of the old text and false of the new one. The rewrite
+could not see it, because the contradiction lived in another section. Commit
+`475bef6` fixed it, and the fix was part of the same piece of work.
+
+It **activated** two others: sections 10.2 and 10.3 give `MAX_LENGTH` as 24, and
+the new 10.4 builds a table on 36 lengths. Those two lines were already listed as
+stale, and they had been left intact on purpose. While 10.4 said nothing about
+lengths, the sections never met. Now they do, and a reader sees a contradiction
+where the document previously held two separate stale facts. Line 69 tracks them,
+and the owner kept them out of the perimeter of D2.
+
+**The rule this leaves.** After a rewrite, grep the document for the terms the new
+text introduces, and not only for the terms it removed. A section that gains a
+subject starts contradicting every other section that already held it. And
+separate the two outcomes: a created defect belongs to the rewrite, and an
+activated one belongs to its own item — otherwise a bounded piece of work grows
+without a decision.
+
 **A REREAD AFTER A REWRITE FINDS WHAT THE REWRITE CREATED. Keep them as two
 steps.** The rebuild of section 15 on 2026-08-31 replaced twenty stale figures
 with measured ones, and it introduced a new defect while doing it: a list
