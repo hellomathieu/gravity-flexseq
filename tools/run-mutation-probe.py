@@ -1087,6 +1087,18 @@ MUTANTS = [
      "sim/src/domain/LengthCv.ts",
      "export const HYSTERESIS = 8;",
      "export const HYSTERESIS = 3;", "ts-lengthcv-noise"),
+    ("cpp: the modulation load no longer checks that the eeprom is free",
+     "include/flexseq/Persistence.h",
+     "    if (storage.busy()) {\n        return false;\n    }\n    return loadTemplateIntoModulationBuffer(storage, state, channel, index);",
+     "    return loadTemplateIntoModulationBuffer(storage, state, channel, index);", "cpp"),
+    ("cpp: the modulation load waits for a busy eeprom instead of a free one",
+     "include/flexseq/Persistence.h",
+     "    if (storage.busy()) {",
+     "    if (!storage.busy()) {", "cpp"),
+    ("cpp: a busy eeprom reports a modulation load that never happened",
+     "include/flexseq/Persistence.h",
+     "    if (storage.busy()) {\n        return false;\n    }",
+     "    if (storage.busy()) {\n        return true;\n    }", "cpp"),
 ]
 
 SUITES = {

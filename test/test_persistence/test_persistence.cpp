@@ -27,6 +27,7 @@ struct FakeEeprom {
     uint16_t writes;
     uint16_t lowestWrite;
     uint16_t highestWrite;
+    bool busyFlag;
 
     FakeEeprom() { reset(); }
 
@@ -35,9 +36,12 @@ struct FakeEeprom {
         writes = 0;
         lowestWrite = persist::EEPROM_SIZE;
         highestWrite = 0;
+        busyFlag = false;
     }
 
     uint8_t read(uint16_t address) const { return cell[address]; }
+
+    bool busy() const { return busyFlag; }
 
     void write(uint16_t address, uint8_t value) {
         cell[address] = value;
@@ -1812,6 +1816,97 @@ void test_the_loader_leaves_the_instance_and_the_base_alone() {
     TEST_ASSERT_EQUAL_UINT8(0x04, engine.instanceForChannel(4)->stepByte(0));
 }
 
+// ---------------------------------------------------------------------------
+// E3.6.4.3 : le garde de disponibilite EEPROM.
+// Storage::busy() est la seule verite materielle. Sous simavr EEPE est efface
+// tout de suite, donc le chemin rouge n'y est pas atteignable : il se prouve
+// ici, avec un FakeEeprom dont l'occupation est pilotable.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+void writeGuardRecord(FakeEeprom& ee, uint8_t index, uint8_t length) {
+    uint8_t content[persist::v3::CONTENT_BYTES];
+    memset(content, 0, sizeof(content));
+    content[0] = 0x81;
+    content[persist::v3::STEP_BYTES] = 0x23;
+    writeTemplateRecord(ee, index, content, length);
+}
+
+}  // namespace
+
+void test_a_busy_storage_loads_nothing_into_the_modulation_buffer() {
+    FakeEeprom ee;
+    writeGuardRecord(ee, 9, 12);
+
+    flexseq::ModulatedPatternState state;
+    state.length[3] = 7;
+    state.pattern[3].setStepByte(0, 0x11);
+    state.pattern[3].setRatchetByte(0, 0x40);
+
+    ee.busyFlag = true;
+    TEST_ASSERT_FALSE(
+        flexseq::loadTemplateIntoModulationBufferIfStorageIsFree(ee, state, 3, 9));
+
+    TEST_ASSERT_EQUAL_UINT8(7, state.length[3]);
+    TEST_ASSERT_EQUAL_UINT8(0x11, state.pattern[3].stepByte(0));
+    TEST_ASSERT_EQUAL_UINT8(0x40, state.pattern[3].ratchetByte(0));
+    TEST_ASSERT_EQUAL_UINT16(0, ee.writes);
+}
+
+void test_a_free_storage_loads_the_template_into_the_modulation_buffer() {
+    FakeEeprom ee;
+    writeGuardRecord(ee, 9, 12);
+
+    flexseq::ModulatedPatternState state;
+    state.length[3] = 7;
+    state.pattern[3].setStepByte(0, 0x11);
+
+    ee.busyFlag = false;
+    TEST_ASSERT_TRUE(
+        flexseq::loadTemplateIntoModulationBufferIfStorageIsFree(ee, state, 3, 9));
+
+    TEST_ASSERT_EQUAL_UINT8(12, state.length[3]);
+    TEST_ASSERT_EQUAL_UINT8(0x81, state.pattern[3].stepByte(0));
+    TEST_ASSERT_EQUAL_UINT8(3, state.pattern[3].getRatchet(0));
+    TEST_ASSERT_EQUAL_UINT16(0, ee.writes);
+}
+
+void test_a_storage_that_becomes_free_loads_on_the_next_pass() {
+    FakeEeprom ee;
+    writeGuardRecord(ee, 9, 12);
+
+    flexseq::ModulatedPatternState state;
+    state.length[3] = 7;
+    state.pattern[3].setStepByte(0, 0x11);
+
+    ee.busyFlag = true;
+    TEST_ASSERT_FALSE(
+        flexseq::loadTemplateIntoModulationBufferIfStorageIsFree(ee, state, 3, 9));
+    TEST_ASSERT_EQUAL_UINT8(7, state.length[3]);
+    TEST_ASSERT_EQUAL_UINT8(0x11, state.pattern[3].stepByte(0));
+
+    ee.busyFlag = false;
+    TEST_ASSERT_TRUE(
+        flexseq::loadTemplateIntoModulationBufferIfStorageIsFree(ee, state, 3, 9));
+    TEST_ASSERT_EQUAL_UINT8(12, state.length[3]);
+    TEST_ASSERT_EQUAL_UINT8(0x81, state.pattern[3].stepByte(0));
+}
+
+void test_a_free_storage_still_refuses_a_record_the_loader_refuses() {
+    FakeEeprom ee;
+    writeGuardRecord(ee, 10, 99);
+
+    flexseq::ModulatedPatternState state;
+    state.length[1] = 7;
+
+    ee.busyFlag = false;
+    TEST_ASSERT_FALSE(
+        flexseq::loadTemplateIntoModulationBufferIfStorageIsFree(ee, state, 1, 10));
+    TEST_ASSERT_EQUAL_UINT8(7, state.length[1]);
+    TEST_ASSERT_EQUAL_UINT8(0x81, state.pattern[1].stepByte(0));
+}
+
 int main() {
     UNITY_BEGIN();
 
@@ -1823,6 +1918,11 @@ int main() {
     RUN_TEST(test_the_loader_touches_one_channel_only);
     RUN_TEST(test_the_loader_writes_nothing_to_the_eeprom);
     RUN_TEST(test_the_loader_leaves_the_instance_and_the_base_alone);
+
+    RUN_TEST(test_a_busy_storage_loads_nothing_into_the_modulation_buffer);
+    RUN_TEST(test_a_free_storage_loads_the_template_into_the_modulation_buffer);
+    RUN_TEST(test_a_storage_that_becomes_free_loads_on_the_next_pass);
+    RUN_TEST(test_a_free_storage_still_refuses_a_record_the_loader_refuses);
     RUN_TEST(test_the_first_boot_seeds_the_templates_and_fills_the_instances_from_a1);
     RUN_TEST(test_a_nominal_boot_restores_the_instances_and_never_overwrites_them);
     RUN_TEST(test_a_valid_version_two_image_is_refused_without_migration);

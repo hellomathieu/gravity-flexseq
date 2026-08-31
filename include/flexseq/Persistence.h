@@ -472,6 +472,16 @@ bool loadTemplateIntoModulationBuffer(Storage& storage, ModulatedPatternState& s
 }
 
 template <typename Storage>
+bool loadTemplateIntoModulationBufferIfStorageIsFree(Storage& storage,
+                                                     ModulatedPatternState& state,
+                                                     uint8_t channel, uint8_t index) {
+    if (storage.busy()) {
+        return false;
+    }
+    return loadTemplateIntoModulationBuffer(storage, state, channel, index);
+}
+
+template <typename Storage>
 bool bootstrap(Storage& storage, PersistentImageV3& image,
                PersistenceScheduler& scheduler, uint32_t nowMs) {
     if (scheduler.load(storage, image)) {

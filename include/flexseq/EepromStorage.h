@@ -27,6 +27,14 @@ struct EepromStorage {
         (void)value;
 #endif
     }
+
+    bool busy() const {
+#ifdef __AVR__
+        return !eeprom_is_ready();
+#else
+        return false;
+#endif
+    }
 };
 
 }  // namespace flexseq
