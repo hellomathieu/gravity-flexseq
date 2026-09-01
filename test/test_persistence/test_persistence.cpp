@@ -2126,6 +2126,65 @@ void test_the_service_writes_no_byte_of_eeprom() {
     TEST_ASSERT_EQUAL_UINT16(before, r.ee.writes);
 }
 
+// ---------------------------------------------------------------------------
+// E3.7-C3 : CARACTERISATION de P35, l'ordre a la frontiere.
+//
+// Ce test ne dit PAS que le comportement est correct. Il dit qu'il existe.
+// Le contrat E3.4-4 demande que le contenu ET le ratchet du step viennent du
+// meme pattern. Ils n'en viennent pas sur la seule frontiere ou l'index change :
+// refreshStepTiming() tourne DANS advance(), le service tourne APRES, dans
+// loop(). Corriger cela demanderait que le moteur appelle le service, donc
+// qu'il connaisse Storage, ce que l'architecture interdit.
+//
+// La correction sera reevaluee quand STEP sera implemente : le contrat E3.4-4
+// ne se referme qu'avec lui. Ce test est une ANCRE DE REGRESSION, pas une
+// preuve de conformite.
+// ---------------------------------------------------------------------------
+
+void test_the_boundary_that_swaps_the_template_keeps_the_previous_ratchet_for_one_step() {
+    ServiceRig r;
+    uint8_t content[persist::v3::CONTENT_BYTES];
+
+    memset(content, 0, sizeof(content));
+    content[0] = 0x02;                          // step 1 actif
+    content[persist::v3::STEP_BYTES] = 0x60;    // ratchet 6 sur le step 1
+    writeTemplateRecord(r.ee, 5, content, 16);
+
+    memset(content, 0, sizeof(content));
+    content[0] = 0x02;                          // step 1 actif, aucun ratchet
+    writeTemplateRecord(r.ee, 0, content, 16);
+
+    // Le service recoit l'etat en parametre, donc les tests de l'election n'ont
+    // pas besoin de cablage. Celui-ci lit ce que le MOTEUR joue, par
+    // patternForChannel(), et il doit donc cabler le pointeur.
+    r.engine.setModulatedPatterns(&r.state);
+    r.engine.setChannelMode(0, flexseq::MODE_SEQ);
+    r.engine.setSelectedPattern(0, 5);
+    r.route(0);
+    TEST_ASSERT_EQUAL_INT8(0, r.serve());
+    TEST_ASSERT_EQUAL_UINT8(5, r.state.loaded[0]);
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_6,
+                            r.engine.patternForChannel(0)->getRatchet(1));
+
+    r.engine.start();
+    r.engine.setCvInput(flexseq::CV_SOURCE_1, -165);   // zone -5, donc index 0
+    r.engine.advance(96);
+    TEST_ASSERT_EQUAL_INT8(1, r.engine.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(0, r.engine.patternCvIndex(0));
+
+    TEST_ASSERT_EQUAL_INT8(0, r.serve());
+    TEST_ASSERT_EQUAL_UINT8(0, r.state.loaded[0]);
+
+    // Le contenu est celui du template 0, le ratchet cache est celui du 5.
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE,
+                            r.engine.patternForChannel(0)->getRatchet(1));
+    TEST_ASSERT_EQUAL_UINT8(6, r.engine.currentStepTriggers(0));
+
+    // Frontiere suivante : les deux concordent de nouveau.
+    r.engine.advance(96);
+    TEST_ASSERT_EQUAL_UINT8(1, r.engine.currentStepTriggers(0));
+}
+
 int main() {
     UNITY_BEGIN();
 
@@ -2155,6 +2214,8 @@ int main() {
     RUN_TEST(test_six_eligible_channels_are_served_in_six_calls);
     RUN_TEST(test_the_sweep_starts_at_the_cursor_and_wraps);
     RUN_TEST(test_the_service_writes_no_byte_of_eeprom);
+
+    RUN_TEST(test_the_boundary_that_swaps_the_template_keeps_the_previous_ratchet_for_one_step);
     RUN_TEST(test_the_first_boot_seeds_the_templates_and_fills_the_instances_from_a1);
     RUN_TEST(test_a_nominal_boot_restores_the_instances_and_never_overwrites_them);
     RUN_TEST(test_a_valid_version_two_image_is_refused_without_migration);
