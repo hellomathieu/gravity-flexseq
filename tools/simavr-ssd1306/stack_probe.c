@@ -83,12 +83,15 @@ static void isr_hook(struct avr_irq_t* irq, uint32_t value, void* param)
 int main(int argc, char** argv)
 {
     if (argc < 3) {
-        fprintf(stderr, "usage: %s <firmware.hex> <adresse_de__end> [duree_s]\n", argv[0]);
+        fprintf(stderr,
+                "usage: %s <firmware.hex> <adresse_de__end> [duree_s] [image.bin]\n",
+                argv[0]);
         return 2;
     }
     const char* fw = argv[1];
     const uint16_t end_addr = (uint16_t)strtol(argv[2], NULL, 0);
     const double seconds = (argc > 3) ? atof(argv[3]) : 8.0;
+    const char* ee_path = (argc > 4 && argv[4][0] != '\0') ? argv[4] : NULL;
     const int quiet = getenv("QUIET") != NULL;   /* sans injection, pour comparer */
 
     /* Sortie NON TAMPONNEE : redirigee vers un fichier, stdout l'est par blocs,
@@ -111,6 +114,38 @@ int main(int argc, char** argv)
     /* Journal de console de l'UART desarme : le firmware emet du MIDI, et ce
      * chemin de simavr lit un octet hors bornes. Voir simavr_uart_quiet.h. */
     uart_quiet(avr, '0');
+
+    /* Image de persistance PRECHARGEE, optionnelle. Sans elle le firmware seme
+     * la sienne, qui ne route aucun CV : le chemin de chargement d'un template
+     * de modulation n'est alors jamais emprunte, donc jamais mesure. Avec elle,
+     * bootstrap() accepte l'image et n'ecrit rien, donc le chemin d'ecriture
+     * EEPROM sort de la mesure. Les deux courses sont complementaires, aucune
+     * ne remplace l'autre. */
+    int preloaded = 0;
+    if (ee_path != NULL) {
+        uint8_t preload[IMAGE_SIZE];
+        FILE* fh = fopen(ee_path, "rb");
+        if (!fh) {
+            fprintf(stderr, "image EEPROM illisible : %s\n", ee_path);
+            return 2;
+        }
+        size_t n = fread(preload, 1, sizeof(preload), fh);
+        fclose(fh);
+        if (n != sizeof(preload)) {
+            fprintf(stderr, "image EEPROM de %zu octets, %zu attendus\n",
+                    n, sizeof(preload));
+            return 2;
+        }
+        avr_eeprom_desc_t pre = { .ee = preload, .offset = BASE_ADDRESS,
+                                  .size = (uint32_t)n };
+        if (avr_ioctl(avr, AVR_IOCTL_EEPROM_SET, &pre) != 0) {
+            fprintf(stderr, "prechargement EEPROM refuse par simavr\n");
+            return 2;
+        }
+        preloaded = 1;
+        printf("EEPROM prechargee : %zu octets a %u, version %u\n",
+               n, (unsigned)BASE_ADDRESS, preload[VERSION_OFFSET]);
+    }
 
     const uint16_t ramend = (uint16_t)avr->ramend;
     if (end_addr >= ramend) {
@@ -208,7 +243,10 @@ int main(int argc, char** argv)
     avr_eeprom_desc_t ee = { .ee = image, .offset = BASE_ADDRESS, .size = sizeof(image) };
     int ee_ok = avr_ioctl(avr, AVR_IOCTL_EEPROM_GET, &ee) == 0;
     printf("\n=== PERSISTANCE ===\n");
-    if (ee_ok) {
+    if (preloaded) {
+        printf("  NON EVALUABLE : image prechargee, donc l'octet de version ne "
+               "prouve aucune ecriture du firmware\n");
+    } else if (ee_ok) {
         int written = 0;
         for (size_t i = 0; i < sizeof(image); ++i)
             if (image[i] != 0xFF) ++written;
@@ -217,6 +255,22 @@ int main(int argc, char** argv)
                written, sizeof(image));
     } else {
         printf("  EEPROM simulee illisible\n");
+    }
+
+    /* Temoin du chemin de chargement. Un pic identique ne dit PAS que la chaine
+     * a ete empruntee : sans ce releve, une image refusee rendrait le meme
+     * chiffre et le vert serait faux. On lit donc l'etat de modulation dans la
+     * RAM simulee, a l'adresse que le shell a resolue sur l'ELF. */
+    const char* loaded_env = getenv("LOADED_ADDR");
+    if (loaded_env != NULL && loaded_env[0] != '\0') {
+        const uint16_t addr = (uint16_t)strtol(loaded_env, NULL, 0);
+        /* Format SANS indentation de deux espaces et sans nombre isole en fin de
+         * ligne : le lecteur du rapport reconnait les vecteurs d'ISR a cette
+         * forme-la, et un releve indente y serait compte comme un vecteur muet. */
+        printf("\n=== MODULATION ===\nloaded[]=");
+        for (int i = 0; i < 6; ++i)
+            printf("%s%u", i ? "," : "", avr->data[addr + i]);
+        printf("\n");
     }
 
     printf("\n=== PILE ===\n");

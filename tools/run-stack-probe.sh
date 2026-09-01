@@ -90,6 +90,17 @@ END_HEX="$("$AVR_NM" --radix=x "$ELF" | grep -E " _end$" | head -1 | cut -d' ' -
 END="$(printf '0x%x' $(( 0x$END_HEX - 0x800000 )))"
 printf '  %s✅%s symbole                %s_end %s%s\n' "$C_OK" "$C_0" "$C_DIM" "$END" "$C_0"
 
+# Temoin du chemin de chargement, utile seulement avec EE_IMAGE. loaded[] vit
+# dans ModulatedPatternState, apres les six Pattern et les six longueurs.
+LOADED_ADDR=""
+if [ -n "${EE_IMAGE:-}" ]; then
+  STATE_HEX="$("$AVR_NM" --radix=x --demangle "$ELF" \
+    | grep -E "modulatedPatterns$" | head -1 | cut -d' ' -f1)"
+  if [ -n "$STATE_HEX" ]; then
+    LOADED_ADDR="$(printf '0x%x' $(( 0x$STATE_HEX - 0x800000 + 6 * 23 + 6 )))"
+  fi
+fi
+
 . "$ROOT/tools/active-format.sh"
 FMT_WORK="$(dirname "$BIN")"
 flexseq_resolve_active_format "$ROOT" "$ELF" "$FMT_WORK" || exit $?
@@ -111,12 +122,14 @@ else
 fi
 
 progress "simulation ($DURATION s)"
-"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$END" "$DURATION" > "$LOG" 2>/dev/null \
-  || die "la sonde a echoue"
+LOADED_ADDR="$LOADED_ADDR" \
+  "$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$END" "$DURATION" "${EE_IMAGE:-}" \
+  > "$LOG" 2>/dev/null || die "la sonde a echoue"
 printf '  %s✅%s simulation             %s%s s%s%s\n' "$C_OK" "$C_0" "$C_DIM" "$DURATION" \
   "${QUIET:+, sans injection}" "$C_0"
 
 RAM_RESERVE="$RAM_RESERVE" QUIET="${QUIET:-}" FORMAT_VERSION="$FORMAT_VERSION" \
+  EE_IMAGE="${EE_IMAGE:-}" LOADED="$LOADED_ADDR" \
   IMAGE_SIZE="$IMAGE_SIZE" SCAN_SIZE="$SCAN_SIZE" \
   VERSION_ADDRESS="$((BASE_ADDRESS + VERSION_OFFSET))" python3 - "$LOG" <<'PY'
 import os, re, sys
@@ -161,15 +174,38 @@ expected_address = os.environ["VERSION_ADDRESS"]
 expected_size = os.environ["IMAGE_SIZE"]
 scan_size = os.environ["SCAN_SIZE"]
 read_back = written is not None and written[2] == expected_size
+preloaded = bool(os.environ.get("EE_IMAGE"))
 persisted = (version is not None and version[1] == expected_address
              and version[2] == expected_version and read_back)
-print(f"  {mark(persisted)} Persistance         "
-      f"octet de version {version[2] if version else 'ABSENT'} "
-      f"a {version[1] if version else '?'}, attendu {expected_version} a {expected_address}"
-      f"{DIM}  (constate, pas suppose){Z}")
-print(f"  {DIM}   octets non vierges  {written[1] if written else '?'} sur "
-      f"{written[2] if written else '?'} relus — mesure, sans attente ;"
-      f" {scan_size} o sont balayes{Z}")
+loaded = re.search(r"loaded\[\]=([\d,]+)", txt)
+if preloaded:
+    if os.environ.get("LOADED") and loaded is None:
+        print(f"  {mark(False)} Chargement          TEMOIN ABSENT — le releve de loaded[] n'a pas ete emis")
+        sys.exit(1)
+    if loaded is not None:
+        values = [int(v) for v in loaded[1].split(',')]
+        served = [v for v in values if v != 255]
+        print(f"  {mark(bool(served))} Chargement          "
+              f"loaded[] = {values}"
+              f"{DIM}  — au moins un canal doit porter un template{Z}")
+        if not served:
+            print(f"  {ERR}   Aucun canal n'a charge : la chaine mesuree n'inclut PAS "
+                  f"le chargement.{Z}")
+            sys.exit(1)
+    # Une image prechargee est acceptee par bootstrap(), qui n'ecrit alors rien.
+    # L'octet de version relu serait le NOTRE : le critere passerait pour la
+    # mauvaise raison. Il devient donc non evaluable, et la course ne mesure que
+    # le chemin de chargement.
+    print(f"  {DIM}·{Z} Persistance         "
+          f"NON EVALUABLE — image prechargee, aucune ecriture du firmware attendue")
+else:
+    print(f"  {mark(persisted)} Persistance         "
+          f"octet de version {version[2] if version else 'ABSENT'} "
+          f"a {version[1] if version else '?'}, attendu {expected_version} a {expected_address}"
+          f"{DIM}  (constate, pas suppose){Z}")
+    print(f"  {DIM}   octets non vierges  {written[1] if written else '?'} sur "
+          f"{written[2] if written else '?'} relus — mesure, sans attente ;"
+          f" {scan_size} o sont balayes{Z}")
 print(f"{B}==================================================================={Z}")
 
 if not fits_ram:
@@ -189,5 +225,6 @@ else:
     print(f"{DIM}  EEPROM de la persistance, constatee ci-dessus et non supposee. Restent{Z}")
     print(f"{DIM}  hors mesure les chemins que le firmware n'emprunte pas encore.{Z}")
 
-sys.exit(0 if (fits_reserve and fits_ram and persisted and (quiet or all_entered)) else 1)
+sys.exit(0 if (fits_reserve and fits_ram and (persisted or preloaded)
+               and (quiet or all_entered)) else 1)
 PY
