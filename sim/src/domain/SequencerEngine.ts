@@ -478,10 +478,14 @@ export class SequencerEngine {
     return patternIndexFor(c.selectedPattern, this.cvZoneSum(channel, CvDestination.PATTERN));
   }
 
-  /** Consomme les valeurs CV poussees, a la frontiere de step et la seule. */
+  /** Consomme les valeurs CV poussees, a la frontiere de step, en MODE_SEQ seul. */
   private applyCvAtStepBoundary(channel: number): void {
     const c = this.channel(channel);
     if (!c) return;
+    if (c.mode !== ChannelMode.SEQ) {
+      this.refreshEffectiveLength(channel);
+      return;
+    }
     for (let source = 0; source < CV_SOURCE_COUNT; ++source) {
       const target = c.cvTarget[source];
       if (target !== CvDestination.LENGTH && target !== CvDestination.PATTERN) continue;
@@ -554,8 +558,12 @@ export class SequencerEngine {
     if (!Number.isInteger(mode) || mode < 0 || mode >= CHANNEL_MODE_COUNT) return false;
     if (c.mode === mode) return true;
     c.mode = mode;
+    for (let source = 0; source < CV_SOURCE_COUNT; ++source) {
+      c.cvZone[source] = 0;
+    }
     this.refreshStepTiming(channel);
     if (c.acc >= c.stepTicks) c.acc %= c.stepTicks;
+    this.refreshEffectiveLength(channel);
     return true;
   }
 

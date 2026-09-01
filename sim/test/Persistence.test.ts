@@ -461,6 +461,7 @@ describe("Persistence — round trip", () => {
   it("ne restaure jamais une zone d'hysteresis", () => {
     const eeprom = new FakeEeprom();
     const saved = rig();
+    expect(saved.engine.setChannelMode(0, ChannelMode.SEQ)).toBe(true);
     expect(saved.engine.setBaseLength(0, 18)).toBe(true);
     expect(saved.engine.setCvDestination(0, CV_SOURCE_1, CvDestination.LENGTH)).toBe(true);
     saved.engine.setCvInput(CV_SOURCE_1, 330);
@@ -1194,6 +1195,7 @@ describe("saveTemplate — instance vers template EEPROM (ADR 0009)", () => {
   it("ecrit la base et non la longueur modulee par le CV", () => {
     const ee = new FakeEeprom();
     const r = rigV3();
+    expect(r.engine.setChannelMode(1, ChannelMode.SEQ)).toBe(true);
     expect(r.engine.setBaseLength(1, 18)).toBe(true);
     expect(r.engine.setCvDestination(1, CV_SOURCE_1, CvDestination.LENGTH)).toBe(true);
     r.engine.setCvInput(CV_SOURCE_1, 330);

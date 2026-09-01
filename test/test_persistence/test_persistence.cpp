@@ -518,6 +518,7 @@ void test_a_round_trip_restores_the_cv_destinations() {
 void test_a_round_trip_never_restores_a_hysteresis_zone() {
     eeprom.reset();
     Rig saved;
+    TEST_ASSERT_TRUE(saved.engine.setChannelMode(0, flexseq::MODE_SEQ));
     TEST_ASSERT_TRUE(saved.engine.setBaseLength(0, 18));
     TEST_ASSERT_TRUE(saved.engine.setCvDestination(0, flexseq::CV_SOURCE_1,
                                                    flexseq::CV_DEST_LENGTH));
@@ -1195,6 +1196,7 @@ void test_save_template_writes_the_instance_content_into_the_record() {
 void test_save_template_writes_the_base_not_the_modulated_length() {
     FakeEeprom ee;
     RigV3 r;
+    TEST_ASSERT_TRUE(r.engine.setChannelMode(1, flexseq::MODE_SEQ));
     TEST_ASSERT_TRUE(r.engine.setBaseLength(1, 18));
     TEST_ASSERT_TRUE(r.engine.setCvDestination(1, flexseq::CV_SOURCE_1,
                                                flexseq::CV_DEST_LENGTH));

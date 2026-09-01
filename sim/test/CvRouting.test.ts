@@ -12,6 +12,7 @@ const STEP = 96; // DEFAULT_SUBDIV = /1
 
 function routed(base: number, source = CV_SOURCE_1): SequencerEngine {
   const e = new SequencerEngine();
+  e.setChannelMode(0, ChannelMode.SEQ);
   e.setBaseLength(0, base);
   e.setCvDestination(0, source, CvDestination.LENGTH);
   return e;
@@ -90,6 +91,8 @@ describe("Length CV — application", () => {
 
   it("garde un etat d'hysteresis par channel", () => {
     const e = new SequencerEngine();
+    e.setChannelMode(0, ChannelMode.SEQ);
+    e.setChannelMode(1, ChannelMode.SEQ);
     e.setBaseLength(0, 18);
     e.setBaseLength(1, 18);
     e.setCvDestination(0, CV_SOURCE_1, CvDestination.LENGTH);
@@ -112,6 +115,8 @@ describe("Length CV — application", () => {
 describe("Length CV — CV1 et CV2", () => {
   it("laisse chaque source piloter seule", () => {
     const e = new SequencerEngine();
+    e.setChannelMode(0, ChannelMode.SEQ);
+    e.setChannelMode(1, ChannelMode.SEQ);
     e.setBaseLength(0, 18);
     e.setBaseLength(1, 18);
     e.setCvDestination(0, CV_SOURCE_1, CvDestination.LENGTH);
@@ -159,6 +164,7 @@ describe("Length CV — CV1 et CV2", () => {
 
   it("laisse un channel non route sur sa base", () => {
     const e = new SequencerEngine();
+    e.setChannelMode(0, ChannelMode.SEQ);
     e.setBaseLength(0, 18);
     e.setCvDestination(0, CV_SOURCE_1, CvDestination.PATTERN);
     e.setCvDestination(0, CV_SOURCE_2, CvDestination.STEP);
@@ -251,6 +257,7 @@ describe("Length CV — invariants", () => {
 describe("PATTERN CV — l'index effectif", () => {
   function routedPattern(selected: number, source = CV_SOURCE_1): SequencerEngine {
     const e = new SequencerEngine();
+    e.setChannelMode(0, ChannelMode.SEQ);
     e.setSelectedPattern(0, selected);
     e.setCvDestination(0, source, CvDestination.PATTERN);
     return e;
@@ -299,6 +306,7 @@ describe("PATTERN CV — l'index effectif", () => {
 
   it("ignore une source routee vers la longueur", () => {
     const e = new SequencerEngine();
+    e.setChannelMode(0, ChannelMode.SEQ);
     e.setSelectedPattern(0, 3);
     e.setBaseLength(0, 18);
     e.setCvDestination(0, CV_SOURCE_1, CvDestination.LENGTH);
@@ -358,27 +366,62 @@ describe("Changement de mode — ce qu'il laisse intact", () => {
     }
   });
 
-  // CARACTERISATION DE L'ETAT ACTUEL, pas une propriete normative. La regle P12
-  // de la conception E3.1 demande l'inverse. Ce test sera REMPLACE par le lot
-  // qui l'implemente, d'ou le 'actuellement' de son nom.
-  it("garde actuellement la zone CV", () => {
+});
+
+describe("Gating par mode (E3.7-F2)", () => {
+  it("laisse la base a un routage LENGTH hors SEQ", () => {
+    for (const outside of [ChannelMode.CLOCK, ChannelMode.RANDOM]) {
+      const e = new SequencerEngine();
+      e.setBaseLength(0, 18);
+      e.setChannelMode(0, outside);
+      e.setCvDestination(0, CV_SOURCE_1, CvDestination.LENGTH);
+      e.setCvInput(CV_SOURCE_1, 330); // zone +10 si elle etait lue
+      e.start();
+      e.advance(STEP * 2);
+      expect(e.lengthCvOffset(0)).toBe(0);
+      expect(e.getEffectiveLength(0)).toBe(18);
+    }
+  });
+
+  it("remet la zone CV a zero au changement de mode", () => {
     const e = new SequencerEngine();
     e.setBaseLength(0, 18);
     e.setCvDestination(0, CV_SOURCE_1, CvDestination.LENGTH);
     e.setChannelMode(0, ChannelMode.SEQ);
-    e.setCvInput(CV_SOURCE_1, 330);
+    e.setCvInput(CV_SOURCE_1, 330); // zone +10
     e.start();
     e.advance(STEP);
     expect(e.lengthCvOffset(0)).toBe(10);
     expect(e.getEffectiveLength(0)).toBe(28);
 
     expect(e.setChannelMode(0, ChannelMode.CLOCK)).toBe(true);
-    expect(e.lengthCvOffset(0)).toBe(10);
-    expect(e.getEffectiveLength(0)).toBe(28);
+    expect(e.getEffectiveLength(0)).toBe(18); // retour immediat a la base
 
     expect(e.setChannelMode(0, ChannelMode.SEQ)).toBe(true);
+    expect(e.lengthCvOffset(0)).toBe(0); // 10 serait la modulation heritee
+    expect(e.getEffectiveLength(0)).toBe(18);
+  });
+
+  it("reapplique le CV a la premiere frontiere apres le retour en SEQ", () => {
+    const e = new SequencerEngine();
+    e.setBaseLength(0, 18);
+    e.setCvDestination(0, CV_SOURCE_1, CvDestination.LENGTH);
+    e.setChannelMode(0, ChannelMode.SEQ);
+    e.start();
+    e.advance(STEP);
+    expect(e.getEffectiveLength(0)).toBe(18);
+
+    expect(e.setChannelMode(0, ChannelMode.CLOCK)).toBe(true);
+    e.setCvInput(CV_SOURCE_1, 330); // zone +10 une fois lue en SEQ
+    e.advance(STEP * 2);
+    expect(e.lengthCvOffset(0)).toBe(0);
+    expect(e.getEffectiveLength(0)).toBe(18);
+
+    expect(e.setChannelMode(0, ChannelMode.SEQ)).toBe(true);
+    expect(e.getEffectiveLength(0)).toBe(18); // avant la frontiere : la base
+    e.advance(STEP);
     expect(e.lengthCvOffset(0)).toBe(10);
-    expect(e.getEffectiveLength(0)).toBe(28);
+    expect(e.getEffectiveLength(0)).toBe(28); // la frontiere reapplique
   });
 });
 
@@ -386,6 +429,7 @@ describe("Changement de mode — ce qu'il laisse intact", () => {
 describe("Changement de base — ce qu'il laisse intact", () => {
   it("conserve l'offset de longueur", () => {
     const e = new SequencerEngine();
+    e.setChannelMode(0, ChannelMode.SEQ);
     e.setBaseLength(0, 18);
     e.setCvDestination(0, CV_SOURCE_1, CvDestination.LENGTH);
     e.setCvInput(CV_SOURCE_1, 330);
@@ -405,6 +449,7 @@ describe("Changement de base — ce qu'il laisse intact", () => {
   // que la zone n'a pas bouge. Les bases 3 et 4 gardent de la marge sous 15.
   it("fait suivre l'index derive du pattern sans perdre l'offset", () => {
     const e = new SequencerEngine();
+    e.setChannelMode(0, ChannelMode.SEQ);
     e.setSelectedPattern(0, 3);
     e.setCvDestination(0, CV_SOURCE_1, CvDestination.PATTERN);
     e.setCvInput(CV_SOURCE_1, 330);

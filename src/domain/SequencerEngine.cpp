@@ -329,6 +329,10 @@ int8_t SequencerEngine::patternCvIndex(uint8_t channel) const {
 
 void SequencerEngine::applyCvAtStepBoundary(uint8_t channel) {
     ChannelState& c = channels_[channel];
+    if (c.mode != MODE_SEQ) {
+        refreshEffectiveLength(channel);
+        return;
+    }
     for (uint8_t source = 0; source < CV_SOURCE_COUNT; ++source) {
         const uint8_t target = c.cvTarget[source];
         if (target != CV_DEST_LENGTH && target != CV_DEST_PATTERN) {
@@ -443,10 +447,14 @@ bool SequencerEngine::setChannelMode(uint8_t channel, ChannelMode mode) {
         return true;
     }
     c.mode = static_cast<uint8_t>(mode);
+    for (uint8_t source = 0; source < CV_SOURCE_COUNT; ++source) {
+        c.cvZone[source] = 0;
+    }
     refreshStepTiming(channel);
     if (c.acc >= c.stepTicks) {
         c.acc = static_cast<uint16_t>(c.acc % c.stepTicks);
     }
+    refreshEffectiveLength(channel);
     return true;
 }
 

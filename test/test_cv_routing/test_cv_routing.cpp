@@ -72,6 +72,7 @@ void test_an_out_of_range_source_pushes_nothing() {
 
 void test_a_pushed_value_alone_changes_nothing() {
     SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
     e.setBaseLength(0, 18);
     routeLength(e, 0, CV_SOURCE_1);
     e.setCvInput(CV_SOURCE_1, 330);
@@ -80,6 +81,7 @@ void test_a_pushed_value_alone_changes_nothing() {
 
 void test_the_stopped_transport_never_applies_the_cv() {
     SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
     e.setBaseLength(0, 18);
     routeLength(e, 0, CV_SOURCE_1);
     e.setCvInput(CV_SOURCE_1, 330);
@@ -89,6 +91,7 @@ void test_the_stopped_transport_never_applies_the_cv() {
 
 void test_the_step_boundary_applies_the_cv() {
     SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
     e.setBaseLength(0, 18);
     routeLength(e, 0, CV_SOURCE_1);
     e.setCvInput(CV_SOURCE_1, 330); // zone +10
@@ -99,6 +102,7 @@ void test_the_step_boundary_applies_the_cv() {
 
 void test_each_boundary_re_reads_the_pushed_value() {
     SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
     e.setBaseLength(0, 18);
     routeLength(e, 0, CV_SOURCE_1);
     e.start();
@@ -115,6 +119,8 @@ void test_each_boundary_re_reads_the_pushed_value() {
 
 void test_the_hysteresis_state_is_per_channel() {
     SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
+    e.setChannelMode(1, MODE_SEQ);
     e.setBaseLength(0, 18);
     e.setBaseLength(1, 18);
     routeLength(e, 0, CV_SOURCE_1);
@@ -139,6 +145,8 @@ void test_the_hysteresis_state_is_per_channel() {
 
 void test_either_source_alone_drives_the_length() {
     SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
+    e.setChannelMode(1, MODE_SEQ);
     e.setBaseLength(0, 18);
     e.setBaseLength(1, 18);
     routeLength(e, 0, CV_SOURCE_1);
@@ -153,6 +161,7 @@ void test_either_source_alone_drives_the_length() {
 
 void test_two_sources_on_one_length_add_up() {
     SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
     e.setBaseLength(0, 10);
     routeLength(e, 0, CV_SOURCE_1);
     routeLength(e, 0, CV_SOURCE_2);
@@ -166,6 +175,7 @@ void test_two_sources_on_one_length_add_up() {
 
 void test_the_sum_is_clamped_once_and_not_twice() {
     SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
     e.setBaseLength(0, 36);
     routeLength(e, 0, CV_SOURCE_1);
     routeLength(e, 0, CV_SOURCE_2);
@@ -180,6 +190,7 @@ void test_the_sum_is_clamped_once_and_not_twice() {
 
 void test_a_source_routed_elsewhere_does_not_contribute() {
     SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
     e.setBaseLength(0, 18);
     routeLength(e, 0, CV_SOURCE_1);
     e.setCvDestination(0, CV_SOURCE_2, CV_DEST_PATTERN);
@@ -193,6 +204,7 @@ void test_a_source_routed_elsewhere_does_not_contribute() {
 
 void test_an_unrouted_channel_keeps_its_base_length() {
     SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
     e.setBaseLength(0, 18);
     e.setCvDestination(0, CV_SOURCE_1, CV_DEST_PATTERN);
     e.setCvDestination(0, CV_SOURCE_2, CV_DEST_STEP);
@@ -210,6 +222,7 @@ void test_an_unrouted_channel_keeps_its_base_length() {
 
 void test_removing_the_routing_returns_to_the_base_at_the_next_boundary() {
     SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
     e.setBaseLength(0, 18);
     routeLength(e, 0, CV_SOURCE_1);
     e.setCvInput(CV_SOURCE_1, 330);
@@ -225,6 +238,7 @@ void test_removing_the_routing_returns_to_the_base_at_the_next_boundary() {
 
 void test_changing_the_destination_clears_the_hysteresis_of_that_source() {
     SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
     e.setBaseLength(0, 18);
     routeLength(e, 0, CV_SOURCE_1);
     e.start();
@@ -244,6 +258,7 @@ void test_changing_the_destination_clears_the_hysteresis_of_that_source() {
 
 void test_stop_and_play_keep_the_zones() {
     SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
     e.setBaseLength(0, 18);
     routeLength(e, 0, CV_SOURCE_1);
     e.setCvInput(CV_SOURCE_1, 330);
@@ -262,6 +277,7 @@ void test_stop_and_play_keep_the_zones() {
 
 void test_a_reset_never_folds_the_playhead() {
     SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
     e.setBaseLength(0, 30);
     routeLength(e, 0, CV_SOURCE_1);
     e.setCvInput(CV_SOURCE_1, -512); // -15
@@ -279,6 +295,7 @@ void test_a_reset_never_folds_the_playhead() {
 
 void test_reset_preserves_the_cv_state() {
     SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
     e.setBaseLength(0, 18);
     routeLength(e, 0, CV_SOURCE_1);
     e.setCvInput(CV_SOURCE_1, 330);
@@ -293,6 +310,7 @@ void test_reset_preserves_the_cv_state() {
 
 void test_the_playhead_folds_at_most_once_per_boundary() {
     SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
     e.setBaseLength(0, 30);
     routeLength(e, 0, CV_SOURCE_1);
     e.start();
@@ -325,6 +343,7 @@ void test_a_new_engine_reports_the_selected_pattern_as_the_index() {
 
 void test_a_pushed_value_alone_does_not_move_the_index() {
     SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
     e.setSelectedPattern(0, 3);
     routePattern(e, 0, CV_SOURCE_1);
     e.setCvInput(CV_SOURCE_1, 330);
@@ -333,6 +352,7 @@ void test_a_pushed_value_alone_does_not_move_the_index() {
 
 void test_the_step_boundary_moves_the_pattern_index() {
     SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
     e.setSelectedPattern(0, 3);
     routePattern(e, 0, CV_SOURCE_1);
     e.setCvInput(CV_SOURCE_1, 330); // zone +10
@@ -343,6 +363,7 @@ void test_the_step_boundary_moves_the_pattern_index() {
 
 void test_the_pattern_index_never_moves_the_selected_pattern() {
     SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
     e.setSelectedPattern(0, 10);
     routePattern(e, 0, CV_SOURCE_1);
     e.setCvInput(CV_SOURCE_1, 330); // zone +10, donc 20 ecrete a 15
@@ -354,6 +375,7 @@ void test_the_pattern_index_never_moves_the_selected_pattern() {
 
 void test_two_sources_on_the_pattern_are_clamped_once_and_not_twice() {
     SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
     e.setSelectedPattern(0, 15);
     routePattern(e, 0, CV_SOURCE_1);
     routePattern(e, 0, CV_SOURCE_2);
@@ -367,6 +389,7 @@ void test_two_sources_on_the_pattern_are_clamped_once_and_not_twice() {
 
 void test_a_source_routed_to_the_length_does_not_move_the_index() {
     SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
     e.setSelectedPattern(0, 3);
     e.setBaseLength(0, 18);
     routeLength(e, 0, CV_SOURCE_1);
@@ -379,6 +402,7 @@ void test_a_source_routed_to_the_length_does_not_move_the_index() {
 
 void test_a_source_routed_to_the_pattern_does_not_move_the_length() {
     SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
     e.setSelectedPattern(0, 3);
     e.setBaseLength(0, 18);
     routePattern(e, 0, CV_SOURCE_1);
@@ -392,6 +416,7 @@ void test_a_source_routed_to_the_pattern_does_not_move_the_length() {
 
 void test_removing_the_pattern_routing_returns_to_the_base_index() {
     SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
     e.setSelectedPattern(0, 3);
     routePattern(e, 0, CV_SOURCE_1);
     e.setCvInput(CV_SOURCE_1, 330);
@@ -436,11 +461,26 @@ void test_the_bases_survive_a_change_of_mode() {
     }
 }
 
-// CARACTERISATION DE L'ETAT ACTUEL, pas une propriete normative. La regle P12
-// de la conception E3.1 demande l'inverse : un changement de mode remettra la
-// zone a 0. Ce test devra donc etre REMPLACE par le lot qui l'implemente, pas
-// complete. Son nom porte 'currently' pour cette raison.
-void test_a_change_of_mode_currently_keeps_the_cv_zone() {
+/*
+ * Famille 11 — le gating par mode (E3.7-F2)
+ */
+
+void test_a_length_routing_outside_seq_keeps_the_base_length() {
+    static const flexseq::ChannelMode OUTSIDE[] = {MODE_CLOCK, MODE_RANDOM};
+    for (uint8_t m = 0; m < 2; ++m) {
+        SequencerEngine e;
+        e.setBaseLength(0, 18);
+        e.setChannelMode(0, OUTSIDE[m]);
+        routeLength(e, 0, CV_SOURCE_1);
+        e.setCvInput(CV_SOURCE_1, 330); // zone +10 si elle etait lue
+        e.start();
+        e.advance(STEP * 2);
+        TEST_ASSERT_EQUAL_INT8(0, e.lengthCvOffset(0));
+        TEST_ASSERT_EQUAL_UINT8(18, e.getEffectiveLength(0));
+    }
+}
+
+void test_a_change_of_mode_resets_the_cv_zone() {
     SequencerEngine e;
     e.setBaseLength(0, 18);
     routeLength(e, 0, CV_SOURCE_1);
@@ -452,12 +492,37 @@ void test_a_change_of_mode_currently_keeps_the_cv_zone() {
     TEST_ASSERT_EQUAL_UINT8(28, e.getEffectiveLength(0));
 
     TEST_ASSERT_TRUE(e.setChannelMode(0, MODE_CLOCK));
-    TEST_ASSERT_EQUAL_INT8(10, e.lengthCvOffset(0));
-    TEST_ASSERT_EQUAL_UINT8(28, e.getEffectiveLength(0));
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(18, e.getEffectiveLength(0),
+        "le retour a la base est immediat, jamais differe a une frontiere");
 
     TEST_ASSERT_TRUE(e.setChannelMode(0, MODE_SEQ));
+    TEST_ASSERT_EQUAL_INT8_MESSAGE(0, e.lengthCvOffset(0),
+        "la zone fut remise a zero : 10 serait la modulation heritee");
+    TEST_ASSERT_EQUAL_UINT8(18, e.getEffectiveLength(0));
+}
+
+void test_the_return_to_seq_applies_the_cv_at_the_first_boundary_only() {
+    SequencerEngine e;
+    e.setBaseLength(0, 18);
+    routeLength(e, 0, CV_SOURCE_1);
+    e.setChannelMode(0, MODE_SEQ);
+    e.start();
+    e.advance(STEP);
+    TEST_ASSERT_EQUAL_UINT8(18, e.getEffectiveLength(0));
+
+    TEST_ASSERT_TRUE(e.setChannelMode(0, MODE_CLOCK));
+    e.setCvInput(CV_SOURCE_1, 330); // zone +10 une fois lue en SEQ
+    e.advance(STEP * 2);
+    TEST_ASSERT_EQUAL_INT8(0, e.lengthCvOffset(0));
+    TEST_ASSERT_EQUAL_UINT8(18, e.getEffectiveLength(0));
+
+    TEST_ASSERT_TRUE(e.setChannelMode(0, MODE_SEQ));
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(18, e.getEffectiveLength(0),
+        "avant la premiere frontiere le canal joue sa base");
+    e.advance(STEP);
     TEST_ASSERT_EQUAL_INT8(10, e.lengthCvOffset(0));
-    TEST_ASSERT_EQUAL_UINT8(28, e.getEffectiveLength(0));
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(28, e.getEffectiveLength(0),
+        "la premiere frontiere reapplique le CV courant");
 }
 
 /*
@@ -466,6 +531,7 @@ void test_a_change_of_mode_currently_keeps_the_cv_zone() {
 
 void test_the_length_offset_survives_a_change_of_base() {
     SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
     e.setBaseLength(0, 18);
     routeLength(e, 0, CV_SOURCE_1);
     e.setCvInput(CV_SOURCE_1, 330); // zone +10
@@ -487,6 +553,7 @@ void test_the_length_offset_survives_a_change_of_base() {
 // offset conserve et pour un offset plus grand.
 void test_the_derived_pattern_index_follows_a_change_of_base_without_losing_the_offset() {
     SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
     e.setSelectedPattern(0, 3);
     routePattern(e, 0, CV_SOURCE_1);
     e.setCvInput(CV_SOURCE_1, 330); // zone +10
@@ -533,7 +600,10 @@ int main() {
 
     RUN_TEST(test_the_routing_survives_a_change_of_mode);
     RUN_TEST(test_the_bases_survive_a_change_of_mode);
-    RUN_TEST(test_a_change_of_mode_currently_keeps_the_cv_zone);
+
+    RUN_TEST(test_a_length_routing_outside_seq_keeps_the_base_length);
+    RUN_TEST(test_a_change_of_mode_resets_the_cv_zone);
+    RUN_TEST(test_the_return_to_seq_applies_the_cv_at_the_first_boundary_only);
 
     RUN_TEST(test_the_length_offset_survives_a_change_of_base);
     RUN_TEST(test_the_derived_pattern_index_follows_a_change_of_base_without_losing_the_offset);
