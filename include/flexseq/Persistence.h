@@ -483,6 +483,47 @@ bool loadTemplateIntoModulationBufferIfStorageIsFree(Storage& storage,
     return loadTemplateIntoModulationBuffer(storage, state, channel, index);
 }
 
+inline bool isRoutedToPattern(const SequencerEngine& engine, uint8_t channel) {
+    for (uint8_t source = 0; source < CV_SOURCE_COUNT; ++source) {
+        if (engine.getCvDestination(channel, source) == CV_DEST_PATTERN) {
+            return true;
+        }
+    }
+    return false;
+}
+
+template <typename Storage>
+int8_t serviceOneModulationTemplateLoad(Storage& storage, const SequencerEngine& engine,
+                                        ModulatedPatternState& state) {
+    for (uint8_t channel = 0; channel < SequencerEngine::CHANNEL_COUNT; ++channel) {
+        if (!isRoutedToPattern(engine, channel)) {
+            state.loaded[channel] = ModulatedPatternState::NOT_MODULATED;
+        }
+    }
+    if (storage.busy()) {
+        return -1;
+    }
+    for (uint8_t step = 0; step < SequencerEngine::CHANNEL_COUNT; ++step) {
+        const uint8_t channel = static_cast<uint8_t>(
+            (state.cursor + step) % SequencerEngine::CHANNEL_COUNT);
+        if (!isRoutedToPattern(engine, channel)) {
+            continue;
+        }
+        const uint8_t wanted = static_cast<uint8_t>(engine.patternCvIndex(channel));
+        if (wanted == state.loaded[channel]) {
+            continue;
+        }
+        state.cursor =
+            static_cast<uint8_t>((channel + 1) % SequencerEngine::CHANNEL_COUNT);
+        if (loadTemplateIntoModulationBufferIfStorageIsFree(storage, state, channel,
+                                                            wanted)) {
+            state.loaded[channel] = wanted;
+        }
+        return static_cast<int8_t>(channel);
+    }
+    return -1;
+}
+
 template <typename Storage>
 bool bootstrap(Storage& storage, PersistentImageV3& image,
                PersistenceScheduler& scheduler, uint32_t nowMs) {

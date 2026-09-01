@@ -1942,6 +1942,190 @@ void test_a_free_storage_still_refuses_a_record_the_loader_refuses() {
     TEST_ASSERT_EQUAL_UINT8(0, state.pattern[1].stepByte(0));
 }
 
+
+// ---------------------------------------------------------------------------
+// E3.6.4.4 etape 4 : l'election et le tourniquet.
+// Un canal par appel. Le curseur avance des l'election, jamais au succes.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+struct ServiceRig {
+    FakeEeprom ee;
+    SequencerEngine engine;
+    flexseq::ModulatedPatternState state;
+
+    ServiceRig() {
+        uint8_t content[persist::v3::CONTENT_BYTES];
+        for (uint8_t index = 0; index < persist::v3::TEMPLATE_COUNT; ++index) {
+            memset(content, 0, sizeof(content));
+            content[0] = static_cast<uint8_t>(index + 1);
+            writeTemplateRecord(ee, index, content, 16);
+        }
+    }
+
+    void route(uint8_t channel) {
+        TEST_ASSERT_TRUE(engine.setCvDestination(channel, flexseq::CV_SOURCE_1,
+                                                 flexseq::CV_DEST_PATTERN));
+    }
+
+    void unroute(uint8_t channel) {
+        TEST_ASSERT_TRUE(engine.setCvDestination(channel, flexseq::CV_SOURCE_1,
+                                                 flexseq::CV_DEST_NONE));
+    }
+
+    int8_t serve() {
+        return flexseq::serviceOneModulationTemplateLoad(ee, engine, state);
+    }
+};
+
+const uint8_t NONE = flexseq::ModulatedPatternState::NOT_MODULATED;
+
+}  // namespace
+
+void test_no_routing_elects_nobody_and_leaves_the_cursor() {
+    ServiceRig r;
+    TEST_ASSERT_EQUAL_INT8(-1, r.serve());
+    TEST_ASSERT_EQUAL_UINT8(0, r.state.cursor);
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        TEST_ASSERT_EQUAL_UINT8(NONE, r.state.loaded[ch]);
+    }
+    TEST_ASSERT_EQUAL_UINT16(0, r.ee.writes);
+}
+
+void test_a_routed_channel_is_served_and_carries_its_template() {
+    ServiceRig r;
+    r.engine.setSelectedPattern(3, 7);
+    r.route(3);
+
+    TEST_ASSERT_EQUAL_INT8(3, r.serve());
+    TEST_ASSERT_EQUAL_UINT8(7, r.state.loaded[3]);
+    TEST_ASSERT_EQUAL_UINT8(16, r.state.length[3]);
+    TEST_ASSERT_EQUAL_UINT8(8, r.state.pattern[3].stepByte(0));
+    TEST_ASSERT_EQUAL_UINT8(4, r.state.cursor);
+}
+
+void test_a_channel_already_carrying_its_index_is_not_eligible() {
+    ServiceRig r;
+    r.engine.setSelectedPattern(3, 7);
+    r.route(3);
+    TEST_ASSERT_EQUAL_INT8(3, r.serve());
+
+    TEST_ASSERT_EQUAL_INT8(-1, r.serve());
+    TEST_ASSERT_EQUAL_UINT8(4, r.state.cursor);
+}
+
+void test_a_busy_storage_elects_nobody_and_leaves_the_cursor() {
+    ServiceRig r;
+    r.engine.setSelectedPattern(3, 7);
+    r.route(3);
+    r.ee.busyFlag = true;
+
+    TEST_ASSERT_EQUAL_INT8(-1, r.serve());
+    TEST_ASSERT_EQUAL_UINT8(NONE, r.state.loaded[3]);
+    TEST_ASSERT_EQUAL_UINT8(0, r.state.cursor);
+    TEST_ASSERT_EQUAL_UINT8(0, r.state.pattern[3].stepByte(0));
+}
+
+void test_removing_the_routing_releases_the_channel() {
+    ServiceRig r;
+    r.engine.setSelectedPattern(3, 7);
+    r.route(3);
+    TEST_ASSERT_EQUAL_INT8(3, r.serve());
+    TEST_ASSERT_EQUAL_UINT8(7, r.state.loaded[3]);
+
+    r.unroute(3);
+    TEST_ASSERT_EQUAL_INT8(-1, r.serve());
+    TEST_ASSERT_EQUAL_UINT8(NONE, r.state.loaded[3]);
+}
+
+void test_the_release_happens_even_while_the_storage_is_busy() {
+    ServiceRig r;
+    r.engine.setSelectedPattern(3, 7);
+    r.route(3);
+    TEST_ASSERT_EQUAL_INT8(3, r.serve());
+
+    r.unroute(3);
+    r.ee.busyFlag = true;
+    TEST_ASSERT_EQUAL_INT8(-1, r.serve());
+    TEST_ASSERT_EQUAL_UINT8(NONE, r.state.loaded[3]);
+}
+
+void test_a_refused_record_elects_the_channel_and_still_moves_the_cursor() {
+    ServiceRig r;
+    uint8_t content[persist::v3::CONTENT_BYTES];
+    memset(content, 0xFF, sizeof(content));
+    writeTemplateRecord(r.ee, 7, content, 99);   // hors de [1, 36]
+    r.engine.setSelectedPattern(3, 7);
+    r.route(3);
+
+    TEST_ASSERT_EQUAL_INT8(3, r.serve());
+    TEST_ASSERT_EQUAL_UINT8(NONE, r.state.loaded[3]);
+    TEST_ASSERT_EQUAL_UINT8(0, r.state.pattern[3].stepByte(0));
+    TEST_ASSERT_EQUAL_UINT8(4, r.state.cursor);
+}
+
+void test_one_channel_only_is_served_per_call() {
+    ServiceRig r;
+    r.engine.setSelectedPattern(1, 4);
+    r.engine.setSelectedPattern(2, 5);
+    r.route(1);
+    r.route(2);
+
+    TEST_ASSERT_EQUAL_INT8(1, r.serve());
+    TEST_ASSERT_EQUAL_UINT8(4, r.state.loaded[1]);
+    TEST_ASSERT_EQUAL_UINT8(NONE, r.state.loaded[2]);
+
+    TEST_ASSERT_EQUAL_INT8(2, r.serve());
+    TEST_ASSERT_EQUAL_UINT8(5, r.state.loaded[2]);
+}
+
+void test_six_eligible_channels_are_served_in_six_calls() {
+    ServiceRig r;
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        r.engine.setSelectedPattern(ch, static_cast<uint8_t>(ch + 2));
+        r.route(ch);
+    }
+    bool served[SequencerEngine::CHANNEL_COUNT] = {false, false, false, false, false, false};
+    for (uint8_t pass = 0; pass < SequencerEngine::CHANNEL_COUNT; ++pass) {
+        const int8_t channel = r.serve();
+        TEST_ASSERT_TRUE(channel >= 0);
+        TEST_ASSERT_FALSE(served[channel]);
+        served[channel] = true;
+    }
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        TEST_ASSERT_TRUE(served[ch]);
+        TEST_ASSERT_EQUAL_UINT8(ch + 2, r.state.loaded[ch]);
+    }
+    TEST_ASSERT_EQUAL_INT8(-1, r.serve());
+}
+
+void test_the_sweep_starts_at_the_cursor_and_wraps() {
+    ServiceRig r;
+    r.engine.setSelectedPattern(1, 4);
+    r.engine.setSelectedPattern(5, 9);
+    r.route(1);
+    r.route(5);
+    r.state.cursor = 5;
+
+    TEST_ASSERT_EQUAL_INT8(5, r.serve());
+    TEST_ASSERT_EQUAL_UINT8(0, r.state.cursor);
+    TEST_ASSERT_EQUAL_INT8(1, r.serve());
+    TEST_ASSERT_EQUAL_UINT8(2, r.state.cursor);
+}
+
+void test_the_service_writes_no_byte_of_eeprom() {
+    ServiceRig r;
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        r.route(ch);
+    }
+    const uint16_t before = r.ee.writes;
+    for (uint8_t pass = 0; pass < 8; ++pass) {
+        r.serve();
+    }
+    TEST_ASSERT_EQUAL_UINT16(before, r.ee.writes);
+}
+
 int main() {
     UNITY_BEGIN();
 
@@ -1960,6 +2144,17 @@ int main() {
     RUN_TEST(test_a_free_storage_loads_the_template_into_the_modulation_buffer);
     RUN_TEST(test_a_storage_that_becomes_free_loads_on_the_next_pass);
     RUN_TEST(test_a_free_storage_still_refuses_a_record_the_loader_refuses);
+    RUN_TEST(test_no_routing_elects_nobody_and_leaves_the_cursor);
+    RUN_TEST(test_a_routed_channel_is_served_and_carries_its_template);
+    RUN_TEST(test_a_channel_already_carrying_its_index_is_not_eligible);
+    RUN_TEST(test_a_busy_storage_elects_nobody_and_leaves_the_cursor);
+    RUN_TEST(test_removing_the_routing_releases_the_channel);
+    RUN_TEST(test_the_release_happens_even_while_the_storage_is_busy);
+    RUN_TEST(test_a_refused_record_elects_the_channel_and_still_moves_the_cursor);
+    RUN_TEST(test_one_channel_only_is_served_per_call);
+    RUN_TEST(test_six_eligible_channels_are_served_in_six_calls);
+    RUN_TEST(test_the_sweep_starts_at_the_cursor_and_wraps);
+    RUN_TEST(test_the_service_writes_no_byte_of_eeprom);
     RUN_TEST(test_the_first_boot_seeds_the_templates_and_fills_the_instances_from_a1);
     RUN_TEST(test_a_nominal_boot_restores_the_instances_and_never_overwrites_them);
     RUN_TEST(test_a_valid_version_two_image_is_refused_without_migration);
