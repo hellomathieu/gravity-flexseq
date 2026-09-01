@@ -233,6 +233,8 @@ void loop() {
     engine.setCvInput(flexseq::CV_SOURCE_2,
                       flexseq::cv::latestCalibrated(flexseq::cv::CV2));
 
+    flexseq::serviceOneModulationTemplateLoad(eeprom, engine, modulatedPatterns);
+
     if (ticks > 0) {
         transport.tick(ticks);
         triggers.update();
