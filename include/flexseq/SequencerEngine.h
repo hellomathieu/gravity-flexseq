@@ -141,6 +141,8 @@ public:
     // C'est une DERIVATION : aucun etat ne la porte. -1 si le canal est invalide.
     int8_t patternCvIndex(uint8_t channel) const;
 
+    void applyCvResetEvents(uint8_t sourceMask);
+
 private:
     struct ChannelState {
         uint8_t selectedPattern;
@@ -191,6 +193,7 @@ private:
     uint8_t beatTick_; // ticks since the last quarter-note beat, in [0, PPQN)
     bool running_;
     uint8_t stepped_; // bitmask: channels that crossed a step in the last advance()
+    uint8_t armed_;
     uint8_t onsets_[CHANNEL_COUNT];
     int16_t cvInput_[CV_SOURCE_COUNT];
     ChannelState channels_[CHANNEL_COUNT];

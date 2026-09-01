@@ -12,6 +12,7 @@ SequencerEngine::SequencerEngine()
       beatTick_(0),
       running_(false),
       stepped_(0),
+      armed_(0),
       modulated_(nullptr) {
     for (uint8_t s = 0; s < CV_SOURCE_COUNT; ++s) {
         cvInput_[s] = 0;
@@ -109,6 +110,7 @@ void SequencerEngine::stop() {
 void SequencerEngine::reset() {
     phase_ = 0;
     beatTick_ = 0;
+    armed_ = 0;
     for (uint8_t ch = 0; ch < CHANNEL_COUNT; ++ch) {
         channels_[ch].localStep = 0;
         channels_[ch].acc = 0;
@@ -141,6 +143,13 @@ void SequencerEngine::advance(uint16_t ticks) {
 
     for (uint8_t ch = 0; ch < CHANNEL_COUNT; ++ch) {
         ChannelState& c = channels_[ch];
+        const uint8_t channelBit = static_cast<uint8_t>(1u << ch);
+        if ((armed_ & channelBit) != 0) {
+            armed_ = static_cast<uint8_t>(armed_ & ~channelBit);
+            if (c.mode != MODE_CLOCK || c.offset == 0) {
+                ++onsets_[ch];
+            }
+        }
         if (beatCrossed && c.pendingTicks > 0) {
             const uint16_t ticksPerStep = c.pendingTicks;
             c.pendingTicks = 0;
@@ -325,6 +334,37 @@ int8_t SequencerEngine::patternCvIndex(uint8_t channel) const {
     }
     return static_cast<int8_t>(lengthcv::patternIndexFor(
         channels_[channel].selectedPattern, cvZoneSum(channel, CV_DEST_PATTERN)));
+}
+
+static_assert(CV_SOURCE_COUNT <= 8, "the source mask is one byte");
+static_assert(SequencerEngine::CHANNEL_COUNT <= 8, "armed_ is one byte");
+
+void SequencerEngine::applyCvResetEvents(uint8_t sourceMask) {
+    sourceMask =
+        static_cast<uint8_t>(sourceMask & ((1u << CV_SOURCE_COUNT) - 1u));
+    if (sourceMask == 0) {
+        return;
+    }
+    for (uint8_t ch = 0; ch < CHANNEL_COUNT; ++ch) {
+        ChannelState& c = channels_[ch];
+        if (c.mode != MODE_SEQ && c.mode != MODE_CLOCK) {
+            continue;
+        }
+        bool routed = false;
+        for (uint8_t source = 0; source < CV_SOURCE_COUNT; ++source) {
+            if ((sourceMask & (1u << source)) != 0 &&
+                c.cvTarget[source] == CV_DEST_RESET) {
+                routed = true;
+            }
+        }
+        if (!routed) {
+            continue;
+        }
+        c.localStep = 0;
+        c.acc = 0;
+        refreshStepTiming(ch);
+        armed_ = static_cast<uint8_t>(armed_ | (1u << ch));
+    }
 }
 
 void SequencerEngine::applyCvAtStepBoundary(uint8_t channel) {
