@@ -446,6 +446,43 @@ void test_press_toggles_the_step_under_the_cursor() {
     TEST_ASSERT_FALSE(active);
 }
 
+void test_the_editor_writes_into_the_instance_and_never_into_the_buffer() {
+    Rig r;
+    flexseq::ModulatedPatternState state;
+    r.engine.setModulatedPatterns(&state);
+    state.loaded[0] = 5;
+
+    r.enterEdit();
+    for (uint8_t i = 0; i < 7; ++i) {
+        r.ui.handle(UiController::EVENT_ROTATE, 1);
+    }
+    r.ui.handle(UiController::EVENT_PRESS);
+
+    bool active = false;
+    r.engine.instanceForChannel(0)->readStep(7, active);
+    TEST_ASSERT_TRUE(active);
+    state.pattern[0].readStep(7, active);
+    TEST_ASSERT_FALSE(active);
+}
+
+void test_clearing_a_pattern_clears_the_instance_and_never_the_buffer() {
+    Rig r;
+    flexseq::ModulatedPatternState state;
+    r.engine.setModulatedPatterns(&state);
+    state.loaded[0] = 5;
+    r.engine.instanceForChannel(0)->writeStep(3, true);
+    state.pattern[0].writeStep(3, true);
+
+    r.enterEdit();
+    r.ui.handle(UiController::EVENT_SHIFT_LONG_PRESS);
+
+    bool active = true;
+    r.engine.instanceForChannel(0)->readStep(3, active);
+    TEST_ASSERT_FALSE(active);
+    state.pattern[0].readStep(3, active);
+    TEST_ASSERT_TRUE(active);
+}
+
 void test_shift_rotate_sets_the_ratchet_of_an_active_step_and_clamps() {
     Rig r;
     r.enterEdit();
@@ -785,6 +822,8 @@ int main(int, char**) {
     RUN_TEST(test_press_on_the_edit_entry_enters_the_grid);
     RUN_TEST(test_rotate_moves_the_step_cursor_and_wraps_at_thirty_six);
     RUN_TEST(test_press_toggles_the_step_under_the_cursor);
+    RUN_TEST(test_the_editor_writes_into_the_instance_and_never_into_the_buffer);
+    RUN_TEST(test_clearing_a_pattern_clears_the_instance_and_never_the_buffer);
     RUN_TEST(test_shift_rotate_sets_the_ratchet_of_an_active_step_and_clamps);
     RUN_TEST(test_a_ratchet_edit_takes_effect_on_the_current_step_immediately);
     RUN_TEST(test_shift_rotate_in_edit_no_longer_changes_channel);

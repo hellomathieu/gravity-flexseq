@@ -137,7 +137,7 @@ Pattern* UiController::currentPattern() const {
     if (channel < 0) {
         return nullptr;
     }
-    return engine_.patternForChannel(static_cast<uint8_t>(channel));
+    return engine_.instanceForChannel(static_cast<uint8_t>(channel));
 }
 
 void UiController::handle(Event event, int8_t delta) {
