@@ -1203,6 +1203,22 @@ MUTANTS = [
      "sim/src/domain/SequencerEngine.ts",
      "    c.mode = mode;\n    this.refreshStepTiming(channel);",
      "    c.mode = mode;\n    c.baseLength = DEFAULT_LENGTH;\n    this.refreshStepTiming(channel);", "ts-cvpattern"),
+    ("cpp: a change of base length clears the cv zone",
+     "src/domain/SequencerEngine.cpp",
+     "    channels_[channel].baseLength = length;\n    refreshEffectiveLength(channel);\n    return true;\n}\n\nbool SequencerEngine::setBaseLengthFromStorage",
+     "    channels_[channel].baseLength = length;\n    channels_[channel].cvZone[0] = 0;\n    refreshEffectiveLength(channel);\n    return true;\n}\n\nbool SequencerEngine::setBaseLengthFromStorage", "cpp-cvpattern"),
+    ("ts: a change of base length clears the cv zone",
+     "sim/src/domain/SequencerEngine.ts",
+     "    if (!Number.isInteger(length) || length < MIN_LENGTH || length > MAX_LENGTH) {\n      return false;\n    }\n    c.baseLength = length;\n    this.refreshEffectiveLength(channel);",
+     "    if (!Number.isInteger(length) || length < MIN_LENGTH || length > MAX_LENGTH) {\n      return false;\n    }\n    c.baseLength = length;\n    c.cvZone[0] = 0;\n    this.refreshEffectiveLength(channel);", "ts-cvpattern"),
+    ("cpp: a change of selected pattern clears the cv zone",
+     "src/domain/SequencerEngine.cpp",
+     "    channels_[channel].selectedPattern = index;\n    refreshStepTiming(channel);",
+     "    channels_[channel].selectedPattern = index;\n    channels_[channel].cvZone[0] = 0;\n    refreshStepTiming(channel);", "cpp-cvpattern"),
+    ("ts: a change of selected pattern clears the cv zone",
+     "sim/src/domain/SequencerEngine.ts",
+     "    c.selectedPattern = index;\n    this.refreshStepTiming(channel);",
+     "    c.selectedPattern = index;\n    c.cvZone[0] = 0;\n    this.refreshStepTiming(channel);", "ts-cvpattern"),
 ]
 
 SUITES = {

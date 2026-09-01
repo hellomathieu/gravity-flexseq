@@ -460,6 +460,45 @@ void test_a_change_of_mode_currently_keeps_the_cv_zone() {
     TEST_ASSERT_EQUAL_UINT8(28, e.getEffectiveLength(0));
 }
 
+/*
+ * Famille 10 — ce qu'un changement de base laisse intact
+ */
+
+void test_the_length_offset_survives_a_change_of_base() {
+    SequencerEngine e;
+    e.setBaseLength(0, 18);
+    routeLength(e, 0, CV_SOURCE_1);
+    e.setCvInput(CV_SOURCE_1, 330); // zone +10
+    e.start();
+    e.advance(STEP);
+    TEST_ASSERT_EQUAL_INT8(10, e.lengthCvOffset(0));
+    TEST_ASSERT_EQUAL_UINT8(28, e.getEffectiveLength(0));
+
+    TEST_ASSERT_TRUE(e.setBaseLength(0, 20));
+    TEST_ASSERT_EQUAL_INT8(10, e.lengthCvOffset(0));
+    TEST_ASSERT_EQUAL_UINT8(30, e.getEffectiveLength(0));
+    TEST_ASSERT_EQUAL_UINT8(20, e.getBaseLength(0));
+}
+
+// La stabilite de l'offset PATTERN s'observe INDIRECTEMENT : l'API publique
+// n'expose pas d'offset, seulement l'index derive. L'index qui suit la base
+// d'exactement +10 est la preuve que la zone n'a pas bouge. Les bases 3 et 4
+// gardent de la marge sous 15 : un ecretage rendrait la meme valeur pour un
+// offset conserve et pour un offset plus grand.
+void test_the_derived_pattern_index_follows_a_change_of_base_without_losing_the_offset() {
+    SequencerEngine e;
+    e.setSelectedPattern(0, 3);
+    routePattern(e, 0, CV_SOURCE_1);
+    e.setCvInput(CV_SOURCE_1, 330); // zone +10
+    e.start();
+    e.advance(STEP);
+    TEST_ASSERT_EQUAL_INT8(13, e.patternCvIndex(0));
+
+    TEST_ASSERT_TRUE(e.setSelectedPattern(0, 4));
+    TEST_ASSERT_EQUAL_INT8(14, e.patternCvIndex(0));
+    TEST_ASSERT_EQUAL_INT8(4, e.getSelectedPattern(0));
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_the_five_destination_codes_hold_their_persisted_values);
@@ -495,5 +534,8 @@ int main() {
     RUN_TEST(test_the_routing_survives_a_change_of_mode);
     RUN_TEST(test_the_bases_survive_a_change_of_mode);
     RUN_TEST(test_a_change_of_mode_currently_keeps_the_cv_zone);
+
+    RUN_TEST(test_the_length_offset_survives_a_change_of_base);
+    RUN_TEST(test_the_derived_pattern_index_follows_a_change_of_base_without_losing_the_offset);
     return UNITY_END();
 }

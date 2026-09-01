@@ -381,3 +381,39 @@ describe("Changement de mode — ce qu'il laisse intact", () => {
     expect(e.getEffectiveLength(0)).toBe(28);
   });
 });
+
+
+describe("Changement de base — ce qu'il laisse intact", () => {
+  it("conserve l'offset de longueur", () => {
+    const e = new SequencerEngine();
+    e.setBaseLength(0, 18);
+    e.setCvDestination(0, CV_SOURCE_1, CvDestination.LENGTH);
+    e.setCvInput(CV_SOURCE_1, 330);
+    e.start();
+    e.advance(STEP);
+    expect(e.lengthCvOffset(0)).toBe(10);
+    expect(e.getEffectiveLength(0)).toBe(28);
+
+    expect(e.setBaseLength(0, 20)).toBe(true);
+    expect(e.lengthCvOffset(0)).toBe(10);
+    expect(e.getEffectiveLength(0)).toBe(30);
+    expect(e.getBaseLength(0)).toBe(20);
+  });
+
+  // Observation INDIRECTE : l'API publique n'expose pas d'offset PATTERN,
+  // seulement l'index derive. L'index qui suit la base d'exactement +10 prouve
+  // que la zone n'a pas bouge. Les bases 3 et 4 gardent de la marge sous 15.
+  it("fait suivre l'index derive du pattern sans perdre l'offset", () => {
+    const e = new SequencerEngine();
+    e.setSelectedPattern(0, 3);
+    e.setCvDestination(0, CV_SOURCE_1, CvDestination.PATTERN);
+    e.setCvInput(CV_SOURCE_1, 330);
+    e.start();
+    e.advance(STEP);
+    expect(e.patternCvIndex(0)).toBe(13);
+
+    expect(e.setSelectedPattern(0, 4)).toBe(true);
+    expect(e.patternCvIndex(0)).toBe(14);
+    expect(e.getSelectedPattern(0)).toBe(4);
+  });
+});
