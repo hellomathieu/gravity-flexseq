@@ -1747,18 +1747,53 @@ void test_the_loader_masks_the_four_bits_above_the_last_step() {
     TEST_ASSERT_EQUAL_UINT8(0x0F, state.pattern[0].stepByte(4));
 }
 
-void test_the_loader_refuses_a_length_out_of_range_and_keeps_the_content() {
+void test_the_loader_refuses_a_length_out_of_range_without_touching_the_buffer() {
     FakeEeprom ee;
     uint8_t content[persist::v3::CONTENT_BYTES];
-    memset(content, 0, sizeof(content));
-    content[0] = 0x05;
+    memset(content, 0xFF, sizeof(content));
     writeTemplateRecord(ee, 10, content, 99);   // hors de [1, 36]
 
     flexseq::ModulatedPatternState state;
     state.length[1] = 20;
+    state.pattern[1].setStepByte(0, 0x05);
+    state.pattern[1].setRatchetByte(0, 0x30);
+
     TEST_ASSERT_FALSE(flexseq::loadTemplateIntoModulationBuffer(ee, state, 1, 10));
-    TEST_ASSERT_EQUAL_UINT8(20, state.length[1]);   // la longueur d'avant reste
-    TEST_ASSERT_EQUAL_UINT8(0x05, state.pattern[1].stepByte(0));  // le contenu est la
+
+    TEST_ASSERT_EQUAL_UINT8(20, state.length[1]);
+    TEST_ASSERT_EQUAL_UINT8(0x05, state.pattern[1].stepByte(0));
+    TEST_ASSERT_EQUAL_UINT8(0x30, state.pattern[1].ratchetByte(0));
+    for (uint8_t offset = 1; offset < persist::v3::STEP_BYTES; ++offset) {
+        TEST_ASSERT_EQUAL_UINT8(0, state.pattern[1].stepByte(offset));
+    }
+}
+
+void test_the_loader_refuses_a_length_of_zero_the_same_way() {
+    FakeEeprom ee;
+    uint8_t content[persist::v3::CONTENT_BYTES];
+    memset(content, 0xFF, sizeof(content));
+    writeTemplateRecord(ee, 11, content, 0);
+
+    flexseq::ModulatedPatternState state;
+    state.length[0] = 12;
+    TEST_ASSERT_FALSE(flexseq::loadTemplateIntoModulationBuffer(ee, state, 0, 11));
+    TEST_ASSERT_EQUAL_UINT8(12, state.length[0]);
+    TEST_ASSERT_EQUAL_UINT8(0, state.pattern[0].stepByte(0));
+}
+
+void test_the_loader_accepts_the_two_bounds_of_the_stored_length() {
+    FakeEeprom ee;
+    uint8_t content[persist::v3::CONTENT_BYTES];
+    memset(content, 0, sizeof(content));
+    content[0] = 0x03;
+    writeTemplateRecord(ee, 12, content, 1);
+    writeTemplateRecord(ee, 13, content, 36);
+
+    flexseq::ModulatedPatternState state;
+    TEST_ASSERT_TRUE(flexseq::loadTemplateIntoModulationBuffer(ee, state, 0, 12));
+    TEST_ASSERT_EQUAL_UINT8(1, state.length[0]);
+    TEST_ASSERT_TRUE(flexseq::loadTemplateIntoModulationBuffer(ee, state, 1, 13));
+    TEST_ASSERT_EQUAL_UINT8(36, state.length[1]);
 }
 
 void test_the_loader_touches_one_channel_only() {
@@ -1904,7 +1939,7 @@ void test_a_free_storage_still_refuses_a_record_the_loader_refuses() {
     TEST_ASSERT_FALSE(
         flexseq::loadTemplateIntoModulationBufferIfStorageIsFree(ee, state, 1, 10));
     TEST_ASSERT_EQUAL_UINT8(7, state.length[1]);
-    TEST_ASSERT_EQUAL_UINT8(0x81, state.pattern[1].stepByte(0));
+    TEST_ASSERT_EQUAL_UINT8(0, state.pattern[1].stepByte(0));
 }
 
 int main() {
@@ -1914,7 +1949,9 @@ int main() {
     RUN_TEST(test_the_loader_refuses_a_template_out_of_range);
     RUN_TEST(test_the_loader_brings_the_content_and_the_length);
     RUN_TEST(test_the_loader_masks_the_four_bits_above_the_last_step);
-    RUN_TEST(test_the_loader_refuses_a_length_out_of_range_and_keeps_the_content);
+    RUN_TEST(test_the_loader_refuses_a_length_out_of_range_without_touching_the_buffer);
+    RUN_TEST(test_the_loader_refuses_a_length_of_zero_the_same_way);
+    RUN_TEST(test_the_loader_accepts_the_two_bounds_of_the_stored_length);
     RUN_TEST(test_the_loader_touches_one_channel_only);
     RUN_TEST(test_the_loader_writes_nothing_to_the_eeprom);
     RUN_TEST(test_the_loader_leaves_the_instance_and_the_base_alone);

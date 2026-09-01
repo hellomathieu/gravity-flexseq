@@ -137,9 +137,13 @@ uint8_t templateByte(const Pattern& pattern, uint8_t length, uint8_t offset) {
     return contentByte(pattern, offset);
 }
 
+bool isValidTemplateLength(uint8_t value) {
+    return value >= MIN_TEMPLATE_LENGTH && value <= MAX_TEMPLATE_LENGTH;
+}
+
 bool applyTemplateByte(Pattern& pattern, uint8_t& length, uint8_t offset, uint8_t value) {
     if (offset == RECORD_LENGTH_AT) {
-        if (value < MIN_TEMPLATE_LENGTH || value > MAX_TEMPLATE_LENGTH) {
+        if (!isValidTemplateLength(value)) {
             return false;
         }
         length = value;

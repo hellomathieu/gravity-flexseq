@@ -164,6 +164,7 @@ uint8_t contentByte(const Pattern& pattern, uint8_t offset);
 void applyContentByte(Pattern& pattern, uint8_t offset, uint8_t value);
 
 uint8_t templateByte(const Pattern& pattern, uint8_t length, uint8_t offset);
+bool isValidTemplateLength(uint8_t value);
 bool applyTemplateByte(Pattern& pattern, uint8_t& length, uint8_t offset, uint8_t value);
 
 uint8_t factoryTemplateByte(uint8_t index, uint8_t offset);
@@ -460,15 +461,16 @@ bool loadTemplateIntoModulationBuffer(Storage& storage, ModulatedPatternState& s
         || index >= persist::v3::TEMPLATE_COUNT) {
         return false;
     }
-    bool accepted = true;
-    for (uint8_t offset = 0; offset < persist::v3::TEMPLATE_RECORD; ++offset) {
-        if (!persist::v3::applyTemplateByte(
-                state.pattern[channel], state.length[channel], offset,
-                storage.read(persist::v3::templateAddress(index, offset)))) {
-            accepted = false;
-        }
+    if (!persist::v3::isValidTemplateLength(storage.read(
+            persist::v3::templateAddress(index, persist::v3::RECORD_LENGTH_AT)))) {
+        return false;
     }
-    return accepted;
+    for (uint8_t offset = 0; offset < persist::v3::TEMPLATE_RECORD; ++offset) {
+        persist::v3::applyTemplateByte(
+            state.pattern[channel], state.length[channel], offset,
+            storage.read(persist::v3::templateAddress(index, offset)));
+    }
+    return true;
 }
 
 template <typename Storage>
