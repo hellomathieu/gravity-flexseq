@@ -19,7 +19,7 @@ either closed without anyone noting it, or accepted without anyone saying so.
 
 ## What is still open
 
-Forty-three lines, and each one states **what it is waiting for and from whom**. A line
+Forty-seven lines, and each one states **what it is waiting for and from whom**. A line
 that waits for nothing from nobody no longer belongs here: it is in the table
 below.
 
@@ -34,6 +34,10 @@ below.
 
 | 74 | **Seven targets of `LengthCv` carry no mutant, and step E2 did not treat them.** The step gave the file its first six mutants — `ZONE_WIDTH`, `ZONE_COUNT` and `HYSTERESIS`, two per language — because line 70 and line 71 named those three figures and no other. What stays without a mutant is `CV_MIN`, `CV_MAX`, `OFFSET_MIN`, `OFFSET_MAX`, and the bodies of `zoneFor()`, `zoneWithHysteresis()` and `effectiveLengthFor()`. ⚠️ **This is a measured gap, and it is not a defect**: the seven targets are correct, and the eleven tests of each language do exercise them. What is absent is the proof that those assertions bite. ⚠️ **Do not read `238/238` as "`LengthCv` is covered"**: a probe only finds the holes a mutant aims at | **low, and it is coverage and not correctness.** The quantiser is now held on its three normative figures, which is what `§10.4` states. The seven targets carry no figure of the PRD | **a decision on the coverage, and it does not impose seven mutants.** Two classes are already measured on 2026-08-31, and they call for different answers. `OFFSET_MIN` and `OFFSET_MAX` are **consumed**: `clampZone()` and `zoneWithHysteresis()` read them in both languages, so a mutant on them would be behavioural. `CV_MIN` and `CV_MAX` have **no consumer at all**, in production or anywhere else — only the contract test names them — so they are in the same class as `ZONE_COUNT`, and line 72 already carries that question. For the three function bodies, the question is whether a useful mutant exists that does not merely repeat an assertion the tests already make. ⚠️ **A third outcome is legitimate for any of the seven: an equivalent mutant, undetectable by construction.** Lot SF3 removed five of those, and naming one is a result, not a failure. This line closes when the owner decides which targets deserve a mutant, and says so for the others |
 | 75 | **The effective rate of the EEPROM save depends on the tempo, and nothing says so.** `persistence.advance()` is called only on a pass that drained no tick — `main.cpp:253`, a guard placed so that a 3.4 ms write never shares a pass with an onset. ⚠️ **Arithmetic of 2026-08-31, not a measurement of the phenomenon.** At 120 BPM a tick falls every 5.21 ms and a pass lasts p90 6.76 ms, so a tick is drained on nearly every pass and the image is **almost never written while the transport runs**. At 30 BPM a tick falls every 20.8 ms, so two passes out of three write freely. The distinction to hold: *the project deliberately suspends the write during an onset* is a decision; *the mechanism saves almost only when stopped, at some tempos* is an observed property that no document carries | **to characterise, and the severity is not established.** No loss is demonstrated: the image is written when the transport stops, and the version byte still guards a partial image. What is absent is a statement of the real rate, and the proof that no invariant of the persistence depends on it | **a characterisation, and it belongs to no lot.** ⚠️ **Out of the perimeter of E3, by the decision of the owner on 2026-08-31**: E3 must not change `Persistence` to answer it. The line came out of the E3.6.1 analysis of the pending PATTERN load, which needed to know when the EEPROM is busy. It closes when the real rate is measured — a probe on the number of image bytes written per minute, at several tempos — and when the owner says whether that rate is acceptable |
+| 76 | **The clamp of the effective length exists in two implementations, and only one of them is reachable from production.** `lengthcv::effectiveLengthFor(base, offset)` clamps to `[MIN_LENGTH, MAX_LENGTH]`, and `SequencerEngine::refreshEffectiveLength()` clamps again, in line, against the same two constants. ⚠️ **`effectiveLengthFor()` has NO production caller**: `grep` finds it in `test_length_cv`, in `test_cv_spec`, and in the two TypeScript mirrors, and nowhere else. The rule that the firmware really applies is therefore the in-line one, and the tests of family `L` exercise the other. Observed 2026-09-01 during step 1 of E3.6.4.4 | **low, and it is a duplication rather than a divergence.** The two implementations agree today, and both read the same constants, so no wrong length can be produced. What is absent is the guarantee that they keep agreeing: a change to one of them would leave the family `L` vectors green while the firmware moved | **nothing now, and NOT inside E3.** ⚠️ **The defect is older than E3.6.4.4 and that lot did not touch it.** Step 1 added the symmetric path for PATTERN and made it call `patternIndexFor()`, so the pattern index does not carry the duplication. To make `refreshEffectiveLength()` call `effectiveLengthFor()` changes a production path, and it belongs to the owner to open it |
+| 77 | **The order at the step boundary breaks the contract E3.4-4, and the firmware ships that way.** On the single boundary where the derived PATTERN index changes, the step plays the CONTENT of the new template and the RATCHET of the previous pattern. `refreshStepTiming()` runs inside `advance()`, and the modulation service runs after it, in `loop()`. The two agree again from the next boundary. Characterised by `test_the_boundary_that_swaps_the_template_keeps_the_previous_ratchet_for_one_step`, commit `ee75eca`, which was seen RED before it was green: simulating the fix with a `refreshTiming()` after the load gives `Expected 6 Was 1` | **low, and it is a known deviation rather than a defect.** It lasts one step, and only when the CV moves the index across a zone boundary. Nothing is lost and nothing is corrupted | **a decision, and it belongs to the lot that implements STEP.** The contract E3.4-4 only closes with STEP, which names `readStep` at its point 5. To fix it now would need the engine to call the service, so to know `Storage`, which the architecture forbids. ⚠️ **The test has no mutant on purpose**: the mutation that would redden it is the fix |
+| 78 | **`patternForChannel()` diverges between C++ and TypeScript, by decision, and no versioned source says so.** In C++ it returns the modulation buffer when `loaded[ch]` names a template; in TypeScript it always returns the instance. The buffers, the round robin and `Storage` belong to the AVR firmware and were deliberately left out of the reference model — decision 5 of E3.6.4.4, 2026-09-01. ⚠️ `sim/test/SequencerEngine.test.ts:638` still asserts `patternForChannel === instanceForChannel`, which is true in TypeScript and **false in C++ for a modulated channel** | **low, and it is a documentation debt.** The parity rule of `CLAUDE.md` says the two languages represent the same contracts; this is an accepted exception, not a drift | **write it where it survives.** The decision lives in a commit message and in this line. `sim/README.md` is the versioned candidate. The same applies to P35, which has no TypeScript mirror for the same reason |
+| 79 | **After a global reset, the step where the playhead lands never emits its entry onset.** `advance()` emits the onset of a step at the boundary crossing that ENTERS it (`SequencerEngine.cpp:169-177`). A reset places the playhead without a crossing. So after PLAY or MIDI Start, step 0 occupies its duration and its trigger stays silent; the first emitted onset belongs to step 1, one step after the start. The transient lasts one step: from the first loop of the pattern, step 0 is entered by a crossing and sounds. Found on 2026-09-01 during the design of the CV RESET (lot E3.7-F3, step F3.4). ⚠️ **No measurement saw it**: the trigger probe checks CYCLIC ROTATIONS of gap sequences, which a missing first onset does not change. No test and no document names this behaviour | **a product question, not a defect of the CV RESET lot.** The CV RESET satisfies §10.3 with its own armed mechanism, per channel, without a change to the global path | **a decision of the owner, out of the perimeter of E3.7-F.** Aligning the global reset on the armed mechanism would change a measured behaviour — the drift probe counts 222 fronts — and would touch §8 of the PRD. This line closes when the owner decides whether PLAY and MIDI Start must sound step 0, and the answer enters the PRD at that moment |
 
 
 | 68 | **The gesture probe accused the firmware of a defect that does not exist.** The cause is a copy of a domain constant inside a tool. `tools/simavr-ssd1306/gesture_probe.cpp` wrapped the step cursor modulo **24**, while lot F took the grid to **36** on 2026-08-30. `PatternScreen.h` was already included by the harness, so the implicit copy sat next to the canonical constant. At the default `R10_STEP=4`, R10 asked for `(4 - 5 + 24) % 24 = 23` rotations from step 5, the firmware wrapped on 36, and it reached step **28**. R12 then asked for 5 more and reached step **33**, so the triplet landed outside the byte the criterion reads, and R12 went **red**. ⚠️ **The second consequence is worse: R10 was PASSING FOR THE WRONG REASON.** It navigated to step 28 and checked that the instances stay unchanged. Step 28 is also inactive in the rig mask `0x0221`, so the refusal happened there and the criterion went green. A false green since lot F | **the THIRD occurrence of the class of line 57, and the first with this cause.** The two earlier ones were a stale grep pattern and a missing pointer guard. This one is a duplicated constant | **closed 2026-08-31**, commit `ff09087`. Three places take `flexseq::screen::GRID_STEPS` through one local constant. Four runs prove it: `R10_STEP=4` gives PASS 103/103 and reaches step 4 in 35 rotations, which is `5 + 35 = 40` and `40 % 36 = 4` · `R10_STEP=28` gives PASS 103/103, and the old harness REFUSED that value with exit 2, so the fix is not tailored to the case 4 · `R10_STEP=6` gives PASS 103/103, a third independent witness · `EXPECT_R12_NIBBLE=06` still reddens R12 and exits 1, so the criterion did not go blind. ⚠️ **The SELFTEST was NOT replayed, and the anchor check says why**: its three source mutants target the SHIFT burst split, `plan[0] = request.detents` and `SHIFT_BURST_DETENTS`, and neither motif touches the three corrected lines. All three are present exactly once. **The method rule this leaves: a measurement tool must read a domain constant, and never hold a copy of it.** The literal is not wrong when it is written; it becomes wrong the day the domain moves, and nothing warns |
@@ -174,6 +178,52 @@ arithmetic impossibility. The line is closed for that reason, and not because
 anyone decided to live with it.
 
 ## Method rules born from these subjects
+
+**A Flash figure is `.text` PLUS `.data`, and comparing one against the other
+costs a factor of four.** On 2026-08-31 the cost of six resident `Pattern`
+buffers was published as **+84 bytes** of Flash. It was **+318**. The measurement
+had read `.text` from `avr-size -A` on one build and compared it to the figure
+`run-build-memory.sh` prints for the other, which is `.text + .data`. The
+initialisers live in Flash, so `.data` counts twice over: once in RAM and once in
+the image. **Read both builds with the same tool, or read both sections.** The
+wrong figure was used to decide an architecture, and the decision had to be
+re-examined.
+
+**An array no code reads is not in the binary, so it cannot be measured.** The
+first attempt to measure those same buffers placed outside their owning object
+returned the baseline exactly: the linker had dropped them. A
+`volatile void*` pointing at the array does not retain it either, because nothing
+reads the pointer. A delta of zero on an unreferenced construct means **not
+observable**, never **free**. Give the variant a real reader before believing its
+figure.
+
+**What a member costs depends on the object it joins, not on its own size.** The
+same 138 bytes cost **+318** of Flash as members of `SequencerEngine`, and **+24**
+placed outside with one pointer in the engine — measured, three builds, all
+genuinely referenced. `avr-nm` spreads the difference over a dozen functions that
+address `ChannelState`, and not over the constructor. The mechanism is **not
+demonstrated** — an interpretation by the AVR displacement window is consistent
+with it and unproven — but the rule stands without it: **measure the placement,
+not only the size.**
+
+**simavr clears `EEPE` at once, so it cannot model an EEPROM collision.** Read in
+`simavr/sim/avr_eeprom.c`: the write registers a 3.4 ms timer, but that timer only
+raises the `EERIE` ready interrupt, and the busy bit is cleared in the same
+access. `while (EECR & (1 << EEPE));` therefore **never waits** under simulation.
+Two consequences: no simulated measurement of a read colliding with a write is
+worth anything, and **a guard that refuses to act while the EEPROM is busy has an
+unreachable red path in simavr**. Such a guard is proven with a storage double
+that declares itself busy, in the domain tests.
+
+**A test double's filler value can satisfy an assertion, and the test then passes
+for the wrong reason.** A guard refusing an out-of-range template index looked
+held: the test passed. Removing the guard did not turn it red. Without the guard
+the reader fell onto cells the double fills with `0x5A`, so the length byte read
+90, the codec refused it, and the function returned `false` anyway. The fix is to
+make the two models **diverge**: a valid record was written at the address the
+out-of-range index reaches, so the guard now decides the answer. **Ask what the
+double returns where the code is not supposed to look.**
+
 
 **A page rebuilt from a design loses features; a page rebuilt from the original
 does not.** Three times now, FlexSeq shipped a screen that was assembled from a
@@ -653,3 +703,22 @@ implementations agreed on every other point of the vector. ⚠️ **The vector f
 the defect; no reading would have.** Normalise the output in the implementation,
 never in the expectation, and keep zero and its two neighbours in every shared
 vector.
+
+**A design conclusion written before a decision is stale the moment the decision
+lands, and nothing warns.** F1.2 of lot E3.7-F concluded that the mode gating
+needed three guards. The P12-A decision of F1.4 then created the invariant
+"outside SEQ, every zone is zero", which made one guard redundant and its
+mutants equivalent — 4 of the 7 planned mutants were undetectable by
+construction. The conclusion was only re-verified during F2, while the mutants
+were prepared, so the plan validated by the owner carried an unsatisfiable
+criterion. The rule: when a decision lands in the middle of a design, re-verify
+every conclusion written before it against the decided state.
+
+**An inventory of mode-dependent tests sweeps the CONSUMERS, never the
+families.** Lot E3.7-F2 undercounted twice: F1.5 announced about twenty tests
+to correct, a first file-by-file inventory found 46, and the run showed **50**.
+The recurring blind spot was `test_persistence`, first its service family, then
+the modulation tests of the round trip and of `saveTemplate`, in both
+languages. The rule: sweep every test file for the consumer call —
+`setCvDestination` here — and classify each hit; an inventory by family only
+finds the families the author remembered, and it reports itself as complete.
