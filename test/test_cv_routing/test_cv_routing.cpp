@@ -13,6 +13,9 @@ using flexseq::CV_DEST_RESET;
 using flexseq::CV_DEST_STEP;
 using flexseq::CV_SOURCE_1;
 using flexseq::CV_SOURCE_2;
+using flexseq::MODE_CLOCK;
+using flexseq::MODE_RANDOM;
+using flexseq::MODE_SEQ;
 
 static const uint16_t STEP = 96; // DEFAULT_SUBDIV = /1
 
@@ -400,6 +403,63 @@ void test_removing_the_pattern_routing_returns_to_the_base_index() {
     TEST_ASSERT_EQUAL_INT8(3, e.patternCvIndex(0));
 }
 
+/*
+ * Famille 9 — ce qu'un changement de mode laisse intact
+ */
+
+void test_the_routing_survives_a_change_of_mode() {
+    SequencerEngine e;
+    routeLength(e, 0, CV_SOURCE_1);
+    routePattern(e, 0, CV_SOURCE_2);
+
+    static const flexseq::ChannelMode COURSE[] = {MODE_CLOCK, MODE_SEQ, MODE_RANDOM,
+                                                  MODE_SEQ};
+    for (uint8_t step = 0; step < 4; ++step) {
+        TEST_ASSERT_TRUE(e.setChannelMode(0, COURSE[step]));
+        TEST_ASSERT_EQUAL_UINT8(COURSE[step], e.getChannelMode(0));
+        TEST_ASSERT_EQUAL_UINT8(CV_DEST_LENGTH, e.getCvDestination(0, CV_SOURCE_1));
+        TEST_ASSERT_EQUAL_UINT8(CV_DEST_PATTERN, e.getCvDestination(0, CV_SOURCE_2));
+    }
+}
+
+void test_the_bases_survive_a_change_of_mode() {
+    SequencerEngine e;
+    e.setBaseLength(0, 18);
+    e.setSelectedPattern(0, 7);
+
+    static const flexseq::ChannelMode COURSE[] = {MODE_CLOCK, MODE_SEQ, MODE_RANDOM,
+                                                  MODE_SEQ};
+    for (uint8_t step = 0; step < 4; ++step) {
+        TEST_ASSERT_TRUE(e.setChannelMode(0, COURSE[step]));
+        TEST_ASSERT_EQUAL_UINT8(18, e.getBaseLength(0));
+        TEST_ASSERT_EQUAL_INT8(7, e.getSelectedPattern(0));
+    }
+}
+
+// CARACTERISATION DE L'ETAT ACTUEL, pas une propriete normative. La regle P12
+// de la conception E3.1 demande l'inverse : un changement de mode remettra la
+// zone a 0. Ce test devra donc etre REMPLACE par le lot qui l'implemente, pas
+// complete. Son nom porte 'currently' pour cette raison.
+void test_a_change_of_mode_currently_keeps_the_cv_zone() {
+    SequencerEngine e;
+    e.setBaseLength(0, 18);
+    routeLength(e, 0, CV_SOURCE_1);
+    e.setChannelMode(0, MODE_SEQ);
+    e.setCvInput(CV_SOURCE_1, 330); // zone +10
+    e.start();
+    e.advance(STEP);
+    TEST_ASSERT_EQUAL_INT8(10, e.lengthCvOffset(0));
+    TEST_ASSERT_EQUAL_UINT8(28, e.getEffectiveLength(0));
+
+    TEST_ASSERT_TRUE(e.setChannelMode(0, MODE_CLOCK));
+    TEST_ASSERT_EQUAL_INT8(10, e.lengthCvOffset(0));
+    TEST_ASSERT_EQUAL_UINT8(28, e.getEffectiveLength(0));
+
+    TEST_ASSERT_TRUE(e.setChannelMode(0, MODE_SEQ));
+    TEST_ASSERT_EQUAL_INT8(10, e.lengthCvOffset(0));
+    TEST_ASSERT_EQUAL_UINT8(28, e.getEffectiveLength(0));
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_the_five_destination_codes_hold_their_persisted_values);
@@ -431,5 +491,9 @@ int main() {
     RUN_TEST(test_a_source_routed_to_the_length_does_not_move_the_index);
     RUN_TEST(test_a_source_routed_to_the_pattern_does_not_move_the_length);
     RUN_TEST(test_removing_the_pattern_routing_returns_to_the_base_index);
+
+    RUN_TEST(test_the_routing_survives_a_change_of_mode);
+    RUN_TEST(test_the_bases_survive_a_change_of_mode);
+    RUN_TEST(test_a_change_of_mode_currently_keeps_the_cv_zone);
     return UNITY_END();
 }

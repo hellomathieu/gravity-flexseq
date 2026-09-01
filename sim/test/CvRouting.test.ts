@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { SequencerEngine } from "../src/domain/SequencerEngine";
+import { SequencerEngine, ChannelMode } from "../src/domain/SequencerEngine";
 import {
   CvDestination,
   CV_DESTINATION_COUNT,
@@ -328,5 +328,56 @@ describe("PATTERN CV — l'index effectif", () => {
     expect(e.patternCvIndex(0)).toBe(13);
     e.setCvDestination(0, CV_SOURCE_1, CvDestination.NONE);
     expect(e.patternCvIndex(0)).toBe(3);
+  });
+});
+
+
+describe("Changement de mode — ce qu'il laisse intact", () => {
+  const COURSE = [ChannelMode.CLOCK, ChannelMode.SEQ, ChannelMode.RANDOM, ChannelMode.SEQ];
+
+  it("conserve le routage", () => {
+    const e = new SequencerEngine();
+    e.setCvDestination(0, CV_SOURCE_1, CvDestination.LENGTH);
+    e.setCvDestination(0, CV_SOURCE_2, CvDestination.PATTERN);
+    for (const mode of COURSE) {
+      expect(e.setChannelMode(0, mode)).toBe(true);
+      expect(e.getChannelMode(0)).toBe(mode);
+      expect(e.getCvDestination(0, CV_SOURCE_1)).toBe(CvDestination.LENGTH);
+      expect(e.getCvDestination(0, CV_SOURCE_2)).toBe(CvDestination.PATTERN);
+    }
+  });
+
+  it("conserve les bases", () => {
+    const e = new SequencerEngine();
+    e.setBaseLength(0, 18);
+    e.setSelectedPattern(0, 7);
+    for (const mode of COURSE) {
+      expect(e.setChannelMode(0, mode)).toBe(true);
+      expect(e.getBaseLength(0)).toBe(18);
+      expect(e.getSelectedPattern(0)).toBe(7);
+    }
+  });
+
+  // CARACTERISATION DE L'ETAT ACTUEL, pas une propriete normative. La regle P12
+  // de la conception E3.1 demande l'inverse. Ce test sera REMPLACE par le lot
+  // qui l'implemente, d'ou le 'actuellement' de son nom.
+  it("garde actuellement la zone CV", () => {
+    const e = new SequencerEngine();
+    e.setBaseLength(0, 18);
+    e.setCvDestination(0, CV_SOURCE_1, CvDestination.LENGTH);
+    e.setChannelMode(0, ChannelMode.SEQ);
+    e.setCvInput(CV_SOURCE_1, 330);
+    e.start();
+    e.advance(STEP);
+    expect(e.lengthCvOffset(0)).toBe(10);
+    expect(e.getEffectiveLength(0)).toBe(28);
+
+    expect(e.setChannelMode(0, ChannelMode.CLOCK)).toBe(true);
+    expect(e.lengthCvOffset(0)).toBe(10);
+    expect(e.getEffectiveLength(0)).toBe(28);
+
+    expect(e.setChannelMode(0, ChannelMode.SEQ)).toBe(true);
+    expect(e.lengthCvOffset(0)).toBe(10);
+    expect(e.getEffectiveLength(0)).toBe(28);
   });
 });

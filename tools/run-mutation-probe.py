@@ -1187,6 +1187,22 @@ MUTANTS = [
      "include/flexseq/Persistence.h",
      "            (state.cursor + step) % SequencerEngine::CHANNEL_COUNT);",
      "            (0 + step) % SequencerEngine::CHANNEL_COUNT);", "cpp"),
+    ("cpp: a change of mode clears the cv routing",
+     "src/domain/SequencerEngine.cpp",
+     "    c.mode = static_cast<uint8_t>(mode);\n    refreshStepTiming(channel);",
+     "    c.mode = static_cast<uint8_t>(mode);\n    c.cvTarget[0] = CV_DEST_NONE;\n    refreshStepTiming(channel);", "cpp-cvpattern"),
+    ("ts: a change of mode clears the cv routing",
+     "sim/src/domain/SequencerEngine.ts",
+     "    c.mode = mode;\n    this.refreshStepTiming(channel);",
+     "    c.mode = mode;\n    c.cvTarget[0] = CvDestination.NONE;\n    this.refreshStepTiming(channel);", "ts-cvpattern"),
+    ("cpp: a change of mode resets the base length",
+     "src/domain/SequencerEngine.cpp",
+     "    c.mode = static_cast<uint8_t>(mode);\n    refreshStepTiming(channel);",
+     "    c.mode = static_cast<uint8_t>(mode);\n    c.baseLength = DEFAULT_LENGTH;\n    refreshStepTiming(channel);", "cpp-cvpattern"),
+    ("ts: a change of mode resets the base length",
+     "sim/src/domain/SequencerEngine.ts",
+     "    c.mode = mode;\n    this.refreshStepTiming(channel);",
+     "    c.mode = mode;\n    c.baseLength = DEFAULT_LENGTH;\n    this.refreshStepTiming(channel);", "ts-cvpattern"),
 ]
 
 SUITES = {
