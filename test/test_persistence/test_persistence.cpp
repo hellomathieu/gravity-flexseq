@@ -1958,6 +1958,9 @@ struct ServiceRig {
     flexseq::ModulatedPatternState state;
 
     ServiceRig() {
+        for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+            engine.setChannelMode(ch, flexseq::MODE_SEQ);
+        }
         uint8_t content[persist::v3::CONTENT_BYTES];
         for (uint8_t index = 0; index < persist::v3::TEMPLATE_COUNT; ++index) {
             memset(content, 0, sizeof(content));
@@ -2128,6 +2131,20 @@ void test_the_service_writes_no_byte_of_eeprom() {
     TEST_ASSERT_EQUAL_UINT16(before, r.ee.writes);
 }
 
+void test_a_channel_outside_seq_is_released_even_when_routed() {
+    ServiceRig r;
+    r.engine.setChannelMode(3, flexseq::MODE_SEQ);
+    r.engine.setSelectedPattern(3, 7);
+    r.route(3);
+    TEST_ASSERT_EQUAL_INT8(3, r.serve());
+    TEST_ASSERT_EQUAL_UINT8(7, r.state.loaded[3]);
+
+    TEST_ASSERT_TRUE(r.engine.setChannelMode(3, flexseq::MODE_CLOCK));
+    TEST_ASSERT_EQUAL_INT8(-1, r.serve());
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(NONE, r.state.loaded[3],
+        "hors SEQ le canal est relache : l'instance redevient jouee");
+}
+
 // ---------------------------------------------------------------------------
 // E3.7-C3 : CARACTERISATION de P35, l'ordre a la frontiere.
 //
@@ -2216,6 +2233,7 @@ int main() {
     RUN_TEST(test_six_eligible_channels_are_served_in_six_calls);
     RUN_TEST(test_the_sweep_starts_at_the_cursor_and_wraps);
     RUN_TEST(test_the_service_writes_no_byte_of_eeprom);
+    RUN_TEST(test_a_channel_outside_seq_is_released_even_when_routed);
 
     RUN_TEST(test_the_boundary_that_swaps_the_template_keeps_the_previous_ratchet_for_one_step);
     RUN_TEST(test_the_first_boot_seeds_the_templates_and_fills_the_instances_from_a1);

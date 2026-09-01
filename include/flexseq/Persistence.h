@@ -492,11 +492,17 @@ inline bool isRoutedToPattern(const SequencerEngine& engine, uint8_t channel) {
     return false;
 }
 
+inline bool isEligibleForPatternModulation(const SequencerEngine& engine,
+                                           uint8_t channel) {
+    return isRoutedToPattern(engine, channel)
+        && engine.getChannelMode(channel) == MODE_SEQ;
+}
+
 template <typename Storage>
 int8_t serviceOneModulationTemplateLoad(Storage& storage, const SequencerEngine& engine,
                                         ModulatedPatternState& state) {
     for (uint8_t channel = 0; channel < SequencerEngine::CHANNEL_COUNT; ++channel) {
-        if (!isRoutedToPattern(engine, channel)) {
+        if (!isEligibleForPatternModulation(engine, channel)) {
             state.loaded[channel] = ModulatedPatternState::NOT_MODULATED;
         }
     }
@@ -506,7 +512,7 @@ int8_t serviceOneModulationTemplateLoad(Storage& storage, const SequencerEngine&
     for (uint8_t step = 0; step < SequencerEngine::CHANNEL_COUNT; ++step) {
         const uint8_t channel = static_cast<uint8_t>(
             (state.cursor + step) % SequencerEngine::CHANNEL_COUNT);
-        if (!isRoutedToPattern(engine, channel)) {
+        if (!isEligibleForPatternModulation(engine, channel)) {
             continue;
         }
         const uint8_t wanted = static_cast<uint8_t>(engine.patternCvIndex(channel));
