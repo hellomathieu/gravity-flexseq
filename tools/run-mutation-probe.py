@@ -63,12 +63,8 @@ OK, ERR, DIM, B, Z = ("\033[32m", "\033[31m", "\033[2m", "\033[1m", "\033[0m") i
 MUTANTS = [
     ("cpp: the play path reads the shared template instead of the channel instance",
      "src/domain/SequencerEngine.cpp",
-     "const Pattern* SequencerEngine::patternForChannel(uint8_t channel) const {\n"
-     "    return instanceForChannel(channel);\n}",
-     "const Pattern* SequencerEngine::patternForChannel(uint8_t channel) const {\n"
-     "    if (!validChannel(channel)) {\n"
-     "        return nullptr;\n    }\n"
-     "    return instanceForChannel(0);\n}", "cpp-all"),
+     "const Pattern* SequencerEngine::patternForChannel(uint8_t channel) const {\n    if (!validChannel(channel)) {\n        return nullptr;\n    }\n    if (modulated_ != nullptr\n        && modulated_->loaded[channel] != ModulatedPatternState::NOT_MODULATED) {\n        return &modulated_->pattern[channel];\n    }\n    return instanceForChannel(channel);\n}",
+     "const Pattern* SequencerEngine::patternForChannel(uint8_t channel) const {\n    if (!validChannel(channel)) {\n        return nullptr;\n    }\n    if (modulated_ != nullptr\n        && modulated_->loaded[channel] != ModulatedPatternState::NOT_MODULATED) {\n        return &modulated_->pattern[channel];\n    }\n    return instanceForChannel(0);\n}", "cpp-all"),
     ("cpp: the effective length derivation never runs (ADR 0009)",
      "src/domain/SequencerEngine.cpp",
      "bool SequencerEngine::setBaseLength(uint8_t channel, uint8_t length) {\n"
@@ -82,14 +78,10 @@ MUTANTS = [
      "        return false;\n    }\n"
      "    channels_[channel].baseLength = length;\n"
      "    return true;", "cpp-all"),
-    ("cpp: the edit path writes into the shared template instead of the instance",
+    ("cpp: the non-const play path reads the instance of the channel 0",
      "src/domain/SequencerEngine.cpp",
-     "Pattern* SequencerEngine::patternForChannel(uint8_t channel) {\n"
-     "    return instanceForChannel(channel);\n}",
-     "Pattern* SequencerEngine::patternForChannel(uint8_t channel) {\n"
-     "    if (!validChannel(channel)) {\n"
-     "        return nullptr;\n    }\n"
-     "    return instanceForChannel(0);\n}", "cpp-all"),
+     "Pattern* SequencerEngine::patternForChannel(uint8_t channel) {\n    if (!validChannel(channel)) {\n        return nullptr;\n    }\n    if (modulated_ != nullptr\n        && modulated_->loaded[channel] != ModulatedPatternState::NOT_MODULATED) {\n        return &modulated_->pattern[channel];\n    }\n    return instanceForChannel(channel);\n}",
+     "Pattern* SequencerEngine::patternForChannel(uint8_t channel) {\n    if (!validChannel(channel)) {\n        return nullptr;\n    }\n    if (modulated_ != nullptr\n        && modulated_->loaded[channel] != ModulatedPatternState::NOT_MODULATED) {\n        return &modulated_->pattern[channel];\n    }\n    return instanceForChannel(0);\n}", "cpp-all"),
     ("cpp: isTemplateEmpty looks at the ratchet bytes too (B4b.6.4)",
      "include/flexseq/Persistence.h",
      "        for (uint8_t offset = 0; offset < persist::v3::STEP_BYTES; ++offset) {",
@@ -1143,6 +1135,22 @@ MUTANTS = [
      "include/flexseq/Persistence.h",
      "    if (storage.busy()) {\n        return false;\n    }",
      "    if (storage.busy()) {\n        return true;\n    }", "cpp"),
+    ("cpp: the played source is the buffer of a channel that carries no template",
+     "src/domain/SequencerEngine.cpp",
+     "Pattern* SequencerEngine::patternForChannel(uint8_t channel) {\n    if (!validChannel(channel)) {\n        return nullptr;\n    }\n    if (modulated_ != nullptr\n        && modulated_->loaded[channel] != ModulatedPatternState::NOT_MODULATED) {\n        return &modulated_->pattern[channel];\n    }\n    return instanceForChannel(channel);\n}",
+     "Pattern* SequencerEngine::patternForChannel(uint8_t channel) {\n    if (!validChannel(channel)) {\n        return nullptr;\n    }\n    if (modulated_ != nullptr\n        && modulated_->loaded[channel] == ModulatedPatternState::NOT_MODULATED) {\n        return &modulated_->pattern[channel];\n    }\n    return instanceForChannel(channel);\n}", "cpp-engine"),
+    ("cpp: every modulated channel plays the buffer of the channel 0",
+     "src/domain/SequencerEngine.cpp",
+     "Pattern* SequencerEngine::patternForChannel(uint8_t channel) {\n    if (!validChannel(channel)) {\n        return nullptr;\n    }\n    if (modulated_ != nullptr\n        && modulated_->loaded[channel] != ModulatedPatternState::NOT_MODULATED) {\n        return &modulated_->pattern[channel];\n    }\n    return instanceForChannel(channel);\n}",
+     "Pattern* SequencerEngine::patternForChannel(uint8_t channel) {\n    if (!validChannel(channel)) {\n        return nullptr;\n    }\n    if (modulated_ != nullptr\n        && modulated_->loaded[channel] != ModulatedPatternState::NOT_MODULATED) {\n        return &modulated_->pattern[0];\n    }\n    return instanceForChannel(channel);\n}", "cpp-engine"),
+    ("cpp: the const overload did not follow and always returns the instance",
+     "src/domain/SequencerEngine.cpp",
+     "const Pattern* SequencerEngine::patternForChannel(uint8_t channel) const {\n    if (!validChannel(channel)) {\n        return nullptr;\n    }\n    if (modulated_ != nullptr\n        && modulated_->loaded[channel] != ModulatedPatternState::NOT_MODULATED) {\n        return &modulated_->pattern[channel];\n    }\n    return instanceForChannel(channel);\n}",
+     "const Pattern* SequencerEngine::patternForChannel(uint8_t channel) const {\n    return instanceForChannel(channel);\n}", "cpp-engine"),
+    ("cpp: the editor writes into the played pattern instead of the instance",
+     "src/domain/UiController.cpp",
+     "    return engine_.instanceForChannel(static_cast<uint8_t>(channel));",
+     "    return engine_.patternForChannel(static_cast<uint8_t>(channel));", "cpp-ui"),
 ]
 
 SUITES = {

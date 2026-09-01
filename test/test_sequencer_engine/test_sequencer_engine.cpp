@@ -795,6 +795,75 @@ void test_a_wired_engine_still_plays_its_instance() {
     }
 }
 
+void test_a_loaded_channel_plays_its_modulation_buffer() {
+    SequencerEngine e;
+    flexseq::ModulatedPatternState state;
+    e.setModulatedPatterns(&state);
+    state.loaded[2] = 5;
+
+    TEST_ASSERT_EQUAL_PTR(&state.pattern[2], e.patternForChannel(2));
+    TEST_ASSERT_TRUE(e.patternForChannel(2) != e.instanceForChannel(2));
+}
+
+void test_only_the_loaded_channels_leave_their_instance() {
+    SequencerEngine e;
+    flexseq::ModulatedPatternState state;
+    e.setModulatedPatterns(&state);
+    state.loaded[2] = 5;
+    state.loaded[4] = 0;
+
+    TEST_ASSERT_EQUAL_PTR(&state.pattern[2], e.patternForChannel(2));
+    TEST_ASSERT_EQUAL_PTR(&state.pattern[4], e.patternForChannel(4));
+    TEST_ASSERT_EQUAL_PTR(e.instanceForChannel(0), e.patternForChannel(0));
+    TEST_ASSERT_EQUAL_PTR(e.instanceForChannel(3), e.patternForChannel(3));
+    TEST_ASSERT_EQUAL_PTR(e.instanceForChannel(5), e.patternForChannel(5));
+}
+
+void test_releasing_a_channel_returns_it_to_its_instance() {
+    SequencerEngine e;
+    flexseq::ModulatedPatternState state;
+    e.setModulatedPatterns(&state);
+    state.loaded[2] = 5;
+    TEST_ASSERT_EQUAL_PTR(&state.pattern[2], e.patternForChannel(2));
+
+    state.loaded[2] = flexseq::ModulatedPatternState::NOT_MODULATED;
+    TEST_ASSERT_EQUAL_PTR(e.instanceForChannel(2), e.patternForChannel(2));
+}
+
+void test_an_invalid_channel_stays_null_even_with_a_loaded_state() {
+    SequencerEngine e;
+    flexseq::ModulatedPatternState state;
+    e.setModulatedPatterns(&state);
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        state.loaded[ch] = 1;
+    }
+    TEST_ASSERT_NULL(e.patternForChannel(SequencerEngine::CHANNEL_COUNT));
+    TEST_ASSERT_NULL(e.patternForChannel(200));
+}
+
+void test_the_const_overload_selects_the_same_source() {
+    SequencerEngine e;
+    flexseq::ModulatedPatternState state;
+    e.setModulatedPatterns(&state);
+    state.loaded[2] = 5;
+    const SequencerEngine& c = e;
+
+    TEST_ASSERT_EQUAL_PTR(&state.pattern[2], c.patternForChannel(2));
+    TEST_ASSERT_EQUAL_PTR(c.instanceForChannel(0), c.patternForChannel(0));
+    TEST_ASSERT_NULL(c.patternForChannel(SequencerEngine::CHANNEL_COUNT));
+}
+
+void test_an_unwired_engine_ignores_a_loaded_state_it_was_never_given() {
+    SequencerEngine e;
+    flexseq::ModulatedPatternState state;
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        state.loaded[ch] = 1;
+    }
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        TEST_ASSERT_EQUAL_PTR(e.instanceForChannel(ch), e.patternForChannel(ch));
+    }
+}
+
 int main() {
     UNITY_BEGIN();
 
@@ -805,6 +874,12 @@ int main() {
     RUN_TEST(test_a_fresh_state_starts_the_round_robin_on_the_first_channel);
     RUN_TEST(test_a_fresh_state_carries_no_length);
     RUN_TEST(test_the_sentinel_names_no_pattern_of_the_bank);
+    RUN_TEST(test_a_loaded_channel_plays_its_modulation_buffer);
+    RUN_TEST(test_only_the_loaded_channels_leave_their_instance);
+    RUN_TEST(test_releasing_a_channel_returns_it_to_its_instance);
+    RUN_TEST(test_an_invalid_channel_stays_null_even_with_a_loaded_state);
+    RUN_TEST(test_the_const_overload_selects_the_same_source);
+    RUN_TEST(test_an_unwired_engine_ignores_a_loaded_state_it_was_never_given);
     RUN_TEST(test_an_unwired_engine_still_plays_its_instance);
     RUN_TEST(test_a_wired_engine_still_plays_its_instance);
     RUN_TEST(test_starts_stopped_at_phase_zero_with_defaults);

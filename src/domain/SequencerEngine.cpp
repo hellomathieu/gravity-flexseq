@@ -198,10 +198,24 @@ const Pattern* SequencerEngine::instanceForChannel(uint8_t channel) const {
 }
 
 Pattern* SequencerEngine::patternForChannel(uint8_t channel) {
+    if (!validChannel(channel)) {
+        return nullptr;
+    }
+    if (modulated_ != nullptr
+        && modulated_->loaded[channel] != ModulatedPatternState::NOT_MODULATED) {
+        return &modulated_->pattern[channel];
+    }
     return instanceForChannel(channel);
 }
 
 const Pattern* SequencerEngine::patternForChannel(uint8_t channel) const {
+    if (!validChannel(channel)) {
+        return nullptr;
+    }
+    if (modulated_ != nullptr
+        && modulated_->loaded[channel] != ModulatedPatternState::NOT_MODULATED) {
+        return &modulated_->pattern[channel];
+    }
     return instanceForChannel(channel);
 }
 
