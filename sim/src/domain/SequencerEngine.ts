@@ -119,6 +119,7 @@ interface ChannelState {
   /** Cadence choisie mais pas encore jouee, en ticksPerStep. 0 = aucune. */
   pendingTicks: number;
   stepped: boolean; // a franchi une frontiere de step lors du dernier advance()
+  armed: boolean;
   cvTarget: number[]; // destination de CV1 et CV2, persistee
   cvZone: number[]; // zone d'hysteresis courante, jamais persistee
 }
@@ -151,6 +152,7 @@ export class SequencerEngine {
       acc: 0,
       pendingTicks: 0,
       stepped: false,
+      armed: false,
       cvTarget: [DEFAULT_CV_DESTINATION, DEFAULT_CV_DESTINATION],
       cvZone: [0, 0],
     }));
@@ -287,6 +289,7 @@ export class SequencerEngine {
       const c = this.channels[ch]!;
       c.localStep = 0;
       c.acc = 0;
+      c.armed = false;
       if (c.pendingTicks > 0) {
         const ticksPerStep = c.pendingTicks;
         c.pendingTicks = 0;
@@ -304,7 +307,7 @@ export class SequencerEngine {
     for (const c of this.channels) c.stepped = false; // report only THIS advance
     this.onsets.fill(0);
     if (!this.running) return;
-    if (!Number.isInteger(ticks) || ticks < 0) return;
+    if (!Number.isInteger(ticks) || ticks <= 0) return;
 
     this.phase = (this.phase + ticks) % PHASE_MODULO;
     let beat = this.beatTick + ticks;
@@ -314,6 +317,12 @@ export class SequencerEngine {
 
     for (let ch = 0; ch < this.channels.length; ++ch) {
       const c = this.channels[ch]!;
+      if (c.armed) {
+        c.armed = false;
+        if (c.mode !== ChannelMode.CLOCK || c.offset === 0) {
+          this.onsets[ch] = (this.onsets[ch] ?? 0) + 1;
+        }
+      }
       if (beatCrossed && c.pendingTicks > 0) {
         const ticksPerStep = c.pendingTicks;
         c.pendingTicks = 0;
@@ -479,6 +488,27 @@ export class SequencerEngine {
   }
 
   /** Consomme les valeurs CV poussees, a la frontiere de step, en MODE_SEQ seul. */
+  applyCvResetEvents(sourceMask: number): void {
+    if (!Number.isInteger(sourceMask)) return;
+    const mask = sourceMask & ((1 << CV_SOURCE_COUNT) - 1);
+    if (mask === 0) return;
+    for (let ch = 0; ch < this.channels.length; ++ch) {
+      const c = this.channels[ch]!;
+      if (c.mode !== ChannelMode.SEQ && c.mode !== ChannelMode.CLOCK) continue;
+      let routed = false;
+      for (let source = 0; source < CV_SOURCE_COUNT; ++source) {
+        if ((mask & (1 << source)) !== 0 && c.cvTarget[source] === CvDestination.RESET) {
+          routed = true;
+        }
+      }
+      if (!routed) continue;
+      c.localStep = 0;
+      c.acc = 0;
+      this.refreshStepTiming(ch);
+      c.armed = true;
+    }
+  }
+
   private applyCvAtStepBoundary(channel: number): void {
     const c = this.channel(channel);
     if (!c) return;
