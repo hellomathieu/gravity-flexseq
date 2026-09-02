@@ -520,8 +520,17 @@ int main(int argc, char **argv)
     } else if (ref->nrise >= 3) {
         static double jit[MAX_EDGES];
         int nj = 0;
-        const uint64_t origin = ref->rise[0];
-        for (int r = 1; r < ref->nrise; ++r) {
+        /* D79 (2026-09-02) : le PREMIER front est l'onset ARME du step 0, emis
+         * au premier tick draine apres le Start — il vit HORS de la grille des
+         * franchissements, decale d'un passage de boucle par construction.
+         * L'ancrer decalerait toute la grille ideale et ferait lire ce decalage
+         * comme de la gigue (mesure : 3,4 % pour un budget de 2). La grille
+         * s'ancre donc sur le premier front DE FRANCHISSEMENT, et le front arme
+         * reste tenu par ses propres criteres : le silence avant PLAY ici, la
+         * fenetre de la course pile, l'appariement de la sonde de derive. */
+        const int first_grid = 1;
+        const uint64_t origin = ref->rise[first_grid];
+        for (int r = first_grid + 1; r < ref->nrise; ++r) {
             const double t = ms(ref->rise[r] - origin);
             const int step = (int)((t + step_ms / 2.0) / step_ms);
             double d = t - (double)step * step_ms;
