@@ -106,11 +106,6 @@ bool load() {
     return true;
 }
 
-int referenceReadStep(int localStep, int offsetSum, int effectiveLength) {
-    const int raw = (localStep + offsetSum) % effectiveLength;
-    return (raw + effectiveLength) % effectiveLength;
-}
-
 }  // namespace
 
 void setUp() {}
@@ -192,7 +187,7 @@ void test_family_P_matches_the_production_clamp() {
     TEST_ASSERT_TRUE(seen > 0);
 }
 
-void test_family_S_matches_the_reference_model() {
+void test_family_S_matches_the_production_read_step() {
     size_t seen = 0;
     for (size_t i = 0; i < vectors.size(); ++i) {
         const Vector& v = vectors[i];
@@ -200,7 +195,8 @@ void test_family_S_matches_the_reference_model() {
             continue;
         }
         ++seen;
-        TEST_ASSERT_EQUAL_INT_MESSAGE(v.expected, referenceReadStep(v.a, v.b, v.c),
+        TEST_ASSERT_EQUAL_INT_MESSAGE(v.expected,
+                                      flexseq::lengthcv::readStepFor(static_cast<uint8_t>(v.a), static_cast<int8_t>(v.b), static_cast<uint8_t>(v.c)),
                                       v.id.c_str());
     }
     TEST_ASSERT_TRUE(seen > 0);
@@ -210,7 +206,7 @@ void test_the_read_step_stays_inside_the_length_for_every_input() {
     for (int length = 1; length <= 36; ++length) {
         for (int local = 0; local < length; ++local) {
             for (int sum = -30; sum <= 30; ++sum) {
-                const int got = referenceReadStep(local, sum, length);
+                const int got = flexseq::lengthcv::readStepFor(static_cast<uint8_t>(local), static_cast<int8_t>(sum), static_cast<uint8_t>(length));
                 TEST_ASSERT_TRUE(got >= 0);
                 TEST_ASSERT_TRUE(got < length);
             }
@@ -220,14 +216,14 @@ void test_the_read_step_stays_inside_the_length_for_every_input() {
 
 void test_a_length_of_one_always_reads_the_first_step() {
     for (int sum = -30; sum <= 30; ++sum) {
-        TEST_ASSERT_EQUAL_INT(0, referenceReadStep(0, sum, 1));
+        TEST_ASSERT_EQUAL_INT(0, flexseq::lengthcv::readStepFor(static_cast<uint8_t>(0), static_cast<int8_t>(sum), static_cast<uint8_t>(1)));
     }
 }
 
 void test_a_null_offset_reads_the_local_step() {
     for (int length = 1; length <= 36; ++length) {
         for (int local = 0; local < length; ++local) {
-            TEST_ASSERT_EQUAL_INT(local, referenceReadStep(local, 0, length));
+            TEST_ASSERT_EQUAL_INT(local, flexseq::lengthcv::readStepFor(static_cast<uint8_t>(local), static_cast<int8_t>(0), static_cast<uint8_t>(length)));
         }
     }
 }
@@ -288,7 +284,7 @@ int main() {
         RUN_TEST(test_family_A_matches_the_production_quantiser);
         RUN_TEST(test_family_L_matches_the_production_clamp);
         RUN_TEST(test_family_P_matches_the_production_clamp);
-        RUN_TEST(test_family_S_matches_the_reference_model);
+        RUN_TEST(test_family_S_matches_the_production_read_step);
     }
     RUN_TEST(test_the_read_step_stays_inside_the_length_for_every_input);
     RUN_TEST(test_a_length_of_one_always_reads_the_first_step);
