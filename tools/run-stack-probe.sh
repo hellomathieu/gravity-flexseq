@@ -92,8 +92,11 @@ printf '  %s✅%s symbole                %s_end %s%s\n' "$C_OK" "$C_0" "$C_DIM" 
 
 # Temoin du chemin de chargement, utile seulement avec EE_IMAGE. loaded[] vit
 # dans ModulatedPatternState, apres les six Pattern et les six longueurs.
+# La course RESET (CV_PULSE_MV) porte son propre temoin, la broche de sortie :
+# son image route RESET et non PATTERN, donc loaded[] resterait vierge et le
+# temoin de modulation rougirait une course qui ne le concerne pas.
 LOADED_ADDR=""
-if [ -n "${EE_IMAGE:-}" ]; then
+if [ -n "${EE_IMAGE:-}" ] && [ -z "${CV_PULSE_MV:-}" ]; then
   STATE_HEX="$("$AVR_NM" --radix=x --demangle "$ELF" \
     | grep -E "modulatedPatterns$" | head -1 | cut -d' ' -f1)"
   if [ -n "$STATE_HEX" ]; then
@@ -178,6 +181,28 @@ preloaded = bool(os.environ.get("EE_IMAGE"))
 persisted = (version is not None and version[1] == expected_address
              and version[2] == expected_version and read_back)
 loaded = re.search(r"loaded\[\]=([\d,]+)", txt)
+
+# Temoin du chemin RESET, quand la course l'exerce (CV_PULSE_MV). La broche de
+# sortie 1 doit se taire avant l'impulsion — l'onset d'entree du reset global
+# n'existe pas, ligne 79 — et le premier front doit tomber dans la fenetre qui
+# suit. Sans ce releve, une image qui ne route pas RESET rendrait le meme pic
+# et le vert serait faux.
+pulse = bool(os.environ.get("CV_PULSE_MV"))
+reset_ok = True
+if pulse:
+    r = re.search(r"RESET fronts_avant=(\d+) premier_apres_ms=([\d.-]+) "
+                  r"fronts_apres=(\d+)", txt)
+    window = float(os.environ.get("RESET_WINDOW_MS", "60"))
+    if r is None:
+        print(f"  {mark(False)} Chemin RESET        TEMOIN ABSENT — le releve "
+              f"des fronts n'a pas ete emis")
+        sys.exit(1)
+    before, first, after = int(r[1]), float(r[2]), int(r[3])
+    reset_ok = before == 0 and after >= 1 and 0.0 <= first <= window
+    print(f"  {mark(reset_ok)} Chemin RESET        {before} front avant "
+          f"l'impulsion, premier front {first:.1f} ms apres, {after} ensuite"
+          f"{DIM}  — fenetre {window:g} ms ; le temoin est la broche OUT1{Z}")
+
 if preloaded:
     if os.environ.get("LOADED") and loaded is None:
         print(f"  {mark(False)} Chargement          TEMOIN ABSENT — le releve de loaded[] n'a pas ete emis")
@@ -226,5 +251,5 @@ else:
     print(f"{DIM}  hors mesure les chemins que le firmware n'emprunte pas encore.{Z}")
 
 sys.exit(0 if (fits_reserve and fits_ram and (persisted or preloaded)
-               and (quiet or all_entered)) else 1)
+               and (quiet or all_entered) and reset_ok) else 1)
 PY

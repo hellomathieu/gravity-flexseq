@@ -49,6 +49,7 @@
 #include <sim_hex.h>
 #include <sim_irq.h>
 #include <sim_interrupts.h>
+#include <avr_adc.h>
 #include <avr_twi.h>
 #include <avr_uart.h>
 #include <avr_ioport.h>
@@ -80,6 +81,45 @@ static void isr_hook(struct avr_irq_t* irq, uint32_t value, void* param)
     if (value) ++isr_count[(size_t)param];
 }
 
+/* Course RESET, sous les leviers CV_PULSE_MV, CV_PULSE_AT_S et CV_PULSE_SOURCE.
+ * Sans CV_PULSE_MV rien de tout ceci n'existe : les deux courses historiques ne
+ * changent pas de regime. La sonde appuie alors sur PLAY, repond aux
+ * conversions ADC — au repos CV_IDLE_MV, puis une impulsion datee — et
+ * horodate les fronts de la sortie 1 (PD7). Le temoin est la BROCHE : apres
+ * PLAY la sortie se tait (l'onset d'entree du reset global n'existe pas,
+ * docs/open-risks.md ligne 79), et seul un reset CV consomme peut produire un
+ * front dans la fenetre qui suit l'impulsion. Aucune lecture de RAM, aucune
+ * copie de layout. */
+#define CV_IDLE_MV 2625
+static avr_irq_t* g_adc_irq[2];
+static int g_cv_mv[2] = { CV_IDLE_MV, CV_IDLE_MV };
+static int g_pulse_mv;
+static int g_pulse_idx;
+static double g_pulse_at_s = 3.0;
+static double g_pulse_width_ms = 50.0;
+static uint64_t g_out_rise[256];
+static int g_out_nrise;
+static int g_out_last = -1;
+static avr_t* g_avr;
+
+static void adc_trigger_hook(struct avr_irq_t* irq, uint32_t value, void* param)
+{
+    (void)irq; (void)param;
+    avr_adc_mux_t mux;
+    memcpy(&mux, &value, sizeof(mux) < sizeof(value) ? sizeof(mux) : sizeof(value));
+    if (mux.src == 7) avr_raise_irq(g_adc_irq[0], g_cv_mv[0]);
+    else if (mux.src == 6) avr_raise_irq(g_adc_irq[1], g_cv_mv[1]);
+}
+
+static void out_hook(struct avr_irq_t* irq, uint32_t value, void* param)
+{
+    (void)irq; (void)param;
+    const int level = value ? 1 : 0;
+    if (level == g_out_last) return;
+    g_out_last = level;
+    if (level && g_out_nrise < 256) g_out_rise[g_out_nrise++] = g_avr->cycle;
+}
+
 int main(int argc, char** argv)
 {
     if (argc < 3) {
@@ -108,8 +148,18 @@ int main(int argc, char** argv)
 
     avr_t* avr = avr_make_mcu_by_name(MCU);
     if (!avr) { fprintf(stderr, "MCU inconnu\n"); return 1; }
+    g_avr = avr;
     avr_init(avr);
     avr_load_firmware(avr, &f);
+
+    const char* pulse_env = getenv("CV_PULSE_MV");
+    if (pulse_env != NULL && atoi(pulse_env) > 0) {
+        g_pulse_mv = atoi(pulse_env);
+        const char* src = getenv("CV_PULSE_SOURCE");
+        g_pulse_idx = (src != NULL && atoi(src) == 2) ? 1 : 0;
+        const char* at = getenv("CV_PULSE_AT_S");
+        if (at != NULL) g_pulse_at_s = atof(at);
+    }
 
     /* Journal de console de l'UART desarme : le firmware emet du MIDI, et ce
      * chemin de simavr lit un octet hors bornes. Voir simavr_uart_quiet.h. */
@@ -171,6 +221,20 @@ int main(int argc, char** argv)
         if (v) avr_irq_register_notify(v + AVR_INT_IRQ_RUNNING, isr_hook, (void*)i);
     }
 
+    avr_irq_t* play = NULL;
+    if (g_pulse_mv > 0) {
+        g_adc_irq[0] = avr_io_getirq(avr, AVR_IOCTL_ADC_GETIRQ, ADC_IRQ_ADC7);
+        g_adc_irq[1] = avr_io_getirq(avr, AVR_IOCTL_ADC_GETIRQ, ADC_IRQ_ADC6);
+        avr_irq_register_notify(
+            avr_io_getirq(avr, AVR_IOCTL_ADC_GETIRQ, ADC_IRQ_OUT_TRIGGER),
+            adc_trigger_hook, NULL);
+        avr_irq_t* out1 = avr_io_getirq(avr, AVR_IOCTL_IOPORT_GETIRQ('D'), 7);
+        if (!out1) { fprintf(stderr, "broche OUT1 introuvable\n"); return 2; }
+        avr_irq_register_notify(out1, out_hook, NULL);
+        play = avr_io_getirq(avr, AVR_IOCTL_IOPORT_GETIRQ('D'), 5);
+        if (!play) { fprintf(stderr, "broche PLAY introuvable\n"); return 2; }
+    }
+
     /* Les entrees a remuer : broches de l'encodeur (les seules sous PCINT dans
      * libGravity ; les boutons sont scrutes) et l'USART, ou le MIDI arrive. */
     avr_irq_t* encA = avr_io_getirq(avr, AVR_IOCTL_IOPORT_GETIRQ('C'), 3);  /* PC3 = A3 */
@@ -188,10 +252,35 @@ int main(int argc, char** argv)
 
     printf("firmware   %s\n", fw);
     printf("RAM libre  %u o  (_end 0x%04x .. RAMEND 0x%04x)\n", free_ram, end_addr, ramend);
-    printf("injection  %s\n\n",
+    printf("injection  %s\n",
            quiet ? "AUCUNE (QUIET)" : "encodeur + MIDI, premiere moitie seulement");
+    if (g_pulse_mv > 0) {
+        printf("impulsion  CV%d a %d mV, a %.2f s, PLAY presse\n",
+               g_pulse_idx + 1, g_pulse_mv, g_pulse_at_s);
+    }
+    printf("\n");
+
+    const uint64_t pulse_from = (uint64_t)(g_pulse_at_s * (double)F_CPU_HZ);
+    const uint64_t pulse_to =
+        pulse_from + (uint64_t)(g_pulse_width_ms * 1e-3 * (double)F_CPU_HZ);
+    const uint64_t play_down = (uint64_t)(0.60 * (double)F_CPU_HZ);
+    const uint64_t play_up = (uint64_t)(0.66 * (double)F_CPU_HZ);
+    int play_state = 2;
 
     while (avr->cycle < target) {
+        if (play != NULL) {
+            const int want =
+                (avr->cycle >= play_down && avr->cycle < play_up) ? 0 : 1;
+            if (want != play_state) {
+                play_state = want;
+                avr_raise_irq(play, want);
+            }
+        }
+        if (g_pulse_mv > 0) {
+            g_cv_mv[g_pulse_idx] =
+                (avr->cycle >= pulse_from && avr->cycle < pulse_to)
+                    ? g_pulse_mv : CV_IDLE_MV;
+        }
         const int state = avr_run(avr);
         if (state == cpu_Done || state == cpu_Crashed) {
             printf("!! CPU arrete (state=%d)\n", state);
@@ -271,6 +360,27 @@ int main(int argc, char** argv)
         for (int i = 0; i < 6; ++i)
             printf("%s%u", i ? "," : "", avr->data[addr + i]);
         printf("\n");
+    }
+
+    /* Temoin du chemin RESET, sur la broche. Format SANS indentation de deux
+     * espaces ni nombre isole en fin de ligne, pour la meme raison que
+     * loaded[]. */
+    if (g_pulse_mv > 0) {
+        int before = 0, after = 0;
+        double first_after_ms = -1.0;
+        const double pulse_ms = g_pulse_at_s * 1000.0;
+        for (int i = 0; i < g_out_nrise; ++i) {
+            const double t = (double)g_out_rise[i] * 1e3 / (double)F_CPU_HZ;
+            if (t < pulse_ms) {
+                ++before;
+            } else {
+                if (first_after_ms < 0.0) first_after_ms = t - pulse_ms;
+                ++after;
+            }
+        }
+        printf("\n=== RESET ===\n");
+        printf("RESET fronts_avant=%d premier_apres_ms=%.1f fronts_apres=%d "
+               "impulsion_ms=%.1f\n", before, first_after_ms, after, pulse_ms);
     }
 
     printf("\n=== PILE ===\n");
