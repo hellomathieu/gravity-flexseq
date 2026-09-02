@@ -97,6 +97,15 @@ static int g_cv_mv[2];
 static int g_inject;
 static uint32_t g_adc_replies[2];
 
+/* Impulsion RESET datee, par les leviers d'environnement RESET_PULSE_MV,
+ * RESET_PULSE_MS, RESET_PULSE_WIDTH_MS et RESET_PULSE_SOURCE (1 ou 2). Sans
+ * RESET_PULSE_MV les courses existantes ne changent pas de regime. */
+static int g_pulse_mv;
+static int g_pulse_idx;
+static int g_pulse_base;
+static double g_pulse_at_ms = 8137.0;
+static double g_pulse_width_ms = 50.0;
+
 #define MAX_EDGES 4096
 
 typedef struct {
@@ -209,8 +218,23 @@ int main(int argc, char **argv)
      * veulent dire quoi que ce soit. Le critere est le NOMBRE d impulsions,
      * et il est evalue par le script contre la course SEQ. */
     const int ratchet = strcmp(mode, "ratchet") == 0;
+    /* Course CVRESET : un front injecte en cours de lecture re-origine la
+     * grille du canal route. Le harnais emet les temps de front bruts, et le
+     * script porte les trois criteres — rotation avant, latence, re-origine. */
+    const int cvreset = strcmp(mode, "cvreset") == 0;
 
     setvbuf(stdout, NULL, _IONBF, 0);
+
+    const char *pulse_env = getenv("RESET_PULSE_MV");
+    if (pulse_env != NULL && atoi(pulse_env) > 0) {
+        g_pulse_mv = atoi(pulse_env);
+        const char *src = getenv("RESET_PULSE_SOURCE");
+        g_pulse_idx = (src != NULL && atoi(src) == 2) ? 1 : 0;
+        const char *at = getenv("RESET_PULSE_MS");
+        if (at != NULL) g_pulse_at_ms = atof(at);
+        const char *w = getenv("RESET_PULSE_WIDTH_MS");
+        if (w != NULL) g_pulse_width_ms = atof(w);
+    }
 
     if (!ee_path) {
         fprintf(stderr, "image EEPROM requise : sans elle le mode et le contenu du "
@@ -281,6 +305,15 @@ int main(int argc, char **argv)
     if (g_inject) {
         printf("injection CV   CV1 %d mV ; CV2 %d mV\n\n", g_cv_mv[0], g_cv_mv[1]);
     }
+    if (g_pulse_mv > 0) {
+        g_pulse_base = g_cv_mv[g_pulse_idx];
+        printf("impulsion RESET  CV%d a %d mV, de %.1f a %.1f ms\n\n",
+               g_pulse_idx + 1, g_pulse_mv, g_pulse_at_ms,
+               g_pulse_at_ms + g_pulse_width_ms);
+    }
+    const uint64_t pulse_from = (uint64_t)(g_pulse_at_ms * 1e-3 * (double)F_CPU_HZ);
+    const uint64_t pulse_to =
+        (uint64_t)((g_pulse_at_ms + g_pulse_width_ms) * 1e-3 * (double)F_CPU_HZ);
 
     /* Le firmware demarre A L'ARRET depuis le 2026-08-25, comme l'original. La
      * sonde doit donc APPUYER SUR PLAY, sinon elle mesurerait le silence et le
@@ -300,6 +333,11 @@ int main(int argc, char **argv)
         if (want != play_state) {
             play_state = want;
             avr_raise_irq(play, want);
+        }
+        if (g_pulse_mv > 0) {
+            g_cv_mv[g_pulse_idx] =
+                (avr->cycle >= pulse_from && avr->cycle < pulse_to)
+                    ? g_pulse_mv : g_pulse_base;
         }
         int state = avr_run(avr);
         if (state == cpu_Done || state == cpu_Crashed) {
@@ -362,6 +400,9 @@ int main(int argc, char **argv)
     if (ratchet) {
         printf("  aucun ecart attendu : le ratchet place les onsets HORS de la\n"
                "  grille des steps. Le critere est le nombre d impulsions.\n");
+    } else if (cvreset) {
+        printf("  la grille se re-origine au front injecte ; les temps bruts\n"
+               "  suivent, et le script porte les trois criteres.\n");
     } else if (seq) {
         printf("  ecarts attendus (steps) :");
         for (int i = 0; i < nexp; ++i) printf(" %d", exp_gaps[i]);
@@ -374,6 +415,11 @@ int main(int argc, char **argv)
     int gap_ok = 0, gap_total = 0;
     if (ratchet) {
         printf("  %d impulsions observees sur le channel 1\n", ref->nrise);
+    } else if (cvreset) {
+        printf("  %d impulsions observees sur le channel 1\n", ref->nrise);
+        printf("EDGES");
+        for (int r = 0; r < ref->nrise; ++r) printf(" %.2f", ms(ref->rise[r]));
+        printf("\n");
     } else if (ref->nrise >= 3) {
         /* DROP=<n> ignore un front sur n : deux steps se fondent en un seul
          * ecart, le train cesse d'etre conforme et le critere doit rougir. Sans
@@ -469,6 +515,8 @@ int main(int argc, char **argv)
     double jit_max = 0.0, jit_med = 0.0;
     if (ratchet) {
         printf("  sans objet : les onsets d un ratchet ne sont pas sur la grille\n");
+    } else if (cvreset) {
+        printf("  sans objet : la grille se re-origine au front injecte\n");
     } else if (ref->nrise >= 3) {
         static double jit[MAX_EDGES];
         int nj = 0;
@@ -523,5 +571,6 @@ int main(int argc, char **argv)
            same_count, coincident, ref->nrise, g_lines[6].nrise,
            step_measured, BPM, mode,
            ref->nrise > 0 ? ms(ref->rise[0]) : -1.0, g_play_ms);
+    printf("RESET reset_ms=%.1f\n", g_pulse_mv > 0 ? g_pulse_at_ms : -1.0);
     return 0;
 }

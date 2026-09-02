@@ -116,7 +116,25 @@ CV1_MV="${CV1_MV:-$CV_NOMINAL_MV}"
 CV2_MV="${CV2_MV:-$CV_NOMINAL_MV}"
 CV_TARGET_FORCED="${CV_TARGET:-}"
 CV_TARGET="${CV_TARGET:-1:2}"
-COURSES="clock seq ratchet cvzero cv1length cv2length"
+# Course CVRESET : NOMINALE depuis F4.8, 2026-09-02. Un front injecte en cours
+# de lecture re-origine la grille du canal route vers RESET. Trois criteres :
+# la rotation cyclique AVANT le front, la latence du premier front apres lui,
+# et la re-origine — la suite des ecarts apres le front est celle du motif
+# DEPUIS LE STEP 0, dans l'ordre, phase connue. C'est la preuve du dernier
+# maillon, ADC -> takeEdge -> masque de main.cpp -> moteur -> broche, que
+# aucune suite de domaine ne peut donner : c'est la ou vit le mutant M7.
+#
+# Leviers : RESET_PULSE_MS (defaut 8137, choisi asynchrone de la grille),
+# RESET_PULSE_MV (4000, au-dessus du seuil d'armement de +1 V),
+# RESET_PULSE_SOURCE (1 ou 2 ; injecter sur la source NON routee doit rougir),
+# RESET_LATENCY_MS (60 : un tick de 5,21 ms a 120 BPM en /1, plus la
+# granularite du passage de boucle, avec de la marge — un critere operationnel,
+# verifie par la mesure rapportee).
+RESET_PULSE_MS="${RESET_PULSE_MS:-8137}"
+RESET_PULSE_MV="${RESET_PULSE_MV:-4000}"
+RESET_PULSE_SOURCE="${RESET_PULSE_SOURCE:-1}"
+RESET_LATENCY_MS="${RESET_LATENCY_MS:-60}"
+COURSES="${COURSES:-clock seq ratchet cvzero cv1length cv2length cvreset}"
 
 if [ -t 1 ]; then
   C_OK=$'\033[32m'; C_ERR=$'\033[31m'; C_DIM=$'\033[2m'; C_B=$'\033[1m'; C_0=$'\033[0m'; TTY=1
@@ -198,6 +216,7 @@ for MODE in $COURSES; do
     cvzero)    GEN_ARGS="--mode seq --cv-target ${CV_TARGET_FORCED:-1:2}" ;;
     cv1length) GEN_ARGS="--mode seq --cv-target ${CV_TARGET_FORCED:-1:2}" ;;
     cv2length) GEN_ARGS="--mode seq --cv-target ${CV_TARGET_FORCED:-2:2}" ;;
+    cvreset)   GEN_ARGS="--mode seq --cv-target ${CV_TARGET_FORCED:-1:3}" ;;
   esac
   # RATCHET_MUTATE=<step>:<code> ajoute un ratchet a l IMAGE et pas a l ATTENTE.
   # Avec un code dont N-1 ne divise pas celui du critere, la difference cesse
@@ -213,7 +232,7 @@ for MODE in $COURSES; do
     cat "$LOG"; die "generation de l'image $MODE en echec"
   fi
 done
-IMAGE_BYTES="$(wc -c < "$(dirname "$BIN")/ee-clock.bin" | tr -d ' ')"
+IMAGE_BYTES="$(wc -c < "$(dirname "$BIN")/ee-${COURSES%% *}.bin" | tr -d ' ')"
 printf '  %s✅%s images generees        %s%s octets, steps %s%s\n' \
   "$C_OK" "$C_0" "$C_DIM" "$IMAGE_BYTES" "$IMAGE_STEPS" "$C_0"
 if [ -n "${MUTATE:-}" ]; then
@@ -240,9 +259,15 @@ for MODE in $COURSES; do
       PROBE_MODE="seq"
       PROBE_LENGTH=$(( EXPECTED_LENGTH + EXPECTED_OFFSET ))
       PROBE_CV="$CV_ZERO_MV $CV2_MV" ;;
+    cvreset)
+      PROBE_MODE="cvreset"; PROBE_CV="$CV_ZERO_MV $CV_ZERO_MV" ;;
   esac
+  PROBE_ENV=""
+  if [ "$MODE" = "cvreset" ]; then
+    PROBE_ENV="RESET_PULSE_MV=$RESET_PULSE_MV RESET_PULSE_MS=$RESET_PULSE_MS RESET_PULSE_SOURCE=$RESET_PULSE_SOURCE"
+  fi
   set +e
-  "$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$DURATION" \
+  env $PROBE_ENV "$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$DURATION" \
     "$(dirname "$BIN")/ee-$MODE.bin" 384 "$PROBE_MODE" "$STEPS" "$PROBE_LENGTH" $PROBE_CV > "$LOG" 2>&1
   PROBE=$?
   set -e
@@ -261,7 +286,9 @@ for MODE in $COURSES; do
   set +e
   JITTER_BUDGET_PCT="$JITTER_BUDGET_PCT" STEP_TOLERANCE_PCT="$STEP_TOLERANCE_PCT" \
     MODE="$PROBE_MODE" SEQ_PULSES="$SEQ_PULSES" STEPS="$STEPS" \
-    RATCHET_CODE="$RATCHET_CODE" python3 - "$LOG" <<'PY'
+    RATCHET_CODE="$RATCHET_CODE" EXPECTED_LENGTH="$EXPECTED_LENGTH" \
+    RESET_PULSE_MS="$RESET_PULSE_MS" RESET_LATENCY_MS="$RESET_LATENCY_MS" \
+    python3 - "$LOG" <<'PY'
 import os, re, sys
 
 txt = open(sys.argv[1], errors='replace').read()
@@ -272,6 +299,7 @@ budget_pct = float(os.environ["JITTER_BUDGET_PCT"])
 mode = os.environ["MODE"]
 seq = mode == "seq"
 ratchet = mode == "ratchet"
+cvreset = mode == "cvreset"
 step_tol = float(os.environ["STEP_TOLERANCE_PCT"])
 
 m = re.search(r"RESULTAT (.*)", txt)
@@ -320,17 +348,62 @@ if ratchet:
     exact = code > 1 and diff > 0 and diff % (code - 1) == 0
     occurrences = diff // (code - 1) if code > 1 else 0
     pattern_ok = seq_pulses > 0 and exact and occurrences >= 2
+
+# Course CVRESET : trois criteres sur les temps de front bruts. AVANT le front
+# injecte, la suite des ecarts est une rotation cyclique de celle du motif —
+# la course se controle elle-meme. Le premier front APRES lui arrive sous
+# RESET_LATENCY_MS. Et la suite des ecarts apres lui est celle du motif DEPUIS
+# LE STEP 0, dans l'ordre : la re-origine, phase connue, plus forte que la
+# rotation.
+rot_ok = latency_ok = anchored = False
+first_delay = -1.0
+pre_gaps = post_gaps = []
+exp = []
+if cvreset:
+    reset_ms = float(os.environ["RESET_PULSE_MS"])
+    latency_budget = float(os.environ["RESET_LATENCY_MS"])
+    steps_list = [int(s) for s in os.environ["STEPS"].split(",")]
+    length = int(os.environ["EXPECTED_LENGTH"])
+    exp = [steps_list[i + 1] - steps_list[i] for i in range(len(steps_list) - 1)]
+    exp.append(length - steps_list[-1] + steps_list[0])
+    edges_m = re.search(r"^EDGES((?:\s+\d+\.\d+)+)$", txt, re.M)
+    edges = [float(x) for x in edges_m.group(1).split()] if edges_m else []
+    pre = [e for e in edges if e < reset_ms]
+    post = [e for e in edges if e >= reset_ms]
+
+    def to_steps(times):
+        out = []
+        for a, b in zip(times, times[1:]):
+            gap = b - a
+            r = round(gap / step_ms)
+            out.append(r if r >= 1 and abs(gap - r * step_ms) <= 0.05 * step_ms else 0)
+        return out
+
+    pre_gaps = to_steps(pre)
+    post_gaps = to_steps(post)
+    n = len(exp)
+    rot_ok = len(pre_gaps) >= 2 and any(
+        all(g == exp[(i + ph) % n] for i, g in enumerate(pre_gaps))
+        for ph in range(n))
+    if post:
+        first_delay = post[0] - reset_ms
+    latency_ok = bool(post) and 0.0 <= first_delay <= latency_budget
+    anchored = len(post_gaps) >= n and all(
+        g == exp[i % n] for i, g in enumerate(post_gaps))
+    pattern_ok = rot_ok and latency_ok and anchored
 jit_pct = 100.0 * jit_max / step_ms if step_ms else 0.0
-jit_ok = jit_pct <= budget_pct if not ratchet else True
+jit_ok = jit_pct <= budget_pct if not (ratchet or cvreset) else True
 step_measured = float(kv.get("step_mesure", "0"))
 bpm = int(kv.get("bpm", "0"))
 step_err_pct = abs(step_measured - step_ms) / step_ms * 100.0 if step_ms else 100.0
-step_ok = (step_measured > 0.0 and step_err_pct <= step_tol) if not ratchet else True
+step_ok = ((step_measured > 0.0 and step_err_pct <= step_tol)
+           if not (ratchet or cvreset) else True)
 duty = 100.0 * width / step_ms if step_ms else 0.0
 duty_ok = duty < 50.0
 
 print()
 title = ("RATCHET — les sous-declenchements atteignent les broches" if ratchet
+         else "CVRESET — un front re-origine la grille" if cvreset
          else "SEQ — le motif est joue" if seq else "CLOCK — le motif est ignore")
 print(f"{B}====== FONCTION MUSICALE : {title} ======{Z}")
 print(f"  {mark(all_lines)} Sorties actives    {lines_on}/{lines_exp}   "
@@ -343,6 +416,14 @@ if ratchet:
           f"= {diff} = {shown}   "
           f"{DIM}— multiple exact de N-1 ; le quotient est le nombre de passages "
           f"du step raccourci, deduit et non suppose{Z}")
+elif cvreset:
+    print(f"  {mark(rot_ok)} Rotation avant     ecarts {pre_gaps}   "
+          f"{DIM}— rotation cyclique de {exp} avant le front{Z}")
+    print(f"  {mark(latency_ok)} Latence du reset   premier front a "
+          f"{first_delay:.1f} ms du front injecte   "
+          f"{DIM}— budget {os.environ['RESET_LATENCY_MS']} ms{Z}")
+    print(f"  {mark(anchored)} Re-origine         ecarts {post_gaps}   "
+          f"{DIM}— la suite de {exp} DEPUIS le step 0, phase connue{Z}")
 elif seq:
     print(f"  {mark(pattern_ok)} Motif joue         {gaps_ok}/{gaps_total} ecarts   "
           f"{DIM}— la suite est une rotation cyclique de celle du motif{Z}")
@@ -353,7 +434,7 @@ print(f"  {mark(silent_before_play)} Silence au demarrage  premier front a {firs
       f"{DIM}— PLAY relache a {play_ms:.0f} ms ; le module demarre a l arret{Z}")
 print(f"  {mark(same and coincident)} Six lignes en phase "
       f"{'meme compte, fronts < 200 us' if (same and coincident) else 'DESACCORD'}")
-if not ratchet:
+if not ratchet and not cvreset:
     print(f"  {mark(step_ok)} Tempo applique     {step_measured:.2f} ms par step   "
           f"{DIM}— attendu {step_ms:.2f} ms a {bpm} BPM ; ecart {step_err_pct:.2f} %"
           f" ; tolerance {step_tol:g} %{Z}")
@@ -380,7 +461,12 @@ if pulse_line == 0:
 ok = (all_lines and pattern_ok and same and coincident and jit_ok and duty_ok
       and step_ok and silent_before_play)
 if ok:
-    if ratchet:
+    if cvreset:
+        print(f"\n  Le front injecte re-origine la grille sur le step 0, "
+              f"en {first_delay:.1f} ms.")
+        print(f"  {DIM}Le maillon ADC -> takeEdge -> masque -> moteur -> broche est "
+              f"exerce de bout en bout.{Z}")
+    elif ratchet:
         print(f"\n  Un ratchet {os.environ['RATCHET_CODE']} sur un step actif ajoute "
               f"exactement {diff} impulsions en {occurrences} passages.")
         print(f"  {DIM}Le chemin ratchet -> sous-declenchement -> broche est exerce. Aucun{Z}")
@@ -406,6 +492,8 @@ if [ "$FAILED" -ne 0 ]; then
 fi
 printf '\n  %s✅%s Les courses passent : CLOCK ignore, SEQ joue, RATCHET subdivise,\n' \
   "$C_OK" "$C_0"
-printf '     %sCV1 et CV2 modulent LENGTH chacune par son propre index de source.%s\n' \
+printf '     %sCV1 et CV2 modulent LENGTH chacune par son propre index de source,%s\n' \
+  "$C_DIM" "$C_0"
+printf '     %set un front CV re-origine la grille du canal route vers RESET.%s\n' \
   "$C_DIM" "$C_0"
 exit 0
