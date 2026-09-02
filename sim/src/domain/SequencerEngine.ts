@@ -34,7 +34,7 @@ import {
   CV_SOURCE_COUNT,
   DEFAULT_CV_DESTINATION,
 } from "./CvDestination.js";
-import { zoneWithHysteresis, patternIndexFor } from "./LengthCv.js";
+import { zoneWithHysteresis, patternIndexFor, readStepFor } from "./LengthCv.js";
 
 import {
   Pattern,
@@ -481,6 +481,12 @@ export class SequencerEngine {
    * Index de pattern que le CV designe, clamp(base + somme, 0, 15). PRD 10.2.
    * C'est une DERIVATION : aucun etat ne la porte. -1 si le canal est invalide.
    */
+  stepCvOffset(channel: number): number {
+    const c = this.channel(channel);
+    if (!c) return 0;
+    return this.cvZoneSum(channel, CvDestination.STEP);
+  }
+
   patternCvIndex(channel: number): number {
     const c = this.channel(channel);
     if (!c) return -1;
@@ -646,6 +652,12 @@ export class SequencerEngine {
   /** Position logique du channel (localStep), dans [0, effectiveLength). -1 si invalide. */
   effectiveStep(channel: number): number {
     return this.channel(channel)?.localStep ?? -1;
+  }
+
+  currentReadStep(channel: number): number {
+    const c = this.channel(channel);
+    if (!c) return -1;
+    return readStepFor(c.localStep, this.cvZoneSum(channel, CvDestination.STEP), c.effectiveLength);
   }
 
   /**

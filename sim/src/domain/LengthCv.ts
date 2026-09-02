@@ -49,3 +49,10 @@ export function effectiveLengthFor(base: number, offset: number): number {
   if (wanted > MAX_LENGTH) return MAX_LENGTH;
   return wanted;
 }
+
+export function readStepFor(localStep: number, offset: number, effectiveLength: number): number {
+  if (effectiveLength <= 0) return 0;
+  let wanted = (localStep + offset) % effectiveLength;
+  if (wanted < 0) wanted += effectiveLength;
+  return wanted === 0 ? 0 : wanted;
+}
