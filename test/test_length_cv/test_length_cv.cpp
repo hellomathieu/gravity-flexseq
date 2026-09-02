@@ -7,6 +7,7 @@ using flexseq::lengthcv::zoneFor;
 using flexseq::lengthcv::zoneWithHysteresis;
 using flexseq::lengthcv::effectiveLengthFor;
 using flexseq::lengthcv::patternIndexFor;
+using flexseq::lengthcv::readStepFor;
 
 void setUp() {}
 void tearDown() {}
@@ -152,6 +153,85 @@ void test_the_pattern_index_saturates_at_zero_and_fifteen() {
     TEST_ASSERT_EQUAL_UINT8(0, patternIndexFor(8, -15));
 }
 
+void test_the_step_offset_is_absolute_at_every_length() {
+    TEST_ASSERT_EQUAL_UINT8(3, readStepFor(0, 3, 4));
+    TEST_ASSERT_EQUAL_UINT8(3, readStepFor(0, 3, 12));
+    TEST_ASSERT_EQUAL_UINT8(3, readStepFor(0, 3, 36));
+    TEST_ASSERT_EQUAL_UINT8(15, readStepFor(0, 15, 36));
+    TEST_ASSERT_EQUAL_UINT8(15, readStepFor(0, 15, 20));
+    TEST_ASSERT_EQUAL_UINT8(15, readStepFor(0, 15, 16));
+    TEST_ASSERT_EQUAL_UINT8(7, readStepFor(0, 15, 8));
+    TEST_ASSERT_EQUAL_UINT8(0, readStepFor(0, 15, 5));
+    TEST_ASSERT_EQUAL_UINT8(1, readStepFor(7, 10, 8));
+}
+
+void test_a_negative_step_offset_wraps_forward() {
+    TEST_ASSERT_EQUAL_UINT8(35, readStepFor(0, -1, 36));
+    TEST_ASSERT_EQUAL_UINT8(21, readStepFor(0, -15, 36));
+    TEST_ASSERT_EQUAL_UINT8(9, readStepFor(2, -5, 12));
+    TEST_ASSERT_EQUAL_UINT8(0, readStepFor(5, -5, 8));
+    TEST_ASSERT_EQUAL_UINT8(0, readStepFor(0, -12, 12));
+}
+
+void test_a_step_offset_larger_than_the_length_laps() {
+    TEST_ASSERT_EQUAL_UINT8(2, readStepFor(0, 30, 4));
+    TEST_ASSERT_EQUAL_UINT8(1, readStepFor(1, 30, 3));
+    TEST_ASSERT_EQUAL_UINT8(0, readStepFor(0, -30, 2));
+    TEST_ASSERT_EQUAL_UINT8(1, readStepFor(3, -30, 7));
+}
+
+void test_the_sum_of_two_sources_spans_thirty_in_both_directions() {
+    TEST_ASSERT_EQUAL_UINT8(30, readStepFor(0, 30, 36));
+    TEST_ASSERT_EQUAL_UINT8(6, readStepFor(0, -30, 36));
+    TEST_ASSERT_EQUAL_UINT8(29, readStepFor(35, 30, 36));
+    TEST_ASSERT_EQUAL_UINT8(5, readStepFor(35, -30, 36));
+}
+
+void test_one_source_misses_five_positions_at_length_thirty_six() {
+    const uint8_t bases[3] = {0, 20, 30};
+    for (uint8_t b = 0; b < 3; ++b) {
+        bool seen[36];
+        for (uint8_t i = 0; i < 36; ++i) {
+            seen[i] = false;
+        }
+        for (int16_t offset = -15; offset <= 15; ++offset) {
+            const uint8_t got = readStepFor(bases[b], static_cast<int8_t>(offset), 36);
+            TEST_ASSERT_TRUE(got < 36);
+            seen[got] = true;
+        }
+        uint8_t reached = 0;
+        for (uint8_t i = 0; i < 36; ++i) {
+            if (seen[i]) {
+                ++reached;
+            }
+        }
+        TEST_ASSERT_EQUAL_UINT8(31, reached);
+        for (uint8_t k = 16; k <= 20; ++k) {
+            const uint8_t missing = static_cast<uint8_t>((bases[b] + k) % 36);
+            TEST_ASSERT_FALSE(seen[missing]);
+        }
+    }
+}
+
+void test_two_sources_reach_every_position_at_length_thirty_six() {
+    bool seen[36];
+    for (uint8_t i = 0; i < 36; ++i) {
+        seen[i] = false;
+    }
+    for (int16_t offset = -30; offset <= 30; ++offset) {
+        const uint8_t got = readStepFor(0, static_cast<int8_t>(offset), 36);
+        TEST_ASSERT_TRUE(got < 36);
+        seen[got] = true;
+    }
+    uint8_t reached = 0;
+    for (uint8_t i = 0; i < 36; ++i) {
+        if (seen[i]) {
+            ++reached;
+        }
+    }
+    TEST_ASSERT_EQUAL_UINT8(36, reached);
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_the_contract_constants_hold_their_decided_values);
@@ -167,5 +247,11 @@ int main() {
     RUN_TEST(test_the_effective_length_saturates_at_one_and_thirty_six);
     RUN_TEST(test_the_offset_moves_the_pattern_index);
     RUN_TEST(test_the_pattern_index_saturates_at_zero_and_fifteen);
+    RUN_TEST(test_the_step_offset_is_absolute_at_every_length);
+    RUN_TEST(test_a_negative_step_offset_wraps_forward);
+    RUN_TEST(test_a_step_offset_larger_than_the_length_laps);
+    RUN_TEST(test_the_sum_of_two_sources_spans_thirty_in_both_directions);
+    RUN_TEST(test_one_source_misses_five_positions_at_length_thirty_six);
+    RUN_TEST(test_two_sources_reach_every_position_at_length_thirty_six);
     return UNITY_END();
 }
