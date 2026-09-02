@@ -22,6 +22,52 @@ TS ↔ C++ parity targets **behaviour, not memory**. Packing constraints
 side only**. Each `it(...)` in `test/Pattern.test.ts` corresponds to a
 `RUN_TEST(...)` in `../test/test_pattern/test_pattern.cpp`.
 
+## Where the mirror stops
+
+The model carries the engine, the CV chain, the transport, the patterns, the
+persistence codec and the UI controller. It does not carry everything, and the
+gaps are deliberate.
+
+**The hardware boundary stays out.** `CvGate`, `CvSampler`, `EepromStorage`,
+`InputAdapter`, `TransportAdapter` and `TwiDisplay` have no mirror. The screens
+do not either: `MainScreen`, `PagedScreen` and `PatternScreen` live on the C++
+side, and the simulator draws its own view. `ChannelMode` and `Subdiv` ARE
+mirrored, inside `SequencerEngine.ts` and `subdiv.ts`.
+
+**One divergence sits INSIDE the shared domain, and it is a decision.** The C++
+firmware holds a modulation buffer, `ModulatedPatternState`, which a round robin
+fills from the EEPROM templates. The model holds none: `ModulatedPatternState`
+has zero occurrence in `sim/src`. The buffers, the round robin and `Storage`
+belong to the AVR firmware, and decision 5 of lot E3.6.4.4 left them out on
+2026-09-01.
+
+The consequence has a name. `patternForChannel()` exists on both sides and it
+does NOT mean the same thing:
+
+- in C++ it returns the modulation buffer when a template is loaded for that
+  channel, and the instance otherwise;
+- in TypeScript it always returns the instance.
+
+**So P35 has no mirror.** P35 asks that the content and the ratchet of a step
+come from the same pattern, on the boundary where the derived PATTERN index
+changes. That boundary needs the buffer, so the model cannot express it. The
+divergence is characterised on the C++ side alone, and `docs/open-risks.md`
+line 77 carries it.
+
+## What a green model proves, and what it does not
+
+A green TypeScript suite says the two languages agree on what BOTH carry. It
+does not say the firmware is correct.
+
+- It proves nothing about memory: `sizeof`, Flash and the stack are measured on
+  the AVR side, and the section above says so.
+- It proves nothing about timing: the loop, the display bands and the ADC under
+  interrupt are measured by the probes in `tools/`.
+- It proves nothing about a path the model does not hold, and the buffer is the
+  one such path inside the domain today.
+
+Read a green suite for what it says. Do not read it as coverage of the firmware.
+
 ## Commands
 
 ```bash
