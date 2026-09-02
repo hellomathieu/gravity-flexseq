@@ -632,7 +632,7 @@ describe("les instances par canal", () => {
     expect(engine.instanceForChannel(1)!.readStep(5)).toBe(false);
   });
 
-  it("sont la source de patternForChannel", () => {
+  it("sont la source de patternForChannel DANS LE MODELE — le C++ diverge, voir sim/README.md", () => {
     const engine = new SequencerEngine();
     engine.setSelectedPattern(0, 0);
     expect(engine.patternForChannel(0)).toBe(engine.instanceForChannel(0));
