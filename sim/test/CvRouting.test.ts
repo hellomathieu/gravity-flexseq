@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { SequencerEngine, ChannelMode } from "../src/domain/SequencerEngine";
+import { RATCHET_TRIPLET } from "../src/domain/Pattern";
 import {
   CvDestination,
   CV_DESTINATION_COUNT,
@@ -460,5 +461,90 @@ describe("Changement de base — ce qu'il laisse intact", () => {
     expect(e.setSelectedPattern(0, 4)).toBe(true);
     expect(e.patternCvIndex(0)).toBe(14);
     expect(e.getSelectedPattern(0)).toBe(4);
+  });
+});
+
+describe("STEP CV — lecture decalee (lot STEP, etape 4d)", () => {
+  function routedStep(base: number): SequencerEngine {
+    const e = new SequencerEngine();
+    e.setChannelMode(0, ChannelMode.SEQ);
+    e.setBaseLength(0, base);
+    e.setCvDestination(0, CV_SOURCE_1, CvDestination.STEP);
+    return e;
+  }
+
+  it("un routage vers STEP garde aujourd'hui une zone nulle", () => {
+    const e = routedStep(12);
+    e.setCvInput(CV_SOURCE_1, 330);
+    e.start();
+    e.advance(STEP);
+    expect(e.stepCvOffset(0)).toBe(0);
+    expect(e.effectiveStep(0)).toBe(1);
+    expect(e.currentReadStep(0)).toBe(1);
+  });
+
+  it.skip("la frontiere de step deplace l'offset de lecture [lot STEP etape 8 : CV_DEST_STEP n est pas cable]", () => {
+    const e = routedStep(12);
+    e.setCvInput(CV_SOURCE_1, 330);
+    e.start();
+    e.advance(STEP);
+    expect(e.stepCvOffset(0)).toBe(10);
+  });
+
+  it.skip("le CV decale la lecture sans deplacer le step local [lot STEP etape 8 : CV_DEST_STEP n est pas cable]", () => {
+    const e = routedStep(12);
+    e.setCvInput(CV_SOURCE_1, 330);
+    e.start();
+    for (let i = 0; i < 4; ++i) e.advance(STEP);
+    expect(e.effectiveStep(0)).toBe(4);
+    expect(e.currentReadStep(0)).toBe(2);
+  });
+
+  it.skip("un changement de longueur garde l'offset et deplace la lecture [lot STEP etape 8 : CV_DEST_STEP n est pas cable]", () => {
+    const e = routedStep(12);
+    e.setCvInput(CV_SOURCE_1, 330);
+    e.start();
+    for (let i = 0; i < 5; ++i) e.advance(STEP);
+    expect(e.stepCvOffset(0)).toBe(10);
+    expect(e.currentReadStep(0)).toBe(3);
+    e.setBaseLength(0, 8);
+    expect(e.getEffectiveLength(0)).toBe(8);
+    expect(e.stepCvOffset(0)).toBe(10);
+    expect(e.currentReadStep(0)).toBe(7);
+  });
+
+  it.skip("deux sources s'additionnent avant le modulo [lot STEP etape 8 : CV_DEST_STEP n est pas cable]", () => {
+    const e = routedStep(36);
+    e.setCvDestination(0, CV_SOURCE_2, CvDestination.STEP);
+    e.setCvInput(CV_SOURCE_1, 330);
+    e.setCvInput(CV_SOURCE_2, 330);
+    e.start();
+    e.advance(STEP);
+    expect(e.stepCvOffset(0)).toBe(20);
+    expect(e.currentReadStep(0)).toBe(21);
+  });
+
+  it.skip("un triolet sur le step LU allonge le step [lot STEP etape 8 : CV_DEST_STEP n est pas cable]", () => {
+    const e = routedStep(12);
+    e.instanceForChannel(0)!.setRatchet(4, RATCHET_TRIPLET);
+    e.setCvInput(CV_SOURCE_1, 99);
+    e.start();
+    e.advance(STEP);
+    expect(e.currentStepTicks(0)).toBe(2 * STEP);
+    expect(e.currentStepTriggers(0)).toBe(3);
+    expect(e.effectiveStep(0)).toBe(1);
+    expect(e.currentReadStep(0)).toBe(4);
+  });
+
+  it.skip("un triolet sur le step LOCAL seul n'allonge pas le step [lot STEP etape 8 : CV_DEST_STEP n est pas cable]", () => {
+    const e = routedStep(12);
+    e.instanceForChannel(0)!.setRatchet(1, RATCHET_TRIPLET);
+    e.setCvInput(CV_SOURCE_1, 99);
+    e.start();
+    e.advance(STEP);
+    expect(e.currentStepTicks(0)).toBe(STEP);
+    expect(e.currentStepTriggers(0)).toBe(1);
+    expect(e.effectiveStep(0)).toBe(1);
+    expect(e.currentReadStep(0)).toBe(4);
   });
 });
