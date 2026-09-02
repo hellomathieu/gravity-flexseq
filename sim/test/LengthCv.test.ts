@@ -12,6 +12,7 @@ import {
   zoneWithHysteresis,
   effectiveLengthFor,
   patternIndexFor,
+  readStepFor,
 } from "../src/domain/LengthCv";
 
 describe("Length CV — constantes du contrat", () => {
@@ -148,5 +149,74 @@ describe("Pattern CV — index effectif", () => {
     expect(patternIndexFor(14, 15)).toBe(15);
     expect(patternIndexFor(8, 15)).toBe(15);
     expect(patternIndexFor(8, -15)).toBe(0);
+  });
+});
+
+describe("Step CV — lecture decalee", () => {
+  it("l'offset est absolu, quelle que soit la longueur", () => {
+    expect(readStepFor(0, 3, 4)).toBe(3);
+    expect(readStepFor(0, 3, 12)).toBe(3);
+    expect(readStepFor(0, 3, 36)).toBe(3);
+    expect(readStepFor(0, 15, 36)).toBe(15);
+    expect(readStepFor(0, 15, 20)).toBe(15);
+    expect(readStepFor(0, 15, 16)).toBe(15);
+    expect(readStepFor(0, 15, 8)).toBe(7);
+    expect(readStepFor(0, 15, 5)).toBe(0);
+    expect(readStepFor(7, 10, 8)).toBe(1);
+  });
+
+  it("un offset negatif enroule vers l'avant", () => {
+    expect(readStepFor(0, -1, 36)).toBe(35);
+    expect(readStepFor(0, -15, 36)).toBe(21);
+    expect(readStepFor(2, -5, 12)).toBe(9);
+    expect(readStepFor(5, -5, 8)).toBe(0);
+    expect(readStepFor(0, -12, 12)).toBe(0);
+  });
+
+  it("un tour exact vers l'arriere ne rend jamais moins zero", () => {
+    expect(Object.is(readStepFor(0, -12, 12), 0)).toBe(true);
+    expect(Object.is(readStepFor(0, -30, 2), 0)).toBe(true);
+    expect(Object.is(readStepFor(0, -30, 6), 0)).toBe(true);
+  });
+
+  it("un offset plus grand que la longueur fait plusieurs tours", () => {
+    expect(readStepFor(0, 30, 4)).toBe(2);
+    expect(readStepFor(1, 30, 3)).toBe(1);
+    expect(readStepFor(0, -30, 2)).toBe(0);
+    expect(readStepFor(3, -30, 7)).toBe(1);
+  });
+
+  it("la somme de deux sources couvre trente dans les deux sens", () => {
+    expect(readStepFor(0, 30, 36)).toBe(30);
+    expect(readStepFor(0, -30, 36)).toBe(6);
+    expect(readStepFor(35, 30, 36)).toBe(29);
+    expect(readStepFor(35, -30, 36)).toBe(5);
+  });
+
+  it("une source manque cinq positions a la longueur 36", () => {
+    for (const base of [0, 20, 30]) {
+      const seen = new Set<number>();
+      for (let offset = -15; offset <= 15; ++offset) {
+        const got = readStepFor(base, offset, 36);
+        expect(got, `base ${base} offset ${offset}`).toBeGreaterThanOrEqual(0);
+        expect(got, `base ${base} offset ${offset}`).toBeLessThan(36);
+        seen.add(got);
+      }
+      expect(seen.size, `base ${base}`).toBe(31);
+      for (let k = 16; k <= 20; ++k) {
+        expect(seen.has((base + k) % 36), `base ${base} manque ${k}`).toBe(false);
+      }
+    }
+  });
+
+  it("deux sources atteignent les trente-six positions", () => {
+    const seen = new Set<number>();
+    for (let offset = -30; offset <= 30; ++offset) {
+      const got = readStepFor(0, offset, 36);
+      expect(got, `offset ${offset}`).toBeGreaterThanOrEqual(0);
+      expect(got, `offset ${offset}`).toBeLessThan(36);
+      seen.add(got);
+    }
+    expect(seen.size).toBe(36);
   });
 });
