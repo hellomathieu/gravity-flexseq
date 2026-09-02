@@ -182,25 +182,38 @@ persisted = (version is not None and version[1] == expected_address
              and version[2] == expected_version and read_back)
 loaded = re.search(r"loaded\[\]=([\d,]+)", txt)
 
-# Temoin du chemin RESET, quand la course l'exerce (CV_PULSE_MV). La broche de
-# sortie 1 doit se taire avant l'impulsion — l'onset d'entree du reset global
-# n'existe pas, ligne 79 — et le premier front doit tomber dans la fenetre qui
-# suit. Sans ce releve, une image qui ne route pas RESET rendrait le meme pic
-# et le vert serait faux.
+# Deux temoins sur la broche OUT1, quand la course l'exerce (CV_PULSE_MV).
+# D79 d'abord : PLAY est un reset global qui ARME, donc le step 0 actif sonne
+# au premier tick — EXACTEMENT UN front avant l'impulsion, au voisinage du
+# relachement de PLAY. Puis le chemin CV : le premier front apres l'impulsion
+# tombe dans la fenetre. Sans ces releves, une image qui ne route pas RESET, ou
+# un firmware qui n'arme pas au reset, rendrait le meme pic et le vert serait
+# faux.
 pulse = bool(os.environ.get("CV_PULSE_MV"))
 reset_ok = True
 if pulse:
-    r = re.search(r"RESET fronts_avant=(\d+) premier_apres_ms=([\d.-]+) "
-                  r"fronts_apres=(\d+)", txt)
+    r = re.search(r"RESET fronts_avant=(\d+) premier_avant_ms=([\d.-]+) "
+                  r"premier_apres_ms=([\d.-]+) fronts_apres=(\d+) "
+                  r"impulsion_ms=[\d.]+ play_ms=([\d.]+)", txt)
     window = float(os.environ.get("RESET_WINDOW_MS", "60"))
     if r is None:
         print(f"  {mark(False)} Chemin RESET        TEMOIN ABSENT — le releve "
               f"des fronts n'a pas ete emis")
         sys.exit(1)
-    before, first, after = int(r[1]), float(r[2]), int(r[3])
-    reset_ok = before == 0 and after >= 1 and 0.0 <= first <= window
-    print(f"  {mark(reset_ok)} Chemin RESET        {before} front avant "
-          f"l'impulsion, premier front {first:.1f} ms apres, {after} ensuite"
+    before = int(r[1])
+    first_before = float(r[2])
+    first = float(r[3])
+    after = int(r[4])
+    play = float(r[5])
+    d79_ok = before == 1 and 0.0 < (first_before - play) <= window
+    cv_ok = after >= 1 and 0.0 <= first <= window
+    reset_ok = d79_ok and cv_ok
+    print(f"  {mark(d79_ok)} Temoin D79          {before} front avant "
+          f"l'impulsion, a {first_before - play:+.1f} ms du relachement de PLAY"
+          f"{DIM}  — attendu exactement 1, dans {window:g} ms : le reset global"
+          f" arme le step 0{Z}")
+    print(f"  {mark(cv_ok)} Chemin RESET        premier front {first:.1f} ms "
+          f"apres l'impulsion, {after} ensuite"
           f"{DIM}  — fenetre {window:g} ms ; le temoin est la broche OUT1{Z}")
 
 if preloaded:

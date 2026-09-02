@@ -367,11 +367,12 @@ int main(int argc, char** argv)
      * loaded[]. */
     if (g_pulse_mv > 0) {
         int before = 0, after = 0;
-        double first_after_ms = -1.0;
+        double first_before_ms = -1.0, first_after_ms = -1.0;
         const double pulse_ms = g_pulse_at_s * 1000.0;
         for (int i = 0; i < g_out_nrise; ++i) {
             const double t = (double)g_out_rise[i] * 1e3 / (double)F_CPU_HZ;
             if (t < pulse_ms) {
+                if (first_before_ms < 0.0) first_before_ms = t;
                 ++before;
             } else {
                 if (first_after_ms < 0.0) first_after_ms = t - pulse_ms;
@@ -379,8 +380,10 @@ int main(int argc, char** argv)
             }
         }
         printf("\n=== RESET ===\n");
-        printf("RESET fronts_avant=%d premier_apres_ms=%.1f fronts_apres=%d "
-               "impulsion_ms=%.1f\n", before, first_after_ms, after, pulse_ms);
+        printf("RESET fronts_avant=%d premier_avant_ms=%.1f "
+               "premier_apres_ms=%.1f fronts_apres=%d impulsion_ms=%.1f "
+               "play_ms=%.1f\n", before, first_before_ms, first_after_ms,
+               after, pulse_ms, 0.66 * 1000.0);
     }
 
     printf("\n=== PILE ===\n");
