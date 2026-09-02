@@ -233,6 +233,15 @@ void loop() {
     engine.setCvInput(flexseq::CV_SOURCE_2,
                       flexseq::cv::latestCalibrated(flexseq::cv::CV2));
 
+    uint8_t resetMask = 0;
+    if (flexseq::cv::takeEdge(flexseq::cv::CV1)) {
+        resetMask |= 1u << flexseq::CV_SOURCE_1;
+    }
+    if (flexseq::cv::takeEdge(flexseq::cv::CV2)) {
+        resetMask |= 1u << flexseq::CV_SOURCE_2;
+    }
+    engine.applyCvResetEvents(resetMask);
+
     flexseq::serviceOneModulationTemplateLoad(eeprom, engine, modulatedPatterns);
 
     if (ticks > 0) {
