@@ -339,7 +339,7 @@ void test_a_reset_while_stopped_repositions_and_fires_only_after_start() {
     TEST_ASSERT_EQUAL_UINT8(1, e.onsetCount(0));
 }
 
-void test_the_global_reset_clears_the_armament() {
+void test_a_global_reset_subsumes_a_cv_armament_into_one_onset() {
     SequencerEngine e;
     seqChannel(e, 0);
     routeReset(e, 0, CV_SOURCE_1);
@@ -349,7 +349,106 @@ void test_the_global_reset_clears_the_armament() {
     e.reset();
     TEST_ASSERT_EQUAL_INT8(0, e.effectiveStep(0));
     e.advance(1);
+    TEST_ASSERT_EQUAL_UINT8(1, e.onsetCount(0));
+}
+
+void test_a_global_reset_arms_the_six_channels() {
+    SequencerEngine e;
+    for (uint8_t ch = 0; ch < 6; ++ch) {
+        TEST_ASSERT_TRUE(e.setChannelMode(ch, MODE_SEQ));
+    }
+    e.start();
+    e.advance(3 * STEP);
+    e.reset();
+    e.advance(1);
+    for (uint8_t ch = 0; ch < 6; ++ch) {
+        TEST_ASSERT_EQUAL_UINT8(1, e.onsetCount(ch));
+        TEST_ASSERT_EQUAL_INT8(0, e.effectiveStep(ch));
+    }
+}
+
+void test_a_reset_while_stopped_arms_until_the_first_start() {
+    SequencerEngine e;
+    seqChannel(e, 0);
+    e.start();
+    e.advance(2 * STEP);
+    e.stop();
+    e.reset();
+    e.advance(1);
     TEST_ASSERT_EQUAL_UINT8(0, e.onsetCount(0));
+    e.start();
+    e.advance(1);
+    TEST_ASSERT_EQUAL_UINT8(1, e.onsetCount(0));
+}
+
+void test_a_global_reset_makes_clock_zero_offset_fire_on_the_first_tick() {
+    SequencerEngine e;
+    TEST_ASSERT_TRUE(e.setChannelMode(0, MODE_CLOCK));
+    e.start();
+    e.advance(2 * STEP);
+    e.reset();
+    e.advance(1);
+    TEST_ASSERT_EQUAL_UINT8(1, e.onsetCount(0));
+}
+
+void test_a_global_armament_in_clock_waits_for_the_offset() {
+    SequencerEngine e;
+    TEST_ASSERT_TRUE(e.setChannelMode(0, MODE_CLOCK));
+    TEST_ASSERT_TRUE(e.setOffset(0, 10));
+    e.start();
+    e.advance(2 * STEP);
+    e.reset();
+    e.advance(1);
+    TEST_ASSERT_EQUAL_UINT8(0, e.onsetCount(0));
+    e.advance(8);
+    TEST_ASSERT_EQUAL_UINT8(0, e.onsetCount(0));
+    e.advance(1);
+    TEST_ASSERT_EQUAL_UINT8(1, e.onsetCount(0));
+}
+
+void test_a_global_armament_in_random_emits_the_onset_through_the_draw() {
+    SequencerEngine e;
+    TEST_ASSERT_TRUE(e.setChannelMode(0, MODE_RANDOM));
+    e.start();
+    e.advance(2 * STEP);
+    e.reset();
+    e.advance(1);
+    TEST_ASSERT_EQUAL_UINT8(1, e.onsetCount(0));
+}
+
+void test_the_armament_survives_a_change_of_mode_to_random() {
+    SequencerEngine e;
+    seqChannel(e, 0);
+    routeReset(e, 0, CV_SOURCE_1);
+    e.start();
+    e.advance(2 * STEP);
+    e.applyCvResetEvents(1u << CV_SOURCE_1);
+    TEST_ASSERT_TRUE(e.setChannelMode(0, MODE_RANDOM));
+    e.advance(1);
+    TEST_ASSERT_EQUAL_UINT8(1, e.onsetCount(0));
+}
+
+void test_the_armament_survives_a_change_of_mode_to_clock() {
+    SequencerEngine e;
+    seqChannel(e, 0);
+    routeReset(e, 0, CV_SOURCE_1);
+    e.start();
+    e.advance(2 * STEP);
+    e.applyCvResetEvents(1u << CV_SOURCE_1);
+    TEST_ASSERT_TRUE(e.setChannelMode(0, MODE_CLOCK));
+    e.advance(1);
+    TEST_ASSERT_EQUAL_UINT8(1, e.onsetCount(0));
+}
+
+void test_a_global_armament_survives_a_change_of_mode_to_random() {
+    SequencerEngine e;
+    seqChannel(e, 0);
+    e.start();
+    e.advance(2 * STEP);
+    e.reset();
+    TEST_ASSERT_TRUE(e.setChannelMode(0, MODE_RANDOM));
+    e.advance(1);
+    TEST_ASSERT_EQUAL_UINT8(1, e.onsetCount(0));
 }
 
 void test_a_reset_in_the_middle_of_a_ratchet_abandons_the_remaining_sub_onsets() {
@@ -431,7 +530,15 @@ int main(int, char**) {
     RUN_TEST(test_random_ignores_the_reset_and_the_return_to_seq_replays_nothing);
     RUN_TEST(test_seq_resets_while_random_stays_on_the_shared_source);
     RUN_TEST(test_a_reset_while_stopped_repositions_and_fires_only_after_start);
-    RUN_TEST(test_the_global_reset_clears_the_armament);
+    RUN_TEST(test_a_global_reset_subsumes_a_cv_armament_into_one_onset);
+    RUN_TEST(test_a_global_reset_arms_the_six_channels);
+    RUN_TEST(test_a_reset_while_stopped_arms_until_the_first_start);
+    RUN_TEST(test_a_global_reset_makes_clock_zero_offset_fire_on_the_first_tick);
+    RUN_TEST(test_a_global_armament_in_clock_waits_for_the_offset);
+    RUN_TEST(test_a_global_armament_in_random_emits_the_onset_through_the_draw);
+    RUN_TEST(test_the_armament_survives_a_change_of_mode_to_random);
+    RUN_TEST(test_the_armament_survives_a_change_of_mode_to_clock);
+    RUN_TEST(test_a_global_armament_survives_a_change_of_mode_to_random);
     RUN_TEST(test_a_reset_in_the_middle_of_a_ratchet_abandons_the_remaining_sub_onsets);
     RUN_TEST(test_a_triplet_on_step_zero_doubles_the_recached_step_ticks);
     RUN_TEST(test_a_reset_of_one_channel_leaves_the_five_others_intact);

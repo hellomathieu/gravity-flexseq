@@ -194,6 +194,34 @@ void test_external_ticks_drained_in_a_batch_land_where_single_ticks_would() {
 
 // Transport rapporte l'etat de marche pour que l'ADAPTATEUR puisse le refleter
 // sur l'horloge de libGravity sans que le domaine connaisse le materiel.
+void test_start_arms_step_zero_and_the_first_tick_sounds_it() {
+    SequencerEngine e;
+    Transport t(e);
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        TEST_ASSERT_TRUE(e.setChannelMode(ch, flexseq::MODE_SEQ));
+    }
+    t.resume();
+    t.tick(STEP * 5);
+    t.start();
+    t.tick(1);
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        TEST_ASSERT_EQUAL_UINT8(1, e.onsetCount(ch));
+        TEST_ASSERT_EQUAL_INT8(0, e.effectiveStep(ch));
+    }
+}
+
+void test_resume_does_not_arm() {
+    SequencerEngine e;
+    Transport t(e);
+    TEST_ASSERT_TRUE(e.setChannelMode(0, flexseq::MODE_SEQ));
+    t.start();
+    t.tick(1);
+    t.stop();
+    t.resume();
+    t.tick(1);
+    TEST_ASSERT_EQUAL_UINT8(0, e.onsetCount(0));
+}
+
 void test_transport_reports_the_running_state() {
     SequencerEngine engine;
     Transport transport(engine);
@@ -220,6 +248,8 @@ int main() {
     RUN_TEST(test_the_source_field_never_leaves_the_six_valid_values);
     RUN_TEST(test_the_tempo_bounds_are_refused_not_clamped_by_the_setter);
     RUN_TEST(test_external_ticks_drained_in_a_batch_land_where_single_ticks_would);
+    RUN_TEST(test_start_arms_step_zero_and_the_first_tick_sounds_it);
+    RUN_TEST(test_resume_does_not_arm);
     RUN_TEST(test_transport_reports_the_running_state);
     return UNITY_END();
 }

@@ -293,7 +293,7 @@ describe("le reset CV — le transport", () => {
     expect(e.onsetCount(0)).toBe(1);
   });
 
-  it("le reset global efface l'armement", () => {
+  it("le reset global subsume un armement CV en UN onset", () => {
     const e = seqRouted();
     e.start();
     e.advance(2 * STEP);
@@ -301,7 +301,102 @@ describe("le reset CV — le transport", () => {
     e.reset();
     expect(e.effectiveStep(0)).toBe(0);
     e.advance(1);
+    expect(e.onsetCount(0)).toBe(1);
+  });
+
+  it("le reset global arme les six channels", () => {
+    const e = new SequencerEngine();
+    for (let ch = 0; ch < 6; ++ch) e.setChannelMode(ch, ChannelMode.SEQ);
+    e.start();
+    e.advance(3 * STEP);
+    e.reset();
+    e.advance(1);
+    for (let ch = 0; ch < 6; ++ch) {
+      expect(e.onsetCount(ch)).toBe(1);
+      expect(e.effectiveStep(ch)).toBe(0);
+    }
+  });
+
+  it("un reset a l'arret arme jusqu'au premier start", () => {
+    const e = new SequencerEngine();
+    e.setChannelMode(0, ChannelMode.SEQ);
+    e.start();
+    e.advance(2 * STEP);
+    e.stop();
+    e.reset();
+    e.advance(1);
     expect(e.onsetCount(0)).toBe(0);
+    e.start();
+    e.advance(1);
+    expect(e.onsetCount(0)).toBe(1);
+  });
+
+  it("le reset global fait tirer CLOCK offset 0 au premier tick", () => {
+    const e = new SequencerEngine();
+    e.setChannelMode(0, ChannelMode.CLOCK);
+    e.start();
+    e.advance(2 * STEP);
+    e.reset();
+    e.advance(1);
+    expect(e.onsetCount(0)).toBe(1);
+  });
+
+  it("un armement global en CLOCK attend l'offset", () => {
+    const e = new SequencerEngine();
+    e.setChannelMode(0, ChannelMode.CLOCK);
+    expect(e.setOffset(0, 10)).toBe(true);
+    e.start();
+    e.advance(2 * STEP);
+    e.reset();
+    e.advance(1);
+    expect(e.onsetCount(0)).toBe(0);
+    e.advance(8);
+    expect(e.onsetCount(0)).toBe(0);
+    e.advance(1);
+    expect(e.onsetCount(0)).toBe(1);
+  });
+
+  it("un armement global en RANDOM emet l'onset a travers le tirage", () => {
+    const e = new SequencerEngine();
+    e.setChannelMode(0, ChannelMode.RANDOM);
+    e.start();
+    e.advance(2 * STEP);
+    e.reset();
+    e.advance(1);
+    expect(e.onsetCount(0)).toBe(1);
+  });
+});
+
+describe("le reset CV — D80, l'armement survit au changement de mode", () => {
+  it("l'armement survit au passage en RANDOM", () => {
+    const e = seqRouted();
+    e.start();
+    e.advance(2 * STEP);
+    e.applyCvResetEvents(1 << CV_SOURCE_1);
+    e.setChannelMode(0, ChannelMode.RANDOM);
+    e.advance(1);
+    expect(e.onsetCount(0)).toBe(1);
+  });
+
+  it("l'armement survit au passage en CLOCK", () => {
+    const e = seqRouted();
+    e.start();
+    e.advance(2 * STEP);
+    e.applyCvResetEvents(1 << CV_SOURCE_1);
+    e.setChannelMode(0, ChannelMode.CLOCK);
+    e.advance(1);
+    expect(e.onsetCount(0)).toBe(1);
+  });
+
+  it("un armement global survit au passage en RANDOM", () => {
+    const e = new SequencerEngine();
+    e.setChannelMode(0, ChannelMode.SEQ);
+    e.start();
+    e.advance(2 * STEP);
+    e.reset();
+    e.setChannelMode(0, ChannelMode.RANDOM);
+    e.advance(1);
+    expect(e.onsetCount(0)).toBe(1);
   });
 });
 
