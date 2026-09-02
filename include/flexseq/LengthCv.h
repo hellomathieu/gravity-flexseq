@@ -21,6 +21,7 @@ int8_t zoneFor(int16_t cv);
 int8_t zoneWithHysteresis(int16_t cv, int8_t current);
 uint8_t effectiveLengthFor(uint8_t base, int8_t offset);
 uint8_t patternIndexFor(uint8_t base, int8_t offset);
+uint8_t readStepFor(uint8_t localStep, int8_t offset, uint8_t effectiveLength);
 
 }  // namespace lengthcv
 }  // namespace flexseq

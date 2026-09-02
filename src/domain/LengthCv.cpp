@@ -64,5 +64,18 @@ uint8_t effectiveLengthFor(uint8_t base, int8_t offset) {
     return static_cast<uint8_t>(wanted);
 }
 
+uint8_t readStepFor(uint8_t localStep, int8_t offset, uint8_t effectiveLength) {
+    if (effectiveLength == 0) {
+        return 0;
+    }
+    const int16_t length = static_cast<int16_t>(effectiveLength);
+    int16_t wanted = static_cast<int16_t>(static_cast<int16_t>(localStep) + offset);
+    wanted = static_cast<int16_t>(wanted % length);
+    if (wanted < 0) {
+        wanted = static_cast<int16_t>(wanted + length);
+    }
+    return static_cast<uint8_t>(wanted);
+}
+
 }  // namespace lengthcv
 }  // namespace flexseq

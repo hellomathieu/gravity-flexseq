@@ -328,6 +328,13 @@ int8_t SequencerEngine::lengthCvOffset(uint8_t channel) const {
     return cvZoneSum(channel, CV_DEST_LENGTH);
 }
 
+int8_t SequencerEngine::stepCvOffset(uint8_t channel) const {
+    if (!validChannel(channel)) {
+        return 0;
+    }
+    return cvZoneSum(channel, CV_DEST_STEP);
+}
+
 int8_t SequencerEngine::patternCvIndex(uint8_t channel) const {
     if (!validChannel(channel)) {
         return -1;
@@ -577,6 +584,15 @@ int8_t SequencerEngine::effectiveStep(uint8_t channel) const {
         return -1;
     }
     return static_cast<int8_t>(channels_[channel].localStep);
+}
+
+int8_t SequencerEngine::currentReadStep(uint8_t channel) const {
+    if (!validChannel(channel)) {
+        return -1;
+    }
+    const ChannelState& c = channels_[channel];
+    return static_cast<int8_t>(lengthcv::readStepFor(
+        c.localStep, cvZoneSum(channel, CV_DEST_STEP), c.effectiveLength));
 }
 
 bool SequencerEngine::hasStepped(uint8_t channel) const {

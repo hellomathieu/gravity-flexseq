@@ -111,6 +111,7 @@ public:
 
     // Logical position of the channel, in [0, effectiveLength). -1 if invalid.
     int8_t effectiveStep(uint8_t channel) const;
+    int8_t currentReadStep(uint8_t channel) const;
 
     void setModulatedPatterns(ModulatedPatternState* state);
     ModulatedPatternState* modulatedPatterns() const;
@@ -136,6 +137,8 @@ public:
 
     // Somme des zones des sources routees vers LENGTH, dans [-30, +30].
     int8_t lengthCvOffset(uint8_t channel) const;
+
+    int8_t stepCvOffset(uint8_t channel) const;
 
     // Index de pattern que le CV designe, clamp(base + somme, 0, 15). PRD 10.2.
     // C'est une DERIVATION : aucun etat ne la porte. -1 si le canal est invalide.
