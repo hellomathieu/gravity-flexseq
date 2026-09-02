@@ -1350,6 +1350,21 @@ MUTANTS = [
      "sim/src/domain/SequencerEngine.ts",
      "    const mask = sourceMask & ((1 << CV_SOURCE_COUNT) - 1);",
      "    const mask = sourceMask | ((1 << CV_SOURCE_COUNT) - 1);", "ts-cvreset"),
+    ("cpp: the cv reset source bits are swapped in main (M7)",
+     "src/main.cpp",
+     "    if (flexseq::cv::takeEdge(flexseq::cv::CV1)) {\n"
+     "        resetMask |= 1u << flexseq::CV_SOURCE_1;\n"
+     "    }\n"
+     "    if (flexseq::cv::takeEdge(flexseq::cv::CV2)) {\n"
+     "        resetMask |= 1u << flexseq::CV_SOURCE_2;\n"
+     "    }",
+     "    if (flexseq::cv::takeEdge(flexseq::cv::CV1)) {\n"
+     "        resetMask |= 1u << flexseq::CV_SOURCE_2;\n"
+     "    }\n"
+     "    if (flexseq::cv::takeEdge(flexseq::cv::CV2)) {\n"
+     "        resetMask |= 1u << flexseq::CV_SOURCE_1;\n"
+     "    }",
+     "probe-cvreset"),
 ]
 
 SUITES = {
@@ -1401,6 +1416,8 @@ SUITES = {
     "cpp-cvreset": (["./tools/run-cpp-tests.sh", "test_cv_reset"], ROOT),
     "ts-cvreset": (["npx", "vitest", "run", "test/CvReset.test.ts"],
                    os.path.join(ROOT, "sim")),
+    "probe-cvreset": (["env", "COURSES=cvreset", "./tools/run-trigger-probe.sh"],
+                      ROOT),
 }
 
 _restore = {}
