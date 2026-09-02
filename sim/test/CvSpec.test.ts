@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { zoneWithHysteresis, effectiveLengthFor, patternIndexFor } from "../src/domain/LengthCv.js";
+import { zoneWithHysteresis, effectiveLengthFor, patternIndexFor, readStepFor } from "../src/domain/LengthCv.js";
 
 /**
  * Vecteurs d'or de la specification CV du lot E3.
@@ -72,10 +72,6 @@ function loadVectors(): Vector[] {
 const vectors = loadVectors();
 const of = (family: Family) => vectors.filter((v) => v.family === family);
 
-function referenceReadStep(localStep: number, offsetSum: number, length: number): number {
-  return (((localStep + offsetSum) % length) + length) % length;
-}
-
 describe("Vecteurs CV — chargement", () => {
   it("charge le fichier et y trouve des cas", () => {
     expect(vectors.length).toBeGreaterThanOrEqual(40);
@@ -115,10 +111,10 @@ describe("Vecteurs CV — famille P, contre la production", () => {
   });
 });
 
-describe("Vecteurs CV — familles non encore implementees", () => {
-  it("S suit le modele de reference", () => {
+describe("Vecteurs CV — famille S, contre la production", () => {
+  it("S suit la lecture de production", () => {
     for (const v of of("S")) {
-      expect(referenceReadStep(v.a, v.b, v.c as number), v.id).toBe(v.expected);
+      expect(readStepFor(v.a, v.b, v.c as number), v.id).toBe(v.expected);
     }
   });
 });
@@ -128,7 +124,7 @@ describe("Invariants exhaustifs", () => {
     for (let length = 1; length <= 36; ++length) {
       for (let local = 0; local < length; ++local) {
         for (let sum = -30; sum <= 30; ++sum) {
-          const got = referenceReadStep(local, sum, length);
+          const got = readStepFor(local, sum, length);
           expect(got).toBeGreaterThanOrEqual(0);
           expect(got).toBeLessThan(length);
         }
@@ -138,14 +134,14 @@ describe("Invariants exhaustifs", () => {
 
   it("une longueur de un lit toujours le premier step", () => {
     for (let sum = -30; sum <= 30; ++sum) {
-      expect(referenceReadStep(0, sum, 1)).toBe(0);
+      expect(readStepFor(0, sum, 1)).toBe(0);
     }
   });
 
   it("un offset nul lit le step local", () => {
     for (let length = 1; length <= 36; ++length) {
       for (let local = 0; local < length; ++local) {
-        expect(referenceReadStep(local, 0, length)).toBe(local);
+        expect(readStepFor(local, 0, length)).toBe(local);
       }
     }
   });
