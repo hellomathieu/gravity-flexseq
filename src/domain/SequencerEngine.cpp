@@ -110,7 +110,7 @@ void SequencerEngine::stop() {
 void SequencerEngine::reset() {
     phase_ = 0;
     beatTick_ = 0;
-    armed_ = 0;
+    armed_ = static_cast<uint8_t>((1u << CHANNEL_COUNT) - 1u);
     for (uint8_t ch = 0; ch < CHANNEL_COUNT; ++ch) {
         channels_[ch].localStep = 0;
         channels_[ch].acc = 0;
