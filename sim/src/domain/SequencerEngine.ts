@@ -289,7 +289,7 @@ export class SequencerEngine {
       const c = this.channels[ch]!;
       c.localStep = 0;
       c.acc = 0;
-      c.armed = false;
+      c.armed = true;
       if (c.pendingTicks > 0) {
         const ticksPerStep = c.pendingTicks;
         c.pendingTicks = 0;
