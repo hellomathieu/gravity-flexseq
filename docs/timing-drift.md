@@ -125,6 +125,15 @@ Command: `DURATION=60 SAVE=1 ./tools/run-drift-probe.sh`
 | onsets emitted | **222** |
 | onsets dropped | **0** |
 | onsets unexpected | **0** |
+
+> ⚠️ **The figures above predate decision D79 (2026-09-02).** A global reset now
+> arms the entry onset of step 0, and the first tick after the Start emits it.
+> The expected model of `drift_probe.c` carries that onset at tick 1, so the
+> reference count is **38 per line, 228 over six lines** since then. The
+> re-derivation was measured in both states: before the model change the run
+> read 228 fronts against 222 expected, one "unexpected" per channel; after it,
+> 228 against 228, zero unexpected, and the armed onset pairs as late by at
+> most 2 ticks — the loop-pass granularity, reported and not hidden.
 | `grid_error_ticks` | min **0**, max **0**, mean 0, median 0 — the only value met is 0 |
 | `timing_error_us` | min **609**, max **862**, mean 741, median 739, standard deviation 60 |
 | OLS slope | 0.000e+0 tick/tick, standard error 0.000e+0 |

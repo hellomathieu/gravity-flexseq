@@ -193,6 +193,12 @@ static void build_expected(const uint8_t *active, const uint8_t *ratchet,
     uint32_t tick = 0;
     uint8_t step = 0;
 
+    /* D79 (2026-09-02) : le reset global ARME le step de depart, et le premier
+     * tick apres le Start emet son onset d'entree. Le modele le porte comme un
+     * onset attendu au tick 1 — avant D79 cet onset n'existait pas, et la
+     * mesure lisait 6 fronts "en trop" (un par canal). */
+    if ((!seq_mode || active[0]) && horizon >= 1) push_expect(1, 0, 0);
+
     for (;;) {
         const uint8_t code = ratchet[step];
         uint8_t triggers = ratchet_triggers(code);
