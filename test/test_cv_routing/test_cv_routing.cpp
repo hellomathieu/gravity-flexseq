@@ -22,6 +22,10 @@ static const uint16_t STEP = 96; // DEFAULT_SUBDIV = /1
 void setUp() {}
 void tearDown() {}
 
+static void routeStep(SequencerEngine& e, uint8_t channel, uint8_t source) {
+    TEST_ASSERT_TRUE(e.setCvDestination(channel, source, CV_DEST_STEP));
+}
+
 static void routeLength(SequencerEngine& e, uint8_t channel, uint8_t source) {
     TEST_ASSERT_TRUE(e.setCvDestination(channel, source, CV_DEST_LENGTH));
 }
@@ -566,6 +570,112 @@ void test_the_derived_pattern_index_follows_a_change_of_base_without_losing_the_
     TEST_ASSERT_EQUAL_INT8(4, e.getSelectedPattern(0));
 }
 
+void test_a_step_routing_currently_keeps_a_null_zone() {
+    SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
+    e.setBaseLength(0, 12);
+    routeStep(e, 0, CV_SOURCE_1);
+    e.setCvInput(CV_SOURCE_1, 330);
+    e.start();
+    e.advance(STEP);
+    TEST_ASSERT_EQUAL_INT8(0, e.stepCvOffset(0));
+    TEST_ASSERT_EQUAL_INT8(1, e.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(1, e.currentReadStep(0));
+}
+
+void test_the_step_boundary_moves_the_step_offset() {
+    TEST_IGNORE_MESSAGE("lot STEP etape 8 : CV_DEST_STEP n est pas cable");
+    SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
+    e.setBaseLength(0, 12);
+    routeStep(e, 0, CV_SOURCE_1);
+    e.setCvInput(CV_SOURCE_1, 330); // zone +10
+    e.start();
+    e.advance(STEP);
+    TEST_ASSERT_EQUAL_INT8(10, e.stepCvOffset(0));
+}
+
+void test_the_step_cv_shifts_the_read_without_moving_the_local_step() {
+    TEST_IGNORE_MESSAGE("lot STEP etape 8 : CV_DEST_STEP n est pas cable");
+    SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
+    e.setBaseLength(0, 12);
+    routeStep(e, 0, CV_SOURCE_1);
+    e.setCvInput(CV_SOURCE_1, 330); // zone +10
+    e.start();
+    for (uint8_t i = 0; i < 4; ++i) {
+        e.advance(STEP);
+    }
+    TEST_ASSERT_EQUAL_INT8(4, e.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(2, e.currentReadStep(0));
+}
+
+void test_a_change_of_length_keeps_the_step_offset_and_moves_the_read() {
+    TEST_IGNORE_MESSAGE("lot STEP etape 8 : CV_DEST_STEP n est pas cable");
+    SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
+    e.setBaseLength(0, 12);
+    routeStep(e, 0, CV_SOURCE_1);
+    e.setCvInput(CV_SOURCE_1, 330); // zone +10
+    e.start();
+    for (uint8_t i = 0; i < 5; ++i) {
+        e.advance(STEP);
+    }
+    TEST_ASSERT_EQUAL_INT8(10, e.stepCvOffset(0));
+    TEST_ASSERT_EQUAL_INT8(3, e.currentReadStep(0));
+    e.setBaseLength(0, 8);
+    TEST_ASSERT_EQUAL_UINT8(8, e.getEffectiveLength(0));
+    TEST_ASSERT_EQUAL_INT8(10, e.stepCvOffset(0));
+    TEST_ASSERT_EQUAL_INT8(7, e.currentReadStep(0));
+}
+
+void test_two_sources_on_the_step_add_before_the_modulo() {
+    TEST_IGNORE_MESSAGE("lot STEP etape 8 : CV_DEST_STEP n est pas cable");
+    SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
+    e.setBaseLength(0, 36);
+    routeStep(e, 0, CV_SOURCE_1);
+    routeStep(e, 0, CV_SOURCE_2);
+    e.setCvInput(CV_SOURCE_1, 330); // zone +10
+    e.setCvInput(CV_SOURCE_2, 330); // zone +10
+    e.start();
+    e.advance(STEP);
+    TEST_ASSERT_EQUAL_INT8(20, e.stepCvOffset(0));
+    TEST_ASSERT_EQUAL_INT8(21, e.currentReadStep(0));
+}
+
+void test_a_triplet_on_the_read_step_stretches_the_step() {
+    TEST_IGNORE_MESSAGE("lot STEP etape 8 : CV_DEST_STEP n est pas cable");
+    SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
+    e.setBaseLength(0, 12);
+    e.instanceForChannel(0)->setRatchet(4, flexseq::RATCHET_TRIPLET);
+    routeStep(e, 0, CV_SOURCE_1);
+    e.setCvInput(CV_SOURCE_1, 99); // zone +3
+    e.start();
+    e.advance(STEP);
+    TEST_ASSERT_EQUAL_UINT16(2 * STEP, e.currentStepTicks(0));
+    TEST_ASSERT_EQUAL_UINT8(3, e.currentStepTriggers(0));
+    TEST_ASSERT_EQUAL_INT8(1, e.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(4, e.currentReadStep(0));
+}
+
+void test_a_triplet_on_the_local_step_alone_does_not_stretch_the_step() {
+    TEST_IGNORE_MESSAGE("lot STEP etape 8 : CV_DEST_STEP n est pas cable");
+    SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
+    e.setBaseLength(0, 12);
+    e.instanceForChannel(0)->setRatchet(1, flexseq::RATCHET_TRIPLET);
+    routeStep(e, 0, CV_SOURCE_1);
+    e.setCvInput(CV_SOURCE_1, 99); // zone +3
+    e.start();
+    e.advance(STEP);
+    TEST_ASSERT_EQUAL_UINT16(STEP, e.currentStepTicks(0));
+    TEST_ASSERT_EQUAL_UINT8(1, e.currentStepTriggers(0));
+    TEST_ASSERT_EQUAL_INT8(1, e.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(4, e.currentReadStep(0));
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_the_five_destination_codes_hold_their_persisted_values);
@@ -607,5 +717,12 @@ int main() {
 
     RUN_TEST(test_the_length_offset_survives_a_change_of_base);
     RUN_TEST(test_the_derived_pattern_index_follows_a_change_of_base_without_losing_the_offset);
+    RUN_TEST(test_a_step_routing_currently_keeps_a_null_zone);
+    RUN_TEST(test_the_step_boundary_moves_the_step_offset);
+    RUN_TEST(test_the_step_cv_shifts_the_read_without_moving_the_local_step);
+    RUN_TEST(test_a_change_of_length_keeps_the_step_offset_and_moves_the_read);
+    RUN_TEST(test_two_sources_on_the_step_add_before_the_modulo);
+    RUN_TEST(test_a_triplet_on_the_read_step_stretches_the_step);
+    RUN_TEST(test_a_triplet_on_the_local_step_alone_does_not_stretch_the_step);
     return UNITY_END();
 }
