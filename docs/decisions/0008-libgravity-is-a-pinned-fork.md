@@ -66,7 +66,9 @@ The fork licence stays **MIT**, with Adam Wonak's copyright intact.
   adapter layer and `docs/upstream-defects.md` at the same time;
 - a change that stops FlexSeq compiling against upstream, or that changes the
   behaviour of another consumer **without that consumer asking for it**;
-- a musical behaviour. uClock stays as it is.
+- a musical behaviour. uClock stays as it is. ⚠️ **Amended on 2026-09-03**, see
+  below: a change that measurement proves equivalent is not a change of
+  behaviour.
 
 ⚠️ **The second line said "an API" until 2026-08-25, and that was too broad.**
 The owner asked why an improvement offered upstream should be forbidden, and the
@@ -75,6 +77,50 @@ locked into the fork, and an ADDITIVE change does not threaten that: a default
 that keeps the previous behaviour leaves every existing consumer untouched, and
 FlexSeq's own sources do not depend on it either way. The rule now states the
 criterion instead of the word.
+
+### Amendment of 2026-09-03 — the tempo path of uClock
+
+The charter also permits this: **replace the floating-point tempo computation of
+uClock with an integer computation, when measurement proves the equivalence.**
+
+**The reason is a defect of the class the charter already covers.** The
+floating-point runtime costs **1082 bytes of Flash**, and FlexSeq cannot avoid
+it from the adapter layer. Lot S2.1 established the cause on the call graph:
+
+- the public interface of libGravity is **already integer** — `SetTempo(int)`
+  and `int Tempo()`. FlexSeq passes no float, so no call site can bypass one;
+- `Clock::Init()` calls `uClock.setTempo(DEFAULT_TEMPO)` without a condition.
+  The float path runs at every boot;
+- the external clock path calls `constrainBpm(freqToBpm(...))` inside uClock.
+  A caller cannot reach it.
+
+**The equivalence is measured, not asserted.** The two forms were compared:
+
+- the **internal** path, where the BPM is an integer, gives **0 difference over
+  the 400 values** of `[1, 400]`, and 0 over the `[20, 200]` of lot K;
+- the **external** path, where uClock estimates a fractional BPM, differs by **at
+  most 1 microsecond**. The integer form removes one division of two, so it is
+  the more exact of the two forms.
+
+**Six conditions apply to such a change, and all are mandatory:**
+
+1. the interface of libGravity does not change;
+2. the BPM clamp of `[1, 400]` stays. ⚠️ Without it the difference reaches
+   124992 microseconds on a very slow or very fast external clock;
+3. the equivalence is measured again before the change, on every integer BPM of
+   the accepted range;
+4. the measurement program lives in `tools/`, so that it replays;
+5. the change is proved **on the pins** by `run-trigger-probe.sh`. Its CLOCK
+   course measures the step to 0.01 %;
+6. the gain is measured by a counter-build, symbol by symbol with `avr-nm`.
+
+**What stays forbidden is unchanged.** The seven audited anomalies stay. A
+change that another consumer did not ask for stays forbidden. A defect that
+FlexSeq can work around from its adapter layer stays out of the fork.
+
+⚠️ **A limit of the measurement, named.** The comparison program runs on the
+host. A `float` there is IEEE 32 bits, as on the AVR, but this measurement does
+not verify the rounding of the AVR division. Condition 5 covers that gap.
 
 ### Per commit
 
