@@ -41,7 +41,7 @@ uClockClass::ClockMode uClockClass::getClockMode() {
     return clock_mode;
 }
 
-void uClockClass::setTempo(float tempo) {
+void uClockClass::setTempo(uint16_t tempo) {
     (void)tempo;
 }
 
