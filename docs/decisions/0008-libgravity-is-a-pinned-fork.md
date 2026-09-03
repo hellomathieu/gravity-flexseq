@@ -84,8 +84,13 @@ The charter also permits this: **replace the floating-point tempo computation of
 uClock with an integer computation, when measurement proves the equivalence.**
 
 **The reason is a defect of the class the charter already covers.** The
-floating-point runtime costs **1082 bytes of Flash**, and FlexSeq cannot avoid
-it from the adapter layer. Lot S2.1 established the cause on the call graph:
+floating-point runtime costs **1474 bytes of Flash**, over 23 symbols, and
+FlexSeq cannot avoid it from the adapter layer. ⚠️ **This figure said 1082 until
+2026-09-03**, and that was an undercount: the pattern that produced it missed the
+internal helpers of the float routines — `__fp_cmp`, `__fp_split3`,
+`__fp_splitA`, `__fp_round`, `__fp_psc*`, `__fp_szero`, `__fp_zero`,
+`__mulohisi3` and `__mulshisi3`. **The measured net gain of the change is 1092
+bytes**, the difference being the cost of the integer forms that replace it. Lot S2.1 established the cause on the call graph:
 
 - the public interface of libGravity is **already integer** — `SetTempo(int)`
   and `int Tempo()`. FlexSeq passes no float, so no call site can bypass one;

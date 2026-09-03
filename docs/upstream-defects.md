@@ -84,12 +84,18 @@ interrupt**, and it is part of that ISR's 974 bytes.
 The figure is 1072 bytes of helpers minus 156 bytes of integer helpers. It is
 3.2 % of the Flash the project has.
 
-⚠️ **Re-measured on 2026-09-03 by lot S2.1, and the two figures do not conflict.**
-`avr-nm` on the current firmware reads **1082 bytes** of float helpers, gross.
-The 916 above is the net: it takes off the 156 bytes of integer helpers. Those
-helpers are **already linked** today, `__udivmodsi4` among them, so an integer
-replacement adds no new runtime. Read 916 as the conservative figure and 1082 as
-the gross one.
+⚠️ **BOTH FIGURES ABOVE ARE UNDERCOUNTS, and the count is settled on
+2026-09-03 by lot S2.1-c.** `avr-nm` reads **1474 bytes** over **23 symbols** on
+the firmware that carries the float path. The 916 of 2026-08-24 and the 1082 that
+this section carried until today both missed the internal helpers of the float
+routines: `__fp_cmp`, `__fp_split3`, `__fp_splitA`, `__fp_round`, `__fp_psc*`,
+`__fp_szero`, `__fp_zero`, `__mulohisi3` and `__mulshisi3`.
+
+**The change was then measured on a counter-build**: Flash **28764 to 27672**, so
+**-1092 bytes**, and RAM **+2**. The 382 bytes between 1474 and 1092 are the cost
+of the integer forms. The integer division helpers were already linked, so they
+add nothing. Attribution: the float helpers go to **zero**, `setTimer` returns
+140 bytes, `main` returns 12, and **the timer ISR GROWS by 44**.
 
 ⚠️ **And the decision this section called for HAS been taken.** ADR 0008 was
 amended on 2026-09-03: the fork may replace the computation when measurement
