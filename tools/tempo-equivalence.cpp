@@ -20,6 +20,11 @@ constexpr uint32_t EXTERNAL_INTERVAL_STEP = 137;
 constexpr uint32_t INTERNAL_TOLERANCE_US = 0;
 constexpr uint32_t EXTERNAL_TOLERANCE_US = 1;
 constexpr uint32_t DISPLAYED_TOLERANCE_BPM = 0;
+constexpr uint32_t TIMER_TOLERANCE_US = 0;
+
+constexpr uint32_t AVR_CLOCK_FREQ = 16000000;
+constexpr uint32_t CYCLES_PER_US = AVR_CLOCK_FREQ / 1000000;
+constexpr uint32_t PRESCALERS[5] = {1, 8, 64, 256, 1024};
 
 const char* mutatedFamily = "";
 
@@ -92,6 +97,38 @@ uint32_t integerDisplayedBpm(uint32_t interval, uint32_t inputPpqn) {
         return integerConstrainBpm(integerFrequencyToBpm(interval, inputPpqn)) + 1;
     }
     return integerConstrainBpm(integerFrequencyToBpm(interval, inputPpqn));
+}
+
+struct TimerSetting {
+    uint32_t prescaler;
+    uint32_t ocr;
+    bool refused;
+};
+
+TimerSetting floatTimerSetting(uint32_t us) {
+    const float tickHertz = 1.0f / ((float)us / 1000000.0f);
+    for (uint32_t i = 0; i < 5; ++i) {
+        const uint32_t ocr =
+            (uint32_t)(AVR_CLOCK_FREQ / (tickHertz * (float)PRESCALERS[i]));
+        if (ocr < 65535) {
+            return TimerSetting{PRESCALERS[i], ocr, false};
+        }
+    }
+    return TimerSetting{0, 0, true};
+}
+
+TimerSetting integerTimerSetting(uint32_t us) {
+    const uint32_t cycles = CYCLES_PER_US * us;
+    for (uint32_t i = 0; i < 5; ++i) {
+        const uint32_t ocr = cycles / PRESCALERS[i];
+        if (ocr < 65535) {
+            if (familyIsMutated("T")) {
+                return TimerSetting{PRESCALERS[i], ocr + 1, false};
+            }
+            return TimerSetting{PRESCALERS[i], ocr, false};
+        }
+    }
+    return TimerSetting{0, 0, true};
 }
 
 struct Verdict {
@@ -180,6 +217,53 @@ Verdict displayedTempo(uint32_t inputPpqn) {
     return v;
 }
 
+uint32_t exactOcr(uint32_t us, uint32_t prescaler) {
+    return (uint32_t)((uint64_t)AVR_CLOCK_FREQ * (uint64_t)us
+                      / 1000000ULL / (uint64_t)prescaler);
+}
+
+Verdict timerSetting() {
+    Verdict v = {"T", {0}, 0, 0, 0, TIMER_TOLERANCE_US, "pas d OCR"};
+    setSubject(v, "OCR1A : l entier n est jamais MOINS exact que le flottant");
+    uint32_t floatWorst = 0;
+    uint32_t integerWorst = 0;
+    uint32_t prescalerDiffers = 0;
+    for (uint32_t bpm = MIN_BPM; bpm <= MAX_BPM; ++bpm) {
+        const uint32_t us = MICROSECONDS_PER_MINUTE / OUTPUT_PPQN / bpm;
+        const TimerSetting byFloat = floatTimerSetting(us);
+        const TimerSetting byInteger = integerTimerSetting(us);
+        ++v.cases;
+        if (byFloat.refused != byInteger.refused
+            || byFloat.prescaler != byInteger.prescaler) {
+            ++prescalerDiffers;
+            ++v.mismatches;
+            v.worst = 0xFFFFFFFFu;
+            continue;
+        }
+        const uint32_t exact = exactOcr(us, byInteger.prescaler);
+        const uint32_t fErr = byFloat.ocr > exact ? byFloat.ocr - exact
+                                                  : exact - byFloat.ocr;
+        const uint32_t iErr = byInteger.ocr > exact ? byInteger.ocr - exact
+                                                    : exact - byInteger.ocr;
+        if (fErr > floatWorst) {
+            floatWorst = fErr;
+        }
+        if (iErr > integerWorst) {
+            integerWorst = iErr;
+        }
+        if (iErr > fErr) {
+            ++v.mismatches;
+            if (iErr - fErr > v.worst) {
+                v.worst = iErr - fErr;
+            }
+        }
+    }
+    std::printf("     %-8s %-46s pire ecart a la valeur EXACTE : flottant %u, "
+                "entier %u ; prediviseur different %u fois\n",
+                "", "", floatWorst, integerWorst, prescalerDiffers);
+    return v;
+}
+
 void usage() {
     std::fprintf(stderr,
         "usage: tempo-equivalence [--mutate I|E|D]\n"
@@ -188,6 +272,7 @@ void usage() {
         "  I  the internal path, an integer BPM to a timer interval\n"
         "  E  the external path, a measured interval to a timer interval\n"
         "  D  the displayed tempo that Clock::Tempo() returns\n"
+        "  T  the period OCR1A and the prescaler apply\n"
         "--mutate breaks the integer form of one family, so that its criterion\n"
         "is seen red. Exit 0 all families inside tolerance, 1 a family outside,\n"
         "2 the arguments were refused.\n");
@@ -201,8 +286,10 @@ int main(int argc, char** argv) {
             mutatedFamily = argv[++i];
             if (std::strcmp(mutatedFamily, "I") != 0
                 && std::strcmp(mutatedFamily, "E") != 0
-                && std::strcmp(mutatedFamily, "D") != 0) {
-                std::fprintf(stderr, "tempo-equivalence: --mutate accepts I, E or D\n");
+                && std::strcmp(mutatedFamily, "D") != 0
+                && std::strcmp(mutatedFamily, "T") != 0) {
+                std::fprintf(stderr,
+                             "tempo-equivalence: --mutate accepts I, E, D or T\n");
                 return 2;
             }
         } else {
@@ -217,7 +304,7 @@ int main(int argc, char** argv) {
                     mutatedFamily);
     }
 
-    Verdict verdicts[10];
+    Verdict verdicts[11];
     uint8_t count = 0;
     verdicts[count++] = internalPath(MIN_BPM, MAX_BPM,
                                      "bpm entier, plage de uClock 1 a 400");
@@ -229,6 +316,7 @@ int main(int argc, char** argv) {
     for (uint32_t i = 0; i < 4; ++i) {
         verdicts[count++] = displayedTempo(INPUT_PPQN[i]);
     }
+    verdicts[count++] = timerSetting();
 
     uint8_t failed = 0;
     for (uint8_t i = 0; i < count; ++i) {
