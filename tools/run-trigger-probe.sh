@@ -188,10 +188,11 @@ EXT_PULSE_US="${EXT_PULSE_US:-1000}"
 EXT_TRACE_MS="${EXT_TRACE_MS:-0}"
 EXT_EXPECT_PERIOD_US="${EXT_EXPECT_PERIOD_US:-}"
 EXT_PIN_FORCE="${EXT_PIN_FORCE:-}"
+EXT_PERIOD_FORCED="${EXT_PERIOD_FORCED:-}"
 EXT_C3_BOUND_PCT="${EXT_C3_BOUND_PCT:-}"
 MIDI_SEND_START="${MIDI_SEND_START:-1}"
 # cvstep est NOMINALE depuis STEP-12.4, 2026-09-03 : onze courses.
-COURSES="${COURSES:-clock seq ratchet cvzero cv1length cv2length cvreset patold patnew cvpattern cvstep extclock}"
+COURSES="${COURSES:-clock seq ratchet cvzero cv1length cv2length cvreset patold patnew cvpattern cvstep extclock24 extclock4 extclock2 extclock1 midiclock}"
 
 case "$EXT_PPQN" in
   24) EXT_SOURCE_CODE=1 ;;
@@ -205,7 +206,7 @@ EXT_PERIOD_GIVEN=0
 EXT_PERIOD_US="${EXT_PERIOD_US:-$(( 60000000 / (TEMPO * EXT_PPQN) ))}"
 
 EXT_MIN_BPM_TICK_US=$(( 60000000 / 96 / 1 ))
-EXT_FREEZE_MS="${EXT_FREEZE_MS:-$(( (96 / EXT_PPQN) * EXT_MIN_BPM_TICK_US / 1000 ))}"
+EXT_FREEZE_MS="${EXT_FREEZE_MS:-0}"
 
 if [ -t 1 ]; then
   C_OK=$'\033[32m'; C_ERR=$'\033[31m'; C_DIM=$'\033[2m'; C_B=$'\033[1m'; C_0=$'\033[0m'; TTY=1
@@ -258,31 +259,50 @@ flexseq_resolve_active_format "$ROOT" "$ROOT/.pio/build/nanoatmega328/firmware.e
 flexseq_report_active_format "$C_OK" "$C_DIM" "$C_0"
 
 # --- 2bis. Garde de la course EXTCLOCK --------------------------------------
+ext_ppqn_of() {
+  case "$1" in
+    extclock24) echo 24 ;;
+    extclock4)  echo 4 ;;
+    extclock2)  echo 2 ;;
+    extclock1)  echo 1 ;;
+    midiclock)  echo 24 ;;
+    extclock)   echo "$EXT_PPQN" ;;
+    *)          echo "" ;;
+  esac
+}
+
+ext_needed_s_of() {
+  local q="$1"
+  local period=$(( 60000000 / (TEMPO * q) ))
+  local step=$(( period * q / 1000 ))
+  local ms=$(( EXT_START_MS + EXT_FREEZE_MS + EXT_DISCARD * period / 1000 \
+               + EXT_MEASURE_STEPS * step ))
+  echo $(( (ms + 1999) / 1000 ))
+}
+
 case " $COURSES " in
   *" midiclock "*)
     EXT_PPQN=24
     EXT_SOURCE_CODE=1
     [ "$EXT_PERIOD_GIVEN" = "0" ] && EXT_PERIOD_US=$(( 60000000 / (TEMPO * 24) ))
-    EXT_FREEZE_MS=$(( (96 / 24) * EXT_MIN_BPM_TICK_US / 1000 ))
     ;;
 esac
 
-case " $COURSES " in
-  *" extclock "* | *" midiclock "*)
-    [ -n "$EXT_SOURCE_CODE" ] || die "EXT_PPQN accepte 24, 4, 2 ou 1 — recu '$EXT_PPQN'." 2
-    EXT_STEP_MS=$(( EXT_PERIOD_US * EXT_PPQN / 1000 ))
-    EXT_NEEDED_MS=$(( EXT_START_MS + EXT_FREEZE_MS \
-                      + EXT_DISCARD * EXT_PERIOD_US / 1000 \
-                      + EXT_MEASURE_STEPS * EXT_STEP_MS ))
-    EXT_NEEDED_S=$(( (EXT_NEEDED_MS + 1999) / 1000 ))
-    if [ "$DURATION" -lt "$EXT_NEEDED_S" ]; then
-      die "la course d horloge externe a PPQN $EXT_PPQN demande DURATION >= $EXT_NEEDED_S s : gel de $EXT_FREEZE_MS ms (defaut 12), puis $EXT_DISCARD impulsions jetees et $EXT_MEASURE_STEPS pas mesures de $EXT_STEP_MS ms, depart $EXT_START_MS ms. DURATION vaut $DURATION." 2
-    fi
-    printf '  %s✅%s garde extclock         %sPPQN %s, source %s, periode %s us, gel %s ms, DURATION %s s >= %s s%s\n' \
-      "$C_OK" "$C_0" "$C_DIM" "$EXT_PPQN" "$EXT_SOURCE_CODE" "$EXT_PERIOD_US" \
-      "$EXT_FREEZE_MS" "$DURATION" "$EXT_NEEDED_S" "$C_0"
-    ;;
-esac
+EXT_TOTAL_S=0
+for c in $COURSES; do
+  q="$(ext_ppqn_of "$c")"
+  [ -n "$q" ] || continue
+  case "$q" in 24|4|2|1) ;; *) die "EXT_PPQN accepte 24, 4, 2 ou 1 — recu '$q'." 2 ;; esac
+  n="$(ext_needed_s_of "$q")"
+  EXT_TOTAL_S=$(( EXT_TOTAL_S + n ))
+  printf '  %s✅%s garde %-14s %sPPQN %2s, periode %6s us, gel %s ms, duree %s s%s\n' \
+    "$C_OK" "$C_0" "$c" "$C_DIM" "$q" "$(( 60000000 / (TEMPO * q) ))" \
+    "$EXT_FREEZE_MS" "$n" "$C_0"
+done
+if [ "$EXT_TOTAL_S" -gt 0 ]; then
+  printf '  %s✅%s horloge externe        %s%s s de simulation au total%s\n' \
+    "$C_OK" "$C_0" "$C_DIM" "$EXT_TOTAL_S" "$C_0"
+fi
 
 # --- 3. Images EEPROM -------------------------------------------------------
 # Fabriquees par le code du domaine, donc le format n'est decrit qu'une fois.
@@ -321,8 +341,11 @@ for MODE in $COURSES; do
       GEN_ARGS="--mode seq --cv-target ${CV_TARGET_FORCED:-1:1} --selected $PAT_NEW" ;;
     cvstep)
       GEN_ARGS="--mode seq --cv-target ${CV_TARGET_FORCED:-1:4} $CVSTEP_INSTANCES" ;;
-    extclock)
-      GEN_ARGS="--mode seq --clock-source ${EXT_SOURCE_CODE_FORCED:-$EXT_SOURCE_CODE}" ;;
+    extclock|extclock24|extclock4|extclock2|extclock1)
+      case "$(ext_ppqn_of "$MODE")" in
+        24) code=1 ;; 4) code=2 ;; 2) code=3 ;; 1) code=4 ;;
+      esac
+      GEN_ARGS="--mode seq --clock-source ${EXT_SOURCE_CODE_FORCED:-$code}" ;;
     midiclock)
       GEN_ARGS="--mode seq --clock-source ${EXT_SOURCE_CODE_FORCED:-5}" ;;
   esac
@@ -356,7 +379,7 @@ fi
 FAILED=0
 SEQ_PULSES=0
 for MODE in $COURSES; do
-  progress "simulation $MODE ($DURATION s)"
+  progress "simulation $MODE"
   PROBE_MODE="$MODE"
   PROBE_LENGTH="$EXPECTED_LENGTH"
   PROBE_CV=""
@@ -383,23 +406,29 @@ for MODE in $COURSES; do
   if [ "$MODE" = "cvreset" ]; then
     PROBE_ENV="RESET_PULSE_MV=$RESET_PULSE_MV RESET_PULSE_MS=$RESET_PULSE_MS RESET_PULSE_SOURCE=$RESET_PULSE_SOURCE"
   fi
-  if [ "$MODE" = "midiclock" ]; then
+  COURSE_DURATION="$DURATION"
+  COURSE_PPQN="$(ext_ppqn_of "$MODE")"
+  COURSE_PERIOD_US="$EXT_PERIOD_US"
+  if [ -n "$COURSE_PPQN" ]; then
     PROBE_MODE="extclock"
-    [ "$EXT_TRACE_MS" = "0" ] && EXT_TRACE_MS=$(( DURATION * 1000 / 400 + 1 ))
-    PROBE_ENV="MIDI_PERIOD_US=$EXT_PERIOD_US MIDI_START_MS=$EXT_START_MS MIDI_SEND_START=$MIDI_SEND_START EXT_PERIOD_US=0 EXT_TRACE_MS=$EXT_TRACE_MS"
-  fi
-  if [ "$MODE" = "extclock" ]; then
-    PROBE_MODE="extclock"
-    [ "$EXT_TRACE_MS" = "0" ] && EXT_TRACE_MS=$(( DURATION * 1000 / 400 + 1 ))
-    PROBE_ENV="EXT_PERIOD_US=$EXT_PERIOD_US EXT_PULSE_US=$EXT_PULSE_US EXT_START_MS=$EXT_START_MS MIDI_PERIOD_US=0 EXT_TRACE_MS=$EXT_TRACE_MS"
-    [ -n "$EXT_PIN_FORCE" ] && PROBE_ENV="$PROBE_ENV EXT_PIN=$EXT_PIN_FORCE"
+    COURSE_DURATION="$(ext_needed_s_of "$COURSE_PPQN")"
+    COURSE_PERIOD_US=$(( 60000000 / (TEMPO * COURSE_PPQN) ))
+    [ -n "$EXT_PERIOD_FORCED" ] && COURSE_PERIOD_US="$EXT_PERIOD_FORCED"
+    TRACE="$EXT_TRACE_MS"
+    [ "$TRACE" = "0" ] && TRACE=$(( COURSE_DURATION * 1000 / 400 + 1 ))
+    if [ "$MODE" = "midiclock" ]; then
+      PROBE_ENV="MIDI_PERIOD_US=$COURSE_PERIOD_US MIDI_START_MS=$EXT_START_MS MIDI_SEND_START=$MIDI_SEND_START EXT_PERIOD_US=0 EXT_TRACE_MS=$TRACE"
+    else
+      PROBE_ENV="EXT_PERIOD_US=$COURSE_PERIOD_US EXT_PULSE_US=$EXT_PULSE_US EXT_START_MS=$EXT_START_MS MIDI_PERIOD_US=0 EXT_TRACE_MS=$TRACE"
+      [ -n "$EXT_PIN_FORCE" ] && PROBE_ENV="$PROBE_ENV EXT_PIN=$EXT_PIN_FORCE"
+    fi
   fi
   if [ "$MODE" = "cvpattern" ]; then
     # Le CV monte et RESTE haut : la largeur depasse la duree de la course.
     PROBE_ENV="RESET_PULSE_MV=$CV_NOMINAL_MV RESET_PULSE_MS=$PAT_PULSE_MS RESET_PULSE_WIDTH_MS=$(( DURATION * 1000 )) RESET_PULSE_SOURCE=1"
   fi
   set +e
-  env $PROBE_ENV "$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$DURATION" \
+  env $PROBE_ENV "$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$COURSE_DURATION" \
     "$(dirname "$BIN")/ee-$MODE.bin" 384 "$PROBE_MODE" "$STEPS" "$PROBE_LENGTH" $PROBE_CV > "$LOG" 2>&1
   PROBE=$?
   set -e
@@ -408,7 +437,7 @@ for MODE in $COURSES; do
       "$C_DIM" "$C_0" "$PROBE"
   fi
   printf '  %s✅%s simulation %-11s %s%s s simulees%s\n' \
-    "$C_OK" "$C_0" "$MODE" "$C_DIM" "$DURATION" "$C_0"
+    "$C_OK" "$C_0" "$MODE" "$C_DIM" "$COURSE_DURATION" "$C_0"
 
   if [ "$MODE" = "seq" ]; then
     SEQ_PULSES="$(grep -o 'impulsions_ch1=[0-9]*' "$LOG" | tail -1 | cut -d= -f2)"
@@ -423,7 +452,8 @@ for MODE in $COURSES; do
     PAT_COURSE="$COURSE_NAME" PAT_PULSE_MS="$PAT_PULSE_MS" PAT_MIN_LATENCY_MS="$PAT_MIN_LATENCY_MS" \
     CVSTEP_TABLE_0="$CVSTEP_TABLE_0" CVSTEP_TABLE_10="$CVSTEP_TABLE_10" CVSTEP_STEP0="$CVSTEP_STEP0" \
     STEP_EXPECTED_OFFSET="$STEP_EXPECTED_OFFSET" CVSTEP_SWAP="$CVSTEP_SWAP" CVSTEP_TOL_MS="$CVSTEP_TOL_MS" \
-    EXT_PPQN="$EXT_PPQN" EXT_PERIOD_US="$EXT_PERIOD_US" EXT_DISCARD="$EXT_DISCARD" \
+    EXT_PPQN="${COURSE_PPQN:-$EXT_PPQN}" \
+    EXT_PERIOD_US="${COURSE_PERIOD_US:-$EXT_PERIOD_US}" EXT_DISCARD="$EXT_DISCARD" \
     EXT_MEASURE_STEPS="$EXT_MEASURE_STEPS" TEMPO="$TEMPO" \
     EXT_EXPECT_PERIOD_US="$EXT_EXPECT_PERIOD_US" EXT_C3_BOUND_PCT="$EXT_C3_BOUND_PCT" \
     EXT_FREEZE_MS="$EXT_FREEZE_MS" EXT_START_MS="$EXT_START_MS" \
@@ -453,7 +483,8 @@ if not m:
 
 kv = dict(p.split("=", 1) for p in m.group(1).split())
 
-if pat_course in ("extclock", "midiclock"):
+if pat_course in ("extclock", "extclock24", "extclock4", "extclock2",
+                  "extclock1", "midiclock"):
     injected_us = int(os.environ["EXT_PERIOD_US"])
     period_us = int(os.environ.get("EXT_EXPECT_PERIOD_US") or injected_us)
     ppqn = int(os.environ["EXT_PPQN"])
