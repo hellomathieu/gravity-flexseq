@@ -17,6 +17,7 @@ void usage() {
         "                    [--per-channel] [--format 2|3]\n"
         "                    [--template <idx>:<steps>[:<step>/<code>,...]]...\n"
         "                    [--selected <idx>]\n"
+        "                    [--instance <ch>:<steps>]...\n"
         "writes the persistent image to stdout, one byte per byte, no header\n"
         "--per-channel gives each channel its own template, and refuses\n"
         "--steps and --ratchet\n"
@@ -34,7 +35,11 @@ void usage() {
         "is refused. --template needs --format 3.\n"
         "--selected sets the selected pattern of the six channels. The instance\n"
         "copies the bank, not the template, so a channel that is not modulated\n"
-        "plays an empty instance. --selected refuses --per-channel.\n");
+        "plays an empty instance. --selected refuses --per-channel.\n"
+        "--instance writes the content of one channel instance, the active steps\n"
+        "only, after the copy of the bank: it is what the channel plays when no\n"
+        "CV is routed to PATTERN. It repeats, refuses a channel given twice and\n"
+        "--per-channel, and needs --format 3.\n");
 }
 
 struct PerChannelTemplate {
@@ -170,7 +175,28 @@ bool parseTemplate(const char* text, uint8_t& index, Pattern& pattern) {
 struct TemplateOverrides {
     bool set[persist::v3::TEMPLATE_COUNT];
     Pattern content[persist::v3::TEMPLATE_COUNT];
+    bool instanceSet[SequencerEngine::CHANNEL_COUNT];
+    Pattern instanceContent[SequencerEngine::CHANNEL_COUNT];
 };
+
+bool parseInstance(const char* text, uint8_t& channel, Pattern& pattern) {
+    char* end = nullptr;
+    const long ch = std::strtol(text, &end, 10);
+    if (end == text || ch < 0 || ch >= SequencerEngine::CHANNEL_COUNT || *end != ':') {
+        return false;
+    }
+    channel = static_cast<uint8_t>(ch);
+    pattern.clear();
+    int count = 0;
+    uint8_t steps[Pattern::DEFAULT_TOTAL_STEPS];
+    if (!parseSteps(end + 1, steps, count)) {
+        return false;
+    }
+    for (int i = 0; i < count; ++i) {
+        pattern.writeStep(steps[i], true);
+    }
+    return true;
+}
 
 }  // namespace
 
@@ -189,6 +215,9 @@ int emitVersionThree(SequencerEngine& engine, UiController& ui,
         const Pattern* source = bank.getPattern(static_cast<uint8_t>(selected));
         if (source != nullptr) {
             *instance = *source;
+        }
+        if (overrides.instanceSet[channel]) {
+            *instance = overrides.instanceContent[channel];
         }
         if (perChannel) {
             const uint8_t marker =
@@ -299,6 +328,19 @@ int main(int argc, char** argv) {
             }
             overrides.set[index] = true;
             overrides.content[index] = content;
+        } else if (std::strcmp(argv[i], "--instance") == 0 && i + 1 < argc) {
+            uint8_t channel = 0;
+            Pattern content;
+            if (!parseInstance(argv[++i], channel, content)) {
+                std::fprintf(stderr, "eeprom-image: instance refused: %s\n", argv[i]);
+                return 2;
+            }
+            if (overrides.instanceSet[channel]) {
+                std::fprintf(stderr, "eeprom-image: instance %u given twice\n", channel);
+                return 2;
+            }
+            overrides.instanceSet[channel] = true;
+            overrides.instanceContent[channel] = content;
         } else if (std::strcmp(argv[i], "--selected") == 0 && i + 1 < argc) {
             selected = std::atoi(argv[++i]);
             if (selected < 0 || selected >= SequencerEngine::PATTERN_COUNT) {
@@ -333,6 +375,18 @@ int main(int argc, char** argv) {
     }
     if (anyTemplate && format != persist::v3::FORMAT_VERSION) {
         std::fprintf(stderr, "eeprom-image: --template needs --format 3\n");
+        return 2;
+    }
+    bool anyInstance = false;
+    for (uint8_t channel = 0; channel < SequencerEngine::CHANNEL_COUNT; ++channel) {
+        anyInstance = anyInstance || overrides.instanceSet[channel];
+    }
+    if (anyInstance && format != persist::v3::FORMAT_VERSION) {
+        std::fprintf(stderr, "eeprom-image: --instance needs --format 3\n");
+        return 2;
+    }
+    if (anyInstance && perChannel) {
+        std::fprintf(stderr, "eeprom-image: --per-channel refuses --instance\n");
         return 2;
     }
 
