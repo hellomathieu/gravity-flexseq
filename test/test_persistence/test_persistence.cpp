@@ -2204,6 +2204,88 @@ void test_the_boundary_that_swaps_the_template_keeps_the_previous_ratchet_for_on
     TEST_ASSERT_EQUAL_UINT8(1, r.engine.currentStepTriggers(0));
 }
 
+// STEP-8.1, P35 normative: PRD 10.3 points 6 and 7, ADR 0011.
+// OLD carries a TRIPLET on step 1, NEW carries none. After the boundary
+// that moves the index to NEW, the content read is NEW, so the cached
+// ratchet must be NEW too: one trigger, a step of one unit.
+void test_the_boundary_that_swaps_the_template_gives_the_content_and_the_ratchet_of_the_same_template() {
+    ServiceRig r;
+    uint8_t content[persist::v3::CONTENT_BYTES];
+
+    memset(content, 0, sizeof(content));
+    content[0] = 0x02;
+    content[persist::v3::STEP_BYTES] = 0x70;
+    writeTemplateRecord(r.ee, 5, content, 16);
+
+    memset(content, 0, sizeof(content));
+    content[0] = 0x02;
+    writeTemplateRecord(r.ee, 0, content, 16);
+
+    r.engine.setModulatedPatterns(&r.state);
+    r.engine.setChannelMode(0, flexseq::MODE_SEQ);
+    r.engine.setSelectedPattern(0, 5);
+    r.route(0);
+    TEST_ASSERT_EQUAL_INT8(0, r.serve());
+    TEST_ASSERT_EQUAL_UINT8(5, r.state.loaded[0]);
+
+    r.engine.start();
+    r.engine.setCvInput(flexseq::CV_SOURCE_1, -165);
+    r.engine.advance(96);
+    TEST_ASSERT_EQUAL_INT8(1, r.engine.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(0, r.engine.patternCvIndex(0));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_TRIPLET,
+                            r.engine.patternForChannel(0)->getRatchet(1));
+    TEST_ASSERT_EQUAL_UINT8(3, r.engine.currentStepTriggers(0));
+    TEST_ASSERT_EQUAL_UINT16(192, r.engine.currentStepTicks(0));
+
+    TEST_ASSERT_EQUAL_INT8(0, r.serve());
+    TEST_ASSERT_EQUAL_UINT8(0, r.state.loaded[0]);
+
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE,
+                            r.engine.patternForChannel(0)->getRatchet(1));
+    TEST_ASSERT_EQUAL_UINT8(1, r.engine.currentStepTriggers(0));
+    TEST_ASSERT_EQUAL_UINT16(96, r.engine.currentStepTicks(0));
+}
+
+// STEP-8.1, the refused path is a characterization, green before B6 and
+// after it: the loader validates the length before it writes one byte, so
+// a refused record publishes nothing and the cache has nothing to follow.
+void test_a_refused_template_at_the_boundary_leaves_the_buffer_and_the_cache_alone() {
+    ServiceRig r;
+    uint8_t content[persist::v3::CONTENT_BYTES];
+
+    memset(content, 0, sizeof(content));
+    content[0] = 0x02;
+    content[persist::v3::STEP_BYTES] = 0x70;
+    writeTemplateRecord(r.ee, 5, content, 16);
+
+    memset(content, 0, sizeof(content));
+    content[0] = 0x02;
+    writeTemplateRecord(r.ee, 0, content, 0);
+
+    r.engine.setModulatedPatterns(&r.state);
+    r.engine.setChannelMode(0, flexseq::MODE_SEQ);
+    r.engine.setSelectedPattern(0, 5);
+    r.route(0);
+    TEST_ASSERT_EQUAL_INT8(0, r.serve());
+    TEST_ASSERT_EQUAL_UINT8(5, r.state.loaded[0]);
+
+    r.engine.start();
+    r.engine.setCvInput(flexseq::CV_SOURCE_1, -165);
+    r.engine.advance(96);
+    TEST_ASSERT_EQUAL_INT8(0, r.engine.patternCvIndex(0));
+    TEST_ASSERT_EQUAL_UINT8(3, r.engine.currentStepTriggers(0));
+    TEST_ASSERT_EQUAL_UINT16(192, r.engine.currentStepTicks(0));
+
+    TEST_ASSERT_EQUAL_INT8(0, r.serve());
+    TEST_ASSERT_EQUAL_UINT8(5, r.state.loaded[0]);
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_TRIPLET,
+                            r.engine.patternForChannel(0)->getRatchet(1));
+    TEST_ASSERT_EQUAL_UINT8(16, r.state.length[0]);
+    TEST_ASSERT_EQUAL_UINT8(3, r.engine.currentStepTriggers(0));
+    TEST_ASSERT_EQUAL_UINT16(192, r.engine.currentStepTicks(0));
+}
+
 int main() {
     UNITY_BEGIN();
 
@@ -2236,6 +2318,8 @@ int main() {
     RUN_TEST(test_a_channel_outside_seq_is_released_even_when_routed);
 
     RUN_TEST(test_the_boundary_that_swaps_the_template_keeps_the_previous_ratchet_for_one_step);
+    RUN_TEST(test_the_boundary_that_swaps_the_template_gives_the_content_and_the_ratchet_of_the_same_template);
+    RUN_TEST(test_a_refused_template_at_the_boundary_leaves_the_buffer_and_the_cache_alone);
     RUN_TEST(test_the_first_boot_seeds_the_templates_and_fills_the_instances_from_a1);
     RUN_TEST(test_a_nominal_boot_restores_the_instances_and_never_overwrites_them);
     RUN_TEST(test_a_valid_version_two_image_is_refused_without_migration);
