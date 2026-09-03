@@ -89,7 +89,7 @@ export class TriggerSequencer {
     const pattern = this.engine.patternForChannel(channel);
     if (!pattern) return false;
 
-    const step = this.engine.effectiveStep(channel);
+    const step = this.engine.currentReadStep(channel);
     if (step < 0) return false;
 
     return pattern.readStep(step) === true;

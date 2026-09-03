@@ -90,7 +90,7 @@ private:
         if (pattern == nullptr) {
             return false;
         }
-        const int8_t step = engine_.effectiveStep(channel);
+        const int8_t step = engine_.currentReadStep(channel);
         if (step < 0) {
             return false;
         }
