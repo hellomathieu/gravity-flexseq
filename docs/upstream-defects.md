@@ -48,6 +48,7 @@ encoder still carries `// Validation (TODO: add debounce check).` at
 | 9 | `Encoder` accelerates, hides the factor, and the acceleration is **unreachable by hand**. `_rotate_change()` returns the movement accumulated since the last poll, multiplied by 3 below 16 ms and by 2 below 32 ms, and `Process()` passes it to `on_rotate()` in **one** call. The factor comes from `encoder_.getMillisBetweenRotations()`, and `encoder_` is **private**, so a consumer cannot recover the true detent count from the value it receives. Measured on the module 2026-08-23: the factor never fired -- 24 callbacks, all of magnitude 1. A factor of 3 needs more than 62 detents per second | `env:encoderprobe` on the module; `docs/open-risks.md` line 30; ADR 0003 | an accessor, or a switch that turns the acceleration off |
 | 10 | **`Clock::SetSource()` attaches a serial handler with the WRONG TYPE, and `-fpermissive` accepts it.** `NeoHWSerial::isr_t` is `bool (*)(uint8_t, uint8_t)` (`NeoHWSerial.h:213`); libGravity passes functions that return `void` (`clock.h:29, 89, 115, 159`). PlatformIO's Arduino AVR builder adds `-fpermissive`, so the type error becomes a warning. At run time `_rx_complete_irq()` does `saveToBuffer = _isr(data, status)` (`NeoHWSerial.h:157`) and the callee sets no return value, so the flag reads an undefined register: **every received MIDI byte is buffered or dropped at random**. Nothing in FlexSeq reads that ring, so no behaviour is observable, but the read is undefined on each byte | the compiler, quoted below | four lines: both handlers return `bool` and return `false` |
 | 11 | **uClock is declared in `depends` while libGravity carries its own copy, in a DIFFERENT version.** The copy lives in `src/uClock/` and every include of it is quoted and relative (`clock.h:18`, `uClock.cpp:34-35`), so it is the one that compiles — measured in the build tree. Its header says **2.2.1**; `depends=uClock` resolves **2.3.0** from the registry, which is downloaded and never compiled. So the manifest advertises a version that never runs, and the running version is declared nowhere | read and measured, 2026-08-24 | one line: remove `uClock` from `depends` |
+| 12 | **The external clock freezes the module for 2.5 to 60 seconds after it is selected, and the delay grows as the input PPQN falls.** Found on 2026-09-03 by lot XCLK, the first course of the project to drive an external clock. `handleTimerInt()` runs its external sync branch with NO guard on `clock_state`, so it runs before the first pulse arrives. `ext_interval` is still 0 and `ext_clock_us` is still 0, so `counter -= phase_mult(sync_interval)` takes a subtraction on a `uint32_t` that holds 0. The result is a very large number, `freqToBpm()` of it is almost 0, `constrainBpm()` clamps it to `MIN_BPM`, which is 1, and `setTimerTempo(1)` programs an output tick of 625 ms. One step of a quarter note then lasts 60 s. **The recovery waits for the next sync boundary**, which is `mod_clock_ref` ticks away, so `96 / input_ppqn` times 625 ms | **the trigger probe, course `extclock`, with the timer witness `EXT_TRACE_MS`.** The witness reads OCR1A and the prescaler of TCCR1B, so it reports the period the timer really applies. At input PPQN 24: 5208 us at 20 ms, **624992 us at 380 ms**, and 5198 us at 2880 ms. The prediction for PPQN 2 was 48 times 625 ms, so 30 s: **measured 30900 ms**, against a start at 900 ms. Both figures come from one mechanism | **a guard on `clock_state`**, so that the sync branch waits for the second external pulse. ⚠️ It is a **musical behaviour** by the letter of ADR 0008, so the fork may not touch it without a decision. Whether FlexSeq can work around it from the adapter layer is **not established**: `uClock::setTempo()` returns early in external mode, so the obvious lever is closed |
 
 Entry 10's warning, quoted exactly:
 
@@ -82,6 +83,18 @@ interrupt**, and it is part of that ISR's 974 bytes.
 
 The figure is 1072 bytes of helpers minus 156 bytes of integer helpers. It is
 3.2 % of the Flash the project has.
+
+⚠️ **Re-measured on 2026-09-03 by lot S2.1, and the two figures do not conflict.**
+`avr-nm` on the current firmware reads **1082 bytes** of float helpers, gross.
+The 916 above is the net: it takes off the 156 bytes of integer helpers. Those
+helpers are **already linked** today, `__udivmodsi4` among them, so an integer
+replacement adds no new runtime. Read 916 as the conservative figure and 1082 as
+the gross one.
+
+⚠️ **And the decision this section called for HAS been taken.** ADR 0008 was
+amended on 2026-09-03: the fork may replace the computation when measurement
+proves the equivalence, under thirteen conditions. The sentence below stays
+because it states the constraint correctly; it is no longer the last word.
 
 **It is irrecoverable, and that is the point of writing it down.** uClock is
 vendored inside a pinned dependency, and ADR 0008 forbids the fork from touching

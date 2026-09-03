@@ -199,6 +199,10 @@ EXT_DISCARD="${EXT_DISCARD:-31}"
 EXT_MEASURE="${EXT_MEASURE:-40}"
 EXT_START_MS="${EXT_START_MS:-300}"
 EXT_PULSE_US="${EXT_PULSE_US:-1000}"
+# EXT_TRACE_MS pose le TEMOIN DU TIMER : la sonde lit OCR1A et le prediviseur
+# de TCCR1B, donc la periode que le timer applique VRAIMENT, et n imprime que
+# les changements. 0 le desactive.
+EXT_TRACE_MS="${EXT_TRACE_MS:-0}"
 # cvstep est NOMINALE depuis STEP-12.4, 2026-09-03 : onze courses.
 COURSES="${COURSES:-clock seq ratchet cvzero cv1length cv2length cvreset patold patnew cvpattern cvstep}"
 
@@ -379,7 +383,7 @@ for MODE in $COURSES; do
   fi
   if [ "$MODE" = "extclock" ]; then
     PROBE_MODE="seq"
-    PROBE_ENV="EXT_PERIOD_US=$EXT_PERIOD_US EXT_PULSE_US=$EXT_PULSE_US EXT_START_MS=$EXT_START_MS"
+    PROBE_ENV="EXT_PERIOD_US=$EXT_PERIOD_US EXT_PULSE_US=$EXT_PULSE_US EXT_START_MS=$EXT_START_MS EXT_TRACE_MS=$EXT_TRACE_MS"
   fi
   if [ "$MODE" = "cvpattern" ]; then
     # Le CV monte et RESTE haut : la largeur depasse la duree de la course.
@@ -463,6 +467,11 @@ if pat_course == "extclock":
     print(f"    premier front de sortie  : {float(kv['premier_front_ms']):.1f} ms"
           f"  — PLAY relache a {float(kv['play_ms']):.0f} ms")
     print(f"    ecarts, POUR INFORMATION : {kv['ecarts_ok']}")
+    trace = re.findall(r"^\s+(\d+\.\d)\s+(\S+)\s+(\S+)$", txt, re.M)
+    if trace:
+        print(f"    temoin du timer          : {len(trace)} changement(s) de periode")
+        for at, per, step in trace[:6]:
+            print(f"      t={float(at):9.1f} ms   periode {per:>12} us   step {step:>10} ms")
     first = float(kv["premier_front_ms"])
     play = float(kv["play_ms"])
     if first > 0.0 and first < play:

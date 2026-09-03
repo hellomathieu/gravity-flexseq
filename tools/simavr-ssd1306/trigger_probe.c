@@ -131,6 +131,35 @@ static long g_ext_period_us;      /* 0 = pas d'injection */
 static long g_ext_pulse_us = 1000;
 static double g_ext_start_ms;
 static long g_ext_edges;          /* fronts montants REELLEMENT injectes */
+
+/* Lot XCLK.3 : le TEMOIN du timer. uClock programme OCR1A et le prediviseur de
+ * TCCR1B a chaque changement de tempo (uClock/platforms/avr.h, setTimer). La
+ * periode d'un tick de sortie se lit donc DIRECTEMENT dans le materiel simule,
+ * sans dependre de la disposition d'une classe :
+ *
+ *     periode = (OCR1A + 1) x prediviseur / F_CPU
+ *
+ * C'est plus fort qu'une lecture de membre prive : le registre est ce que le
+ * timer applique VRAIMENT. */
+#define REG_TCCR1B 0x81
+#define REG_OCR1AL 0x88
+#define REG_OCR1AH 0x89
+static double g_trace_ms;         /* 0 = pas de trace */
+#define TRACE_MAX 512
+static double g_trace_at[TRACE_MAX];
+static double g_trace_period_us[TRACE_MAX];
+static int g_trace_n;
+
+static int prescaler_of(uint8_t tccr1b) {
+    switch (tccr1b & 0x07) {
+        case 1: return 1;
+        case 2: return 8;
+        case 3: return 64;
+        case 4: return 256;
+        case 5: return 1024;
+        default: return 0;   /* 0 ou 6/7 : horloge arretee ou source externe */
+    }
+}
 static avr_t *g_avr;
 
 static double us(uint64_t cycles) { return (double)cycles * 1e6 / (double)F_CPU_HZ; }
@@ -258,6 +287,9 @@ int main(int argc, char **argv)
         const char *w = getenv("RESET_PULSE_WIDTH_MS");
         if (w != NULL) g_pulse_width_ms = atof(w);
     }
+
+    const char *trace_env = getenv("EXT_TRACE_MS");
+    if (trace_env != NULL && atof(trace_env) > 0.0) g_trace_ms = atof(trace_env);
 
     const char *ext_env = getenv("EXT_PERIOD_US");
     if (ext_env != NULL && atol(ext_env) > 0) {
@@ -397,6 +429,20 @@ int main(int argc, char **argv)
             g_cv_mv[g_pulse_idx] =
                 (avr->cycle >= pulse_from && avr->cycle < pulse_to)
                     ? g_pulse_mv : g_pulse_base;
+        }
+        if (g_trace_ms > 0.0 && g_trace_n < TRACE_MAX) {
+            const double now_ms = 1000.0 * (double)avr->cycle / (double)F_CPU_HZ;
+            if (g_trace_n == 0 || now_ms >= g_trace_at[g_trace_n - 1] + g_trace_ms) {
+                const uint16_t ocr = (uint16_t)avr->data[REG_OCR1AL]
+                                   | ((uint16_t)avr->data[REG_OCR1AH] << 8);
+                const int pre = prescaler_of(avr->data[REG_TCCR1B]);
+                g_trace_at[g_trace_n] = now_ms;
+                g_trace_period_us[g_trace_n] =
+                    (pre == 0) ? -1.0
+                               : 1e6 * ((double)ocr + 1.0) * (double)pre
+                                     / (double)F_CPU_HZ;
+                ++g_trace_n;
+            }
         }
         if (ext != NULL && avr->cycle >= ext_from) {
             const uint64_t phase = (avr->cycle - ext_from) % ext_period_cy;
@@ -667,6 +713,23 @@ int main(int argc, char **argv)
            step_measured, BPM, mode,
            ref->nrise > 0 ? ms(ref->rise[0]) : -1.0, g_play_ms);
     printf("RESET reset_ms=%.1f\n", g_pulse_mv > 0 ? g_pulse_at_ms : -1.0);
+    if (g_trace_n > 0) {
+        printf("=== TEMOIN DU TIMER (OCR1A et prediviseur) ===\n");
+        printf("  %10s %16s %14s\n", "t (ms)", "periode tick (us)", "step /1 (ms)");
+        double last = -2.0;
+        for (int i = 0; i < g_trace_n; ++i) {
+            /* n'imprimer qu'un CHANGEMENT : une trace plate n'apprend rien */
+            if (i > 0 && g_trace_period_us[i] == last) continue;
+            last = g_trace_period_us[i];
+            if (g_trace_period_us[i] < 0.0) {
+                printf("  %10.1f %16s %14s\n", g_trace_at[i], "timer arrete", "-");
+            } else {
+                printf("  %10.1f %16.2f %14.2f\n", g_trace_at[i],
+                       g_trace_period_us[i], g_trace_period_us[i] * 96.0 / 1000.0);
+            }
+        }
+        printf("  %d echantillon(s), %.1f ms d'intervalle\n", g_trace_n, g_trace_ms);
+    }
     printf("EXTCLK ext_period_us=%ld ext_pulse_us=%ld ext_start_ms=%.1f "
            "ext_edges=%ld\n",
            g_ext_period_us, g_ext_period_us > 0 ? g_ext_pulse_us : 0L,
