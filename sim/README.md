@@ -50,9 +50,13 @@ does NOT mean the same thing:
 
 **So P35 has no mirror.** P35 asks that the content and the ratchet of a step
 come from the same pattern, on the boundary where the derived PATTERN index
-changes. That boundary needs the buffer, so the model cannot express it. The
-divergence is characterised on the C++ side alone, and `docs/open-risks.md`
-line 77 carries it.
+changes. That boundary needs the buffer, so the model cannot express it. P35 is
+held on the C++ side alone: the writer of the buffer invalidates the timing
+cache (ADR 0011), a normative test in `test_persistence` proves it, and the
+`cvpattern` course of the trigger probe proves it on the pins. The
+characterization of the former order is deleted. The boundary of the mirror
+does not move: the model still holds no buffer, and this section still says
+so.
 
 ## What a green model proves, and what it does not
 
