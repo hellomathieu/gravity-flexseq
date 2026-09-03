@@ -217,6 +217,15 @@ case "$EXT_PPQN" in
 esac
 EXT_PERIOD_US="${EXT_PERIOD_US:-$(( 60000000 / (TEMPO * EXT_PPQN) ))}"
 
+# ⚠️ LE GEL DU DEFAUT 12 doit etre ABSORBE avant toute mesure, et il est DERIVE,
+# pas suppose. docs/upstream-defects.md entree 12 : au passage en horloge
+# externe, uClock ecrete le tempo a MIN_BPM = 1, donc un tick de sortie de
+# 60000000 / 96 / 1 = 625000 us, et la recuperation attend mod_clock_ref ticks,
+# soit 96 / input_ppqn. Le proprietaire a decide le 2026-09-03 de CONSIGNER ce
+# defaut sans toucher au fork : la course doit donc vivre avec.
+EXT_MIN_BPM_TICK_US=$(( 60000000 / 96 / 1 ))
+EXT_FREEZE_MS=$(( (96 / EXT_PPQN) * EXT_MIN_BPM_TICK_US / 1000 ))
+
 if [ -t 1 ]; then
   C_OK=$'\033[32m'; C_ERR=$'\033[31m'; C_DIM=$'\033[2m'; C_B=$'\033[1m'; C_0=$'\033[0m'; TTY=1
 else
@@ -273,14 +282,15 @@ flexseq_report_active_format "$C_OK" "$C_DIM" "$C_0"
 case " $COURSES " in
   *" extclock "*)
     [ -n "$EXT_SOURCE_CODE" ] || die "EXT_PPQN accepte 24, 4, 2 ou 1 — recu '$EXT_PPQN'." 2
-    EXT_NEEDED_MS=$(( EXT_START_MS + (EXT_DISCARD + EXT_MEASURE) * EXT_PERIOD_US / 1000 ))
+    EXT_NEEDED_MS=$(( EXT_START_MS + EXT_FREEZE_MS \
+                      + (EXT_DISCARD + EXT_MEASURE) * EXT_PERIOD_US / 1000 ))
     EXT_NEEDED_S=$(( (EXT_NEEDED_MS + 1999) / 1000 ))
     if [ "$DURATION" -lt "$EXT_NEEDED_S" ]; then
-      die "extclock a PPQN $EXT_PPQN demande DURATION >= $EXT_NEEDED_S s : $EXT_DISCARD impulsions jetees plus $EXT_MEASURE mesurees, a $EXT_PERIOD_US us, depart $EXT_START_MS ms. DURATION vaut $DURATION." 2
+      die "extclock a PPQN $EXT_PPQN demande DURATION >= $EXT_NEEDED_S s : gel de $EXT_FREEZE_MS ms (defaut 12), puis $EXT_DISCARD impulsions jetees et $EXT_MEASURE mesurees a $EXT_PERIOD_US us, depart $EXT_START_MS ms. DURATION vaut $DURATION." 2
     fi
-    printf '  %s✅%s garde extclock         %sPPQN %s, source %s, periode %s us, DURATION %s s >= %s s%s\n' \
+    printf '  %s✅%s garde extclock         %sPPQN %s, source %s, periode %s us, gel %s ms, DURATION %s s >= %s s%s\n' \
       "$C_OK" "$C_0" "$C_DIM" "$EXT_PPQN" "$EXT_SOURCE_CODE" "$EXT_PERIOD_US" \
-      "$DURATION" "$EXT_NEEDED_S" "$C_0"
+      "$EXT_FREEZE_MS" "$DURATION" "$EXT_NEEDED_S" "$C_0"
     ;;
 esac
 
@@ -415,7 +425,7 @@ for MODE in $COURSES; do
     CVSTEP_TABLE_0="$CVSTEP_TABLE_0" CVSTEP_TABLE_10="$CVSTEP_TABLE_10" CVSTEP_STEP0="$CVSTEP_STEP0" \
     STEP_EXPECTED_OFFSET="$STEP_EXPECTED_OFFSET" CVSTEP_SWAP="$CVSTEP_SWAP" CVSTEP_TOL_MS="$CVSTEP_TOL_MS" \
     EXT_PPQN="$EXT_PPQN" EXT_PERIOD_US="$EXT_PERIOD_US" EXT_DISCARD="$EXT_DISCARD" \
-    EXT_MEASURE="$EXT_MEASURE" TEMPO="$TEMPO" \
+    EXT_MEASURE="$EXT_MEASURE" TEMPO="$TEMPO" EXT_FREEZE_MS="$EXT_FREEZE_MS" \
     python3 - "$LOG" <<'PY'
 import os, re, sys
 
@@ -461,6 +471,8 @@ if pat_course == "extclock":
     print(f"  {DIM}INFORMATION — aucun critere a l etape XCLK.2b{Z}")
     print(f"    PPQN d entree            : {ppqn}, periode {period_us} us")
     print(f"    fronts injectes sur PD2  : {edges}")
+    freeze_ms = int(os.environ["EXT_FREEZE_MS"])
+    print(f"    gel du defaut 12         : {freeze_ms} ms a absorber avant de mesurer")
     print(f"    fenetre                  : {discard} jetees + {measure} mesurees")
     print(f"    step attendu (derive)    : {step_expected_ms:.2f} ms")
     print(f"    step mesure par la sonde : {float(kv['step_mesure']):.2f} ms")
