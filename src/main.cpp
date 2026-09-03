@@ -169,6 +169,10 @@ void setup() {
     // source chargés depuis l'EEPROM sont appliqués ici.
     flexseq::transport::begin(ui, transport);
 
+#if FLEXSEQ_START_ON_CLOCK_TAB
+    ui.handle(flexseq::UiController::EVENT_ROTATE, -1);
+#endif
+
 #if FLEXSEQ_START_IN_EDIT
     // Un harnais a besoin d'une boucle LENTE qui emet des triggers, et aucun
     // binaire ne reunissait les deux : l'ecran principal ne redessine presque
