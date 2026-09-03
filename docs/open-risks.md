@@ -1,6 +1,6 @@
 # Open risks and watch items
 
-**Last review: 2026-09-03.** Forty-five open lines, thirty-five closed or accepted.
+**Last review: 2026-09-03.** Forty-four open lines, forty-three closed or accepted.
 
 ## What this document is, and is not
 
@@ -19,7 +19,7 @@ either closed without anyone noting it, or accepted without anyone saying so.
 
 ## What is still open
 
-Forty-three lines, and each one states **what it is waiting for and from whom**. A line
+Forty-four lines, and each one states **what it is waiting for and from whom**. A line
 that waits for nothing from nobody no longer belongs here: it is in the table
 below.
 
@@ -35,6 +35,7 @@ below.
 | 74 | **Seven targets of `LengthCv` carry no mutant, and step E2 did not treat them.** The step gave the file its first six mutants — `ZONE_WIDTH`, `ZONE_COUNT` and `HYSTERESIS`, two per language — because line 70 and line 71 named those three figures and no other. What stays without a mutant is `CV_MIN`, `CV_MAX`, `OFFSET_MIN`, `OFFSET_MAX`, and the bodies of `zoneFor()`, `zoneWithHysteresis()` and `effectiveLengthFor()`. ⚠️ **This is a measured gap, and it is not a defect**: the seven targets are correct, and the eleven tests of each language do exercise them. What is absent is the proof that those assertions bite. ⚠️ **Do not read `238/238` as "`LengthCv` is covered"**: a probe only finds the holes a mutant aims at | **low, and it is coverage and not correctness.** The quantiser is now held on its three normative figures, which is what `§10.4` states. The seven targets carry no figure of the PRD | **a decision on the coverage, and it does not impose seven mutants.** Two classes are already measured on 2026-08-31, and they call for different answers. `OFFSET_MIN` and `OFFSET_MAX` are **consumed**: `clampZone()` and `zoneWithHysteresis()` read them in both languages, so a mutant on them would be behavioural. `CV_MIN` and `CV_MAX` have **no consumer at all**, in production or anywhere else — only the contract test names them — so they are in the same class as `ZONE_COUNT`, and line 72 already carries that question. For the three function bodies, the question is whether a useful mutant exists that does not merely repeat an assertion the tests already make. ⚠️ **A third outcome is legitimate for any of the seven: an equivalent mutant, undetectable by construction.** Lot SF3 removed five of those, and naming one is a result, not a failure. This line closes when the owner decides which targets deserve a mutant, and says so for the others |
 | 75 | **The effective rate of the EEPROM save depends on the tempo, and nothing says so.** `persistence.advance()` is called only on a pass that drained no tick — `main.cpp:253`, a guard placed so that a 3.4 ms write never shares a pass with an onset. ⚠️ **Arithmetic of 2026-08-31, not a measurement of the phenomenon.** At 120 BPM a tick falls every 5.21 ms and a pass lasts p90 6.76 ms, so a tick is drained on nearly every pass and the image is **almost never written while the transport runs**. At 30 BPM a tick falls every 20.8 ms, so two passes out of three write freely. The distinction to hold: *the project deliberately suspends the write during an onset* is a decision; *the mechanism saves almost only when stopped, at some tempos* is an observed property that no document carries | **to characterise, and the severity is not established.** No loss is demonstrated: the image is written when the transport stops, and the version byte still guards a partial image. What is absent is a statement of the real rate, and the proof that no invariant of the persistence depends on it | **a characterisation, and it belongs to no lot.** ⚠️ **Out of the perimeter of E3, by the decision of the owner on 2026-08-31**: E3 must not change `Persistence` to answer it. The line came out of the E3.6.1 analysis of the pending PATTERN load, which needed to know when the EEPROM is busy. It closes when the real rate is measured — a probe on the number of image bytes written per minute, at several tempos — and when the owner says whether that rate is acceptable |
 | 76 | **The clamp of the effective length exists in two implementations, and only one of them is reachable from production.** `lengthcv::effectiveLengthFor(base, offset)` clamps to `[MIN_LENGTH, MAX_LENGTH]`, and `SequencerEngine::refreshEffectiveLength()` clamps again, in line, against the same two constants. ⚠️ **`effectiveLengthFor()` has NO production caller**: `grep` finds it in `test_length_cv`, in `test_cv_spec`, and in the two TypeScript mirrors, and nowhere else. The rule that the firmware really applies is therefore the in-line one, and the tests of family `L` exercise the other. Observed 2026-09-01 during step 1 of E3.6.4.4 | **low, and it is a duplication rather than a divergence.** The two implementations agree today, and both read the same constants, so no wrong length can be produced. What is absent is the guarantee that they keep agreeing: a change to one of them would leave the family `L` vectors green while the firmware moved | **nothing now, and NOT inside E3.** ⚠️ **The defect is older than E3.6.4.4 and that lot did not touch it.** Step 1 added the symmetric path for PATTERN and made it call `patternIndexFor()`, so the pattern index does not carry the duplication. To make `refreshEffectiveLength()` call `effectiveLengthFor()` changes a production path, and it belongs to the owner to open it |
+| 82 | **Only ONE of the four external clock rates is guarded by the routine pass.** Lot XCLK proved the external clock at input PPQN 24, 4, 2 and 1, and on the MIDI transport. Only `extclock` at PPQN 24 joined the nominal pass, because the freeze of defect 12 makes the other three need 31, 50 and 87 seconds of simulation, against 15. The `midiclock` course is on demand for the same reason. Measured 2026-09-03 | **low, and it is a coverage debt rather than a defect.** All five courses were green on the tree of the closure, so nothing is known to be broken. What is missing is the guard against a later regression | **a decision on where those courses run.** A candidate is a slower gate that a lot runs deliberately, as the SELFTEST of the gesture probe already is at about 68 minutes. Putting them in the nominal pass would take it from 53 s to about 200 s, and a gate too costly to run stops protecting anything |
 
 
 | 66 | **The measured stack peak is 207 bytes against a reserve of 256, so 49 bytes of margin.** The reserve covers the peak **1.2x**. It covered it 2.1x when `RAM_RESERVE = 256` was decided on 2026-08-20, on a peak of 120. Lot LCV added 4 bytes: `advance()` now reaches `latestCalibrated()` and the quantiser, two call levels deeper than before. ⚠️ **Nothing is exceeded, and the absolute condition holds widely** — 207 bytes against 691 free. Measured 2026-08-31 by `tools/run-stack-probe.sh`, 6/6 watched vectors entered | **low, and it is a watch item rather than a defect.** The linker never sees a stack overflow on AVR: it shows as silent corruption. This reserve is the only guard | **a rule for the next lots, not a new threshold.** Any lot that adds call depth must run `run-stack-probe.sh` BEFORE accepting its footprint, not after. Do not raise the reserve and do not lower it without a fresh measurement — the 2026-08-20 decision rested on a comfort that is now spent |
@@ -751,3 +752,24 @@ ignored or reversed. Found on 2026-09-03 by the audit of step 12.0, before a cou
 was written. The rule: a probe that must see a read shift needs an oracle with a
 known phase — here the armed onset of PLAY fixes `n = 0` — and literal schedules per
 output, derived once by hand; a phase-free criterion cannot carry that proof.
+
+**A harness must not depend on the ABSENCE of an environment variable.** The
+external clock course of the trigger probe reads `EXT_PERIOD_US` to drive the
+pin, and the MIDI course reads `MIDI_PERIOD_US` to drive the UART. Neither
+course set the other variable to zero, so a value inherited from the caller
+enabled **both** injections at once and two clocks drove the module in silence.
+Measured on 2026-09-03: 13 edges where 7 were expected, gaps of 0 steps, C1 at
+11.76 % and C3 at 49.97 %. ⚠️ **The red was read as a defect of the firmware
+first.** Each course now sets the other transport to zero explicitly. This is
+the same family as "a tool must not depend on state it does not control", and it
+is the second time in one lot that a red accused the wrong cause.
+
+**A derived budget can pass an assertion for the wrong reason, so a separate
+guard is needed.** The C1 criterion of the external clock course carries a
+budget derived from the residual of the PLL of uClock, `(220/256)^n` after `n`
+discarded pulses. With `EXT_DISCARD=0` that residual is 1, so the budget becomes
+101 % and C1 passes on any measurement at all. That behaviour is **correct** for
+a derived budget, and it is why criterion C5 exists apart: it reads the timer
+witness and refuses a window that still sits inside the freeze. A budget that
+widens with the uncertainty must be paired with a guard on the conditions of the
+measurement.
