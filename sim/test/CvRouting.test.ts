@@ -473,17 +473,7 @@ describe("STEP CV — lecture decalee (lot STEP, etape 4d)", () => {
     return e;
   }
 
-  it("un routage vers STEP garde aujourd'hui une zone nulle", () => {
-    const e = routedStep(12);
-    e.setCvInput(CV_SOURCE_1, 330);
-    e.start();
-    e.advance(STEP);
-    expect(e.stepCvOffset(0)).toBe(0);
-    expect(e.effectiveStep(0)).toBe(1);
-    expect(e.currentReadStep(0)).toBe(1);
-  });
-
-  it.skip("la frontiere de step deplace l'offset de lecture [lot STEP etape 8 : CV_DEST_STEP n est pas cable]", () => {
+  it("la frontiere de step deplace l'offset de lecture", () => {
     const e = routedStep(12);
     e.setCvInput(CV_SOURCE_1, 330);
     e.start();
@@ -491,7 +481,7 @@ describe("STEP CV — lecture decalee (lot STEP, etape 4d)", () => {
     expect(e.stepCvOffset(0)).toBe(10);
   });
 
-  it.skip("le CV decale la lecture sans deplacer le step local [lot STEP etape 8 : CV_DEST_STEP n est pas cable]", () => {
+  it("le CV decale la lecture sans deplacer le step local", () => {
     const e = routedStep(12);
     e.setCvInput(CV_SOURCE_1, 330);
     e.start();
@@ -500,7 +490,7 @@ describe("STEP CV — lecture decalee (lot STEP, etape 4d)", () => {
     expect(e.currentReadStep(0)).toBe(2);
   });
 
-  it.skip("un changement de longueur garde l'offset et deplace la lecture [lot STEP etape 8 : CV_DEST_STEP n est pas cable]", () => {
+  it("un changement de longueur garde l'offset et deplace la lecture", () => {
     const e = routedStep(12);
     e.setCvInput(CV_SOURCE_1, 330);
     e.start();
@@ -513,7 +503,7 @@ describe("STEP CV — lecture decalee (lot STEP, etape 4d)", () => {
     expect(e.currentReadStep(0)).toBe(7);
   });
 
-  it.skip("deux sources s'additionnent avant le modulo [lot STEP etape 8 : CV_DEST_STEP n est pas cable]", () => {
+  it("deux sources s'additionnent avant le modulo", () => {
     const e = routedStep(36);
     e.setCvDestination(0, CV_SOURCE_2, CvDestination.STEP);
     e.setCvInput(CV_SOURCE_1, 330);
@@ -524,7 +514,7 @@ describe("STEP CV — lecture decalee (lot STEP, etape 4d)", () => {
     expect(e.currentReadStep(0)).toBe(21);
   });
 
-  it.skip("un triolet sur le step LU allonge le step [lot STEP etape 8 : CV_DEST_STEP n est pas cable]", () => {
+  it("un triolet sur le step LU allonge le step", () => {
     const e = routedStep(12);
     e.instanceForChannel(0)!.setRatchet(4, RATCHET_TRIPLET);
     e.setCvInput(CV_SOURCE_1, 99);
@@ -536,7 +526,7 @@ describe("STEP CV — lecture decalee (lot STEP, etape 4d)", () => {
     expect(e.currentReadStep(0)).toBe(4);
   });
 
-  it.skip("un triolet sur le step LOCAL seul n'allonge pas le step [lot STEP etape 8 : CV_DEST_STEP n est pas cable]", () => {
+  it("un triolet sur le step LOCAL seul n'allonge pas le step", () => {
     const e = routedStep(12);
     e.instanceForChannel(0)!.setRatchet(1, RATCHET_TRIPLET);
     e.setCvInput(CV_SOURCE_1, 99);
