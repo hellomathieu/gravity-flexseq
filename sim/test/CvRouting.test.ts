@@ -568,4 +568,40 @@ describe("STEP CV — lecture decalee (lot STEP, etape 4d)", () => {
     advanceToLocalStepTwoUnderStepOffsetThree(e, t);
     expect(t.triggerCount(0)).toBe(0);
   });
+
+  // STEP-8b.5 : LENGTH et STEP changent a la meme frontiere (E3.4-4). CV1 fait
+  // passer la longueur de 12 a 8 sur la frontiere du step local 6 ; CV2 tient un
+  // decalage de +3. Le step lu passe de 9 a 1, l'offset ne bouge pas (P33), et le
+  // contenu comme le ratchet sont lus au step lu de la NOUVELLE longueur.
+  it("un changement de longueur a la frontiere lit le contenu et le ratchet au nouveau step lu", () => {
+    const e = new SequencerEngine();
+    const t = new TriggerSequencer(e);
+    e.setChannelMode(0, ChannelMode.SEQ);
+    e.setBaseLength(0, 12);
+    e.instanceForChannel(0)!.writeStep(1, true);
+    e.instanceForChannel(0)!.setRatchet(1, RATCHET_TRIPLET);
+    e.setCvDestination(0, CV_SOURCE_1, CvDestination.LENGTH);
+    e.setCvDestination(0, CV_SOURCE_2, CvDestination.STEP);
+    e.setCvInput(CV_SOURCE_2, 99);
+    e.start();
+    for (let i = 0; i < 5; ++i) {
+      e.advance(STEP);
+      t.update();
+    }
+    expect(e.effectiveStep(0)).toBe(5);
+    expect(e.currentReadStep(0)).toBe(8);
+    expect(e.getEffectiveLength(0)).toBe(12);
+    expect(e.currentStepTriggers(0)).toBe(1);
+
+    e.setCvInput(CV_SOURCE_1, -132);
+    e.advance(STEP);
+    t.update();
+    expect(e.getEffectiveLength(0)).toBe(8);
+    expect(e.effectiveStep(0)).toBe(6);
+    expect(e.stepCvOffset(0)).toBe(3);
+    expect(e.currentReadStep(0)).toBe(1);
+    expect(e.currentStepTicks(0)).toBe(2 * STEP);
+    expect(e.currentStepTriggers(0)).toBe(3);
+    expect(t.triggerCount(0)).toBe(1);
+  });
 });

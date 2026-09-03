@@ -694,6 +694,44 @@ void test_the_trigger_stays_silent_on_a_step_active_at_the_local_step_only() {
     TEST_ASSERT_EQUAL_UINT8(0, t.triggerCount(0));
 }
 
+// STEP-8b.5: LENGTH and STEP change at the same boundary, PRD 10.3 E3.4-4.
+// CV1 takes the length from 12 to 8 on the boundary that lands on local
+// step 6; CV2 holds a read shift of +3. The read step moves from 9 to 1, the
+// offset does not move (P33), and the content and the ratchet are read at
+// the read step of the NEW length: step 1 is active with a TRIPLET, steps 6
+// and 9 are inactive with no ratchet.
+void test_a_length_change_at_the_boundary_reads_the_content_and_the_ratchet_at_the_new_read_step() {
+    SequencerEngine e;
+    flexseq::TriggerSequencer t(e);
+    e.setChannelMode(0, MODE_SEQ);
+    e.setBaseLength(0, 12);
+    e.instanceForChannel(0)->writeStep(1, true);
+    e.instanceForChannel(0)->setRatchet(1, flexseq::RATCHET_TRIPLET);
+    routeLength(e, 0, CV_SOURCE_1);
+    routeStep(e, 0, CV_SOURCE_2);
+    e.setCvInput(CV_SOURCE_2, 99); // zone +3
+    e.start();
+    for (uint8_t i = 0; i < 5; ++i) {
+        e.advance(STEP);
+        t.update();
+    }
+    TEST_ASSERT_EQUAL_INT8(5, e.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(8, e.currentReadStep(0));
+    TEST_ASSERT_EQUAL_UINT8(12, e.getEffectiveLength(0));
+    TEST_ASSERT_EQUAL_UINT8(1, e.currentStepTriggers(0));
+
+    e.setCvInput(CV_SOURCE_1, -132); // zone -4
+    e.advance(STEP);
+    t.update();
+    TEST_ASSERT_EQUAL_UINT8(8, e.getEffectiveLength(0));
+    TEST_ASSERT_EQUAL_INT8(6, e.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(3, e.stepCvOffset(0));
+    TEST_ASSERT_EQUAL_INT8(1, e.currentReadStep(0));
+    TEST_ASSERT_EQUAL_UINT16(2 * STEP, e.currentStepTicks(0));
+    TEST_ASSERT_EQUAL_UINT8(3, e.currentStepTriggers(0));
+    TEST_ASSERT_EQUAL_UINT8(1, t.triggerCount(0));
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_the_five_destination_codes_hold_their_persisted_values);
@@ -743,5 +781,6 @@ int main() {
     RUN_TEST(test_a_triplet_on_the_local_step_alone_does_not_stretch_the_step);
     RUN_TEST(test_the_trigger_fires_on_a_step_active_at_the_read_step_only);
     RUN_TEST(test_the_trigger_stays_silent_on_a_step_active_at_the_local_step_only);
+    RUN_TEST(test_a_length_change_at_the_boundary_reads_the_content_and_the_ratchet_at_the_new_read_step);
     return UNITY_END();
 }

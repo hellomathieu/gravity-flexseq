@@ -3,6 +3,7 @@
 #include <unity.h>
 
 #include <flexseq/Persistence.h>
+#include <flexseq/TriggerSequencer.h>
 
 using flexseq::PatternBank;
 using flexseq::Pattern;
@@ -2228,6 +2229,86 @@ void test_a_refused_template_at_the_boundary_leaves_the_buffer_and_the_cache_alo
     TEST_ASSERT_EQUAL_UINT16(192, r.engine.currentStepTicks(0));
 }
 
+// STEP-8b.5, P35 under a STEP offset: PRD 10.2 E3.4-1, 10.3 points 6 and 7,
+// ADR 0011. CV1 moves the PATTERN index, CV2 shifts the read by +3. On the
+// boundary that swaps OLD for NEW, local step 2 is read at step 5, and the
+// content and the ratchet of that step must both come from NEW.
+//
+//            step 2                 step 5 (the read step)
+//   OLD      inactive, NONE         ACTIVE, TRIPLET      -> 3 triggers, 192 ticks
+//   NEW      ACTIVE, TRIPLET        INACTIVE, RATCHET_2  -> 2 triggers,  96 ticks
+//
+// NEW differs from OLD on both dimensions at step 5, and NEW differs from
+// itself between step 5 and step 2: a reader left on localStep, or a ratchet
+// left on OLD, changes the observation.
+void test_after_a_template_swap_under_a_step_offset_the_content_and_the_ratchet_come_from_the_new_template_at_the_read_step() {
+    ServiceRig r;
+    flexseq::TriggerSequencer triggers(r.engine);
+    uint8_t content[persist::v3::CONTENT_BYTES];
+
+    memset(content, 0, sizeof(content));
+    content[0] = 0x20;
+    content[persist::v3::STEP_BYTES + 2] = 0x70;
+    writeTemplateRecord(r.ee, 5, content, 16);
+
+    memset(content, 0, sizeof(content));
+    content[0] = 0x04;
+    content[persist::v3::STEP_BYTES + 1] = 0x07;
+    content[persist::v3::STEP_BYTES + 2] = 0x20;
+    writeTemplateRecord(r.ee, 0, content, 16);
+
+    r.engine.setModulatedPatterns(&r.state);
+    r.engine.setChannelMode(0, flexseq::MODE_SEQ);
+    r.engine.setBaseLength(0, 12);
+    r.engine.setSelectedPattern(0, 5);
+    r.route(0);
+    TEST_ASSERT_TRUE(r.engine.setCvDestination(0, flexseq::CV_SOURCE_2,
+                                               flexseq::CV_DEST_STEP));
+    TEST_ASSERT_EQUAL_INT8(0, r.serve());
+    TEST_ASSERT_EQUAL_UINT8(5, r.state.loaded[0]);
+
+    r.engine.setCvInput(flexseq::CV_SOURCE_2, 99);
+    r.engine.start();
+    r.engine.advance(96);
+    triggers.update();
+    TEST_ASSERT_EQUAL_INT8(1, r.engine.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(4, r.engine.currentReadStep(0));
+    TEST_ASSERT_EQUAL_INT8(3, r.engine.stepCvOffset(0));
+
+    r.engine.setCvInput(flexseq::CV_SOURCE_1, -165);
+    r.engine.advance(96);
+    triggers.update();
+    TEST_ASSERT_EQUAL_INT8(2, r.engine.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(5, r.engine.currentReadStep(0));
+    TEST_ASSERT_EQUAL_INT8(0, r.engine.patternCvIndex(0));
+    TEST_ASSERT_EQUAL_UINT8(3, r.engine.currentStepTriggers(0));
+    TEST_ASSERT_EQUAL_UINT16(192, r.engine.currentStepTicks(0));
+    TEST_ASSERT_EQUAL_UINT8(1, triggers.triggerCount(0));
+
+    TEST_ASSERT_EQUAL_INT8(0, r.serve());
+    TEST_ASSERT_EQUAL_UINT8(0, r.state.loaded[0]);
+
+    const flexseq::Pattern* played = r.engine.patternForChannel(0);
+    bool active = true;
+    TEST_ASSERT_TRUE(played->readStep(5, active));
+    TEST_ASSERT_FALSE(active);
+    TEST_ASSERT_TRUE(played->readStep(2, active));
+    TEST_ASSERT_TRUE(active);
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_2, played->getRatchet(5));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_TRIPLET, played->getRatchet(2));
+
+    TEST_ASSERT_EQUAL_INT8(2, r.engine.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(5, r.engine.currentReadStep(0));
+    TEST_ASSERT_EQUAL_UINT8(2, r.engine.currentStepTriggers(0));
+    TEST_ASSERT_EQUAL_UINT16(96, r.engine.currentStepTicks(0));
+
+    r.engine.advance(48);
+    triggers.update();
+    TEST_ASSERT_EQUAL_INT8(2, r.engine.effectiveStep(0));
+    TEST_ASSERT_EQUAL_UINT8(1, r.engine.onsetCount(0));
+    TEST_ASSERT_EQUAL_UINT8(0, triggers.triggerCount(0));
+}
+
 int main() {
     UNITY_BEGIN();
 
@@ -2261,6 +2342,7 @@ int main() {
 
     RUN_TEST(test_the_boundary_that_swaps_the_template_gives_the_content_and_the_ratchet_of_the_same_template);
     RUN_TEST(test_a_refused_template_at_the_boundary_leaves_the_buffer_and_the_cache_alone);
+    RUN_TEST(test_after_a_template_swap_under_a_step_offset_the_content_and_the_ratchet_come_from_the_new_template_at_the_read_step);
     RUN_TEST(test_the_first_boot_seeds_the_templates_and_fills_the_instances_from_a1);
     RUN_TEST(test_a_nominal_boot_restores_the_instances_and_never_overwrites_them);
     RUN_TEST(test_a_valid_version_two_image_is_refused_without_migration);
