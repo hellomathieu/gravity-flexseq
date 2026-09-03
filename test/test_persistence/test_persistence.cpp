@@ -2309,6 +2309,67 @@ void test_after_a_template_swap_under_a_step_offset_the_content_and_the_ratchet_
     TEST_ASSERT_EQUAL_UINT8(0, triggers.triggerCount(0));
 }
 
+// STEP-9.3 G2: the PATTERN index and the STEP offset change on the SAME
+// boundary. CV1 moves the index from 5 to 0 and CV2 shifts the read by +3 in
+// the same advance(). The musical decision must read the NEW template at the
+// NEW read step: NEW carries an active step 5 with RATCHET_2, so the sub-onset
+// at half a step fires exactly once. Every other pairing is silent: OLD has
+// nothing at step 5, NEW has nothing at local step 2.
+void test_when_the_index_and_the_step_offset_change_on_the_same_boundary_the_decision_reads_the_new_template_at_the_new_read_step() {
+    ServiceRig r;
+    flexseq::TriggerSequencer triggers(r.engine);
+    uint8_t content[persist::v3::CONTENT_BYTES];
+
+    memset(content, 0, sizeof(content));
+    writeTemplateRecord(r.ee, 5, content, 16);
+
+    memset(content, 0, sizeof(content));
+    content[0] = 0x20;
+    content[persist::v3::STEP_BYTES + 2] = 0x20;
+    writeTemplateRecord(r.ee, 0, content, 16);
+
+    r.engine.setModulatedPatterns(&r.state);
+    r.engine.setChannelMode(0, flexseq::MODE_SEQ);
+    r.engine.setBaseLength(0, 12);
+    r.engine.setSelectedPattern(0, 5);
+    r.route(0);
+    TEST_ASSERT_TRUE(r.engine.setCvDestination(0, flexseq::CV_SOURCE_2,
+                                               flexseq::CV_DEST_STEP));
+    TEST_ASSERT_EQUAL_INT8(0, r.serve());
+    TEST_ASSERT_EQUAL_UINT8(5, r.state.loaded[0]);
+
+    r.engine.start();
+    r.engine.advance(96);
+    triggers.update();
+    TEST_ASSERT_EQUAL_INT8(1, r.engine.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(1, r.engine.currentReadStep(0));
+    TEST_ASSERT_EQUAL_INT8(5, r.engine.patternCvIndex(0));
+
+    r.engine.setCvInput(flexseq::CV_SOURCE_1, -165);
+    r.engine.setCvInput(flexseq::CV_SOURCE_2, 99);
+    r.engine.advance(96);
+    triggers.update();
+    TEST_ASSERT_EQUAL_INT8(2, r.engine.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(3, r.engine.stepCvOffset(0));
+    TEST_ASSERT_EQUAL_INT8(5, r.engine.currentReadStep(0));
+    TEST_ASSERT_EQUAL_INT8(0, r.engine.patternCvIndex(0));
+    TEST_ASSERT_EQUAL_UINT8(1, r.engine.currentStepTriggers(0));
+    TEST_ASSERT_EQUAL_UINT16(96, r.engine.currentStepTicks(0));
+    TEST_ASSERT_EQUAL_UINT8(0, triggers.triggerCount(0));
+
+    TEST_ASSERT_EQUAL_INT8(0, r.serve());
+    TEST_ASSERT_EQUAL_UINT8(0, r.state.loaded[0]);
+    TEST_ASSERT_EQUAL_UINT8(2, r.engine.currentStepTriggers(0));
+    TEST_ASSERT_EQUAL_UINT16(96, r.engine.currentStepTicks(0));
+
+    r.engine.advance(48);
+    triggers.update();
+    TEST_ASSERT_EQUAL_INT8(2, r.engine.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(5, r.engine.currentReadStep(0));
+    TEST_ASSERT_EQUAL_UINT8(1, r.engine.onsetCount(0));
+    TEST_ASSERT_EQUAL_UINT8(1, triggers.triggerCount(0));
+}
+
 int main() {
     UNITY_BEGIN();
 
@@ -2343,6 +2404,7 @@ int main() {
     RUN_TEST(test_the_boundary_that_swaps_the_template_gives_the_content_and_the_ratchet_of_the_same_template);
     RUN_TEST(test_a_refused_template_at_the_boundary_leaves_the_buffer_and_the_cache_alone);
     RUN_TEST(test_after_a_template_swap_under_a_step_offset_the_content_and_the_ratchet_come_from_the_new_template_at_the_read_step);
+    RUN_TEST(test_when_the_index_and_the_step_offset_change_on_the_same_boundary_the_decision_reads_the_new_template_at_the_new_read_step);
     RUN_TEST(test_the_first_boot_seeds_the_templates_and_fills_the_instances_from_a1);
     RUN_TEST(test_a_nominal_boot_restores_the_instances_and_never_overwrites_them);
     RUN_TEST(test_a_valid_version_two_image_is_refused_without_migration);

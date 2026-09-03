@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { SequencerEngine, ChannelMode } from "../src/domain/SequencerEngine";
 import { TriggerSequencer } from "../src/domain/TriggerSequencer";
-import { RATCHET_TRIPLET } from "../src/domain/Pattern";
+import { RATCHET_6, RATCHET_TRIPLET } from "../src/domain/Pattern";
 import {
   CvDestination,
   CV_DESTINATION_COUNT,
@@ -602,6 +602,198 @@ describe("STEP CV — lecture decalee (lot STEP, etape 4d)", () => {
     expect(e.currentReadStep(0)).toBe(1);
     expect(e.currentStepTicks(0)).toBe(2 * STEP);
     expect(e.currentStepTriggers(0)).toBe(3);
+    expect(t.triggerCount(0)).toBe(1);
+  });
+
+  // STEP-9.3 G1 : un reset CV remet localStep a 0 et garde la zone STEP.
+  it("un reset CV garde la zone STEP et lit depuis l'offset", () => {
+    const e = new SequencerEngine();
+    const t = new TriggerSequencer(e);
+    e.setChannelMode(0, ChannelMode.SEQ);
+    e.setBaseLength(0, 12);
+    e.instanceForChannel(0)!.writeStep(3, true);
+    expect(e.setCvDestination(0, CV_SOURCE_1, CvDestination.RESET)).toBe(true);
+    e.setCvDestination(0, CV_SOURCE_2, CvDestination.STEP);
+    e.setCvInput(CV_SOURCE_2, 99);
+    e.start();
+    e.advance(STEP);
+    t.update();
+    e.advance(STEP);
+    t.update();
+    expect(e.effectiveStep(0)).toBe(2);
+    expect(e.currentReadStep(0)).toBe(5);
+
+    e.applyCvResetEvents(1 << CV_SOURCE_1);
+    expect(e.effectiveStep(0)).toBe(0);
+    expect(e.stepCvOffset(0)).toBe(3);
+    expect(e.currentReadStep(0)).toBe(3);
+
+    e.advance(1);
+    t.update();
+    expect(e.effectiveStep(0)).toBe(0);
+    expect(e.onsetCount(0)).toBe(1);
+    expect(t.triggerCount(0)).toBe(1);
+
+    e.advance(STEP - 1);
+    t.update();
+    expect(e.effectiveStep(0)).toBe(1);
+    expect(e.currentReadStep(0)).toBe(4);
+    expect(t.triggerCount(0)).toBe(0);
+  });
+
+  // STEP-9.3 G2, valeurs DERIVEES seulement : le service et le tampon n'ont pas
+  // de miroir, la decision musicale sur le nouveau template est prouvee en C++.
+  it("l'index PATTERN et l'offset STEP changent a la meme frontiere (valeurs derivees)", () => {
+    const e = new SequencerEngine();
+    e.setChannelMode(0, ChannelMode.SEQ);
+    e.setBaseLength(0, 12);
+    e.setSelectedPattern(0, 5);
+    e.setCvDestination(0, CV_SOURCE_1, CvDestination.PATTERN);
+    e.setCvDestination(0, CV_SOURCE_2, CvDestination.STEP);
+    e.start();
+    e.advance(STEP);
+    expect(e.effectiveStep(0)).toBe(1);
+    expect(e.currentReadStep(0)).toBe(1);
+    expect(e.patternCvIndex(0)).toBe(5);
+    e.setCvInput(CV_SOURCE_1, -165);
+    e.setCvInput(CV_SOURCE_2, 99);
+    e.advance(STEP);
+    expect(e.effectiveStep(0)).toBe(2);
+    expect(e.stepCvOffset(0)).toBe(3);
+    expect(e.currentReadStep(0)).toBe(5);
+    expect(e.patternCvIndex(0)).toBe(0);
+  });
+
+  // STEP-9.3 G3 : une zone negative fait reculer la lecture (P30).
+  it("une zone STEP negative fait reculer la lecture avec le modulo positif", () => {
+    const e = routedStep(12);
+    e.setCvInput(CV_SOURCE_1, -99);
+    e.start();
+    e.advance(STEP);
+    expect(e.stepCvOffset(0)).toBe(-3);
+    expect(e.effectiveStep(0)).toBe(1);
+    expect(e.currentReadStep(0)).toBe(10);
+    e.advance(STEP);
+    expect(e.effectiveStep(0)).toBe(2);
+    expect(e.currentReadStep(0)).toBe(11);
+    e.advance(STEP);
+    expect(e.effectiveStep(0)).toBe(3);
+    expect(e.currentReadStep(0)).toBe(0);
+  });
+
+  // STEP-9.3 G4 : les deux bornes de la longueur sous un routage STEP.
+  it("une longueur de 1 sous un routage STEP lit toujours le step 0", () => {
+    const e = routedStep(1);
+    e.setCvInput(CV_SOURCE_1, 330);
+    e.start();
+    for (let i = 0; i < 3; ++i) {
+      e.advance(STEP);
+      expect(e.stepCvOffset(0)).toBe(10);
+      expect(e.effectiveStep(0)).toBe(0);
+      expect(e.currentReadStep(0)).toBe(0);
+    }
+  });
+
+  it("une longueur de 36 sous un routage STEP boucle a 36", () => {
+    const e = routedStep(36);
+    e.setCvInput(CV_SOURCE_1, 99);
+    e.start();
+    for (let i = 0; i < 34; ++i) e.advance(STEP);
+    expect(e.effectiveStep(0)).toBe(34);
+    expect(e.currentReadStep(0)).toBe(1);
+    e.advance(STEP);
+    expect(e.effectiveStep(0)).toBe(35);
+    expect(e.currentReadStep(0)).toBe(2);
+    e.advance(STEP);
+    expect(e.effectiveStep(0)).toBe(0);
+    expect(e.currentReadStep(0)).toBe(3);
+  });
+
+  // STEP-9.3 G5 : hors SEQ la zone STEP vaut 0 (A3) ; le retour en SEQ lit la
+  // base jusqu'a la frontiere suivante.
+  it("un changement de mode remet la zone STEP a zero et le retour en SEQ la reprend a la frontiere suivante", () => {
+    const e = routedStep(12);
+    e.setCvInput(CV_SOURCE_1, 330);
+    e.start();
+    e.advance(STEP);
+    expect(e.stepCvOffset(0)).toBe(10);
+    expect(e.currentReadStep(0)).toBe(11);
+
+    expect(e.setChannelMode(0, ChannelMode.CLOCK)).toBe(true);
+    expect(e.stepCvOffset(0)).toBe(0);
+    expect(e.effectiveStep(0)).toBe(1);
+    expect(e.currentReadStep(0)).toBe(1);
+    e.advance(STEP);
+    expect(e.stepCvOffset(0)).toBe(0);
+    expect(e.effectiveStep(0)).toBe(2);
+    expect(e.currentReadStep(0)).toBe(2);
+
+    expect(e.setChannelMode(0, ChannelMode.SEQ)).toBe(true);
+    expect(e.stepCvOffset(0)).toBe(0);
+    expect(e.currentReadStep(0)).toBe(2);
+    e.advance(STEP);
+    expect(e.stepCvOffset(0)).toBe(10);
+    expect(e.effectiveStep(0)).toBe(3);
+    expect(e.currentReadStep(0)).toBe(1);
+  });
+
+  // STEP-9.3 G6 : un ratchet 6 est lu au step LU. A /1 un slot fait 16 ticks,
+  // R6 est admis par la matrice : un ecart ici est la coordonnee, pas la cadence.
+  it("un ratchet 6 sur le step LU donne six triggers", () => {
+    const e = routedStep(12);
+    e.instanceForChannel(0)!.setRatchet(4, RATCHET_6);
+    e.setCvInput(CV_SOURCE_1, 99);
+    e.start();
+    e.advance(STEP);
+    expect(e.effectiveStep(0)).toBe(1);
+    expect(e.currentReadStep(0)).toBe(4);
+    expect(e.currentStepTriggers(0)).toBe(6);
+    expect(e.currentStepTicks(0)).toBe(STEP);
+  });
+
+  it("un ratchet 6 sur le step LOCAL seul donne un trigger", () => {
+    const e = routedStep(12);
+    e.instanceForChannel(0)!.setRatchet(1, RATCHET_6);
+    e.setCvInput(CV_SOURCE_1, 99);
+    e.start();
+    e.advance(STEP);
+    expect(e.effectiveStep(0)).toBe(1);
+    expect(e.currentReadStep(0)).toBe(4);
+    expect(e.currentStepTriggers(0)).toBe(1);
+    expect(e.currentStepTicks(0)).toBe(STEP);
+  });
+
+  // STEP-9.3 G10 : une source routee vers STEP ne nourrit ni la longueur ni l'index.
+  it("une source routee vers STEP ne bouge ni la longueur ni l'index PATTERN", () => {
+    const e = routedStep(12);
+    e.setSelectedPattern(0, 5);
+    e.setCvInput(CV_SOURCE_1, 330);
+    e.start();
+    e.advance(STEP);
+    expect(e.stepCvOffset(0)).toBe(10);
+    expect(e.lengthCvOffset(0)).toBe(0);
+    expect(e.getEffectiveLength(0)).toBe(12);
+    expect(e.patternCvIndex(0)).toBe(5);
+    expect(e.getSelectedPattern(0)).toBe(5);
+  });
+
+  // STEP-9.3 G11 : en CLOCK un routage STEP reste inerte.
+  it("un routage STEP en CLOCK garde une zone nulle et un trigger par step", () => {
+    const e = new SequencerEngine();
+    const t = new TriggerSequencer(e);
+    e.setChannelMode(0, ChannelMode.CLOCK);
+    e.setBaseLength(0, 12);
+    e.setCvDestination(0, CV_SOURCE_1, CvDestination.STEP);
+    e.setCvInput(CV_SOURCE_1, 330);
+    e.start();
+    e.advance(STEP);
+    t.update();
+    e.advance(STEP);
+    t.update();
+    expect(e.stepCvOffset(0)).toBe(0);
+    expect(e.effectiveStep(0)).toBe(2);
+    expect(e.currentReadStep(0)).toBe(2);
+    expect(e.onsetCount(0)).toBe(1);
     expect(t.triggerCount(0)).toBe(1);
   });
 });

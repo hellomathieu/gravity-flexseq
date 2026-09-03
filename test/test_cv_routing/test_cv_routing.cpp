@@ -732,6 +732,203 @@ void test_a_length_change_at_the_boundary_reads_the_content_and_the_ratchet_at_t
     TEST_ASSERT_EQUAL_UINT8(1, t.triggerCount(0));
 }
 
+// STEP-9.3 G1: a CV reset puts the local step back to 0 and keeps the STEP
+// zone (PRD 10.3, RESET is immediate; the zones survive a reset). The armed
+// onset of step 0 is therefore read at the offset, and the first boundary
+// reads one step further.
+void test_a_cv_reset_keeps_the_step_zone_and_reads_from_the_offset() {
+    SequencerEngine e;
+    flexseq::TriggerSequencer t(e);
+    e.setChannelMode(0, MODE_SEQ);
+    e.setBaseLength(0, 12);
+    e.instanceForChannel(0)->writeStep(3, true);
+    TEST_ASSERT_TRUE(e.setCvDestination(0, CV_SOURCE_1, CV_DEST_RESET));
+    routeStep(e, 0, CV_SOURCE_2);
+    e.setCvInput(CV_SOURCE_2, 99); // zone +3
+    e.start();
+    e.advance(STEP);
+    t.update();
+    e.advance(STEP);
+    t.update();
+    TEST_ASSERT_EQUAL_INT8(2, e.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(5, e.currentReadStep(0));
+
+    e.applyCvResetEvents(static_cast<uint8_t>(1u << CV_SOURCE_1));
+    TEST_ASSERT_EQUAL_INT8(0, e.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(3, e.stepCvOffset(0));
+    TEST_ASSERT_EQUAL_INT8(3, e.currentReadStep(0));
+
+    e.advance(1);
+    t.update();
+    TEST_ASSERT_EQUAL_INT8(0, e.effectiveStep(0));
+    TEST_ASSERT_EQUAL_UINT8(1, e.onsetCount(0));
+    TEST_ASSERT_EQUAL_UINT8(1, t.triggerCount(0));
+
+    e.advance(STEP - 1);
+    t.update();
+    TEST_ASSERT_EQUAL_INT8(1, e.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(4, e.currentReadStep(0));
+    TEST_ASSERT_EQUAL_UINT8(0, t.triggerCount(0));
+}
+
+// STEP-9.3 G3: a negative zone wraps the read backward, PRD 10.2 P30.
+void test_a_negative_step_zone_wraps_the_read_backward() {
+    SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
+    e.setBaseLength(0, 12);
+    routeStep(e, 0, CV_SOURCE_1);
+    e.setCvInput(CV_SOURCE_1, -99); // zone -3
+    e.start();
+    e.advance(STEP);
+    TEST_ASSERT_EQUAL_INT8(-3, e.stepCvOffset(0));
+    TEST_ASSERT_EQUAL_INT8(1, e.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(10, e.currentReadStep(0));
+    e.advance(STEP);
+    TEST_ASSERT_EQUAL_INT8(2, e.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(11, e.currentReadStep(0));
+    e.advance(STEP);
+    TEST_ASSERT_EQUAL_INT8(3, e.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(0, e.currentReadStep(0));
+}
+
+// STEP-9.3 G4: the two bounds of the length under a STEP routing.
+void test_a_length_of_one_under_a_step_routing_always_reads_step_zero() {
+    SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
+    e.setBaseLength(0, 1);
+    routeStep(e, 0, CV_SOURCE_1);
+    e.setCvInput(CV_SOURCE_1, 330); // zone +10
+    e.start();
+    for (uint8_t i = 0; i < 3; ++i) {
+        e.advance(STEP);
+        TEST_ASSERT_EQUAL_INT8(10, e.stepCvOffset(0));
+        TEST_ASSERT_EQUAL_INT8(0, e.effectiveStep(0));
+        TEST_ASSERT_EQUAL_INT8(0, e.currentReadStep(0));
+    }
+}
+
+void test_a_length_of_thirty_six_under_a_step_routing_wraps_at_thirty_six() {
+    SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
+    e.setBaseLength(0, 36);
+    routeStep(e, 0, CV_SOURCE_1);
+    e.setCvInput(CV_SOURCE_1, 99); // zone +3
+    e.start();
+    for (uint8_t i = 0; i < 34; ++i) {
+        e.advance(STEP);
+    }
+    TEST_ASSERT_EQUAL_INT8(34, e.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(1, e.currentReadStep(0));
+    e.advance(STEP);
+    TEST_ASSERT_EQUAL_INT8(35, e.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(2, e.currentReadStep(0));
+    e.advance(STEP);
+    TEST_ASSERT_EQUAL_INT8(0, e.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(3, e.currentReadStep(0));
+}
+
+// STEP-9.3 G5: outside SEQ the STEP zone holds 0 (PRD 10.2, matrix F0 and A3),
+// and the return to SEQ reads the base until the next boundary re-applies the CV.
+void test_a_change_of_mode_resets_the_step_zone_and_the_return_to_seq_reapplies_it_at_the_next_boundary() {
+    SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
+    e.setBaseLength(0, 12);
+    routeStep(e, 0, CV_SOURCE_1);
+    e.setCvInput(CV_SOURCE_1, 330); // zone +10
+    e.start();
+    e.advance(STEP);
+    TEST_ASSERT_EQUAL_INT8(10, e.stepCvOffset(0));
+    TEST_ASSERT_EQUAL_INT8(11, e.currentReadStep(0));
+
+    TEST_ASSERT_TRUE(e.setChannelMode(0, MODE_CLOCK));
+    TEST_ASSERT_EQUAL_INT8(0, e.stepCvOffset(0));
+    TEST_ASSERT_EQUAL_INT8(1, e.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(1, e.currentReadStep(0));
+    e.advance(STEP);
+    TEST_ASSERT_EQUAL_INT8(0, e.stepCvOffset(0));
+    TEST_ASSERT_EQUAL_INT8(2, e.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(2, e.currentReadStep(0));
+
+    TEST_ASSERT_TRUE(e.setChannelMode(0, MODE_SEQ));
+    TEST_ASSERT_EQUAL_INT8(0, e.stepCvOffset(0));
+    TEST_ASSERT_EQUAL_INT8(2, e.currentReadStep(0));
+    e.advance(STEP);
+    TEST_ASSERT_EQUAL_INT8(10, e.stepCvOffset(0));
+    TEST_ASSERT_EQUAL_INT8(3, e.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(1, e.currentReadStep(0));
+}
+
+// STEP-9.3 G6: a ratchet 6 is read at the read step. At SUBDIV /1 a step is
+// 96 ticks, a slot is 16 ticks, so R6 is admitted by ratchetFitsStep() (the
+// matrix of test_ratchet_matrix): a miss here is the coordinate, never the rate.
+void test_a_ratchet_six_on_the_read_step_gives_six_triggers() {
+    SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
+    e.setBaseLength(0, 12);
+    e.instanceForChannel(0)->setRatchet(4, flexseq::RATCHET_6);
+    routeStep(e, 0, CV_SOURCE_1);
+    e.setCvInput(CV_SOURCE_1, 99); // zone +3
+    e.start();
+    e.advance(STEP);
+    TEST_ASSERT_EQUAL_INT8(1, e.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(4, e.currentReadStep(0));
+    TEST_ASSERT_EQUAL_UINT8(6, e.currentStepTriggers(0));
+    TEST_ASSERT_EQUAL_UINT16(STEP, e.currentStepTicks(0));
+}
+
+void test_a_ratchet_six_on_the_local_step_alone_gives_one_trigger() {
+    SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
+    e.setBaseLength(0, 12);
+    e.instanceForChannel(0)->setRatchet(1, flexseq::RATCHET_6);
+    routeStep(e, 0, CV_SOURCE_1);
+    e.setCvInput(CV_SOURCE_1, 99); // zone +3
+    e.start();
+    e.advance(STEP);
+    TEST_ASSERT_EQUAL_INT8(1, e.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(4, e.currentReadStep(0));
+    TEST_ASSERT_EQUAL_UINT8(1, e.currentStepTriggers(0));
+    TEST_ASSERT_EQUAL_UINT16(STEP, e.currentStepTicks(0));
+}
+
+// STEP-9.3 G10: a source routed to STEP feeds neither the length nor the index.
+void test_a_source_routed_to_the_step_moves_neither_the_length_nor_the_pattern_index() {
+    SequencerEngine e;
+    e.setChannelMode(0, MODE_SEQ);
+    e.setBaseLength(0, 12);
+    e.setSelectedPattern(0, 5);
+    routeStep(e, 0, CV_SOURCE_1);
+    e.setCvInput(CV_SOURCE_1, 330); // zone +10
+    e.start();
+    e.advance(STEP);
+    TEST_ASSERT_EQUAL_INT8(10, e.stepCvOffset(0));
+    TEST_ASSERT_EQUAL_INT8(0, e.lengthCvOffset(0));
+    TEST_ASSERT_EQUAL_UINT8(12, e.getEffectiveLength(0));
+    TEST_ASSERT_EQUAL_INT8(5, e.patternCvIndex(0));
+    TEST_ASSERT_EQUAL_INT8(5, e.getSelectedPattern(0));
+}
+
+// STEP-9.3 G11: in CLOCK a STEP routing stays inert, the zone holds 0, and the
+// channel keeps one onset and one trigger per step.
+void test_a_step_routing_in_clock_keeps_a_null_zone_and_one_trigger_per_step() {
+    SequencerEngine e;
+    flexseq::TriggerSequencer t(e);
+    e.setChannelMode(0, MODE_CLOCK);
+    e.setBaseLength(0, 12);
+    routeStep(e, 0, CV_SOURCE_1);
+    e.setCvInput(CV_SOURCE_1, 330); // zone +10 if it were read
+    e.start();
+    e.advance(STEP);
+    t.update();
+    e.advance(STEP);
+    t.update();
+    TEST_ASSERT_EQUAL_INT8(0, e.stepCvOffset(0));
+    TEST_ASSERT_EQUAL_INT8(2, e.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(2, e.currentReadStep(0));
+    TEST_ASSERT_EQUAL_UINT8(1, e.onsetCount(0));
+    TEST_ASSERT_EQUAL_UINT8(1, t.triggerCount(0));
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_the_five_destination_codes_hold_their_persisted_values);
@@ -782,5 +979,14 @@ int main() {
     RUN_TEST(test_the_trigger_fires_on_a_step_active_at_the_read_step_only);
     RUN_TEST(test_the_trigger_stays_silent_on_a_step_active_at_the_local_step_only);
     RUN_TEST(test_a_length_change_at_the_boundary_reads_the_content_and_the_ratchet_at_the_new_read_step);
+    RUN_TEST(test_a_cv_reset_keeps_the_step_zone_and_reads_from_the_offset);
+    RUN_TEST(test_a_negative_step_zone_wraps_the_read_backward);
+    RUN_TEST(test_a_length_of_one_under_a_step_routing_always_reads_step_zero);
+    RUN_TEST(test_a_length_of_thirty_six_under_a_step_routing_wraps_at_thirty_six);
+    RUN_TEST(test_a_change_of_mode_resets_the_step_zone_and_the_return_to_seq_reapplies_it_at_the_next_boundary);
+    RUN_TEST(test_a_ratchet_six_on_the_read_step_gives_six_triggers);
+    RUN_TEST(test_a_ratchet_six_on_the_local_step_alone_gives_one_trigger);
+    RUN_TEST(test_a_source_routed_to_the_step_moves_neither_the_length_nor_the_pattern_index);
+    RUN_TEST(test_a_step_routing_in_clock_keeps_a_null_zone_and_one_trigger_per_step);
     return UNITY_END();
 }
