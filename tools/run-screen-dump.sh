@@ -15,7 +15,8 @@
 # `flexseq/PatternScreen.h` — la meme source que le firmware, aucune constante
 # recopiee — et verifie que l'encre est la ou cette transformation la place.
 #
-#   1. GEOMETRIE : les 24 steps sont a leur position attendue apres rotation ;
+#   1. GEOMETRIE : les positions de grille definies par LENGTH sont la ou
+#      cette transformation les place ;
 #   2. ROTATION   : le titre, en haut du canvas logique, apparait EN BAS du
 #      panneau, et le PIED DE PAGE, en bas du canvas, apparait EN HAUT. Entre les
 #      deux, la bande qui ne porte jamais rien doit rester vide. Les deux
