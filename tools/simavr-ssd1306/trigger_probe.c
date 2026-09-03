@@ -53,6 +53,7 @@
 #include <avr_eeprom.h>
 #include <parts/ssd1306_virt.h>
 
+#include <avr_uart.h>
 #include "simavr_uart_quiet.h"
 
 #define MCU        "atmega328p"
@@ -132,6 +133,17 @@ static long g_ext_pulse_us = 1000;
 static double g_ext_start_ms;
 static long g_ext_edges;          /* fronts montants REELLEMENT injectes */
 static uint8_t g_ext_pin = 2;     /* EXT_PIN vaut 2 ; le levier le deplace */
+
+/* Lot XCLK.4 : l'horloge MIDI. Elle n'arrive pas par une broche mais par l'UART.
+ * libGravity attache onSerialEvent en source MIDI (clock.h) : l'octet 0xF8
+ * appelle le callback externe du firmware, 0xFA demarre uClock et 0xFC l'arrete.
+ * La norme MIDI fixe l'entree a 24 PPQN, et libGravity la force. */
+#define MIDI_CLOCK_BYTE 0xF8
+#define MIDI_START_BYTE 0xFA
+static long g_midi_period_us;     /* 0 = pas d'injection MIDI */
+static double g_midi_start_ms = 300.0;
+static int g_midi_send_start = 1;
+static long g_midi_bytes;         /* octets 0xF8 REELLEMENT injectes */
 
 /* Lot XCLK.3 : le TEMOIN du timer. uClock programme OCR1A et le prediviseur de
  * TCCR1B a chaque changement de tempo (uClock/platforms/avr.h, setTimer). La
@@ -297,6 +309,15 @@ int main(int argc, char **argv)
     const char *trace_env = getenv("EXT_TRACE_MS");
     if (trace_env != NULL && atof(trace_env) > 0.0) g_trace_ms = atof(trace_env);
 
+    const char *midi_env = getenv("MIDI_PERIOD_US");
+    if (midi_env != NULL && atol(midi_env) > 0) {
+        g_midi_period_us = atol(midi_env);
+        const char *at = getenv("MIDI_START_MS");
+        if (at != NULL) g_midi_start_ms = atof(at);
+        const char *st = getenv("MIDI_SEND_START");
+        if (st != NULL) g_midi_send_start = atoi(st);
+    }
+
     const char *ext_env = getenv("EXT_PERIOD_US");
     if (ext_env != NULL && atol(ext_env) > 0) {
         g_ext_period_us = atol(ext_env);
@@ -417,6 +438,27 @@ int main(int argc, char **argv)
     if (!play) { fprintf(stderr, "broche PLAY introuvable\n"); return 1; }
     int play_state = 2;  /* ni 0 ni 1 : force la premiere ecriture */
 
+    avr_irq_t *midi = NULL;
+    uint64_t midi_from = 0, midi_period_cy = 0, midi_next = 0;
+    int midi_started = 0;
+    if (g_midi_period_us > 0) {
+        midi = avr_io_getirq(avr, AVR_IOCTL_UART_GETIRQ('0'), UART_IRQ_INPUT);
+        if (!midi) { fprintf(stderr, "UART introuvable pour le MIDI\n"); return 1; }
+        midi_from = (uint64_t)(g_midi_start_ms * 1e-3 * (double)F_CPU_HZ);
+        midi_period_cy =
+            (uint64_t)((double)g_midi_period_us * 1e-6 * (double)F_CPU_HZ);
+        if (midi_period_cy == 0) {
+            fprintf(stderr, "periode MIDI trop courte : %ld us\n",
+                    g_midi_period_us);
+            return 2;
+        }
+        midi_next = midi_from;
+        printf("  horloge MIDI : UART0, 0xF8 toutes les %ld us, depart %.1f ms, "
+               "start %s\n",
+               g_midi_period_us, g_midi_start_ms,
+               g_midi_send_start ? "0xFA envoye" : "aucun");
+    }
+
     avr_irq_t *ext = NULL;
     uint64_t ext_from = 0, ext_period_cy = 0, ext_pulse_cy = 0;
     int ext_state = 0;
@@ -447,6 +489,16 @@ int main(int argc, char **argv)
             g_cv_mv[g_pulse_idx] =
                 (avr->cycle >= pulse_from && avr->cycle < pulse_to)
                     ? g_pulse_mv : g_pulse_base;
+        }
+        if (midi != NULL && avr->cycle >= midi_next) {
+            if (!midi_started && g_midi_send_start) {
+                midi_started = 1;
+                avr_raise_irq(midi, MIDI_START_BYTE);
+            } else {
+                avr_raise_irq(midi, MIDI_CLOCK_BYTE);
+                ++g_midi_bytes;
+            }
+            midi_next += midi_period_cy;
         }
         if (g_trace_ms > 0.0 && g_trace_n < TRACE_MAX) {
             const double now_ms = 1000.0 * (double)avr->cycle / (double)F_CPU_HZ;
@@ -752,6 +804,9 @@ int main(int argc, char **argv)
             printf(" %.1f:%.1f", g_trace_at[i], g_trace_period_us[i]);
         printf("\n");
     }
+    printf("MIDICLK midi_period_us=%ld midi_start_ms=%.1f midi_bytes=%ld\n",
+           g_midi_period_us,
+           g_midi_period_us > 0 ? g_midi_start_ms : -1.0, g_midi_bytes);
     printf("EXTCLK ext_period_us=%ld ext_pulse_us=%ld ext_start_ms=%.1f "
            "ext_edges=%ld\n",
            g_ext_period_us, g_ext_period_us > 0 ? g_ext_pulse_us : 0L,

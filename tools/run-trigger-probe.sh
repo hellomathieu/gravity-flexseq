@@ -217,6 +217,12 @@ EXT_PIN_FORCE="${EXT_PIN_FORCE:-}"
 # La borne de C3 est DERIVEE de PHASE_FACTOR, 16 >> 8, donc 6,25 %. La surcharge
 # existe pour la contre-epreuve, comme JITTER_BUDGET_PCT sur les autres courses.
 EXT_C3_BOUND_PCT="${EXT_C3_BOUND_PCT:-}"
+# Course MIDICLOCK (lot XCLK.4) : la MEME horloge externe, par un AUTRE transport.
+# Elle n'arrive pas par une broche mais par l'UART, et libGravity force l'entree a
+# 24 PPQN en source MIDI, comme la norme. La course reutilise donc les cinq
+# criteres de extclock a PPQN 24, et seul le transport change. Elle reste A LA
+# DEMANDE : COURSES=midiclock ./tools/run-trigger-probe.sh
+MIDI_SEND_START="${MIDI_SEND_START:-1}"
 # cvstep est NOMINALE depuis STEP-12.4, 2026-09-03 : onze courses.
 # extclock est NOMINALE depuis XCLK.2c, 2026-09-03, a PPQN 24 SEULEMENT : elle
 # demande 15 s a cette cadence, contre 31, 50 et 87 s a PPQN 4, 2 et 1. Ces trois
@@ -233,6 +239,8 @@ case "$EXT_PPQN" in
   1)  EXT_SOURCE_CODE=4 ;;
   *)  EXT_SOURCE_CODE="" ;;
 esac
+EXT_PERIOD_GIVEN=0
+[ -n "${EXT_PERIOD_US:-}" ] && EXT_PERIOD_GIVEN=1
 EXT_PERIOD_US="${EXT_PERIOD_US:-$(( 60000000 / (TEMPO * EXT_PPQN) ))}"
 
 # ⚠️ LE GEL DU DEFAUT 12 doit etre ABSORBE avant toute mesure, et il est DERIVE,
@@ -300,7 +308,18 @@ flexseq_report_active_format "$C_OK" "$C_DIM" "$C_0"
 # Elle refuse AVANT de simuler : une course trop courte rendrait une fenetre de
 # mesure vide, et un verdict sur une fenetre vide se lit comme un succes.
 case " $COURSES " in
-  *" extclock "*)
+  *" midiclock "*)
+    # La norme MIDI fixe l'entree a 24 PPQN, et libGravity la force
+    # (clock.h, SOURCE_EXTERNAL_MIDI). La course n'a donc pas de reglage de PPQN.
+    EXT_PPQN=24
+    EXT_SOURCE_CODE=1
+    [ "$EXT_PERIOD_GIVEN" = "0" ] && EXT_PERIOD_US=$(( 60000000 / (TEMPO * 24) ))
+    EXT_FREEZE_MS=$(( (96 / 24) * EXT_MIN_BPM_TICK_US / 1000 ))
+    ;;
+esac
+
+case " $COURSES " in
+  *" extclock "* | *" midiclock "*)
     [ -n "$EXT_SOURCE_CODE" ] || die "EXT_PPQN accepte 24, 4, 2 ou 1 — recu '$EXT_PPQN'." 2
     EXT_STEP_MS=$(( EXT_PERIOD_US * EXT_PPQN / 1000 ))
     EXT_NEEDED_MS=$(( EXT_START_MS + EXT_FREEZE_MS \
@@ -308,7 +327,7 @@ case " $COURSES " in
                       + EXT_MEASURE_STEPS * EXT_STEP_MS ))
     EXT_NEEDED_S=$(( (EXT_NEEDED_MS + 1999) / 1000 ))
     if [ "$DURATION" -lt "$EXT_NEEDED_S" ]; then
-      die "extclock a PPQN $EXT_PPQN demande DURATION >= $EXT_NEEDED_S s : gel de $EXT_FREEZE_MS ms (defaut 12), puis $EXT_DISCARD impulsions jetees et $EXT_MEASURE_STEPS pas mesures de $EXT_STEP_MS ms, depart $EXT_START_MS ms. DURATION vaut $DURATION." 2
+      die "la course d horloge externe a PPQN $EXT_PPQN demande DURATION >= $EXT_NEEDED_S s : gel de $EXT_FREEZE_MS ms (defaut 12), puis $EXT_DISCARD impulsions jetees et $EXT_MEASURE_STEPS pas mesures de $EXT_STEP_MS ms, depart $EXT_START_MS ms. DURATION vaut $DURATION." 2
     fi
     printf '  %s✅%s garde extclock         %sPPQN %s, source %s, periode %s us, gel %s ms, DURATION %s s >= %s s%s\n' \
       "$C_OK" "$C_0" "$C_DIM" "$EXT_PPQN" "$EXT_SOURCE_CODE" "$EXT_PERIOD_US" \
@@ -355,6 +374,8 @@ for MODE in $COURSES; do
       GEN_ARGS="--mode seq --cv-target ${CV_TARGET_FORCED:-1:4} $CVSTEP_INSTANCES" ;;
     extclock)
       GEN_ARGS="--mode seq --clock-source ${EXT_SOURCE_CODE_FORCED:-$EXT_SOURCE_CODE}" ;;
+    midiclock)
+      GEN_ARGS="--mode seq --clock-source ${EXT_SOURCE_CODE_FORCED:-5}" ;;
   esac
   case "$MODE" in
     patold|patnew|cvpattern)
@@ -413,12 +434,22 @@ for MODE in $COURSES; do
   if [ "$MODE" = "cvreset" ]; then
     PROBE_ENV="RESET_PULSE_MV=$RESET_PULSE_MV RESET_PULSE_MS=$RESET_PULSE_MS RESET_PULSE_SOURCE=$RESET_PULSE_SOURCE"
   fi
+  if [ "$MODE" = "midiclock" ]; then
+    PROBE_MODE="extclock"
+    [ "$EXT_TRACE_MS" = "0" ] && EXT_TRACE_MS=$(( DURATION * 1000 / 400 + 1 ))
+    # ⚠️ EXT_PERIOD_US=0 EXPLICITE. Sans lui, une variable heritee de
+    # l'environnement de l'appelant activerait AUSSI l'injection sur la broche, et
+    # DEUX horloges piloteraient le module en silence. Constate le 2026-09-03 :
+    # ecarts a 0 pas, C1 a 11,76 %, et la cause etait le harnais, pas le firmware.
+    PROBE_ENV="MIDI_PERIOD_US=$EXT_PERIOD_US MIDI_START_MS=$EXT_START_MS MIDI_SEND_START=$MIDI_SEND_START EXT_PERIOD_US=0 EXT_TRACE_MS=$EXT_TRACE_MS"
+  fi
   if [ "$MODE" = "extclock" ]; then
     PROBE_MODE="extclock"
     # Le temoin est OBLIGATOIRE pour cette course : C5 le lit. On borne le
     # nombre d'echantillons pour rester sous la capacite du harnais.
     [ "$EXT_TRACE_MS" = "0" ] && EXT_TRACE_MS=$(( DURATION * 1000 / 400 + 1 ))
-    PROBE_ENV="EXT_PERIOD_US=$EXT_PERIOD_US EXT_PULSE_US=$EXT_PULSE_US EXT_START_MS=$EXT_START_MS EXT_TRACE_MS=$EXT_TRACE_MS"
+    # MIDI_PERIOD_US=0 explicite, meme raison que ci-dessus, en miroir.
+    PROBE_ENV="EXT_PERIOD_US=$EXT_PERIOD_US EXT_PULSE_US=$EXT_PULSE_US EXT_START_MS=$EXT_START_MS MIDI_PERIOD_US=0 EXT_TRACE_MS=$EXT_TRACE_MS"
     [ -n "$EXT_PIN_FORCE" ] && PROBE_ENV="$PROBE_ENV EXT_PIN=$EXT_PIN_FORCE"
   fi
   if [ "$MODE" = "cvpattern" ]; then
@@ -490,7 +521,7 @@ kv = dict(p.split("=", 1) for p in m.group(1).split())
 #
 # La fenetre s'ouvre APRES le gel du defaut 12 et APRES la convergence de la PLL,
 # dont le residu vaut (220/256)^n apres n impulsions.
-if pat_course == "extclock":
+if pat_course in ("extclock", "midiclock"):
     injected_us = int(os.environ["EXT_PERIOD_US"])
     period_us = int(os.environ.get("EXT_EXPECT_PERIOD_US") or injected_us)
     ppqn = int(os.environ["EXT_PPQN"])
@@ -512,6 +543,8 @@ if pat_course == "extclock":
         c3_bound_pct = float(os.environ["EXT_C3_BOUND_PCT"])
         print(f"    {DIM}levier : borne C3 forcee a {c3_bound_pct:.2f} %{Z}")
 
+    transport = "UART, octets 0xF8" if pat_course == "midiclock" else "broche PD2"
+    print(f"    transport                : {transport}")
     print(f"    PPQN d entree            : {ppqn}, periode injectee {injected_us} us")
     if period_us != injected_us:
         print(f"    {DIM}levier : l attendu est calcule sur {period_us} us,"
