@@ -617,17 +617,24 @@ int main(int argc, char **argv)
              * attendu — une erreur d'un facteur exact se voit, alors qu'un
              * compte de steps arrondi sur le tempo attendu serait
              * auto-confirmant. */
+            const int first = (nobs > 2) ? 1 : 0;
+            const int judged = nobs - first;
             static double sorted[MAX_EDGES];
-            for (int i = 0; i < nobs; ++i) sorted[i] = gaps[i];
-            qsort(sorted, nobs, sizeof(double), cmp_d);
-            step_measured = sorted[nobs / 2];
-            for (int i = 0; i < nobs; ++i) {
+            for (int i = 0; i < judged; ++i) sorted[i] = gaps[first + i];
+            qsort(sorted, judged, sizeof(double), cmp_d);
+            step_measured = sorted[judged / 2];
+            for (int i = first; i < nobs; ++i) {
                 const double err = fabs(gaps[i] - step_measured) / step_measured;
                 if (err <= 0.05) ++gap_ok;
                 else printf("    ecart %d : %.2f ms au lieu de %.2f   <-- IRREGULIER\n",
                             i + 1, gaps[i], step_measured);
             }
-            printf("  %d ecarts observes, mediane %.2f ms\n", nobs, step_measured);
+            gap_total = judged;
+            if (first != 0) {
+                printf("    ecart 1 : %.2f ms, ECARTE — l'onset arme de D79 tombe hors "
+                       "grille\n", gaps[0]);
+            }
+            printf("  %d ecarts juges, mediane %.2f ms\n", judged, step_measured);
         } else {
             /* En SEQ un ecart vaut PLUSIEURS steps, donc chacun est converti en
              * nombre de steps avant d'etre compare. La conversion part de la
