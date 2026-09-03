@@ -12,6 +12,7 @@
 #   MUTATE_INSTANCE=<c>   flips one byte of the instance record of channel c
 #   MUTATE_TEMPLATE=<i>   flips one byte of the template record i
 #   MUTATE_FIXTURE=1      copies the ratchet of the OLD fixture template into NEW
+#   MUTATE_SOURCE=<n>     writes n into the clock source byte of the images
 #
 # Exit codes: 0 all green, 1 a criterion failed, 2 the harness could not run.
 
@@ -25,6 +26,7 @@ TRUNCATE="${TRUNCATE:-0}"
 MUTATE_INSTANCE="${MUTATE_INSTANCE:--1}"
 MUTATE_TEMPLATE="${MUTATE_TEMPLATE:--1}"
 MUTATE_FIXTURE="${MUTATE_FIXTURE:-0}"
+MUTATE_SOURCE="${MUTATE_SOURCE:--1}"
 
 GEN="$WORK/eeprom-image"
 if ! c++ -std=gnu++11 -I"$ROOT/include" -o "$GEN" \
@@ -53,16 +55,22 @@ emit "$WORK/pc3.bin" --mode seq --per-channel --format 3
 # both have step 4 active, and the six channels select OLD.
 emit "$WORK/fx3.bin" --mode seq --format 3 --selected 8 \
      --template 8:0,4:4/7 --template 15:0,4
+# Lot XCLK: the persisted clock source. 1 is the external PPQN 24.
+emit "$WORK/ext3.bin" --mode seq --steps 0,3,4,9,15 --format 3 --clock-source 1
 
 python3 - "$WORK/v2.bin" "$WORK/v3.bin" "$WORK/pc3.bin" "$WORK/fx3.bin" \
-         "$MUTATE_INSTANCE" "$MUTATE_TEMPLATE" "$MUTATE_FIXTURE" <<'PYEOF'
+         "$WORK/ext3.bin" \
+         "$MUTATE_INSTANCE" "$MUTATE_TEMPLATE" "$MUTATE_FIXTURE" \
+         "$MUTATE_SOURCE" <<'PYEOF'
 import sys
 
-(v2_path, v3_path, pc3_path, fx3_path,
- mutate_instance, mutate_template, mutate_fixture) = sys.argv[1:8]
+(v2_path, v3_path, pc3_path, fx3_path, ext3_path,
+ mutate_instance, mutate_template, mutate_fixture,
+ mutate_source) = sys.argv[1:10]
 mutate_instance = int(mutate_instance)
 mutate_template = int(mutate_template)
 mutate_fixture = int(mutate_fixture)
+mutate_source = int(mutate_source)
 
 # ------------------------------------------------------------------
 # Every number below is a LITERAL. Nothing here is read from FlexSeq.
@@ -105,6 +113,12 @@ CHANNELS_AT = 523
 CHANNEL_RECORD = 9
 CHANNEL_COUNT = 6
 
+# Global zone of the format 3, all literals: 523 + 6 * 9 = 577.
+GLOBAL_AT = 577
+GLOBAL_CLOCK_SOURCE_AT = 2
+SOURCE_INTERNAL = 0
+SOURCE_EXTERNAL_PPQN_24 = 1
+
 FIXTURE_OLD = 8
 FIXTURE_NEW = 15
 FIXTURE_STEP = 4
@@ -143,6 +157,7 @@ v2 = read(v2_path)
 v3 = read(v3_path)
 pc3 = read(pc3_path)
 fx3 = read(fx3_path)
+ext3 = read(ext3_path)
 
 if mutate_fixture and len(fx3) == V3_SIZE:
     src = TEMPLATES_AT + FIXTURE_OLD * TEMPLATE_RECORD + STEP_BYTES + FIXTURE_STEP // 2
@@ -160,6 +175,13 @@ if mutate_instance >= 0 and len(pc3) > INSTANCES_AT + mutate_instance * INSTANCE
     pc3[at] ^= 0xFF
     print("  levier : instance %d, octet %d inverse" % (mutate_instance, at))
 
+if mutate_source >= 0:
+    at = GLOBAL_AT + GLOBAL_CLOCK_SOURCE_AT
+    for image in (v3, ext3):
+        if len(image) > at:
+            image[at] = mutate_source
+    print("  levier : octet de source d horloge %d force a %d" % (at, mutate_source))
+
 print()
 print("========== IMAGE EEPROM, OCTETS RECUS ==========")
 
@@ -175,7 +197,8 @@ else:
     bad("version du format 2", "octet 0 = %s" % (v2[0] if v2 else "absent"))
 
 for label, image in (("format 3", v3), ("format 3 --per-channel", pc3),
-                     ("format 3 fixture P35", fx3)):
+                     ("format 3 fixture P35", fx3),
+                     ("format 3 --clock-source", ext3)):
     if len(image) == V3_SIZE:
         ok("longueur du %s" % label, "%d octets" % len(image))
     else:
@@ -334,6 +357,27 @@ if plain_carries_marker:
         "canal %d le porte sans le drapeau" % plain_carries_marker[0])
 else:
     ok("le marqueur appartient a --per-channel", "absent des six instances sans le drapeau")
+
+# --- lot XCLK : la source d horloge persistee ------------------------
+at = GLOBAL_AT + GLOBAL_CLOCK_SOURCE_AT
+if v3[at] == SOURCE_INTERNAL:
+    ok("source d horloge par defaut", "octet %d = %d, INT" % (at, v3[at]))
+else:
+    bad("source d horloge par defaut", "octet %d = %d au lieu de %d"
+        % (at, v3[at], SOURCE_INTERNAL))
+
+if ext3[at] == SOURCE_EXTERNAL_PPQN_24:
+    ok("--clock-source 1", "octet %d = %d, EXT PPQN 24" % (at, ext3[at]))
+else:
+    bad("--clock-source 1", "octet %d = %d au lieu de %d"
+        % (at, ext3[at], SOURCE_EXTERNAL_PPQN_24))
+
+# L option ne doit toucher QUE cet octet : le reste de l image est identique.
+diff = [i for i in range(min(len(v3), len(ext3))) if v3[i] != ext3[i]]
+if diff == [at]:
+    ok("--clock-source n a qu un effet", "un seul octet differe, %d" % at)
+else:
+    bad("--clock-source n a qu un effet", "octets differents : %s" % diff[:8])
 
 print("=" * 48)
 if failed:

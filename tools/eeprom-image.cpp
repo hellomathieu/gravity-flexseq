@@ -25,6 +25,10 @@ void usage() {
         "firmware reads today. Format 3 is not emitted yet.\n"
         "--length sets the base length of the six channels. The engine keeps\n"
         "its own bound, so an out-of-range value is refused here.\n"
+        "--clock-source picks the persisted clock source, 0 to 5: 0 is INT, 1\n"
+        "to 4 are the external PPQN 24, 4, 2 and 1, and 5 is MIDI. It defaults\n"
+        "to 0. The external sources need no other option: the firmware starts\n"
+        "the transport on the first external pulse.\n"
         "--cv-target routes a CV source to a destination on the six channels.\n"
         "The source is 1 or 2; the destination is the PRD 10.2 code, so 2 is\n"
         "LENGTH. Several pairs are separated by a comma.\n"
@@ -291,6 +295,7 @@ int main(int argc, char** argv) {
     const char* lengthText = nullptr;
     const char* cvTargetText = nullptr;
     uint16_t tempo = UiController::DEFAULT_TEMPO;
+    int clockSource = 0;
     bool perChannel = false;
     uint8_t format = persist::FORMAT_VERSION;
     TemplateOverrides overrides = {};
@@ -311,6 +316,15 @@ int main(int argc, char** argv) {
             cvTargetText = argv[++i];
         } else if (std::strcmp(argv[i], "--tempo") == 0 && i + 1 < argc) {
             tempo = static_cast<uint16_t>(std::atoi(argv[++i]));
+        } else if (std::strcmp(argv[i], "--clock-source") == 0 && i + 1 < argc) {
+            clockSource = std::atoi(argv[++i]);
+            if (clockSource < 0
+                || clockSource >= UiController::CLOCK_SOURCE_COUNT) {
+                std::fprintf(stderr,
+                             "eeprom-image: --clock-source accepts 0 to %d\n",
+                             UiController::CLOCK_SOURCE_COUNT - 1);
+                return 2;
+            }
         } else if (std::strcmp(argv[i], "--per-channel") == 0) {
             perChannel = true;
         } else if (std::strcmp(argv[i], "--format") == 0 && i + 1 < argc) {
@@ -507,6 +521,11 @@ int main(int argc, char** argv) {
     }
     if (!ui.setTempo(tempo)) {
         std::fprintf(stderr, "eeprom-image: tempo refused: %u\n", tempo);
+        return 2;
+    }
+    if (!ui.setClockSource(static_cast<uint8_t>(clockSource))) {
+        std::fprintf(stderr, "eeprom-image: clock source refused: %d\n",
+                     clockSource);
         return 2;
     }
 
