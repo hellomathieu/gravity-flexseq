@@ -134,6 +134,34 @@ RESET_PULSE_MS="${RESET_PULSE_MS:-8137}"
 RESET_PULSE_MV="${RESET_PULSE_MV:-4000}"
 RESET_PULSE_SOURCE="${RESET_PULSE_SOURCE:-1}"
 RESET_LATENCY_MS="${RESET_LATENCY_MS:-60}"
+# Courses PATOLD, PATNEW, CVPATTERN : la fixture P35 du lot STEP, decidee le
+# 2026-09-03. Deux templates ecrits par --template : OLD (index 8) porte seize
+# steps actifs et un TRIPLET sur chacun, NEW (index 15) les memes seize steps et
+# aucun ratchet. CV1 est route vers PATTERN, les six canaux selectionnent OLD.
+#   patold     CV1 au zero mesure          -> index 8, tous les ecarts font 2/3 step
+#   patnew     --selected 15, pas de CV    -> tous les ecarts font 1 step
+#   cvpattern  CV1 monte a CV_NOMINAL_MV a PAT_PULSE_MS et y reste : zone +10,
+#              index 8 + 10 ecrete a 15 par patternIndexFor(), donc OLD -> NEW
+# Le critere de cvpattern est le NOMBRE D'ONSETS du step ou l'index change :
+#   1  le ratchet vient du template dont le contenu est lu (P35 tenue)
+#   3  le ratchet TRIPLET en cache vient de OLD, le contenu de NEW (P35 violee)
+# La frontiere est anchree par D79 : le premier front est l'onset arme du
+# step 0, et sous OLD chaque step emet trois onsets, donc les frontieres sont
+# les fronts d'indice multiple de trois. Le step qui precede la bascule doit
+# encore jouer OLD, sinon le verdict est INVALID : la bascule a eu lieu avant.
+# Leviers : PAT_PULSE_MS (defaut 8137), PAT_MIN_LATENCY_MS (defaut 30 : sous ce
+# delai la zone peut ne pas etre relue a la frontiere, verdict INVALID).
+# Ces trois courses sont HORS de la passe nominale tant que P35 n'est pas
+# implementee (lot STEP, decision d'architecture ouverte) : la course cvpattern
+# lit 3 sur le firmware de production, mesure du 2026-09-03, et la passe
+# nominale doit rester un verdict sur un etat connu. Lancer la suite P35 par :
+#   COURSES="patold patnew cvpattern" ./tools/run-trigger-probe.sh
+PAT_OLD=8
+PAT_NEW=15
+PAT_STEPS="0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15"
+PAT_TRIPLETS="0/7,1/7,2/7,3/7,4/7,5/7,6/7,7/7,8/7,9/7,10/7,11/7,12/7,13/7,14/7,15/7"
+PAT_PULSE_MS="${PAT_PULSE_MS:-8137}"
+PAT_MIN_LATENCY_MS="${PAT_MIN_LATENCY_MS:-30}"
 COURSES="${COURSES:-clock seq ratchet cvzero cv1length cv2length cvreset}"
 
 if [ -t 1 ]; then
@@ -217,6 +245,14 @@ for MODE in $COURSES; do
     cv1length) GEN_ARGS="--mode seq --cv-target ${CV_TARGET_FORCED:-1:2}" ;;
     cv2length) GEN_ARGS="--mode seq --cv-target ${CV_TARGET_FORCED:-2:2}" ;;
     cvreset)   GEN_ARGS="--mode seq --cv-target ${CV_TARGET_FORCED:-1:3}" ;;
+    patold|cvpattern)
+      GEN_ARGS="--mode seq --cv-target ${CV_TARGET_FORCED:-1:1} --selected $PAT_OLD" ;;
+    patnew)
+      GEN_ARGS="--mode seq --cv-target ${CV_TARGET_FORCED:-1:1} --selected $PAT_NEW" ;;
+  esac
+  case "$MODE" in
+    patold|patnew|cvpattern)
+      GEN_ARGS="$GEN_ARGS --template $PAT_OLD:$PAT_STEPS:$PAT_TRIPLETS --template $PAT_NEW:$PAT_STEPS" ;;
   esac
   # RATCHET_MUTATE=<step>:<code> ajoute un ratchet a l IMAGE et pas a l ATTENTE.
   # Avec un code dont N-1 ne divise pas celui du critere, la difference cesse
@@ -261,10 +297,17 @@ for MODE in $COURSES; do
       PROBE_CV="$CV_ZERO_MV $CV2_MV" ;;
     cvreset)
       PROBE_MODE="cvreset"; PROBE_CV="$CV_ZERO_MV $CV_ZERO_MV" ;;
+    patold|patnew|cvpattern)
+      PROBE_MODE="cvpattern"; PROBE_CV="$CV_ZERO_MV $CV_ZERO_MV" ;;
   esac
+  COURSE_NAME="$MODE"
   PROBE_ENV=""
   if [ "$MODE" = "cvreset" ]; then
     PROBE_ENV="RESET_PULSE_MV=$RESET_PULSE_MV RESET_PULSE_MS=$RESET_PULSE_MS RESET_PULSE_SOURCE=$RESET_PULSE_SOURCE"
+  fi
+  if [ "$MODE" = "cvpattern" ]; then
+    # Le CV monte et RESTE haut : la largeur depasse la duree de la course.
+    PROBE_ENV="RESET_PULSE_MV=$CV_NOMINAL_MV RESET_PULSE_MS=$PAT_PULSE_MS RESET_PULSE_WIDTH_MS=$(( DURATION * 1000 )) RESET_PULSE_SOURCE=1"
   fi
   set +e
   env $PROBE_ENV "$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$DURATION" \
@@ -288,6 +331,7 @@ for MODE in $COURSES; do
     MODE="$PROBE_MODE" SEQ_PULSES="$SEQ_PULSES" STEPS="$STEPS" \
     RATCHET_CODE="$RATCHET_CODE" EXPECTED_LENGTH="$EXPECTED_LENGTH" \
     RESET_PULSE_MS="$RESET_PULSE_MS" RESET_LATENCY_MS="$RESET_LATENCY_MS" \
+    PAT_COURSE="$COURSE_NAME" PAT_PULSE_MS="$PAT_PULSE_MS" PAT_MIN_LATENCY_MS="$PAT_MIN_LATENCY_MS" \
     python3 - "$LOG" <<'PY'
 import os, re, sys
 
@@ -300,6 +344,9 @@ mode = os.environ["MODE"]
 seq = mode == "seq"
 ratchet = mode == "ratchet"
 cvreset = mode == "cvreset"
+cvpattern = mode == "cvpattern"
+pat_course = os.environ["PAT_COURSE"]
+raw_edges = cvreset or cvpattern
 step_tol = float(os.environ["STEP_TOLERANCE_PCT"])
 
 m = re.search(r"RESULTAT (.*)", txt)
@@ -391,19 +438,91 @@ if cvreset:
     anchored = len(post_gaps) >= n and all(
         g == exp[i % n] for i, g in enumerate(post_gaps))
     pattern_ok = rot_ok and latency_ok and anchored
+# Courses PATOLD / PATNEW / CVPATTERN : la fixture P35. Chaque ecart est
+# classe : 'T' pour 2/3 de step, le TRIPLET de OLD ; 'S' pour un step, le NEW
+# sans ratchet ; '?' sinon. patold exige des 'T' seulement, patnew des 'S'
+# seulement. cvpattern cherche la frontiere de bascule Tb et compte ses onsets.
+pat_old_ok = pat_new_ok = pat_switch_ok = False
+pat_invalid = ""
+pat_count = -1
+pat_delay = -1.0
+pat_classes = ""
+if cvpattern:
+    edges_m = re.search(r"^EDGES((?:\s+\d+\.\d+)+)$", txt, re.M)
+    edges = [float(x) for x in edges_m.group(1).split()] if edges_m else []
+    tol = 0.05 * step_ms
+
+    def classify(gap):
+        if abs(gap - step_ms * 2.0 / 3.0) <= tol:
+            return "T"
+        if abs(gap - step_ms) <= tol:
+            return "S"
+        return "?"
+
+    gaps = [classify(b - a) for a, b in zip(edges, edges[1:])]
+    pat_classes = "".join(gaps)
+    if pat_course == "patold":
+        pat_old_ok = len(gaps) >= 6 and all(g == "T" for g in gaps)
+        pattern_ok = pat_old_ok
+    elif pat_course == "patnew":
+        pat_new_ok = len(gaps) >= 6 and all(g == "S" for g in gaps)
+        pattern_ok = pat_new_ok
+    else:
+        pulse_ms = float(os.environ["PAT_PULSE_MS"])
+        min_latency = float(os.environ["PAT_MIN_LATENCY_MS"])
+        pre = [i for i, e in enumerate(edges) if e < pulse_ms]
+        pat_old_ok = len(pre) >= 6 and all(gaps[i] == "T" for i in pre[:-1])
+        boundaries = [i for i in range(0, len(edges), 3) if edges[i] >= pulse_ms]
+        if not pat_old_ok:
+            pat_invalid = "OLD ne joue pas des triolets avant l'impulsion"
+        elif not boundaries:
+            pat_invalid = "aucune frontiere apres l'impulsion"
+        else:
+            ib = boundaries[0]
+            pat_delay = edges[ib] - pulse_ms
+            before = gaps[ib - 3:ib] if ib >= 3 else []
+            if pat_delay < min_latency:
+                pat_invalid = "frontiere a %.1f ms de l'impulsion, sous %.0f ms" % (
+                    pat_delay, min_latency)
+            elif before != ["T", "T", "T"]:
+                pat_invalid = "le step avant la bascule ne joue plus OLD : %s" % "".join(before)
+            else:
+                after = gaps[ib:ib + 4]
+                if after[:1] == ["S"]:
+                    pat_count = 1
+                    tail = gaps[ib:]
+                elif after == ["T", "T", "T", "S"]:
+                    pat_count = 3
+                    tail = gaps[ib + 3:]
+                elif after == ["T", "T", "T", "T"]:
+                    pat_invalid = "aucune bascule observee : OLD continue apres l'impulsion"
+                    tail = []
+                else:
+                    pat_invalid = "onsets du step de bascule illisibles : %s" % "".join(after)
+                    tail = []
+                if pat_count > 0:
+                    pat_new_ok = len(tail) >= 6 and all(g == "S" for g in tail)
+                    if not pat_new_ok:
+                        pat_invalid = "NEW n'est pas adopte apres la bascule : %s" % "".join(tail[:12])
+        pat_switch_ok = pat_count == 1 and pat_new_ok and not pat_invalid
+        pattern_ok = pat_switch_ok
+
 jit_pct = 100.0 * jit_max / step_ms if step_ms else 0.0
-jit_ok = jit_pct <= budget_pct if not (ratchet or cvreset) else True
+jit_ok = jit_pct <= budget_pct if not (ratchet or raw_edges) else True
 step_measured = float(kv.get("step_mesure", "0"))
 bpm = int(kv.get("bpm", "0"))
 step_err_pct = abs(step_measured - step_ms) / step_ms * 100.0 if step_ms else 100.0
 step_ok = ((step_measured > 0.0 and step_err_pct <= step_tol)
-           if not (ratchet or cvreset) else True)
+           if not (ratchet or raw_edges) else True)
 duty = 100.0 * width / step_ms if step_ms else 0.0
 duty_ok = duty < 50.0
 
 print()
 title = ("RATCHET — les sous-declenchements atteignent les broches" if ratchet
          else "CVRESET — un front re-origine la grille" if cvreset
+         else "PATOLD — la fixture OLD joue ses triolets" if pat_course == "patold"
+         else "PATNEW — la fixture NEW joue un onset par step" if pat_course == "patnew"
+         else "CVPATTERN — P35 au step ou l'index PATTERN change" if cvpattern
          else "SEQ — le motif est joue" if seq else "CLOCK — le motif est ignore")
 print(f"{B}====== FONCTION MUSICALE : {title} ======{Z}")
 print(f"  {mark(all_lines)} Sorties actives    {lines_on}/{lines_exp}   "
@@ -424,6 +543,23 @@ elif cvreset:
           f"{DIM}— budget {os.environ['RESET_LATENCY_MS']} ms{Z}")
     print(f"  {mark(anchored)} Re-origine         ecarts {post_gaps}   "
           f"{DIM}— la suite de {exp} DEPUIS le step 0, phase connue{Z}")
+elif pat_course == "patold":
+    print(f"  {mark(pat_old_ok)} Triolets partout   {len(pat_classes)} ecarts {pat_classes[:24]}   "
+          f"{DIM}— T = 2/3 step, le TRIPLET de OLD sur chaque step{Z}")
+elif pat_course == "patnew":
+    print(f"  {mark(pat_new_ok)} Un onset par step  {len(pat_classes)} ecarts {pat_classes[:24]}   "
+          f"{DIM}— S = 1 step, NEW sans ratchet{Z}")
+elif cvpattern:
+    print(f"  {mark(pat_old_ok)} OLD avant          "
+          f"{DIM}— triolets jusqu'a l'impulsion a {os.environ['PAT_PULSE_MS']} ms{Z}")
+    print(f"  {mark(pat_count == 1)} Onsets a la bascule  "
+          f"{pat_count if pat_count > 0 else '?'}   "
+          f"{DIM}— frontiere a {pat_delay:.1f} ms de l'impulsion ; 1 = P35 tenue, "
+          f"3 = ratchet de OLD sur le contenu de NEW{Z}")
+    print(f"  {mark(pat_new_ok)} NEW apres          "
+          f"{DIM}— un onset par step des la frontiere suivante{Z}")
+    if pat_invalid:
+        print(f"  {ERR}INVALID{Z} {pat_invalid}   {DIM}ecarts : {pat_classes[:40]}{Z}")
 elif seq:
     print(f"  {mark(pattern_ok)} Motif joue         {gaps_ok}/{gaps_total} ecarts   "
           f"{DIM}— la suite est une rotation cyclique de celle du motif{Z}")
@@ -434,7 +570,7 @@ print(f"  {mark(silent_before_play)} Silence au demarrage  premier front a {firs
       f"{DIM}— PLAY relache a {play_ms:.0f} ms ; le module demarre a l arret{Z}")
 print(f"  {mark(same and coincident)} Six lignes en phase "
       f"{'meme compte, fronts < 200 us' if (same and coincident) else 'DESACCORD'}")
-if not ratchet and not cvreset:
+if not ratchet and not raw_edges:
     print(f"  {mark(step_ok)} Tempo applique     {step_measured:.2f} ms par step   "
           f"{DIM}— attendu {step_ms:.2f} ms a {bpm} BPM ; ecart {step_err_pct:.2f} %"
           f" ; tolerance {step_tol:g} %{Z}")
@@ -471,6 +607,12 @@ if ok:
               f"exactement {diff} impulsions en {occurrences} passages.")
         print(f"  {DIM}Le chemin ratchet -> sous-declenchement -> broche est exerce. Aucun{Z}")
         print(f"  {DIM}binaire ne l'avait jamais montre.{Z}")
+    elif cvpattern and pat_course == "cvpattern":
+        print(f"\n  Au step ou l'index PATTERN change, le contenu et le ratchet viennent "
+              f"du meme template.")
+        print(f"  {DIM}P35 est tenue sur les broches, sur la fixture OLD -> NEW.{Z}")
+    elif cvpattern:
+        print(f"\n  La fixture {pat_course.upper()} joue ce que son template porte.")
     elif seq:
         print(f"\n  Les six sorties jouent le motif ecrit, en phase, au bon tempo.")
         print(f"  {DIM}Le chemin contenu du pattern -> sortie est exerce de bout en bout.{Z}")
@@ -478,6 +620,9 @@ if ok:
         print(f"\n  Les six sorties emettent le train CLOCK, en phase, au bon tempo.")
         print(f"  {DIM}Le motif est dans la banque et n'est pas joue : c'est le{Z}")
         print(f"  {DIM}comportement de l'original.{Z}")
+elif cvpattern and pat_invalid:
+    print(f"\n  {ERR}INVALID{Z} — la course ne permet pas de conclure : {pat_invalid}")
+    sys.exit(5)
 else:
     print(f"\n  {ERR}Au moins un critere echoue — ne pas flasher sur cette base.{Z}")
 sys.exit(0 if ok else 1)

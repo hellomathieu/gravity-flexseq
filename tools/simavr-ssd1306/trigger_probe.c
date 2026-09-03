@@ -222,6 +222,11 @@ int main(int argc, char **argv)
      * grille du canal route. Le harnais emet les temps de front bruts, et le
      * script porte les trois criteres — rotation avant, latence, re-origine. */
     const int cvreset = strcmp(mode, "cvreset") == 0;
+    /* Course CVPATTERN : la fixture P35 du lot STEP. Le harnais emet les temps
+     * de front bruts ; le script compte les onsets du step ou l'index PATTERN
+     * change, et rien d'autre n'est suppose. */
+    const int cvpattern = strcmp(mode, "cvpattern") == 0;
+    const int raw_edges = cvreset || cvpattern;
 
     setvbuf(stdout, NULL, _IONBF, 0);
 
@@ -403,6 +408,9 @@ int main(int argc, char **argv)
     } else if (cvreset) {
         printf("  la grille se re-origine au front injecte ; les temps bruts\n"
                "  suivent, et le script porte les trois criteres.\n");
+    } else if (cvpattern) {
+        printf("  fixture P35 : les temps bruts suivent, et le script compte les\n"
+               "  onsets du step ou l'index PATTERN change.\n");
     } else if (seq) {
         printf("  ecarts attendus (steps) :");
         for (int i = 0; i < nexp; ++i) printf(" %d", exp_gaps[i]);
@@ -415,7 +423,7 @@ int main(int argc, char **argv)
     int gap_ok = 0, gap_total = 0;
     if (ratchet) {
         printf("  %d impulsions observees sur le channel 1\n", ref->nrise);
-    } else if (cvreset) {
+    } else if (raw_edges) {
         printf("  %d impulsions observees sur le channel 1\n", ref->nrise);
         printf("EDGES");
         for (int r = 0; r < ref->nrise; ++r) printf(" %.2f", ms(ref->rise[r]));
@@ -517,6 +525,8 @@ int main(int argc, char **argv)
         printf("  sans objet : les onsets d un ratchet ne sont pas sur la grille\n");
     } else if (cvreset) {
         printf("  sans objet : la grille se re-origine au front injecte\n");
+    } else if (cvpattern) {
+        printf("  sans objet : la fixture etire les steps par le TRIPLET\n");
     } else if (ref->nrise >= 3) {
         static double jit[MAX_EDGES];
         int nj = 0;
