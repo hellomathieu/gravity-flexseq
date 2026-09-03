@@ -163,10 +163,29 @@ versioned `EXPECTED`, and it fails **in both directions**. A fork commit that
 repairs an audited anomaly by accident turns the suite red on its own.
 
 **A pin bump is a re-audit, and a test already forces it.** `test_gravity` pins
-the composition of `Gravity::Process()` for exactly this moment. The re-audit
-list is: the characterization conform with `EXPECTED` unchanged, the four suites
-at the same counts, the resolved tree identical to the archive of the commit,
-and the memory measured.
+the composition of `Gravity::Process()` for exactly this moment.
+
+⚠️ **The list said "the four suites" until 2026-09-03, and there are SIX**, plus
+a collection gate. This ADR was written on 2026-08-24, before the adapter
+environment and the image check existed. A re-audit that followed the letter
+would skip two gates. `platformio.ini` and `tools/run-all-tests.sh` are the
+authority; the reference counts are the last accepted ones:
+
+```text
+0  the test collection      tools/check-test-collection.py    27 directories, 0 orphan
+1  the C++ domain           tools/run-cpp-tests.sh            631 assertions
+2  TypeScript               cd sim && npm test                580 tests
+2b the TypeScript typing    cd sim && npm run typecheck       clean
+3  the input adapter        tools/run-adapter-tests.sh        12 assertions
+4  the EEPROM image         tools/run-eeprom-image-check.sh   29 criteria
+5  the characterization     tools/run-libgravity-tests.sh     7 red of 68
+```
+
+⚠️ **Gate 5 conforms when it is RED**: seven assertions fail by construction,
+and the criterion is that `EXPECTED` does not move, **in both directions**.
+
+Two checks stay outside the suites: the **resolved tree identical to the archive
+of the commit**, and the **memory measured**.
 
 **The pin lives in one place.** The five AVR environments extend a `[deps]`
 section, so a bump is one line. `run-libgravity-tests.sh` reads the commit from
