@@ -3,6 +3,7 @@
 
 #include <flexseq/CvDestination.h>
 #include <flexseq/SequencerEngine.h>
+#include <flexseq/TriggerSequencer.h>
 
 using flexseq::SequencerEngine;
 using flexseq::CvDestination;
@@ -657,6 +658,42 @@ void test_a_triplet_on_the_local_step_alone_does_not_stretch_the_step() {
     TEST_ASSERT_EQUAL_INT8(4, e.currentReadStep(0));
 }
 
+// STEP-8b.4: the trigger decision reads the CONTENT at readStep, PRD 10.2
+// E3.4-1 and 10.3 point 6. The first boundary consumes the armed onset of
+// step 0 (D79) and is discarded; the second boundary emits one onset on
+// local step 2, read step 5 under a zone of +3. No ratchet anywhere, so the
+// count is the content decision alone.
+static void advanceToLocalStepTwoUnderStepOffsetThree(SequencerEngine& e,
+                                                      flexseq::TriggerSequencer& t) {
+    e.setChannelMode(0, MODE_SEQ);
+    e.setBaseLength(0, 12);
+    routeStep(e, 0, CV_SOURCE_1);
+    e.setCvInput(CV_SOURCE_1, 99); // zone +3
+    e.start();
+    e.advance(STEP);
+    t.update();
+    e.advance(STEP);
+    t.update();
+    TEST_ASSERT_EQUAL_INT8(2, e.effectiveStep(0));
+    TEST_ASSERT_EQUAL_INT8(5, e.currentReadStep(0));
+}
+
+void test_the_trigger_fires_on_a_step_active_at_the_read_step_only() {
+    SequencerEngine e;
+    flexseq::TriggerSequencer t(e);
+    e.instanceForChannel(0)->writeStep(5, true);
+    advanceToLocalStepTwoUnderStepOffsetThree(e, t);
+    TEST_ASSERT_EQUAL_UINT8(1, t.triggerCount(0));
+}
+
+void test_the_trigger_stays_silent_on_a_step_active_at_the_local_step_only() {
+    SequencerEngine e;
+    flexseq::TriggerSequencer t(e);
+    e.instanceForChannel(0)->writeStep(2, true);
+    advanceToLocalStepTwoUnderStepOffsetThree(e, t);
+    TEST_ASSERT_EQUAL_UINT8(0, t.triggerCount(0));
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_the_five_destination_codes_hold_their_persisted_values);
@@ -704,5 +741,7 @@ int main() {
     RUN_TEST(test_two_sources_on_the_step_add_before_the_modulo);
     RUN_TEST(test_a_triplet_on_the_read_step_stretches_the_step);
     RUN_TEST(test_a_triplet_on_the_local_step_alone_does_not_stretch_the_step);
+    RUN_TEST(test_the_trigger_fires_on_a_step_active_at_the_read_step_only);
+    RUN_TEST(test_the_trigger_stays_silent_on_a_step_active_at_the_local_step_only);
     return UNITY_END();
 }

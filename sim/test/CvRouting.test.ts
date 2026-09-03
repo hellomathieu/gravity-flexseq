@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { SequencerEngine, ChannelMode } from "../src/domain/SequencerEngine";
+import { TriggerSequencer } from "../src/domain/TriggerSequencer";
 import { RATCHET_TRIPLET } from "../src/domain/Pattern";
 import {
   CvDestination,
@@ -536,5 +537,35 @@ describe("STEP CV — lecture decalee (lot STEP, etape 4d)", () => {
     expect(e.currentStepTriggers(0)).toBe(1);
     expect(e.effectiveStep(0)).toBe(1);
     expect(e.currentReadStep(0)).toBe(4);
+  });
+
+  // STEP-8b.4 : la decision de trigger lit le CONTENU a readStep. La premiere
+  // frontiere consomme l'onset arme du step 0 (D79) et est ecartee ; la seconde
+  // emet un onset sur le step local 2, lu 5 sous une zone de +3. Aucun ratchet.
+  function advanceToLocalStepTwoUnderStepOffsetThree(e: SequencerEngine, t: TriggerSequencer): void {
+    e.setCvInput(CV_SOURCE_1, 99);
+    e.start();
+    e.advance(STEP);
+    t.update();
+    e.advance(STEP);
+    t.update();
+    expect(e.effectiveStep(0)).toBe(2);
+    expect(e.currentReadStep(0)).toBe(5);
+  }
+
+  it("le trigger part sur un step actif au step LU seulement", () => {
+    const e = routedStep(12);
+    const t = new TriggerSequencer(e);
+    e.instanceForChannel(0)!.writeStep(5, true);
+    advanceToLocalStepTwoUnderStepOffsetThree(e, t);
+    expect(t.triggerCount(0)).toBe(1);
+  });
+
+  it("le trigger reste muet sur un step actif au step LOCAL seulement", () => {
+    const e = routedStep(12);
+    const t = new TriggerSequencer(e);
+    e.instanceForChannel(0)!.writeStep(2, true);
+    advanceToLocalStepTwoUnderStepOffsetThree(e, t);
+    expect(t.triggerCount(0)).toBe(0);
   });
 });
