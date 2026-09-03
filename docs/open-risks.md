@@ -724,3 +724,31 @@ the modulation tests of the round trip and of `saveTemplate`, in both
 languages. The rule: sweep every test file for the consumer call —
 `setCvDestination` here — and classify each hit; an inventory by family only
 finds the families the author remembered, and it reports itself as complete.
+
+**A commit is verified on the commit checked out, never on the working tree that
+produced it.** On 2026-09-03, step 8b.9, seven commits were rebuilt from the final
+state, and a test run after each one was meant to show the red or green state the
+message claimed. Every run was green or wrong: the working tree still carried the
+final production files while the test files were being staged, so the runs measured
+a mix that no commit contains. Each commit was then checked out in a detached
+worktree and run on its own content; the states matched the messages. The rule:
+to prove what a commit does, build and test that commit, in a worktree, not the
+tree that is being carved into commits.
+
+**In a generated EEPROM image, 385 and 523 are offsets in the emitted stream.** The
+image starts at EEPROM address 384, and `INSTANCES_OFFSET = 385` and
+`CHANNELS_OFFSET = 523` are already offsets inside the 588 emitted bytes, the same
+literals `run-eeprom-image-check.sh` uses. On 2026-09-03, step 12.3.0, a read-back
+subtracted 384 from them and printed six garbage instances: the hand-offset trap of
+line 81, made again one day after that line was closed. The rule: read a generated
+image with the literals of the image check, or through `templateAddress()` and
+`addressAt()` minus `BASE_ADDRESS`, and never with an offset computed by hand.
+
+**A criterion on the cyclic rotation of the gaps is blind to a constant read
+shift.** The SEQ course of the trigger probe accepts any rotation of the pattern's
+gaps, by design, because the phase of the playhead is unknown. A STEP offset of `+k`
+is exactly such a rotation, so that criterion would stay green with STEP consumed,
+ignored or reversed. Found on 2026-09-03 by the audit of step 12.0, before a course
+was written. The rule: a probe that must see a read shift needs an oracle with a
+known phase — here the armed onset of PLAY fixes `n = 0` — and literal schedules per
+output, derived once by hand; a phase-free criterion cannot carry that proof.
