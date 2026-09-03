@@ -499,7 +499,7 @@ inline bool isEligibleForPatternModulation(const SequencerEngine& engine,
 }
 
 template <typename Storage>
-int8_t serviceOneModulationTemplateLoad(Storage& storage, const SequencerEngine& engine,
+int8_t serviceOneModulationTemplateLoad(Storage& storage, SequencerEngine& engine,
                                         ModulatedPatternState& state) {
     for (uint8_t channel = 0; channel < SequencerEngine::CHANNEL_COUNT; ++channel) {
         if (!isEligibleForPatternModulation(engine, channel)) {
@@ -524,6 +524,7 @@ int8_t serviceOneModulationTemplateLoad(Storage& storage, const SequencerEngine&
         if (loadTemplateIntoModulationBufferIfStorageIsFree(storage, state, channel,
                                                             wanted)) {
             state.loaded[channel] = wanted;
+            engine.refreshTiming(channel);
         }
         return static_cast<int8_t>(channel);
     }
