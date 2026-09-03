@@ -15,6 +15,8 @@ void usage() {
         "                    [--ratchet 0:6,3:2] [--subdiv -8] [--length 36]\n"
         "                    [--cv-target 1:2,2:2]\n"
         "                    [--per-channel] [--format 2|3]\n"
+        "                    [--template <idx>:<steps>[:<step>/<code>,...]]...\n"
+        "                    [--selected <idx>]\n"
         "writes the persistent image to stdout, one byte per byte, no header\n"
         "--per-channel gives each channel its own template, and refuses\n"
         "--steps and --ratchet\n"
@@ -24,7 +26,15 @@ void usage() {
         "its own bound, so an out-of-range value is refused here.\n"
         "--cv-target routes a CV source to a destination on the six channels.\n"
         "The source is 1 or 2; the destination is the PRD 10.2 code, so 2 is\n"
-        "LENGTH. Several pairs are separated by a comma.\n");
+        "LENGTH. Several pairs are separated by a comma.\n"
+        "--template writes one template record of the format 3 zone with an\n"
+        "explicit content: the active steps, then optional ratchets as\n"
+        "step/code pairs. Its length byte is the factory length. The other\n"
+        "records keep the factory content. The option repeats; one index twice\n"
+        "is refused. --template needs --format 3.\n"
+        "--selected sets the selected pattern of the six channels. The instance\n"
+        "copies the bank, not the template, so a channel that is not modulated\n"
+        "plays an empty instance. --selected refuses --per-channel.\n");
 }
 
 struct PerChannelTemplate {
@@ -107,12 +117,68 @@ bool parseRatchets(const char* list, uint8_t* steps, uint8_t* codes, int& count)
     return count > 0;
 }
 
+bool parseTemplate(const char* text, uint8_t& index, Pattern& pattern) {
+    char* end = nullptr;
+    const long idx = std::strtol(text, &end, 10);
+    if (end == text || idx < 0 || idx >= persist::v3::TEMPLATE_COUNT || *end != ':') {
+        return false;
+    }
+    index = static_cast<uint8_t>(idx);
+    pattern.clear();
+    const char* p = end + 1;
+    int stepCount = 0;
+    while (*p != '\0' && *p != ':') {
+        const long step = std::strtol(p, &end, 10);
+        if (end == p || step < 0 || step >= Pattern::DEFAULT_TOTAL_STEPS) {
+            return false;
+        }
+        pattern.writeStep(static_cast<uint8_t>(step), true);
+        ++stepCount;
+        p = end;
+        if (*p == ',') {
+            ++p;
+        }
+    }
+    if (stepCount == 0) {
+        return false;
+    }
+    if (*p == '\0') {
+        return true;
+    }
+    ++p;
+    int ratchetCount = 0;
+    while (*p != '\0') {
+        const long step = std::strtol(p, &end, 10);
+        if (end == p || step < 0 || step >= Pattern::DEFAULT_TOTAL_STEPS || *end != '/') {
+            return false;
+        }
+        p = end + 1;
+        const long code = std::strtol(p, &end, 10);
+        if (end == p || !isValidRatchet(static_cast<uint8_t>(code))
+            || !pattern.setRatchet(static_cast<uint8_t>(step), static_cast<uint8_t>(code))) {
+            return false;
+        }
+        ++ratchetCount;
+        p = end;
+        if (*p == ',') {
+            ++p;
+        }
+    }
+    return ratchetCount > 0;
+}
+
+struct TemplateOverrides {
+    bool set[persist::v3::TEMPLATE_COUNT];
+    Pattern content[persist::v3::TEMPLATE_COUNT];
+};
+
 }  // namespace
 
 constexpr uint8_t INSTANCE_MARKER_FIRST_STEP = 18;
 
 int emitVersionThree(SequencerEngine& engine, UiController& ui,
-                     Preferences& preferences, PatternBank& bank, bool perChannel) {
+                     Preferences& preferences, PatternBank& bank, bool perChannel,
+                     const TemplateOverrides& overrides) {
     for (uint8_t channel = 0; channel < SequencerEngine::CHANNEL_COUNT; ++channel) {
         Pattern* instance = engine.instanceForChannel(channel);
         const int8_t selected = engine.getSelectedPattern(channel);
@@ -151,7 +217,10 @@ int emitVersionThree(SequencerEngine& engine, UiController& ui,
                 std::fprintf(stderr, "eeprom-image: template offset %u written twice\n", at);
                 return 2;
             }
-            physical[at] = persist::v3::factoryTemplateByte(index, offset);
+            physical[at] = overrides.set[index]
+                ? persist::v3::templateByte(overrides.content[index],
+                                            persist::v3::FACTORY_TEMPLATE_LENGTH, offset)
+                : persist::v3::factoryTemplateByte(index, offset);
             covered[at] = true;
         }
     }
@@ -195,6 +264,8 @@ int main(int argc, char** argv) {
     uint16_t tempo = UiController::DEFAULT_TEMPO;
     bool perChannel = false;
     uint8_t format = persist::FORMAT_VERSION;
+    TemplateOverrides overrides = {};
+    int selected = -1;
 
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--mode") == 0 && i + 1 < argc) {
@@ -215,6 +286,25 @@ int main(int argc, char** argv) {
             perChannel = true;
         } else if (std::strcmp(argv[i], "--format") == 0 && i + 1 < argc) {
             format = static_cast<uint8_t>(std::atoi(argv[++i]));
+        } else if (std::strcmp(argv[i], "--template") == 0 && i + 1 < argc) {
+            uint8_t index = 0;
+            Pattern content;
+            if (!parseTemplate(argv[++i], index, content)) {
+                std::fprintf(stderr, "eeprom-image: template refused: %s\n", argv[i]);
+                return 2;
+            }
+            if (overrides.set[index]) {
+                std::fprintf(stderr, "eeprom-image: template %u given twice\n", index);
+                return 2;
+            }
+            overrides.set[index] = true;
+            overrides.content[index] = content;
+        } else if (std::strcmp(argv[i], "--selected") == 0 && i + 1 < argc) {
+            selected = std::atoi(argv[++i]);
+            if (selected < 0 || selected >= SequencerEngine::PATTERN_COUNT) {
+                std::fprintf(stderr, "eeprom-image: --selected accepts 0 to 15\n");
+                return 2;
+            }
         } else {
             usage();
             return 2;
@@ -231,6 +321,18 @@ int main(int argc, char** argv) {
     if (perChannel && (stepList != nullptr || ratchetList != nullptr)) {
         std::fprintf(stderr,
                      "eeprom-image: --per-channel refuses --steps and --ratchet\n");
+        return 2;
+    }
+    if (perChannel && selected >= 0) {
+        std::fprintf(stderr, "eeprom-image: --per-channel refuses --selected\n");
+        return 2;
+    }
+    bool anyTemplate = false;
+    for (uint8_t index = 0; index < persist::v3::TEMPLATE_COUNT; ++index) {
+        anyTemplate = anyTemplate || overrides.set[index];
+    }
+    if (anyTemplate && format != persist::v3::FORMAT_VERSION) {
+        std::fprintf(stderr, "eeprom-image: --template needs --format 3\n");
         return 2;
     }
 
@@ -295,7 +397,8 @@ int main(int argc, char** argv) {
     }
 
     for (uint8_t channel = 0; channel < SequencerEngine::CHANNEL_COUNT; ++channel) {
-        engine.setSelectedPattern(channel, perChannel ? channel : 0);
+        engine.setSelectedPattern(
+            channel, perChannel ? channel : static_cast<uint8_t>(selected < 0 ? 0 : selected));
         engine.setChannelMode(channel, channelMode);
     }
     if (subdivText != nullptr) {
@@ -354,7 +457,7 @@ int main(int argc, char** argv) {
     }
 
     if (format == persist::v3::FORMAT_VERSION) {
-        return emitVersionThree(engine, ui, preferences, bank, perChannel);
+        return emitVersionThree(engine, ui, preferences, bank, perChannel, overrides);
     }
 
     for (uint16_t index = 0; index < PersistentImage::SIZE; ++index) {
