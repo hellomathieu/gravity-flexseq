@@ -180,8 +180,38 @@ CVSTEP_STEP0="1;0;1;0;0;0"
 STEP_EXPECTED_OFFSET="${STEP_EXPECTED_OFFSET:-10}"
 CVSTEP_SWAP="${CVSTEP_SWAP:-}"
 CVSTEP_TOL_MS="${CVSTEP_TOL_MS:-25}"
+# Course EXTCLOCK (lot XCLK, 2026-09-03) : l'horloge EXTERNE, que RIEN n'exercait
+# — ni une sonde, ni le materiel (dette du lot 5). Le harnais injecte un creneau
+# sur PD2 (EXT_PIN vaut 2) et l'image porte --clock-source, donc le firmware
+# demarre le transport a la PREMIERE impulsion : PLAY est inerte hors horloge
+# interne (src/hal/TransportAdapter.cpp, fidele a Gravity.ino:321-322).
+#
+# ⚠️ ELLE N'EST PAS NOMINALE A L'ETAPE XCLK.2b : ses criteres arrivent en 2c, et
+# une course sans critere qui compterait pour verte serait pire qu'aucune course.
+# Lancer : COURSES=extclock ./tools/run-trigger-probe.sh
+#
+# ⚠️ LA FENETRE DE STABILISATION EST DERIVEE, PAS SUPPOSEE. uClock lisse
+# l'intervalle externe par une PLL, PLL_X = 220, donc le residu vaut
+# (220/256)^n apres n impulsions : 20 impulsions pour 5 %, 31 pour 1 %, 46 pour
+# 0,1 %. EXT_DISCARD porte ce nombre, et sa valeur par defaut est 31.
+EXT_PPQN="${EXT_PPQN:-24}"
+EXT_DISCARD="${EXT_DISCARD:-31}"
+EXT_MEASURE="${EXT_MEASURE:-40}"
+EXT_START_MS="${EXT_START_MS:-300}"
+EXT_PULSE_US="${EXT_PULSE_US:-1000}"
 # cvstep est NOMINALE depuis STEP-12.4, 2026-09-03 : onze courses.
 COURSES="${COURSES:-clock seq ratchet cvzero cv1length cv2length cvreset patold patnew cvpattern cvstep}"
+
+# La periode et le code de source se DERIVENT du PPQN d'entree et du tempo.
+# Rien n'est recopie : 60 000 000 / (tempo x ppqn) est la definition du PPQN.
+case "$EXT_PPQN" in
+  24) EXT_SOURCE_CODE=1 ;;
+  4)  EXT_SOURCE_CODE=2 ;;
+  2)  EXT_SOURCE_CODE=3 ;;
+  1)  EXT_SOURCE_CODE=4 ;;
+  *)  EXT_SOURCE_CODE="" ;;
+esac
+EXT_PERIOD_US="${EXT_PERIOD_US:-$(( 60000000 / (TEMPO * EXT_PPQN) ))}"
 
 if [ -t 1 ]; then
   C_OK=$'\033[32m'; C_ERR=$'\033[31m'; C_DIM=$'\033[2m'; C_B=$'\033[1m'; C_0=$'\033[0m'; TTY=1
@@ -233,6 +263,23 @@ flexseq_resolve_active_format "$ROOT" "$ROOT/.pio/build/nanoatmega328/firmware.e
   "$(dirname "$BIN")" || exit $?
 flexseq_report_active_format "$C_OK" "$C_DIM" "$C_0"
 
+# --- 2bis. Garde de la course EXTCLOCK --------------------------------------
+# Elle refuse AVANT de simuler : une course trop courte rendrait une fenetre de
+# mesure vide, et un verdict sur une fenetre vide se lit comme un succes.
+case " $COURSES " in
+  *" extclock "*)
+    [ -n "$EXT_SOURCE_CODE" ] || die "EXT_PPQN accepte 24, 4, 2 ou 1 — recu '$EXT_PPQN'." 2
+    EXT_NEEDED_MS=$(( EXT_START_MS + (EXT_DISCARD + EXT_MEASURE) * EXT_PERIOD_US / 1000 ))
+    EXT_NEEDED_S=$(( (EXT_NEEDED_MS + 1999) / 1000 ))
+    if [ "$DURATION" -lt "$EXT_NEEDED_S" ]; then
+      die "extclock a PPQN $EXT_PPQN demande DURATION >= $EXT_NEEDED_S s : $EXT_DISCARD impulsions jetees plus $EXT_MEASURE mesurees, a $EXT_PERIOD_US us, depart $EXT_START_MS ms. DURATION vaut $DURATION." 2
+    fi
+    printf '  %s✅%s garde extclock         %sPPQN %s, source %s, periode %s us, DURATION %s s >= %s s%s\n' \
+      "$C_OK" "$C_0" "$C_DIM" "$EXT_PPQN" "$EXT_SOURCE_CODE" "$EXT_PERIOD_US" \
+      "$DURATION" "$EXT_NEEDED_S" "$C_0"
+    ;;
+esac
+
 # --- 3. Images EEPROM -------------------------------------------------------
 # Fabriquees par le code du domaine, donc le format n'est decrit qu'une fois.
 progress "generateur d'image EEPROM"
@@ -270,6 +317,8 @@ for MODE in $COURSES; do
       GEN_ARGS="--mode seq --cv-target ${CV_TARGET_FORCED:-1:1} --selected $PAT_NEW" ;;
     cvstep)
       GEN_ARGS="--mode seq --cv-target ${CV_TARGET_FORCED:-1:4} $CVSTEP_INSTANCES" ;;
+    extclock)
+      GEN_ARGS="--mode seq --clock-source ${EXT_SOURCE_CODE_FORCED:-$EXT_SOURCE_CODE}" ;;
   esac
   case "$MODE" in
     patold|patnew|cvpattern)
@@ -328,6 +377,10 @@ for MODE in $COURSES; do
   if [ "$MODE" = "cvreset" ]; then
     PROBE_ENV="RESET_PULSE_MV=$RESET_PULSE_MV RESET_PULSE_MS=$RESET_PULSE_MS RESET_PULSE_SOURCE=$RESET_PULSE_SOURCE"
   fi
+  if [ "$MODE" = "extclock" ]; then
+    PROBE_MODE="seq"
+    PROBE_ENV="EXT_PERIOD_US=$EXT_PERIOD_US EXT_PULSE_US=$EXT_PULSE_US EXT_START_MS=$EXT_START_MS"
+  fi
   if [ "$MODE" = "cvpattern" ]; then
     # Le CV monte et RESTE haut : la largeur depasse la duree de la course.
     PROBE_ENV="RESET_PULSE_MV=$CV_NOMINAL_MV RESET_PULSE_MS=$PAT_PULSE_MS RESET_PULSE_WIDTH_MS=$(( DURATION * 1000 )) RESET_PULSE_SOURCE=1"
@@ -357,6 +410,8 @@ for MODE in $COURSES; do
     PAT_COURSE="$COURSE_NAME" PAT_PULSE_MS="$PAT_PULSE_MS" PAT_MIN_LATENCY_MS="$PAT_MIN_LATENCY_MS" \
     CVSTEP_TABLE_0="$CVSTEP_TABLE_0" CVSTEP_TABLE_10="$CVSTEP_TABLE_10" CVSTEP_STEP0="$CVSTEP_STEP0" \
     STEP_EXPECTED_OFFSET="$STEP_EXPECTED_OFFSET" CVSTEP_SWAP="$CVSTEP_SWAP" CVSTEP_TOL_MS="$CVSTEP_TOL_MS" \
+    EXT_PPQN="$EXT_PPQN" EXT_PERIOD_US="$EXT_PERIOD_US" EXT_DISCARD="$EXT_DISCARD" \
+    EXT_MEASURE="$EXT_MEASURE" TEMPO="$TEMPO" \
     python3 - "$LOG" <<'PY'
 import os, re, sys
 
@@ -382,6 +437,46 @@ if not m:
     sys.exit(1)
 
 kv = dict(p.split("=", 1) for p in m.group(1).split())
+
+# --- Course EXTCLOCK, etape XCLK.2b : INFORMATION, aucun critere -------------
+# ⚠️ Les criteres C1 a C4 arrivent en XCLK.2c. Ici la course rapporte ce qu'elle
+# observe et NE REND AUCUN VERDICT : les criteres de la course SEQ ne peuvent pas
+# s'appliquer telles quelles, parce que le transport demarre au milieu d'un pas et
+# que la PLL de uClock n'a pas converge. Un vert emprunte a SEQ serait faux.
+if pat_course == "extclock":
+    ext = re.search(r"EXTCLK (.*)", txt)
+    ekv = dict(p.split("=", 1) for p in ext.group(1).split()) if ext else {}
+    period_us = int(os.environ["EXT_PERIOD_US"])
+    ppqn = int(os.environ["EXT_PPQN"])
+    discard = int(os.environ["EXT_DISCARD"])
+    measure = int(os.environ["EXT_MEASURE"])
+    # L'attendu se DERIVE de la periode injectee : un step de /1 vaut une noire,
+    # donc 96 ticks de sortie, et une impulsion d'entree vaut 96 / ppqn ticks.
+    step_expected_ms = period_us * ppqn * 96.0 / 96.0 / 1000.0
+    edges = int(ekv.get("ext_edges", 0))
+    print(f"  {DIM}INFORMATION — aucun critere a l etape XCLK.2b{Z}")
+    print(f"    PPQN d entree            : {ppqn}, periode {period_us} us")
+    print(f"    fronts injectes sur PD2  : {edges}")
+    print(f"    fenetre                  : {discard} jetees + {measure} mesurees")
+    print(f"    step attendu (derive)    : {step_expected_ms:.2f} ms")
+    print(f"    step mesure par la sonde : {float(kv['step_mesure']):.2f} ms")
+    print(f"    premier front de sortie  : {float(kv['premier_front_ms']):.1f} ms"
+          f"  — PLAY relache a {float(kv['play_ms']):.0f} ms")
+    print(f"    ecarts, POUR INFORMATION : {kv['ecarts_ok']}")
+    first = float(kv["premier_front_ms"])
+    play = float(kv["play_ms"])
+    if first > 0.0 and first < play:
+        print(f"  {DIM}Le premier front tombe AVANT le relachement de PLAY, donc le"
+              f" transport a{Z}")
+        print(f"  {DIM}demarre sur impulsion externe : PLAY est inerte hors horloge"
+              f" interne.{Z}")
+    else:
+        print(f"  {DIM}⚠ Le premier front ne precede PAS le relachement de PLAY :"
+              f" cette course{Z}")
+        print(f"  {DIM}n etablit donc RIEN sur l origine du demarrage. Voir le"
+              f" journal XCLK.2b.{Z}")
+    sys.exit(0)
+
 lines_on = int(kv["lignes_actives"]); lines_exp = int(kv["attendu"])
 gaps_ok, gaps_total = (int(x) for x in kv["ecarts_ok"].split("/"))
 width = float(kv["largeur_med"])
