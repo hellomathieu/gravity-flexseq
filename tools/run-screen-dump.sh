@@ -103,9 +103,14 @@ PROBE=$?
 set -e
 printf '  %s✅%s simulation             %s%s s%s\n' "$C_OK" "$C_0" "$C_DIM" "$DURATION" "$C_0"
 
-# L'art ASCII, s'il a ete demande, avant le verdict.
 if [ -n "${ASCII:-}" ]; then
-  sed -n '/^--- /,/^   +-*+$/p' "$LOG"
+  awk '
+    /^--- / { show = 1; borders = 0; print; next }
+    show {
+      print
+      if ($0 ~ /^ *\+-*\+$/) { if (++borders == 2) show = 0 }
+    }
+  ' "$LOG"
 fi
 
 # La surveillance continue conditionne le code de sortie : son rapport doit donc
