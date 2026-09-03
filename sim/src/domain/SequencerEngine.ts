@@ -524,7 +524,8 @@ export class SequencerEngine {
     }
     for (let source = 0; source < CV_SOURCE_COUNT; ++source) {
       const target = c.cvTarget[source];
-      if (target !== CvDestination.LENGTH && target !== CvDestination.PATTERN) continue;
+      if (target !== CvDestination.LENGTH && target !== CvDestination.PATTERN
+          && target !== CvDestination.STEP) continue;
       c.cvZone[source] = zoneWithHysteresis(this.cvInput[source]!, c.cvZone[source]!);
     }
     this.refreshEffectiveLength(channel);

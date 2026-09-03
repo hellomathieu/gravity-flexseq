@@ -382,7 +382,8 @@ void SequencerEngine::applyCvAtStepBoundary(uint8_t channel) {
     }
     for (uint8_t source = 0; source < CV_SOURCE_COUNT; ++source) {
         const uint8_t target = c.cvTarget[source];
-        if (target != CV_DEST_LENGTH && target != CV_DEST_PATTERN) {
+        if (target != CV_DEST_LENGTH && target != CV_DEST_PATTERN
+            && target != CV_DEST_STEP) {
             continue;
         }
         c.cvZone[source] =
