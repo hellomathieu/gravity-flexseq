@@ -634,7 +634,7 @@ The measurement drove the decision, in two steps. The CV was read once per pass 
 ---
 ## 12. UI
 ### 12.1 Interaction model — VALIDATED on 2026-08-22
-**The chosen principle is hybrid.** The project keeps the structure of the original, and it redefines the edit only where the new model requires it: 24 steps, ratchets per step, and LENGTH per channel. The reason: §4 asks to keep the historical features, and the original already solved the problem of three controls for many functions. A constraint the owner set: **minimal cognitive effort** — to create or edit a pattern must ask for the fewest gestures possible.
+**The chosen principle is hybrid.** The project keeps the structure of the original, and it redefines the edit only where the new model requires it: 36 steps, ratchets per step, and LENGTH per channel. The reason: §4 asks to keep the historical features, and the original already solved the problem of three controls for many functions. A constraint the owner set: **minimal cognitive effort** — to create or edit a pattern must ask for the fewest gestures possible.
 **The tab bar IS the navigation**, as in the original:
 ```javascript
 ────────────────────────────
@@ -695,7 +695,7 @@ State: **designed, and not implemented**, except the v2 format, which is impleme
 — *the previous wording, partly replaced:*
 **Three screens**, exactly those of the original:
 1. **The main screen** — the tab bar and the parameters of the active tab. **No** separate "CONFIG PATTERN" screen exists: the settings of a channel are the content of its tab.
-2. **EDIT PATTERN** — the grid of 24 steps, reached from the entry `EDIT PATTERN` of the tab of a channel.
+2. **EDIT PATTERN** — the grid of 36 steps, reached from the entry `EDIT PATTERN` of the tab of a channel.
 3. **The settings** — reached through the `■` tab. Deferred: the screen rotation, the encoder direction, and the CV calibration (§4.1).
 **Two levels inside the main screen**, as in the original: you are either **on** the tab bar, or **inside** a tab.
 **The eight gestures:**
@@ -888,7 +888,7 @@ Every piece of domain code has a unit test.
 Measured on 2026-08-23, 20 s per course: **6/6 outputs** in both · **38/38 gaps** in CLOCK and **11/11** in SEQ · **499.96 to 499.97 ms** per step against 500.00 expected · the edges coincident inside 200 µs. The jitter **changes from one course to the next**, 1.01 to 1.29 ms over four courses: it is a bound, and not a value, and the budget is 2 %.
 **The asymmetry is the proof.** `MUTATE=7` adds a step to the image and not to the expectation: SEQ turns red (6/14) and CLOCK stays green (38/38). No single course could establish that CLOCK ignores the bank, and two courses on one firmware do. `DROP=3` turns both red, and `JITTER_BUDGET_PCT=0.1` turns the jitter red. `MUTATE` bites **under** the played LENGTH only, 16 by default.
 Two findings reported and not asserted. The pulse was measured at **8.8 ms** on 2026-08-21 against the 5 ms of `DEFAULT_TRIGGER_DURATION_MS`. That was read as 5 ms rounded up to the next pass, because the auto-off sits at the end of `loop()`. **Re-measured since: 4.70 ms, then 4.78 ms in CLOCK and 5.01 ms in SEQ.** It therefore goes **below** the configured value, and it **changes with the mode**. The explanation no longer holds, and the figures stay. Tracked at line 12 of `docs/open-risks.md`. And **`PULSE` stays silent**, because `main.cpp` does not drive `gravity.pulse`.
-- **A dump of the memory of the panel** (`tools/run-screen-dump.sh`): it reads the image the SSD1306 really shows, and it asserts the geometry after `U8G2_R2`, 24/24 steps at their place, and the rotation. `WATCH=` samples the panel continuously. It checks that **no band, once it has carried ink, comes back empty**, which is the only way the band skip (§12) could flicker. **20 000 readings, one every 0.5 ms: none.** The minima that are low and not zero are states **in the middle of a transfer**, because a band goes out in six transactions. That is inherent to every partial update.
+- **A dump of the memory of the panel** (`tools/run-screen-dump.sh`): it reads the image the SSD1306 really shows, and it asserts the geometry after `U8G2_R2`, 36/36 steps at their place, and the rotation. `WATCH=` samples the panel continuously. It checks that **no band, once it has carried ink, comes back empty**, which is the only way the band skip (§12) could flicker. **20 000 readings, one every 0.5 ms: none.** The minima that are low and not zero are states **in the middle of a transfer**, because a band goes out in six transactions. That is inherent to every partial update.
 - **The stack probe** (`tools/run-stack-probe.sh`): it measures at run time the stack the **production** firmware really consumes, which the linker cannot see. A C harness paints the RAM before the first cycle and injects interrupt traffic, and the firmware is not instrumented. The result and the method are at §15.
 > ⚠️ **A gap in the verification — found on 2026-08-20.** The render and the timing had **never run together**: `src/simavr_main.cpp` holds no render, so the step durations validated in simavr (§6.3: 250 ms and 511 ms) were validated **with no display**. And a full frame is about 25 ms of I2C bus. **To measure:** the real blocking of the main loop, and the minimum CV pulse width really captured (§10.6, ADR 0001). That measurement depends on no product decision.
 >
@@ -1096,5 +1096,5 @@ A change of version starts **from the defaults again**: the FlexSeq state writte
 > The matching actions are tracked in `docs/open-risks.md`, lines 14 to 16.
 ---
 ## 19. Criteria of success
-The final firmware must run on the **unchanged** Gravity hardware · keep the historical features the project retained · offer patterns of 1 to 24 steps with the `masterPhase` temporal model · stay inside the RAM and Flash budget · allow the restoration of the original firmware.
+The final firmware must run on the **unchanged** Gravity hardware · keep the historical features the project retained · offer patterns of 1 to 36 steps with the `masterPhase` temporal model · stay inside the RAM and Flash budget · allow the restoration of the original firmware.
 <page url="https://app.notion.com/p/3c7d2c2576ce813fa814eb6259949d5f">Conception — fractionnement des salves SHIFT</page>
