@@ -97,6 +97,14 @@ static int g_pulse_mv;
 static int g_pulse_idx;
 static double g_pulse_at_s = 3.0;
 static double g_pulse_width_ms = 50.0;
+/* Course STEP, sous CV_STEP_MV, CV_STEP_SOURCE et CV_STEP_AT_S : un NIVEAU tenu
+ * jusqu'a la fin, sur une source que l'image route vers STEP. Le temoin est la
+ * broche OUT1 : avec le seul step 0 actif et une zone +k, le step 0 est relu
+ * quand localStep vaut 16 - k, donc le second front tombe (16 - k) steps
+ * apres le premier, l'onset arme de PLAY. Une zone ignoree donnerait 16. */
+static int g_step_mv;
+static int g_step_idx;
+static double g_step_at_s = 0.0;
 static uint64_t g_out_rise[256];
 static int g_out_nrise;
 static int g_out_last = -1;
@@ -160,6 +168,14 @@ int main(int argc, char** argv)
         const char* at = getenv("CV_PULSE_AT_S");
         if (at != NULL) g_pulse_at_s = atof(at);
     }
+    const char* step_env = getenv("CV_STEP_MV");
+    if (step_env != NULL && atoi(step_env) > 0) {
+        g_step_mv = atoi(step_env);
+        const char* src = getenv("CV_STEP_SOURCE");
+        g_step_idx = (src != NULL && atoi(src) == 2) ? 1 : 0;
+        const char* at = getenv("CV_STEP_AT_S");
+        if (at != NULL) g_step_at_s = atof(at);
+    }
 
     /* Journal de console de l'UART desarme : le firmware emet du MIDI, et ce
      * chemin de simavr lit un octet hors bornes. Voir simavr_uart_quiet.h. */
@@ -222,7 +238,7 @@ int main(int argc, char** argv)
     }
 
     avr_irq_t* play = NULL;
-    if (g_pulse_mv > 0) {
+    if (g_pulse_mv > 0 || g_step_mv > 0) {
         g_adc_irq[0] = avr_io_getirq(avr, AVR_IOCTL_ADC_GETIRQ, ADC_IRQ_ADC7);
         g_adc_irq[1] = avr_io_getirq(avr, AVR_IOCTL_ADC_GETIRQ, ADC_IRQ_ADC6);
         avr_irq_register_notify(
@@ -258,6 +274,10 @@ int main(int argc, char** argv)
         printf("impulsion  CV%d a %d mV, a %.2f s, PLAY presse\n",
                g_pulse_idx + 1, g_pulse_mv, g_pulse_at_s);
     }
+    if (g_step_mv > 0) {
+        printf("niveau     CV%d a %d mV des %.2f s jusqu'a la fin, PLAY presse\n",
+               g_step_idx + 1, g_step_mv, g_step_at_s);
+    }
     printf("\n");
 
     const uint64_t pulse_from = (uint64_t)(g_pulse_at_s * (double)F_CPU_HZ);
@@ -280,6 +300,11 @@ int main(int argc, char** argv)
             g_cv_mv[g_pulse_idx] =
                 (avr->cycle >= pulse_from && avr->cycle < pulse_to)
                     ? g_pulse_mv : CV_IDLE_MV;
+        }
+        if (g_step_mv > 0) {
+            g_cv_mv[g_step_idx] =
+                (avr->cycle >= (uint64_t)(g_step_at_s * (double)F_CPU_HZ))
+                    ? g_step_mv : CV_IDLE_MV;
         }
         const int state = avr_run(avr);
         if (state == cpu_Done || state == cpu_Crashed) {
@@ -384,6 +409,18 @@ int main(int argc, char** argv)
                "premier_apres_ms=%.1f fronts_apres=%d impulsion_ms=%.1f "
                "play_ms=%.1f\n", before, first_before_ms, first_after_ms,
                after, pulse_ms, 0.66 * 1000.0);
+    }
+
+    /* Temoin du chemin STEP, sur la broche : l'ecart entre les deux premiers
+     * fronts, en ms. Meme forme sans indentation que les autres releves. */
+    if (g_step_mv > 0) {
+        const double first = g_out_nrise > 0
+            ? (double)g_out_rise[0] * 1e3 / (double)F_CPU_HZ : -1.0;
+        const double second = g_out_nrise > 1
+            ? (double)g_out_rise[1] * 1e3 / (double)F_CPU_HZ : -1.0;
+        printf("\n=== STEP ===\n");
+        printf("STEP fronts=%d premier_ms=%.1f deuxieme_ms=%.1f play_ms=%.1f\n",
+               g_out_nrise, first, second, 0.66 * 1000.0);
     }
 
     printf("\n=== PILE ===\n");

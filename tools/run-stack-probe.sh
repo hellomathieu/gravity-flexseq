@@ -46,6 +46,13 @@
 # Le nombre d'octets non vierges est une MESURE, pas un critere : rien
 # n'etablit aujourd'hui combien d'octets un semis d'usine laisse non vierges.
 #
+# Course STEP (2026-09-03, STEP-11.4) : CV_STEP_MV tient un NIVEAU sur la source
+# CV_STEP_SOURCE (1 par defaut) des CV_STEP_AT_S (0), avec une image EE_IMAGE
+# routee vers STEP (--cv-target 1:4 --steps 0 --length 16). Temoin sur OUT1 :
+# l'ecart entre les deux premiers fronts vaut STEP_EXPECTED_GAP_STEPS steps de
+# STEP_MS (500 a 120 BPM en /1), a STEP_GAP_TOL_MS pres (60). Une zone ignoree
+# rendrait 16 steps ; le litteral attendu est celui de la table LCV.3a, 4150 mV
+# -> +10, donc 16 - 10 = 6. Le harnais ne recopie pas le quantizer.
 # Reglages : RAM_RESERVE (defaut 256), DURATION (defaut 8 s), QUIET=1 pour
 # mesurer sans injection (utile pour attribuer l'ecart aux ISR).
 
@@ -96,7 +103,7 @@ printf '  %s✅%s symbole                %s_end %s%s\n' "$C_OK" "$C_0" "$C_DIM" 
 # son image route RESET et non PATTERN, donc loaded[] resterait vierge et le
 # temoin de modulation rougirait une course qui ne le concerne pas.
 LOADED_ADDR=""
-if [ -n "${EE_IMAGE:-}" ] && [ -z "${CV_PULSE_MV:-}" ]; then
+if [ -n "${EE_IMAGE:-}" ] && [ -z "${CV_PULSE_MV:-}" ] && [ -z "${CV_STEP_MV:-}" ]; then
   STATE_HEX="$("$AVR_NM" --radix=x --demangle "$ELF" \
     | grep -E "modulatedPatterns$" | head -1 | cut -d' ' -f1)"
   if [ -n "$STATE_HEX" ]; then
@@ -216,6 +223,28 @@ if pulse:
           f"apres l'impulsion, {after} ensuite"
           f"{DIM}  — fenetre {window:g} ms ; le temoin est la broche OUT1{Z}")
 
+step = bool(os.environ.get("CV_STEP_MV"))
+step_ok = True
+if step:
+    r = re.search(r"STEP fronts=(\d+) premier_ms=([\d.-]+) deuxieme_ms=([\d.-]+) "
+                  r"play_ms=([\d.]+)", txt)
+    if r is None:
+        print(f"  {mark(False)} Chemin STEP         TEMOIN ABSENT — le releve des fronts n'a pas ete emis")
+        sys.exit(1)
+    fronts, first, second, play = int(r[1]), float(r[2]), float(r[3]), float(r[4])
+    gap_steps = int(os.environ["STEP_EXPECTED_GAP_STEPS"])
+    step_ms = float(os.environ.get("STEP_MS", "500"))
+    tol = float(os.environ.get("STEP_GAP_TOL_MS", "60"))
+    expected = gap_steps * step_ms
+    gap = second - first if fronts >= 2 else -1.0
+    armed_ok = fronts >= 1 and 0.0 < (first - play) <= tol
+    step_ok = armed_ok and fronts >= 2 and abs(gap - expected) <= tol
+    print(f"  {mark(armed_ok)} Temoin D79          premier front a {first - play:+.1f} ms du relachement"
+          f" de PLAY{DIM}  — l'onset arme du step 0, lu a zone nulle{Z}")
+    print(f"  {mark(step_ok)} Chemin STEP         second front {gap:.1f} ms apres le premier, "
+          f"{fronts} fronts{DIM}  — attendu {gap_steps} steps = {expected:.0f} ms a {tol:g} ms pres :"
+          f" le step 0 relu a localStep 16 - k, sur la broche{Z}")
+
 if preloaded:
     if os.environ.get("LOADED") and loaded is None:
         print(f"  {mark(False)} Chargement          TEMOIN ABSENT — le releve de loaded[] n'a pas ete emis")
@@ -264,5 +293,5 @@ else:
     print(f"{DIM}  hors mesure les chemins que le firmware n'emprunte pas encore.{Z}")
 
 sys.exit(0 if (fits_reserve and fits_ram and (persisted or preloaded)
-               and (quiet or all_entered) and reset_ok) else 1)
+               and (quiet or all_entered) and reset_ok and step_ok) else 1)
 PY
