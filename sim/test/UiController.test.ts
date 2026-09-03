@@ -200,6 +200,16 @@ describe("UiController — inside a tab", () => {
     expect(engine.getEffectiveLength(0)).toBe(DEFAULT_LENGTH - 1);
   });
 
+  it("the tempo range is the one the module announces", () => {
+    expect(MIN_TEMPO).toBe(20);
+    expect(MAX_TEMPO).toBe(300);
+    const { ui } = rig();
+    expect(ui.setTempo(19)).toBe(false);
+    expect(ui.setTempo(20)).toBe(true);
+    expect(ui.setTempo(300)).toBe(true);
+    expect(ui.setTempo(301)).toBe(false);
+  });
+
   it("tempo is clamped to the musical range", () => {
     const { ui, gotoTab, enterTab } = rig();
     gotoTab(TAB_CLOCK);

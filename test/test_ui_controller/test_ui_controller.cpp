@@ -204,6 +204,16 @@ void test_shift_rotate_changes_the_value_without_opening_the_field() {
     TEST_ASSERT_EQUAL_UINT8(SequencerEngine::DEFAULT_LENGTH - 1, r.engine.getEffectiveLength(0));
 }
 
+void test_the_tempo_range_is_the_one_the_module_announces() {
+    TEST_ASSERT_EQUAL_UINT16(20, UiController::MIN_TEMPO);
+    TEST_ASSERT_EQUAL_UINT16(300, UiController::MAX_TEMPO);
+    Rig r;
+    TEST_ASSERT_FALSE(r.ui.setTempo(19));
+    TEST_ASSERT_TRUE(r.ui.setTempo(20));
+    TEST_ASSERT_TRUE(r.ui.setTempo(300));
+    TEST_ASSERT_FALSE(r.ui.setTempo(301));
+}
+
 void test_tempo_is_clamped_to_the_musical_range() {
     Rig r;
     r.gotoTab(UiController::TAB_CLOCK);
@@ -805,6 +815,7 @@ int main(int, char**) {
     RUN_TEST(test_long_press_closes_the_open_field_without_leaving_the_tab);
     RUN_TEST(test_long_press_on_a_closed_field_returns_to_the_tab_bar);
     RUN_TEST(test_shift_rotate_changes_the_value_without_opening_the_field);
+    RUN_TEST(test_the_tempo_range_is_the_one_the_module_announces);
     RUN_TEST(test_tempo_is_clamped_to_the_musical_range);
     RUN_TEST(test_the_clock_source_field_never_reaches_the_sentinel);
     RUN_TEST(test_the_pattern_field_is_clamped_to_the_bank);

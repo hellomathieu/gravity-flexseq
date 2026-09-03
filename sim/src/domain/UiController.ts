@@ -51,7 +51,7 @@ export const CHANNEL_TAB_FIELDS = 5;
 
 export const CLOCK_SOURCE_COUNT = 6;
 export const CLOCK_SOURCE_INTERNAL = 0;
-export const MIN_TEMPO = 30;
+export const MIN_TEMPO = 20;
 export const MAX_TEMPO = 300;
 export const DEFAULT_TEMPO = 120;
 
