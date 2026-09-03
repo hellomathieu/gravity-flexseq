@@ -180,58 +180,19 @@ CVSTEP_STEP0="1;0;1;0;0;0"
 STEP_EXPECTED_OFFSET="${STEP_EXPECTED_OFFSET:-10}"
 CVSTEP_SWAP="${CVSTEP_SWAP:-}"
 CVSTEP_TOL_MS="${CVSTEP_TOL_MS:-25}"
-# Course EXTCLOCK (lot XCLK, 2026-09-03) : l'horloge EXTERNE, que RIEN n'exercait
-# — ni une sonde, ni le materiel (dette du lot 5). Le harnais injecte un creneau
-# sur PD2 (EXT_PIN vaut 2) et l'image porte --clock-source, donc le firmware
-# demarre le transport a la PREMIERE impulsion : PLAY est inerte hors horloge
-# interne (src/hal/TransportAdapter.cpp, fidele a Gravity.ino:321-322).
-#
-# ⚠️ ELLE N'EST PAS NOMINALE A L'ETAPE XCLK.2b : ses criteres arrivent en 2c, et
-# une course sans critere qui compterait pour verte serait pire qu'aucune course.
-# Lancer : COURSES=extclock ./tools/run-trigger-probe.sh
-#
-# ⚠️ LA FENETRE DE STABILISATION EST DERIVEE, PAS SUPPOSEE. uClock lisse
-# l'intervalle externe par une PLL, PLL_X = 220, donc le residu vaut
-# (220/256)^n apres n impulsions : 20 impulsions pour 5 %, 31 pour 1 %, 46 pour
-# 0,1 %. EXT_DISCARD porte ce nombre, et sa valeur par defaut est 31.
 EXT_PPQN="${EXT_PPQN:-24}"
 EXT_DISCARD="${EXT_DISCARD:-31}"
-# ⚠️ LA FENETRE DE MESURE SE COMPTE EN PAS, PAS EN IMPULSIONS. Une impulsion
-# d'entree vaut 96 / ppqn ticks de sortie, donc un pas de /1 vaut ppqn
-# impulsions : a PPQN 24, quarante impulsions ne font que 1,7 pas, et aucun
-# critere de train ne tient sur 1,7 pas. EXT_DISCARD reste en impulsions, lui,
-# parce que la PLL de uClock converge PAR IMPULSION.
 EXT_MEASURE_STEPS="${EXT_MEASURE_STEPS:-20}"
 EXT_START_MS="${EXT_START_MS:-300}"
 EXT_PULSE_US="${EXT_PULSE_US:-1000}"
-# EXT_TRACE_MS pose le TEMOIN DU TIMER : la sonde lit OCR1A et le prediviseur
-# de TCCR1B, donc la periode que le timer applique VRAIMENT, et n imprime que
-# les changements. 0 le desactive.
 EXT_TRACE_MS="${EXT_TRACE_MS:-0}"
-# CONTRE-EPREUVES de la course. EXT_EXPECT_PERIOD_US decouple l ATTENDU de
-# l INJECTE : sans ce levier, une seule variable nourrit les deux cotes et la
-# course confirmerait son hypothese. EXT_PIN_FORCE injecte sur une autre broche,
-# donc le firmware ne recoit aucune horloge et la mesure devient non evaluable.
 EXT_EXPECT_PERIOD_US="${EXT_EXPECT_PERIOD_US:-}"
 EXT_PIN_FORCE="${EXT_PIN_FORCE:-}"
-# La borne de C3 est DERIVEE de PHASE_FACTOR, 16 >> 8, donc 6,25 %. La surcharge
-# existe pour la contre-epreuve, comme JITTER_BUDGET_PCT sur les autres courses.
 EXT_C3_BOUND_PCT="${EXT_C3_BOUND_PCT:-}"
-# Course MIDICLOCK (lot XCLK.4) : la MEME horloge externe, par un AUTRE transport.
-# Elle n'arrive pas par une broche mais par l'UART, et libGravity force l'entree a
-# 24 PPQN en source MIDI, comme la norme. La course reutilise donc les cinq
-# criteres de extclock a PPQN 24, et seul le transport change. Elle reste A LA
-# DEMANDE : COURSES=midiclock ./tools/run-trigger-probe.sh
 MIDI_SEND_START="${MIDI_SEND_START:-1}"
 # cvstep est NOMINALE depuis STEP-12.4, 2026-09-03 : onze courses.
-# extclock est NOMINALE depuis XCLK.2c, 2026-09-03, a PPQN 24 SEULEMENT : elle
-# demande 15 s a cette cadence, contre 31, 50 et 87 s a PPQN 4, 2 et 1. Ces trois
-# cadences restent a la demande — une porte trop couteuse finit par ne plus etre
-# lancee, et elle ne protege alors plus rien.
 COURSES="${COURSES:-clock seq ratchet cvzero cv1length cv2length cvreset patold patnew cvpattern cvstep extclock}"
 
-# La periode et le code de source se DERIVENT du PPQN d'entree et du tempo.
-# Rien n'est recopie : 60 000 000 / (tempo x ppqn) est la definition du PPQN.
 case "$EXT_PPQN" in
   24) EXT_SOURCE_CODE=1 ;;
   4)  EXT_SOURCE_CODE=2 ;;
@@ -243,15 +204,7 @@ EXT_PERIOD_GIVEN=0
 [ -n "${EXT_PERIOD_US:-}" ] && EXT_PERIOD_GIVEN=1
 EXT_PERIOD_US="${EXT_PERIOD_US:-$(( 60000000 / (TEMPO * EXT_PPQN) ))}"
 
-# ⚠️ LE GEL DU DEFAUT 12 doit etre ABSORBE avant toute mesure, et il est DERIVE,
-# pas suppose. docs/upstream-defects.md entree 12 : au passage en horloge
-# externe, uClock ecrete le tempo a MIN_BPM = 1, donc un tick de sortie de
-# 60000000 / 96 / 1 = 625000 us, et la recuperation attend mod_clock_ref ticks,
-# soit 96 / input_ppqn. Le proprietaire a decide le 2026-09-03 de CONSIGNER ce
-# defaut sans toucher au fork : la course doit donc vivre avec.
 EXT_MIN_BPM_TICK_US=$(( 60000000 / 96 / 1 ))
-# ⚠️ Surchargeable, et c'est la CONTRE-EPREUVE de C5 : EXT_FREEZE_MS=0 ouvre la
-# fenetre pendant le gel, donc le temoin doit y voir le tick de 625 ms et rougir.
 EXT_FREEZE_MS="${EXT_FREEZE_MS:-$(( (96 / EXT_PPQN) * EXT_MIN_BPM_TICK_US / 1000 ))}"
 
 if [ -t 1 ]; then
@@ -305,12 +258,8 @@ flexseq_resolve_active_format "$ROOT" "$ROOT/.pio/build/nanoatmega328/firmware.e
 flexseq_report_active_format "$C_OK" "$C_DIM" "$C_0"
 
 # --- 2bis. Garde de la course EXTCLOCK --------------------------------------
-# Elle refuse AVANT de simuler : une course trop courte rendrait une fenetre de
-# mesure vide, et un verdict sur une fenetre vide se lit comme un succes.
 case " $COURSES " in
   *" midiclock "*)
-    # La norme MIDI fixe l'entree a 24 PPQN, et libGravity la force
-    # (clock.h, SOURCE_EXTERNAL_MIDI). La course n'a donc pas de reglage de PPQN.
     EXT_PPQN=24
     EXT_SOURCE_CODE=1
     [ "$EXT_PERIOD_GIVEN" = "0" ] && EXT_PERIOD_US=$(( 60000000 / (TEMPO * 24) ))
@@ -437,18 +386,11 @@ for MODE in $COURSES; do
   if [ "$MODE" = "midiclock" ]; then
     PROBE_MODE="extclock"
     [ "$EXT_TRACE_MS" = "0" ] && EXT_TRACE_MS=$(( DURATION * 1000 / 400 + 1 ))
-    # ⚠️ EXT_PERIOD_US=0 EXPLICITE. Sans lui, une variable heritee de
-    # l'environnement de l'appelant activerait AUSSI l'injection sur la broche, et
-    # DEUX horloges piloteraient le module en silence. Constate le 2026-09-03 :
-    # ecarts a 0 pas, C1 a 11,76 %, et la cause etait le harnais, pas le firmware.
     PROBE_ENV="MIDI_PERIOD_US=$EXT_PERIOD_US MIDI_START_MS=$EXT_START_MS MIDI_SEND_START=$MIDI_SEND_START EXT_PERIOD_US=0 EXT_TRACE_MS=$EXT_TRACE_MS"
   fi
   if [ "$MODE" = "extclock" ]; then
     PROBE_MODE="extclock"
-    # Le temoin est OBLIGATOIRE pour cette course : C5 le lit. On borne le
-    # nombre d'echantillons pour rester sous la capacite du harnais.
     [ "$EXT_TRACE_MS" = "0" ] && EXT_TRACE_MS=$(( DURATION * 1000 / 400 + 1 ))
-    # MIDI_PERIOD_US=0 explicite, meme raison que ci-dessus, en miroir.
     PROBE_ENV="EXT_PERIOD_US=$EXT_PERIOD_US EXT_PULSE_US=$EXT_PULSE_US EXT_START_MS=$EXT_START_MS MIDI_PERIOD_US=0 EXT_TRACE_MS=$EXT_TRACE_MS"
     [ -n "$EXT_PIN_FORCE" ] && PROBE_ENV="$PROBE_ENV EXT_PIN=$EXT_PIN_FORCE"
   fi
@@ -511,16 +453,6 @@ if not m:
 
 kv = dict(p.split("=", 1) for p in m.group(1).split())
 
-# --- Course EXTCLOCK, lot XCLK.2c : CINQ criteres --------------------------
-# Tous les attendus sont DERIVES. Le harnais ne recopie ni le quantizer de uClock,
-# ni sa PLL : il en derive des bornes.
-#
-#   un pas de /1 vaut 96 ticks de sortie
-#   une impulsion d'entree vaut 96 / ppqn ticks de sortie
-#   donc  tick attendu = periode x ppqn / 96   et   pas attendu = periode x ppqn
-#
-# La fenetre s'ouvre APRES le gel du defaut 12 et APRES la convergence de la PLL,
-# dont le residu vaut (220/256)^n apres n impulsions.
 if pat_course in ("extclock", "midiclock"):
     injected_us = int(os.environ["EXT_PERIOD_US"])
     period_us = int(os.environ.get("EXT_EXPECT_PERIOD_US") or injected_us)
@@ -537,7 +469,7 @@ if pat_course in ("extclock", "midiclock"):
     open_ms = start_ms + freeze_ms + discard * period_us / 1000.0
     close_ms = open_ms + measure_steps * step_us / 1000.0
     pll_residual = (220.0 / 256.0) ** discard
-    c1_budget_pct = 100.0 * (pll_residual + 1.0 / 96.0)   # PLL + un tick sur 96
+    c1_budget_pct = 100.0 * (pll_residual + 1.0 / 96.0)
     c3_bound_pct = 100.0 / 16.0                            # PHASE_FACTOR 16 >> 8
     if os.environ.get("EXT_C3_BOUND_PCT"):
         c3_bound_pct = float(os.environ["EXT_C3_BOUND_PCT"])
@@ -560,7 +492,6 @@ if pat_course in ("extclock", "midiclock"):
     edges = [float(x) for x in em.group(1).split()] if em else []
     win = [e for e in edges if open_ms <= e <= close_ms]
 
-    # --- C4, la garde de la mesure : INVALID, jamais FAIL --------------------
     if len(win) < 3:
         print(f"  {mark(False)} C4 fenetre exploitable "
               f"{len(win)} front(s) dans la fenetre, il en faut 3")
@@ -572,7 +503,6 @@ if pat_course in ("extclock", "midiclock"):
     print(f"  {mark(True)} C4 fenetre exploitable "
           f"{len(win)} fronts entre {win[0]:.0f} et {win[-1]:.0f} ms")
 
-    # --- C5, le gel est TERMINE dans la fenetre ------------------------------
     tm = re.search(r"^TRACE (.*)$", txt, re.M)
     samples = []
     if tm:
@@ -593,26 +523,20 @@ if pat_course in ("extclock", "midiclock"):
           f"pire tick {worst[1]:.0f} us a {worst[0]:.0f} ms, "
           f"{off_pct:.2f} % de l attendu (borne {c3_bound_pct:.2f} %)")
 
-    # --- les ecarts, convertis en NOMBRE DE PAS ------------------------------
     gaps = [win[i + 1] - win[i] for i in range(len(win) - 1)]
     counts = [int(round(g * 1000.0 / step_us)) for g in gaps]
     total_steps = sum(counts)
     measured_step_us = (win[-1] - win[0]) * 1000.0 / total_steps if total_steps else 0.0
 
-    # --- C1, la MOYENNE sur la fenetre --------------------------------------
     c1_off = 100.0 * abs(measured_step_us - step_us) / step_us
     c1 = c1_off <= c1_budget_pct
     print(f"  {mark(c1)} C1 pas moyen         "
           f"{measured_step_us / 1000.0:.2f} ms contre {step_us / 1000.0:.2f} "
           f"attendu, ecart {c1_off:.2f} % (budget {c1_budget_pct:.2f} %)")
 
-    # --- C2, rotation cyclique du motif, sans phase --------------------------
     act = sorted(x for x in steps if x < length)
     expected = [(act[(i + 1) % len(act)] - act[i]) % length or length
                 for i in range(len(act))] if len(act) > 1 else []
-    # ⚠️ La fenetre peut contenir PLUS d ecarts qu un cycle : la suite attendue se
-    # repete autant de fois qu il faut avant d etre tronquee. Sans cela un cycle
-    # et demi rougirait un firmware correct.
     def cycle_from(i):
         need = -(-len(counts) // len(expected)) + 1
         rot = expected[i:] + expected[:i]
@@ -621,7 +545,6 @@ if pat_course in ("extclock", "midiclock"):
     print(f"  {mark(c2)} C2 rotation cyclique "
           f"{counts} contre {expected} a une rotation pres")
 
-    # --- C3, l oscillation instantanee --------------------------------------
     devs = [100.0 * abs(g * 1000.0 - c * step_us) / (c * step_us)
             for g, c in zip(gaps, counts) if c > 0]
     c3_worst = max(devs) if devs else 0.0

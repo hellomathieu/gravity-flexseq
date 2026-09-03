@@ -55,7 +55,6 @@ emit "$WORK/pc3.bin" --mode seq --per-channel --format 3
 # both have step 4 active, and the six channels select OLD.
 emit "$WORK/fx3.bin" --mode seq --format 3 --selected 8 \
      --template 8:0,4:4/7 --template 15:0,4
-# Lot XCLK: the persisted clock source. 1 is the external PPQN 24.
 emit "$WORK/ext3.bin" --mode seq --steps 0,3,4,9,15 --format 3 --clock-source 1
 
 python3 - "$WORK/v2.bin" "$WORK/v3.bin" "$WORK/pc3.bin" "$WORK/fx3.bin" \
@@ -113,7 +112,6 @@ CHANNELS_AT = 523
 CHANNEL_RECORD = 9
 CHANNEL_COUNT = 6
 
-# Global zone of the format 3, all literals: 523 + 6 * 9 = 577.
 GLOBAL_AT = 577
 GLOBAL_CLOCK_SOURCE_AT = 2
 SOURCE_INTERNAL = 0
@@ -372,7 +370,6 @@ else:
     bad("--clock-source 1", "octet %d = %d au lieu de %d"
         % (at, ext3[at], SOURCE_EXTERNAL_PPQN_24))
 
-# L option ne doit toucher QUE cet octet : le reste de l image est identique.
 diff = [i for i in range(min(len(v3), len(ext3))) if v3[i] != ext3[i]]
 if diff == [at]:
     ok("--clock-source n a qu un effet", "un seul octet differe, %d" % at)

@@ -119,45 +119,23 @@ typedef struct {
 static line_t g_lines[LINE_COUNT];
 static double g_play_ms = 0.0;
 
-/* Lot XCLK : l'horloge EXTERNE, injectee sur PD2 (EXT_PIN vaut 2). libGravity
- * y attache une interruption sur FRONT MONTANT, donc un creneau carre produit
- * exactement un front par periode, quel que soit le niveau de repos de la
- * broche. La sonde pilote les deux niveaux elle-meme, donc elle ne depend
- * d'aucun pull-up.
- *
- * PLAY reste presse : il est INERTE hors horloge interne, et le firmware
- * demarre le transport a la premiere impulsion externe
- * (src/hal/TransportAdapter.cpp, fidele a Gravity.ino:321-322). */
-static long g_ext_period_us;      /* 0 = pas d'injection */
+static long g_ext_period_us;
 static long g_ext_pulse_us = 1000;
 static double g_ext_start_ms;
-static long g_ext_edges;          /* fronts montants REELLEMENT injectes */
-static uint8_t g_ext_pin = 2;     /* EXT_PIN vaut 2 ; le levier le deplace */
+static long g_ext_edges;
+static uint8_t g_ext_pin = 2;
 
-/* Lot XCLK.4 : l'horloge MIDI. Elle n'arrive pas par une broche mais par l'UART.
- * libGravity attache onSerialEvent en source MIDI (clock.h) : l'octet 0xF8
- * appelle le callback externe du firmware, 0xFA demarre uClock et 0xFC l'arrete.
- * La norme MIDI fixe l'entree a 24 PPQN, et libGravity la force. */
 #define MIDI_CLOCK_BYTE 0xF8
 #define MIDI_START_BYTE 0xFA
-static long g_midi_period_us;     /* 0 = pas d'injection MIDI */
+static long g_midi_period_us;
 static double g_midi_start_ms = 300.0;
 static int g_midi_send_start = 1;
-static long g_midi_bytes;         /* octets 0xF8 REELLEMENT injectes */
+static long g_midi_bytes;
 
-/* Lot XCLK.3 : le TEMOIN du timer. uClock programme OCR1A et le prediviseur de
- * TCCR1B a chaque changement de tempo (uClock/platforms/avr.h, setTimer). La
- * periode d'un tick de sortie se lit donc DIRECTEMENT dans le materiel simule,
- * sans dependre de la disposition d'une classe :
- *
- *     periode = (OCR1A + 1) x prediviseur / F_CPU
- *
- * C'est plus fort qu'une lecture de membre prive : le registre est ce que le
- * timer applique VRAIMENT. */
 #define REG_TCCR1B 0x81
 #define REG_OCR1AL 0x88
 #define REG_OCR1AH 0x89
-static double g_trace_ms;         /* 0 = pas de trace */
+static double g_trace_ms;
 #define TRACE_MAX 512
 static double g_trace_at[TRACE_MAX];
 static double g_trace_period_us[TRACE_MAX];
@@ -286,10 +264,6 @@ int main(int argc, char **argv)
      * les temps de front bruts des SIX sorties ; le script compare chaque flux
      * a son horaire litteral, a phase connue par l'onset arme de PLAY. */
     const int cvstep = strcmp(mode, "cvstep") == 0;
-    /* Course EXTCLOCK (lot XCLK) : les fronts BRUTS, parce que la fenetre de
-     * mesure s'ouvre apres le gel du defaut 12 et apres la convergence de la
-     * PLL. C'est le script qui connait ces deux durees, donc c'est lui qui
-     * filtre. */
     const int extclock = strcmp(mode, "extclock") == 0;
     const int raw_edges = cvreset || cvpattern || cvstep || extclock;
 
@@ -325,9 +299,6 @@ int main(int argc, char **argv)
         if (w != NULL && atol(w) > 0) g_ext_pulse_us = atol(w);
         const char *at = getenv("EXT_START_MS");
         if (at != NULL) g_ext_start_ms = atof(at);
-        /* Contre-epreuve : injecter sur une AUTRE broche que PD2. Le firmware ne
-         * recoit alors aucune horloge, et PLAY etant inerte hors horloge interne
-         * il ne demarre pas : la mesure devient non evaluable, pas fausse. */
         const char *pin = getenv("EXT_PIN");
         if (pin != NULL) {
             const int want = atoi(pin);
@@ -788,7 +759,6 @@ int main(int argc, char **argv)
         printf("  %10s %16s %14s\n", "t (ms)", "periode tick (us)", "step /1 (ms)");
         double last = -2.0;
         for (int i = 0; i < g_trace_n; ++i) {
-            /* n'imprimer qu'un CHANGEMENT : une trace plate n'apprend rien */
             if (i > 0 && g_trace_period_us[i] == last) continue;
             last = g_trace_period_us[i];
             if (g_trace_period_us[i] < 0.0) {
