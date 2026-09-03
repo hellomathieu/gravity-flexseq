@@ -151,18 +151,19 @@ RESET_LATENCY_MS="${RESET_LATENCY_MS:-60}"
 # encore jouer OLD, sinon le verdict est INVALID : la bascule a eu lieu avant.
 # Leviers : PAT_PULSE_MS (defaut 8137), PAT_MIN_LATENCY_MS (defaut 30 : sous ce
 # delai la zone peut ne pas etre relue a la frontiere, verdict INVALID).
-# Ces trois courses sont HORS de la passe nominale tant que P35 n'est pas
-# implementee (lot STEP, decision d'architecture ouverte) : la course cvpattern
-# lit 3 sur le firmware de production, mesure du 2026-09-03, et la passe
-# nominale doit rester un verdict sur un etat connu. Lancer la suite P35 par :
-#   COURSES="patold patnew cvpattern" ./tools/run-trigger-probe.sh
+# Ces trois courses sont NOMINALES depuis STEP-8.7, 2026-09-03 : P35 est
+# implementee par B6 (ADR 0011), le service qui charge le tampon rafraichit le
+# cache du canal dans le bloc qui publie le chargement. Avant B6, cvpattern
+# lisait 3 onsets sur la production ; avec B6 elle lit 1, et le mutant M-B6
+# (run-mutation-probe.py, suite probe-cvpattern) la rougit a 3. La suite P35
+# seule : COURSES="patold patnew cvpattern" ./tools/run-trigger-probe.sh
 PAT_OLD=8
 PAT_NEW=15
 PAT_STEPS="0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15"
 PAT_TRIPLETS="0/7,1/7,2/7,3/7,4/7,5/7,6/7,7/7,8/7,9/7,10/7,11/7,12/7,13/7,14/7,15/7"
 PAT_PULSE_MS="${PAT_PULSE_MS:-8137}"
 PAT_MIN_LATENCY_MS="${PAT_MIN_LATENCY_MS:-30}"
-COURSES="${COURSES:-clock seq ratchet cvzero cv1length cv2length cvreset}"
+COURSES="${COURSES:-clock seq ratchet cvzero cv1length cv2length cvreset patold patnew cvpattern}"
 
 if [ -t 1 ]; then
   C_OK=$'\033[32m'; C_ERR=$'\033[31m'; C_DIM=$'\033[2m'; C_B=$'\033[1m'; C_0=$'\033[0m'; TTY=1
