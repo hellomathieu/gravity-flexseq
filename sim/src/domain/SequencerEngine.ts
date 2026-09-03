@@ -172,7 +172,7 @@ export class SequencerEngine {
     let code = RATCHET_NONE;
     if (c.mode === ChannelMode.SEQ) {
       const pattern = this.patternForChannel(ch);
-      if (pattern) code = pattern.getRatchet(c.localStep);
+      if (pattern) code = pattern.getRatchet(this.currentReadStep(ch));
     }
 
     const span = ratchetSpan(code);

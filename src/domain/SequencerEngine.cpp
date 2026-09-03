@@ -55,7 +55,7 @@ void SequencerEngine::refreshStepTiming(uint8_t channel, bool resetSubOnset) {
     if (c.mode == MODE_SEQ) {
         const Pattern* pattern = patternForChannel(channel);
         if (pattern != nullptr) {
-            code = pattern->getRatchet(c.localStep);
+            code = pattern->getRatchet(static_cast<uint8_t>(currentReadStep(channel)));
         }
     }
 
