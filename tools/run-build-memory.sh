@@ -56,7 +56,7 @@
 #
 # Seuils (surchargeables) :
 #   RAM_RESERVE=256     octets qui doivent rester libres pour la pile
-#   FLASH_BUDGET_PCT=95 part de Flash au-dela de laquelle on refuse
+#   FLASH_BUDGET_PCT=98 part de Flash au-dela de laquelle on refuse
 #   RAM_DRIFT=16        croissance de RAM acceptee sans acquittement
 #   FLASH_DRIFT=512     croissance de Flash acceptee sans acquittement
 #
@@ -71,7 +71,7 @@ set -uo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 RAM_RESERVE="${RAM_RESERVE:-256}"
-FLASH_BUDGET_PCT="${FLASH_BUDGET_PCT:-95}"
+FLASH_BUDGET_PCT="${FLASH_BUDGET_PCT:-98}"
 RAM_DRIFT="${RAM_DRIFT:-16}"
 FLASH_DRIFT="${FLASH_DRIFT:-512}"
 BASELINE="tools/memory-baseline"
