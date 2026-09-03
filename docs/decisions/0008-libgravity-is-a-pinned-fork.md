@@ -114,6 +114,33 @@ it from the adapter layer. Lot S2.1 established the cause on the call graph:
    course measures the step to 0.01 %;
 6. the gain is measured by a counter-build, symbol by symbol with `avr-nm`.
 
+**Seven more conditions came from the owner on 2026-09-03.** He asked one
+question: does the list prevent a regression of what already works, and of the
+original features that nobody touched? It did not. The list was about the
+computation. These seven are about the system.
+
+7. **A baseline runs before the fork changes.** The whole proof set runs on the
+   current HEAD, and the figures are kept. Without a "before", an "after" proves
+   nothing;
+8. the step duration is measured **on the pins at the bounds** of the product
+   range — 20, 120 and 200 BPM — and not at 120 alone;
+9. `run-drift-probe.sh` runs **before and after**, for the same duration. A
+   change of the timer interval is what that probe measures;
+10. **`Clock::Tempo()` returns the same displayed value.** Today it truncates a
+    float. The integer form must return the same number, on the internal path
+    and for an estimated external tempo;
+11. **the external clock path has a proof course before the change.** It had
+    none, in simulation or on hardware, when this amendment was written;
+12. the stack peak and the static RAM are measured again. Removing the float
+    changes the pressure on the registers;
+13. **the pin bump is a re-audit**, by the list this ADR already gives: the
+    characterization conform with `EXPECTED` unchanged, the four suites at the
+    same counts, the resolved tree identical to the archive of the commit, and
+    the memory measured.
+
+**And `docs/original-conformity.md` is read again.** No conformity item may
+depend on a fractional tempo.
+
 **What stays forbidden is unchanged.** The seven audited anomalies stay. A
 change that another consumer did not ask for stays forbidden. A defect that
 FlexSeq can work around from its adapter layer stays out of the fork.
