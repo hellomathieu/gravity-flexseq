@@ -11,6 +11,7 @@
 #   TRUNCATE=304          cuts the stream before the analysis
 #   MUTATE_INSTANCE=<c>   flips one byte of the instance record of channel c
 #   MUTATE_TEMPLATE=<i>   flips one byte of the template record i
+#   MUTATE_FIXTURE=1      copies the ratchet of the OLD fixture template into NEW
 #
 # Exit codes: 0 all green, 1 a criterion failed, 2 the harness could not run.
 
@@ -23,6 +24,7 @@ trap 'rm -rf "$WORK"' EXIT
 TRUNCATE="${TRUNCATE:-0}"
 MUTATE_INSTANCE="${MUTATE_INSTANCE:--1}"
 MUTATE_TEMPLATE="${MUTATE_TEMPLATE:--1}"
+MUTATE_FIXTURE="${MUTATE_FIXTURE:-0}"
 
 GEN="$WORK/eeprom-image"
 if ! c++ -std=gnu++11 -I"$ROOT/include" -o "$GEN" \
@@ -47,14 +49,20 @@ emit() {
 emit "$WORK/v2.bin" --mode seq --steps 0,3,4,9,15
 emit "$WORK/v3.bin" --mode seq --steps 0,3,4,9,15 --format 3
 emit "$WORK/pc3.bin" --mode seq --per-channel --format 3
+# The P35 fixture of lot STEP: OLD carries the TRIPLET at step 4, NEW does not,
+# both have step 4 active, and the six channels select OLD.
+emit "$WORK/fx3.bin" --mode seq --format 3 --selected 8 \
+     --template 8:0,4:4/7 --template 15:0,4
 
-python3 - "$WORK/v2.bin" "$WORK/v3.bin" "$WORK/pc3.bin" \
-         "$MUTATE_INSTANCE" "$MUTATE_TEMPLATE" <<'PYEOF'
+python3 - "$WORK/v2.bin" "$WORK/v3.bin" "$WORK/pc3.bin" "$WORK/fx3.bin" \
+         "$MUTATE_INSTANCE" "$MUTATE_TEMPLATE" "$MUTATE_FIXTURE" <<'PYEOF'
 import sys
 
-v2_path, v3_path, pc3_path, mutate_instance, mutate_template = sys.argv[1:6]
+(v2_path, v3_path, pc3_path, fx3_path,
+ mutate_instance, mutate_template, mutate_fixture) = sys.argv[1:8]
 mutate_instance = int(mutate_instance)
 mutate_template = int(mutate_template)
+mutate_fixture = int(mutate_fixture)
 
 # ------------------------------------------------------------------
 # Every number below is a LITERAL. Nothing here is read from FlexSeq.
@@ -93,6 +101,17 @@ INSTANCE_MASKS = [
 ]
 INSTANCE_RATCHETS = [(0, 2), (1, 3), (3, 4), (6, 6), (10, 7), (15, 2)]
 
+CHANNELS_AT = 523
+CHANNEL_RECORD = 9
+CHANNEL_COUNT = 6
+
+FIXTURE_OLD = 8
+FIXTURE_NEW = 15
+FIXTURE_STEP = 4
+FIXTURE_MASK = 0x000011
+TRIPLET = 7
+NONE = 0
+
 passed = 0
 failed = 0
 
@@ -123,6 +142,13 @@ def ratchet_at(record, step):
 v2 = read(v2_path)
 v3 = read(v3_path)
 pc3 = read(pc3_path)
+fx3 = read(fx3_path)
+
+if mutate_fixture and len(fx3) == V3_SIZE:
+    src = TEMPLATES_AT + FIXTURE_OLD * TEMPLATE_RECORD + STEP_BYTES + FIXTURE_STEP // 2
+    dst = TEMPLATES_AT + FIXTURE_NEW * TEMPLATE_RECORD + STEP_BYTES + FIXTURE_STEP // 2
+    fx3[dst] = fx3[src]
+    print("  levier : fixture, ratchet de OLD copie dans NEW, octet %d -> %d" % (src, dst))
 
 if mutate_template >= 0 and len(pc3) > TEMPLATES_AT + mutate_template * TEMPLATE_RECORD:
     at = TEMPLATES_AT + mutate_template * TEMPLATE_RECORD
@@ -148,7 +174,8 @@ if len(v2) > 0 and v2[0] == V2_VERSION:
 else:
     bad("version du format 2", "octet 0 = %s" % (v2[0] if v2 else "absent"))
 
-for label, image in (("format 3", v3), ("format 3 --per-channel", pc3)):
+for label, image in (("format 3", v3), ("format 3 --per-channel", pc3),
+                     ("format 3 fixture P35", fx3)):
     if len(image) == V3_SIZE:
         ok("longueur du %s" % label, "%d octets" % len(image))
     else:
@@ -239,6 +266,61 @@ if wrong_inst_canonical:
     bad("bits 36 a 39 des instances", "canal %d les porte" % wrong_inst_canonical[0])
 else:
     ok("bits 36 a 39 des instances", "canoniques a zero sur les six")
+
+# --- la fixture P35 : deux templates, meme step actif, ratchets differents ---
+def template_record(image, index):
+    at = TEMPLATES_AT + index * TEMPLATE_RECORD
+    return image[at:at + TEMPLATE_RECORD]
+
+old = template_record(fx3, FIXTURE_OLD)
+new = template_record(fx3, FIXTURE_NEW)
+
+if old[CONTENT_BYTES] == FACTORY_LENGTH and new[CONTENT_BYTES] == FACTORY_LENGTH:
+    ok("fixture : longueurs", "OLD et NEW valent %d" % FACTORY_LENGTH)
+else:
+    bad("fixture : longueurs", "OLD %d, NEW %d" % (old[CONTENT_BYTES], new[CONTENT_BYTES]))
+
+if step_mask(old) == FIXTURE_MASK and step_mask(new) == FIXTURE_MASK:
+    ok("fixture : meme contenu", "steps 0 et %d actifs des deux cotes" % FIXTURE_STEP)
+else:
+    bad("fixture : meme contenu", "OLD %06x, NEW %06x" % (step_mask(old), step_mask(new)))
+
+old_r = ratchet_at(old, FIXTURE_STEP)
+new_r = ratchet_at(new, FIXTURE_STEP)
+if old_r == TRIPLET:
+    ok("fixture : ratchet de OLD", "TRIPLET (%d) au step %d" % (TRIPLET, FIXTURE_STEP))
+else:
+    bad("fixture : ratchet de OLD", "%d au lieu de %d" % (old_r, TRIPLET))
+if new_r == NONE:
+    ok("fixture : ratchet de NEW", "NONE au step %d" % FIXTURE_STEP)
+else:
+    bad("fixture : ratchet de NEW", "%d au lieu de %d" % (new_r, NONE))
+
+if old != new and old[:STEP_BYTES] == new[:STEP_BYTES]:
+    ok("fixture : OLD != NEW", "par les ratchets seulement")
+else:
+    bad("fixture : OLD != NEW", "identiques" if old == new else "les steps different aussi")
+
+untouched = [i for i in range(TEMPLATE_COUNT) if i not in (FIXTURE_OLD, FIXTURE_NEW)
+             and template_record(fx3, i) != template_record(pc3, i)]
+if untouched:
+    bad("fixture : templates d usine", "template %d modifie" % untouched[0])
+else:
+    ok("fixture : templates d usine", "les 14 autres records identiques a l usine")
+
+selected = [fx3[CHANNELS_AT + c * CHANNEL_RECORD] for c in range(CHANNEL_COUNT)]
+if all(sel == FIXTURE_OLD for sel in selected):
+    ok("fixture : --selected", "les six canaux selectionnent %d" % FIXTURE_OLD)
+else:
+    bad("fixture : --selected", "octets 0 des records de canal : %s" % selected)
+
+instances_empty = all(step_mask(fx3[INSTANCES_AT + c * INSTANCE_RECORD:
+                                    INSTANCES_AT + (c + 1) * INSTANCE_RECORD]) == 0
+                      for c in range(INSTANCE_COUNT))
+if instances_empty:
+    ok("fixture : instances vides", "la banque, pas le template : un canal non module se tait")
+else:
+    bad("fixture : instances vides", "une instance porte du contenu")
 
 # --- l image sans --per-channel ne porte pas les marqueurs ----------
 plain_carries_marker = []
