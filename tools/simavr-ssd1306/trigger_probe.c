@@ -117,6 +117,20 @@ typedef struct {
 
 static line_t g_lines[LINE_COUNT];
 static double g_play_ms = 0.0;
+
+/* Lot XCLK : l'horloge EXTERNE, injectee sur PD2 (EXT_PIN vaut 2). libGravity
+ * y attache une interruption sur FRONT MONTANT, donc un creneau carre produit
+ * exactement un front par periode, quel que soit le niveau de repos de la
+ * broche. La sonde pilote les deux niveaux elle-meme, donc elle ne depend
+ * d'aucun pull-up.
+ *
+ * PLAY reste presse : il est INERTE hors horloge interne, et le firmware
+ * demarre le transport a la premiere impulsion externe
+ * (src/hal/TransportAdapter.cpp, fidele a Gravity.ino:321-322). */
+static long g_ext_period_us;      /* 0 = pas d'injection */
+static long g_ext_pulse_us = 1000;
+static double g_ext_start_ms;
+static long g_ext_edges;          /* fronts montants REELLEMENT injectes */
 static avr_t *g_avr;
 
 static double us(uint64_t cycles) { return (double)cycles * 1e6 / (double)F_CPU_HZ; }
@@ -245,6 +259,22 @@ int main(int argc, char **argv)
         if (w != NULL) g_pulse_width_ms = atof(w);
     }
 
+    const char *ext_env = getenv("EXT_PERIOD_US");
+    if (ext_env != NULL && atol(ext_env) > 0) {
+        g_ext_period_us = atol(ext_env);
+        const char *w = getenv("EXT_PULSE_US");
+        if (w != NULL && atol(w) > 0) g_ext_pulse_us = atol(w);
+        const char *at = getenv("EXT_START_MS");
+        if (at != NULL) g_ext_start_ms = atof(at);
+        if (g_ext_pulse_us >= g_ext_period_us) {
+            fprintf(stderr, "EXT_PULSE_US (%ld) doit rester sous EXT_PERIOD_US "
+                            "(%ld) : sinon la broche ne redescend jamais et "
+                            "aucun front montant ne part.\n",
+                    g_ext_pulse_us, g_ext_period_us);
+            return 2;
+        }
+    }
+
     if (!ee_path) {
         fprintf(stderr, "image EEPROM requise : sans elle le mode et le contenu du "
                         "pattern ne peuvent pas atteindre le firmware.\n");
@@ -337,6 +367,26 @@ int main(int argc, char **argv)
     if (!play) { fprintf(stderr, "broche PLAY introuvable\n"); return 1; }
     int play_state = 2;  /* ni 0 ni 1 : force la premiere ecriture */
 
+    avr_irq_t *ext = NULL;
+    uint64_t ext_from = 0, ext_period_cy = 0, ext_pulse_cy = 0;
+    int ext_state = 0;
+    if (g_ext_period_us > 0) {
+        ext = avr_io_getirq(avr, AVR_IOCTL_IOPORT_GETIRQ('D'), 2);
+        if (!ext) { fprintf(stderr, "broche EXT introuvable\n"); return 1; }
+        ext_from = (uint64_t)(g_ext_start_ms * 1e-3 * (double)F_CPU_HZ);
+        ext_period_cy = (uint64_t)((double)g_ext_period_us * 1e-6 * (double)F_CPU_HZ);
+        ext_pulse_cy = (uint64_t)((double)g_ext_pulse_us * 1e-6 * (double)F_CPU_HZ);
+        if (ext_period_cy == 0 || ext_pulse_cy == 0) {
+            fprintf(stderr, "periode externe trop courte pour la resolution du "
+                            "cycle : %ld us\n", g_ext_period_us);
+            return 2;
+        }
+        avr_raise_irq(ext, 0);
+        printf("  horloge EXTERNE : PD2, periode %ld us, impulsion %ld us, "
+               "depart %.1f ms\n",
+               g_ext_period_us, g_ext_pulse_us, g_ext_start_ms);
+    }
+
     while (avr->cycle < target) {
         const int want = (avr->cycle >= play_down && avr->cycle < play_up) ? 0 : 1;
         if (want != play_state) {
@@ -347,6 +397,15 @@ int main(int argc, char **argv)
             g_cv_mv[g_pulse_idx] =
                 (avr->cycle >= pulse_from && avr->cycle < pulse_to)
                     ? g_pulse_mv : g_pulse_base;
+        }
+        if (ext != NULL && avr->cycle >= ext_from) {
+            const uint64_t phase = (avr->cycle - ext_from) % ext_period_cy;
+            const int level = (phase < ext_pulse_cy) ? 1 : 0;
+            if (level != ext_state) {
+                ext_state = level;
+                avr_raise_irq(ext, level);
+                if (level == 1) ++g_ext_edges;
+            }
         }
         int state = avr_run(avr);
         if (state == cpu_Done || state == cpu_Crashed) {
@@ -608,5 +667,9 @@ int main(int argc, char **argv)
            step_measured, BPM, mode,
            ref->nrise > 0 ? ms(ref->rise[0]) : -1.0, g_play_ms);
     printf("RESET reset_ms=%.1f\n", g_pulse_mv > 0 ? g_pulse_at_ms : -1.0);
+    printf("EXTCLK ext_period_us=%ld ext_pulse_us=%ld ext_start_ms=%.1f "
+           "ext_edges=%ld\n",
+           g_ext_period_us, g_ext_period_us > 0 ? g_ext_pulse_us : 0L,
+           g_ext_period_us > 0 ? g_ext_start_ms : -1.0, g_ext_edges);
     return 0;
 }
