@@ -226,7 +226,11 @@ int main(int argc, char **argv)
      * de front bruts ; le script compte les onsets du step ou l'index PATTERN
      * change, et rien d'autre n'est suppose. */
     const int cvpattern = strcmp(mode, "cvpattern") == 0;
-    const int raw_edges = cvreset || cvpattern;
+    /* Course CVSTEP : six instances distinctes et CV1 -> STEP. Le harnais emet
+     * les temps de front bruts des SIX sorties ; le script compare chaque flux
+     * a son horaire litteral, a phase connue par l'onset arme de PLAY. */
+    const int cvstep = strcmp(mode, "cvstep") == 0;
+    const int raw_edges = cvreset || cvpattern || cvstep;
 
     setvbuf(stdout, NULL, _IONBF, 0);
 
@@ -411,6 +415,9 @@ int main(int argc, char **argv)
     } else if (cvpattern) {
         printf("  fixture P35 : les temps bruts suivent, et le script compte les\n"
                "  onsets du step ou l'index PATTERN change.\n");
+    } else if (cvstep) {
+        printf("  six instances, CV1 -> STEP : les temps bruts des six sorties\n"
+               "  suivent, et le script tient un horaire litteral par sortie.\n");
     } else if (seq) {
         printf("  ecarts attendus (steps) :");
         for (int i = 0; i < nexp; ++i) printf(" %d", exp_gaps[i]);
@@ -428,6 +435,14 @@ int main(int argc, char **argv)
         printf("EDGES");
         for (int r = 0; r < ref->nrise; ++r) printf(" %.2f", ms(ref->rise[r]));
         printf("\n");
+        if (cvstep) {
+            for (int i = 0; i < OUT_COUNT; ++i) {
+                printf("EDGES%d", i + 1);
+                for (int r = 0; r < g_lines[i].nrise; ++r)
+                    printf(" %.2f", ms(g_lines[i].rise[r]));
+                printf("\n");
+            }
+        }
     } else if (ref->nrise >= 3) {
         /* DROP=<n> ignore un front sur n : deux steps se fondent en un seul
          * ecart, le train cesse d'etre conforme et le critere doit rougir. Sans
@@ -527,6 +542,8 @@ int main(int argc, char **argv)
         printf("  sans objet : la grille se re-origine au front injecte\n");
     } else if (cvpattern) {
         printf("  sans objet : la fixture etire les steps par le TRIPLET\n");
+    } else if (cvstep) {
+        printf("  sans objet : chaque sortie tient son propre horaire\n");
     } else if (ref->nrise >= 3) {
         static double jit[MAX_EDGES];
         int nj = 0;

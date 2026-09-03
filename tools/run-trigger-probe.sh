@@ -163,7 +163,25 @@ PAT_STEPS="0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15"
 PAT_TRIPLETS="0/7,1/7,2/7,3/7,4/7,5/7,6/7,7/7,8/7,9/7,10/7,11/7,12/7,13/7,14/7,15/7"
 PAT_PULSE_MS="${PAT_PULSE_MS:-8137}"
 PAT_MIN_LATENCY_MS="${PAT_MIN_LATENCY_MS:-30}"
-COURSES="${COURSES:-clock seq ratchet cvzero cv1length cv2length cvreset patold patnew cvpattern}"
+# Course CVSTEP (STEP-12, 2026-09-03) : la consommation PHYSIQUE de STEP sur les
+# six sorties. Six INSTANCES distinctes (--instance du generateur, ce que le canal
+# joue sans routage PATTERN), longueur 16, aucun ratchet, CV1 -> STEP tenu a
+# CV_NOMINAL_MV : zone +10 des la premiere frontiere. L'oracle est a PHASE CONNUE :
+# l'onset arme de PLAY (D79) fixe n = 0, lu au step 0 a zone NULLE ; la frontiere
+# n >= 1 porte un onset ssi (n mod 16) est dans l'HORAIRE LITTERAL de la sortie.
+# Les horaires sont derives UNE FOIS a la main (WORKPLAN 12.1) : le harnais ne
+# recopie ni readStepFor(), ni le quantizer, ni le decalage. STEP_EXPECTED_OFFSET
+# choisit la table : 10 (nominal) ou 0 (CP1). CVSTEP_SWAP=a:b echange les tables
+# de deux sorties (CP4). Aucun critere ne porte sur le nombre global de fronts.
+CVSTEP_INSTANCES="--instance 0:0,3,4,9,15 --instance 1:1,2,7,12 --instance 2:0,5,6,11,13 --instance 3:2,8,9,10 --instance 4:4,7,14 --instance 5:1,6,12,13,15"
+CVSTEP_TABLE_0="0,3,4,9,15;1,2,7,12;0,5,6,11,13;2,8,9,10;4,7,14;1,6,12,13,15"
+CVSTEP_TABLE_10="5,6,9,10,15;2,7,8,13;1,3,6,11,12;0,8,14,15;4,10,13;2,3,5,7,12"
+CVSTEP_STEP0="1;0;1;0;0;0"
+STEP_EXPECTED_OFFSET="${STEP_EXPECTED_OFFSET:-10}"
+CVSTEP_SWAP="${CVSTEP_SWAP:-}"
+CVSTEP_TOL_MS="${CVSTEP_TOL_MS:-25}"
+# cvstep est NOMINALE depuis STEP-12.4, 2026-09-03 : onze courses.
+COURSES="${COURSES:-clock seq ratchet cvzero cv1length cv2length cvreset patold patnew cvpattern cvstep}"
 
 if [ -t 1 ]; then
   C_OK=$'\033[32m'; C_ERR=$'\033[31m'; C_DIM=$'\033[2m'; C_B=$'\033[1m'; C_0=$'\033[0m'; TTY=1
@@ -250,6 +268,8 @@ for MODE in $COURSES; do
       GEN_ARGS="--mode seq --cv-target ${CV_TARGET_FORCED:-1:1} --selected $PAT_OLD" ;;
     patnew)
       GEN_ARGS="--mode seq --cv-target ${CV_TARGET_FORCED:-1:1} --selected $PAT_NEW" ;;
+    cvstep)
+      GEN_ARGS="--mode seq --cv-target ${CV_TARGET_FORCED:-1:4} $CVSTEP_INSTANCES" ;;
   esac
   case "$MODE" in
     patold|patnew|cvpattern)
@@ -300,6 +320,8 @@ for MODE in $COURSES; do
       PROBE_MODE="cvreset"; PROBE_CV="$CV_ZERO_MV $CV_ZERO_MV" ;;
     patold|patnew|cvpattern)
       PROBE_MODE="cvpattern"; PROBE_CV="$CV_ZERO_MV $CV_ZERO_MV" ;;
+    cvstep)
+      PROBE_MODE="cvstep"; PROBE_CV="$CV_NOMINAL_MV $CV_ZERO_MV" ;;
   esac
   COURSE_NAME="$MODE"
   PROBE_ENV=""
@@ -333,6 +355,8 @@ for MODE in $COURSES; do
     RATCHET_CODE="$RATCHET_CODE" EXPECTED_LENGTH="$EXPECTED_LENGTH" \
     RESET_PULSE_MS="$RESET_PULSE_MS" RESET_LATENCY_MS="$RESET_LATENCY_MS" \
     PAT_COURSE="$COURSE_NAME" PAT_PULSE_MS="$PAT_PULSE_MS" PAT_MIN_LATENCY_MS="$PAT_MIN_LATENCY_MS" \
+    CVSTEP_TABLE_0="$CVSTEP_TABLE_0" CVSTEP_TABLE_10="$CVSTEP_TABLE_10" CVSTEP_STEP0="$CVSTEP_STEP0" \
+    STEP_EXPECTED_OFFSET="$STEP_EXPECTED_OFFSET" CVSTEP_SWAP="$CVSTEP_SWAP" CVSTEP_TOL_MS="$CVSTEP_TOL_MS" \
     python3 - "$LOG" <<'PY'
 import os, re, sys
 
@@ -346,8 +370,9 @@ seq = mode == "seq"
 ratchet = mode == "ratchet"
 cvreset = mode == "cvreset"
 cvpattern = mode == "cvpattern"
+cvstep = mode == "cvstep"
 pat_course = os.environ["PAT_COURSE"]
-raw_edges = cvreset or cvpattern
+raw_edges = cvreset or cvpattern or cvstep
 step_tol = float(os.environ["STEP_TOLERANCE_PCT"])
 
 m = re.search(r"RESULTAT (.*)", txt)
@@ -508,6 +533,59 @@ if cvpattern:
         pat_switch_ok = pat_count == 1 and pat_new_ok and not pat_invalid
         pattern_ok = pat_switch_ok
 
+# Course CVSTEP : six horaires litteraux, un critere par sortie, puis six flux
+# distincts. n = 0 est l'onset arme (D79), lu au step 0 a zone nulle ; n >= 1 suit
+# la table choisie par STEP_EXPECTED_OFFSET. Aucun front hors horaire n'est tolere.
+cvstep_rows = []
+cvstep_ok = False
+cvstep_distinct = False
+cvstep_anchor = -1.0
+if cvstep:
+    tables = {"0": os.environ["CVSTEP_TABLE_0"], "10": os.environ["CVSTEP_TABLE_10"]}
+    key = os.environ["STEP_EXPECTED_OFFSET"]
+    if key not in tables:
+        print(f"  {mark(False)} STEP_EXPECTED_OFFSET={key} : aucune table litterale pour cette valeur")
+        sys.exit(2)
+    table = [set(int(x) for x in part.split(",")) for part in tables[key].split(";")]
+    step0 = [part == "1" for part in os.environ["CVSTEP_STEP0"].split(";")]
+    swap = os.environ.get("CVSTEP_SWAP", "")
+    if swap:
+        a, b = (int(x) - 1 for x in swap.split(":"))
+        table[a], table[b] = table[b], table[a]
+        step0[a], step0[b] = step0[b], step0[a]
+    tol = float(os.environ["CVSTEP_TOL_MS"])
+    edges_by_out = []
+    for i in range(1, 7):
+        m_i = re.search(r"^EDGES%d((?:\s+\d+\.\d+)*)$" % i, txt, re.M)
+        edges_by_out.append([float(x) for x in m_i.group(1).split()] if m_i else [])
+    early = [e for es in edges_by_out for e in es if play_ms < e <= play_ms + 60.0]
+    if early:
+        cvstep_anchor = min(early)
+        t_end = max((es[-1] for es in edges_by_out if es), default=cvstep_anchor)
+        n_max = int((t_end - cvstep_anchor) / step_ms) - 1
+        observed_sets = []
+        all_ok = True
+        for i, es in enumerate(edges_by_out):
+            observed, extra = set(), 0
+            for e in es:
+                n = int(round((e - cvstep_anchor) / step_ms))
+                if n < 0 or n > n_max or abs(e - cvstep_anchor - n * step_ms) > tol:
+                    if n <= n_max:
+                        extra += 1
+                    continue
+                observed.add(n)
+            expected = set(n for n in range(1, n_max + 1) if (n % 16) in table[i])
+            if step0[i]:
+                expected.add(0)
+            ok_i = observed == expected and extra == 0
+            all_ok = all_ok and ok_i
+            observed_sets.append(frozenset(observed))
+            cvstep_rows.append((i + 1, ok_i, len(observed & expected), len(expected),
+                                len(observed - expected) + extra, sorted(expected - observed)[:4]))
+        cvstep_distinct = len(set(observed_sets)) == 6
+        cvstep_ok = all_ok and cvstep_distinct and n_max >= 32
+    pattern_ok = cvstep_ok
+
 jit_pct = 100.0 * jit_max / step_ms if step_ms else 0.0
 jit_ok = jit_pct <= budget_pct if not (ratchet or raw_edges) else True
 step_measured = float(kv.get("step_mesure", "0"))
@@ -524,6 +602,7 @@ title = ("RATCHET — les sous-declenchements atteignent les broches" if ratchet
          else "PATOLD — la fixture OLD joue ses triolets" if pat_course == "patold"
          else "PATNEW — la fixture NEW joue un onset par step" if pat_course == "patnew"
          else "CVPATTERN — P35 au step ou l'index PATTERN change" if cvpattern
+         else "CVSTEP — STEP consomme sur les six sorties" if cvstep
          else "SEQ — le motif est joue" if seq else "CLOCK — le motif est ignore")
 print(f"{B}====== FONCTION MUSICALE : {title} ======{Z}")
 print(f"  {mark(all_lines)} Sorties actives    {lines_on}/{lines_exp}   "
@@ -550,6 +629,16 @@ elif pat_course == "patold":
 elif pat_course == "patnew":
     print(f"  {mark(pat_new_ok)} Un onset par step  {len(pat_classes)} ecarts {pat_classes[:24]}   "
           f"{DIM}— S = 1 step, NEW sans ratchet{Z}")
+elif cvstep:
+    if cvstep_anchor < 0:
+        print(f"  {mark(False)} Ancrage D79        aucun front dans les 60 ms apres PLAY : "
+              f"l'horaire n'a pas d'origine")
+    for out, ok_i, hit, exp, wrong, missing in cvstep_rows:
+        print(f"  {mark(ok_i)} OUT{out} horaire      {hit}/{exp} onsets a l'heure, {wrong} hors horaire"
+              + (f"   {DIM}manquants n={missing}{Z}" if missing else "")
+              + (f"   {DIM}— table +{os.environ['STEP_EXPECTED_OFFSET']}, n=0 = onset arme{Z}" if out == 1 else ""))
+    print(f"  {mark(cvstep_distinct)} Six flux distincts "
+          f"{DIM}— une duplication ou une permutation de sortie se voit ici{Z}")
 elif cvpattern:
     print(f"  {mark(pat_old_ok)} OLD avant          "
           f"{DIM}— triolets jusqu'a l'impulsion a {os.environ['PAT_PULSE_MS']} ms{Z}")
@@ -569,8 +658,9 @@ else:
           f"{DIM}— un par step, a 5 % de la mediane ; le motif charge est ignore{Z}")
 print(f"  {mark(silent_before_play)} Silence au demarrage  premier front a {first_ms:.0f} ms   "
       f"{DIM}— PLAY relache a {play_ms:.0f} ms ; le module demarre a l arret{Z}")
-print(f"  {mark(same and coincident)} Six lignes en phase "
-      f"{'meme compte, fronts < 200 us' if (same and coincident) else 'DESACCORD'}")
+if not cvstep:
+    print(f"  {mark(same and coincident)} Six lignes en phase "
+          f"{'meme compte, fronts < 200 us' if (same and coincident) else 'DESACCORD'}")
 if not ratchet and not raw_edges:
     print(f"  {mark(step_ok)} Tempo applique     {step_measured:.2f} ms par step   "
           f"{DIM}— attendu {step_ms:.2f} ms a {bpm} BPM ; ecart {step_err_pct:.2f} %"
@@ -595,7 +685,8 @@ if pulse_line == 0:
     print(f"  {DIM}PULSE reste muet : main.cpp ne pilote pas gravity.pulse. Observation,")
     print(f"  non defaut — l'expandeur MIDI n'est pas encore dans le chemin.{Z}")
 
-ok = (all_lines and pattern_ok and same and coincident and jit_ok and duty_ok
+phase_ok = True if cvstep else (same and coincident)
+ok = (all_lines and pattern_ok and phase_ok and jit_ok and duty_ok
       and step_ok and silent_before_play)
 if ok:
     if cvreset:
@@ -608,6 +699,9 @@ if ok:
               f"exactement {diff} impulsions en {occurrences} passages.")
         print(f"  {DIM}Le chemin ratchet -> sous-declenchement -> broche est exerce. Aucun{Z}")
         print(f"  {DIM}binaire ne l'avait jamais montre.{Z}")
+    elif cvstep:
+        print(f"\n  Les six sorties jouent chacune leur instance, lue au step decale par le CV STEP.")
+        print(f"  {DIM}Le chemin CV -> zone STEP -> readStep -> contenu -> broche est exerce sur les six.{Z}")
     elif cvpattern and pat_course == "cvpattern":
         print(f"\n  Au step ou l'index PATTERN change, le contenu et le ratchet viennent "
               f"du meme template.")
