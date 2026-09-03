@@ -131,6 +131,7 @@ static long g_ext_period_us;      /* 0 = pas d'injection */
 static long g_ext_pulse_us = 1000;
 static double g_ext_start_ms;
 static long g_ext_edges;          /* fronts montants REELLEMENT injectes */
+static uint8_t g_ext_pin = 2;     /* EXT_PIN vaut 2 ; le levier le deplace */
 
 /* Lot XCLK.3 : le TEMOIN du timer. uClock programme OCR1A et le prediviseur de
  * TCCR1B a chaque changement de tempo (uClock/platforms/avr.h, setTimer). La
@@ -273,7 +274,12 @@ int main(int argc, char **argv)
      * les temps de front bruts des SIX sorties ; le script compare chaque flux
      * a son horaire litteral, a phase connue par l'onset arme de PLAY. */
     const int cvstep = strcmp(mode, "cvstep") == 0;
-    const int raw_edges = cvreset || cvpattern || cvstep;
+    /* Course EXTCLOCK (lot XCLK) : les fronts BRUTS, parce que la fenetre de
+     * mesure s'ouvre apres le gel du defaut 12 et apres la convergence de la
+     * PLL. C'est le script qui connait ces deux durees, donc c'est lui qui
+     * filtre. */
+    const int extclock = strcmp(mode, "extclock") == 0;
+    const int raw_edges = cvreset || cvpattern || cvstep || extclock;
 
     setvbuf(stdout, NULL, _IONBF, 0);
 
@@ -298,6 +304,18 @@ int main(int argc, char **argv)
         if (w != NULL && atol(w) > 0) g_ext_pulse_us = atol(w);
         const char *at = getenv("EXT_START_MS");
         if (at != NULL) g_ext_start_ms = atof(at);
+        /* Contre-epreuve : injecter sur une AUTRE broche que PD2. Le firmware ne
+         * recoit alors aucune horloge, et PLAY etant inerte hors horloge interne
+         * il ne demarre pas : la mesure devient non evaluable, pas fausse. */
+        const char *pin = getenv("EXT_PIN");
+        if (pin != NULL) {
+            const int want = atoi(pin);
+            if (want < 0 || want > 7) {
+                fprintf(stderr, "EXT_PIN accepte 0 a 7 (port D) — recu %s\n", pin);
+                return 2;
+            }
+            g_ext_pin = (uint8_t)want;
+        }
         if (g_ext_pulse_us >= g_ext_period_us) {
             fprintf(stderr, "EXT_PULSE_US (%ld) doit rester sous EXT_PERIOD_US "
                             "(%ld) : sinon la broche ne redescend jamais et "
@@ -403,7 +421,7 @@ int main(int argc, char **argv)
     uint64_t ext_from = 0, ext_period_cy = 0, ext_pulse_cy = 0;
     int ext_state = 0;
     if (g_ext_period_us > 0) {
-        ext = avr_io_getirq(avr, AVR_IOCTL_IOPORT_GETIRQ('D'), 2);
+        ext = avr_io_getirq(avr, AVR_IOCTL_IOPORT_GETIRQ('D'), g_ext_pin);
         if (!ext) { fprintf(stderr, "broche EXT introuvable\n"); return 1; }
         ext_from = (uint64_t)(g_ext_start_ms * 1e-3 * (double)F_CPU_HZ);
         ext_period_cy = (uint64_t)((double)g_ext_period_us * 1e-6 * (double)F_CPU_HZ);
@@ -414,9 +432,9 @@ int main(int argc, char **argv)
             return 2;
         }
         avr_raise_irq(ext, 0);
-        printf("  horloge EXTERNE : PD2, periode %ld us, impulsion %ld us, "
+        printf("  horloge EXTERNE : PD%u, periode %ld us, impulsion %ld us, "
                "depart %.1f ms\n",
-               g_ext_period_us, g_ext_pulse_us, g_ext_start_ms);
+               g_ext_pin, g_ext_period_us, g_ext_pulse_us, g_ext_start_ms);
     }
 
     while (avr->cycle < target) {
@@ -729,6 +747,10 @@ int main(int argc, char **argv)
             }
         }
         printf("  %d echantillon(s), %.1f ms d'intervalle\n", g_trace_n, g_trace_ms);
+        printf("TRACE");
+        for (int i = 0; i < g_trace_n; ++i)
+            printf(" %.1f:%.1f", g_trace_at[i], g_trace_period_us[i]);
+        printf("\n");
     }
     printf("EXTCLK ext_period_us=%ld ext_pulse_us=%ld ext_start_ms=%.1f "
            "ext_edges=%ld\n",

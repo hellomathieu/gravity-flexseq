@@ -196,15 +196,33 @@ CVSTEP_TOL_MS="${CVSTEP_TOL_MS:-25}"
 # 0,1 %. EXT_DISCARD porte ce nombre, et sa valeur par defaut est 31.
 EXT_PPQN="${EXT_PPQN:-24}"
 EXT_DISCARD="${EXT_DISCARD:-31}"
-EXT_MEASURE="${EXT_MEASURE:-40}"
+# ⚠️ LA FENETRE DE MESURE SE COMPTE EN PAS, PAS EN IMPULSIONS. Une impulsion
+# d'entree vaut 96 / ppqn ticks de sortie, donc un pas de /1 vaut ppqn
+# impulsions : a PPQN 24, quarante impulsions ne font que 1,7 pas, et aucun
+# critere de train ne tient sur 1,7 pas. EXT_DISCARD reste en impulsions, lui,
+# parce que la PLL de uClock converge PAR IMPULSION.
+EXT_MEASURE_STEPS="${EXT_MEASURE_STEPS:-20}"
 EXT_START_MS="${EXT_START_MS:-300}"
 EXT_PULSE_US="${EXT_PULSE_US:-1000}"
 # EXT_TRACE_MS pose le TEMOIN DU TIMER : la sonde lit OCR1A et le prediviseur
 # de TCCR1B, donc la periode que le timer applique VRAIMENT, et n imprime que
 # les changements. 0 le desactive.
 EXT_TRACE_MS="${EXT_TRACE_MS:-0}"
+# CONTRE-EPREUVES de la course. EXT_EXPECT_PERIOD_US decouple l ATTENDU de
+# l INJECTE : sans ce levier, une seule variable nourrit les deux cotes et la
+# course confirmerait son hypothese. EXT_PIN_FORCE injecte sur une autre broche,
+# donc le firmware ne recoit aucune horloge et la mesure devient non evaluable.
+EXT_EXPECT_PERIOD_US="${EXT_EXPECT_PERIOD_US:-}"
+EXT_PIN_FORCE="${EXT_PIN_FORCE:-}"
+# La borne de C3 est DERIVEE de PHASE_FACTOR, 16 >> 8, donc 6,25 %. La surcharge
+# existe pour la contre-epreuve, comme JITTER_BUDGET_PCT sur les autres courses.
+EXT_C3_BOUND_PCT="${EXT_C3_BOUND_PCT:-}"
 # cvstep est NOMINALE depuis STEP-12.4, 2026-09-03 : onze courses.
-COURSES="${COURSES:-clock seq ratchet cvzero cv1length cv2length cvreset patold patnew cvpattern cvstep}"
+# extclock est NOMINALE depuis XCLK.2c, 2026-09-03, a PPQN 24 SEULEMENT : elle
+# demande 15 s a cette cadence, contre 31, 50 et 87 s a PPQN 4, 2 et 1. Ces trois
+# cadences restent a la demande — une porte trop couteuse finit par ne plus etre
+# lancee, et elle ne protege alors plus rien.
+COURSES="${COURSES:-clock seq ratchet cvzero cv1length cv2length cvreset patold patnew cvpattern cvstep extclock}"
 
 # La periode et le code de source se DERIVENT du PPQN d'entree et du tempo.
 # Rien n'est recopie : 60 000 000 / (tempo x ppqn) est la definition du PPQN.
@@ -224,7 +242,9 @@ EXT_PERIOD_US="${EXT_PERIOD_US:-$(( 60000000 / (TEMPO * EXT_PPQN) ))}"
 # soit 96 / input_ppqn. Le proprietaire a decide le 2026-09-03 de CONSIGNER ce
 # defaut sans toucher au fork : la course doit donc vivre avec.
 EXT_MIN_BPM_TICK_US=$(( 60000000 / 96 / 1 ))
-EXT_FREEZE_MS=$(( (96 / EXT_PPQN) * EXT_MIN_BPM_TICK_US / 1000 ))
+# ⚠️ Surchargeable, et c'est la CONTRE-EPREUVE de C5 : EXT_FREEZE_MS=0 ouvre la
+# fenetre pendant le gel, donc le temoin doit y voir le tick de 625 ms et rougir.
+EXT_FREEZE_MS="${EXT_FREEZE_MS:-$(( (96 / EXT_PPQN) * EXT_MIN_BPM_TICK_US / 1000 ))}"
 
 if [ -t 1 ]; then
   C_OK=$'\033[32m'; C_ERR=$'\033[31m'; C_DIM=$'\033[2m'; C_B=$'\033[1m'; C_0=$'\033[0m'; TTY=1
@@ -282,11 +302,13 @@ flexseq_report_active_format "$C_OK" "$C_DIM" "$C_0"
 case " $COURSES " in
   *" extclock "*)
     [ -n "$EXT_SOURCE_CODE" ] || die "EXT_PPQN accepte 24, 4, 2 ou 1 — recu '$EXT_PPQN'." 2
+    EXT_STEP_MS=$(( EXT_PERIOD_US * EXT_PPQN / 1000 ))
     EXT_NEEDED_MS=$(( EXT_START_MS + EXT_FREEZE_MS \
-                      + (EXT_DISCARD + EXT_MEASURE) * EXT_PERIOD_US / 1000 ))
+                      + EXT_DISCARD * EXT_PERIOD_US / 1000 \
+                      + EXT_MEASURE_STEPS * EXT_STEP_MS ))
     EXT_NEEDED_S=$(( (EXT_NEEDED_MS + 1999) / 1000 ))
     if [ "$DURATION" -lt "$EXT_NEEDED_S" ]; then
-      die "extclock a PPQN $EXT_PPQN demande DURATION >= $EXT_NEEDED_S s : gel de $EXT_FREEZE_MS ms (defaut 12), puis $EXT_DISCARD impulsions jetees et $EXT_MEASURE mesurees a $EXT_PERIOD_US us, depart $EXT_START_MS ms. DURATION vaut $DURATION." 2
+      die "extclock a PPQN $EXT_PPQN demande DURATION >= $EXT_NEEDED_S s : gel de $EXT_FREEZE_MS ms (defaut 12), puis $EXT_DISCARD impulsions jetees et $EXT_MEASURE_STEPS pas mesures de $EXT_STEP_MS ms, depart $EXT_START_MS ms. DURATION vaut $DURATION." 2
     fi
     printf '  %s✅%s garde extclock         %sPPQN %s, source %s, periode %s us, gel %s ms, DURATION %s s >= %s s%s\n' \
       "$C_OK" "$C_0" "$C_DIM" "$EXT_PPQN" "$EXT_SOURCE_CODE" "$EXT_PERIOD_US" \
@@ -392,8 +414,12 @@ for MODE in $COURSES; do
     PROBE_ENV="RESET_PULSE_MV=$RESET_PULSE_MV RESET_PULSE_MS=$RESET_PULSE_MS RESET_PULSE_SOURCE=$RESET_PULSE_SOURCE"
   fi
   if [ "$MODE" = "extclock" ]; then
-    PROBE_MODE="seq"
+    PROBE_MODE="extclock"
+    # Le temoin est OBLIGATOIRE pour cette course : C5 le lit. On borne le
+    # nombre d'echantillons pour rester sous la capacite du harnais.
+    [ "$EXT_TRACE_MS" = "0" ] && EXT_TRACE_MS=$(( DURATION * 1000 / 400 + 1 ))
     PROBE_ENV="EXT_PERIOD_US=$EXT_PERIOD_US EXT_PULSE_US=$EXT_PULSE_US EXT_START_MS=$EXT_START_MS EXT_TRACE_MS=$EXT_TRACE_MS"
+    [ -n "$EXT_PIN_FORCE" ] && PROBE_ENV="$PROBE_ENV EXT_PIN=$EXT_PIN_FORCE"
   fi
   if [ "$MODE" = "cvpattern" ]; then
     # Le CV monte et RESTE haut : la largeur depasse la duree de la course.
@@ -425,7 +451,9 @@ for MODE in $COURSES; do
     CVSTEP_TABLE_0="$CVSTEP_TABLE_0" CVSTEP_TABLE_10="$CVSTEP_TABLE_10" CVSTEP_STEP0="$CVSTEP_STEP0" \
     STEP_EXPECTED_OFFSET="$STEP_EXPECTED_OFFSET" CVSTEP_SWAP="$CVSTEP_SWAP" CVSTEP_TOL_MS="$CVSTEP_TOL_MS" \
     EXT_PPQN="$EXT_PPQN" EXT_PERIOD_US="$EXT_PERIOD_US" EXT_DISCARD="$EXT_DISCARD" \
-    EXT_MEASURE="$EXT_MEASURE" TEMPO="$TEMPO" EXT_FREEZE_MS="$EXT_FREEZE_MS" \
+    EXT_MEASURE_STEPS="$EXT_MEASURE_STEPS" TEMPO="$TEMPO" \
+    EXT_EXPECT_PERIOD_US="$EXT_EXPECT_PERIOD_US" EXT_C3_BOUND_PCT="$EXT_C3_BOUND_PCT" \
+    EXT_FREEZE_MS="$EXT_FREEZE_MS" EXT_START_MS="$EXT_START_MS" \
     python3 - "$LOG" <<'PY'
 import os, re, sys
 
@@ -452,51 +480,123 @@ if not m:
 
 kv = dict(p.split("=", 1) for p in m.group(1).split())
 
-# --- Course EXTCLOCK, etape XCLK.2b : INFORMATION, aucun critere -------------
-# ⚠️ Les criteres C1 a C4 arrivent en XCLK.2c. Ici la course rapporte ce qu'elle
-# observe et NE REND AUCUN VERDICT : les criteres de la course SEQ ne peuvent pas
-# s'appliquer telles quelles, parce que le transport demarre au milieu d'un pas et
-# que la PLL de uClock n'a pas converge. Un vert emprunte a SEQ serait faux.
+# --- Course EXTCLOCK, lot XCLK.2c : CINQ criteres --------------------------
+# Tous les attendus sont DERIVES. Le harnais ne recopie ni le quantizer de uClock,
+# ni sa PLL : il en derive des bornes.
+#
+#   un pas de /1 vaut 96 ticks de sortie
+#   une impulsion d'entree vaut 96 / ppqn ticks de sortie
+#   donc  tick attendu = periode x ppqn / 96   et   pas attendu = periode x ppqn
+#
+# La fenetre s'ouvre APRES le gel du defaut 12 et APRES la convergence de la PLL,
+# dont le residu vaut (220/256)^n apres n impulsions.
 if pat_course == "extclock":
-    ext = re.search(r"EXTCLK (.*)", txt)
-    ekv = dict(p.split("=", 1) for p in ext.group(1).split()) if ext else {}
-    period_us = int(os.environ["EXT_PERIOD_US"])
+    injected_us = int(os.environ["EXT_PERIOD_US"])
+    period_us = int(os.environ.get("EXT_EXPECT_PERIOD_US") or injected_us)
     ppqn = int(os.environ["EXT_PPQN"])
     discard = int(os.environ["EXT_DISCARD"])
-    measure = int(os.environ["EXT_MEASURE"])
-    # L'attendu se DERIVE de la periode injectee : un step de /1 vaut une noire,
-    # donc 96 ticks de sortie, et une impulsion d'entree vaut 96 / ppqn ticks.
-    step_expected_ms = period_us * ppqn * 96.0 / 96.0 / 1000.0
-    edges = int(ekv.get("ext_edges", 0))
-    print(f"  {DIM}INFORMATION — aucun critere a l etape XCLK.2b{Z}")
-    print(f"    PPQN d entree            : {ppqn}, periode {period_us} us")
-    print(f"    fronts injectes sur PD2  : {edges}")
+    measure_steps = int(os.environ["EXT_MEASURE_STEPS"])
     freeze_ms = int(os.environ["EXT_FREEZE_MS"])
-    print(f"    gel du defaut 12         : {freeze_ms} ms a absorber avant de mesurer")
-    print(f"    fenetre                  : {discard} jetees + {measure} mesurees")
-    print(f"    step attendu (derive)    : {step_expected_ms:.2f} ms")
-    print(f"    step mesure par la sonde : {float(kv['step_mesure']):.2f} ms")
-    print(f"    premier front de sortie  : {float(kv['premier_front_ms']):.1f} ms"
-          f"  — PLAY relache a {float(kv['play_ms']):.0f} ms")
-    print(f"    ecarts, POUR INFORMATION : {kv['ecarts_ok']}")
-    trace = re.findall(r"^\s+(\d+\.\d)\s+(\S+)\s+(\S+)$", txt, re.M)
-    if trace:
-        print(f"    temoin du timer          : {len(trace)} changement(s) de periode")
-        for at, per, step in trace[:6]:
-            print(f"      t={float(at):9.1f} ms   periode {per:>12} us   step {step:>10} ms")
-    first = float(kv["premier_front_ms"])
-    play = float(kv["play_ms"])
-    if first > 0.0 and first < play:
-        print(f"  {DIM}Le premier front tombe AVANT le relachement de PLAY, donc le"
-              f" transport a{Z}")
-        print(f"  {DIM}demarre sur impulsion externe : PLAY est inerte hors horloge"
-              f" interne.{Z}")
-    else:
-        print(f"  {DIM}⚠ Le premier front ne precede PAS le relachement de PLAY :"
-              f" cette course{Z}")
-        print(f"  {DIM}n etablit donc RIEN sur l origine du demarrage. Voir le"
-              f" journal XCLK.2b.{Z}")
-    sys.exit(0)
+    start_ms = int(os.environ["EXT_START_MS"])
+    length = int(os.environ["EXPECTED_LENGTH"])
+    steps = [int(x) for x in os.environ["STEPS"].split(",")]
+
+    tick_us = period_us * ppqn / 96.0
+    step_us = float(period_us * ppqn)
+    open_ms = start_ms + freeze_ms + discard * period_us / 1000.0
+    close_ms = open_ms + measure_steps * step_us / 1000.0
+    pll_residual = (220.0 / 256.0) ** discard
+    c1_budget_pct = 100.0 * (pll_residual + 1.0 / 96.0)   # PLL + un tick sur 96
+    c3_bound_pct = 100.0 / 16.0                            # PHASE_FACTOR 16 >> 8
+    if os.environ.get("EXT_C3_BOUND_PCT"):
+        c3_bound_pct = float(os.environ["EXT_C3_BOUND_PCT"])
+        print(f"    {DIM}levier : borne C3 forcee a {c3_bound_pct:.2f} %{Z}")
+
+    print(f"    PPQN d entree            : {ppqn}, periode injectee {injected_us} us")
+    if period_us != injected_us:
+        print(f"    {DIM}levier : l attendu est calcule sur {period_us} us,"
+              f" pas sur l injecte{Z}")
+    print(f"    pas attendu (derive)     : {step_us / 1000.0:.2f} ms"
+          f"   tick {tick_us:.2f} us")
+    print(f"    fenetre de mesure        : {open_ms:.0f} a {close_ms:.0f} ms"
+          f"   (gel {freeze_ms} ms + {discard} impulsions)")
+    print(f"    budget C1 derive         : {c1_budget_pct:.2f} %"
+          f"   (residu PLL {100.0 * pll_residual:.2f} % + un tick)")
+
+    em = re.search(r"^EDGES (.*)$", txt, re.M)
+    edges = [float(x) for x in em.group(1).split()] if em else []
+    win = [e for e in edges if open_ms <= e <= close_ms]
+
+    # --- C4, la garde de la mesure : INVALID, jamais FAIL --------------------
+    if len(win) < 3:
+        print(f"  {mark(False)} C4 fenetre exploitable "
+              f"{len(win)} front(s) dans la fenetre, il en faut 3")
+        print(f"  {DIM}VERDICT INVALID : la course n a pas produit de fenetre"
+              f" mesurable.{Z}")
+        print(f"  {DIM}Ce n est PAS un defaut du firmware : c est une mesure"
+              f" non evaluable.{Z}")
+        sys.exit(5)
+    print(f"  {mark(True)} C4 fenetre exploitable "
+          f"{len(win)} fronts entre {win[0]:.0f} et {win[-1]:.0f} ms")
+
+    # --- C5, le gel est TERMINE dans la fenetre ------------------------------
+    tm = re.search(r"^TRACE (.*)$", txt, re.M)
+    samples = []
+    if tm:
+        for pair in tm.group(1).split():
+            at, per = pair.split(":")
+            samples.append((float(at), float(per)))
+    inside = [(a, p) for a, p in samples if open_ms <= a <= close_ms]
+    if not inside:
+        print(f"  {mark(False)} C5 gel termine "
+              f"aucun echantillon du temoin dans la fenetre")
+        print(f"  {DIM}VERDICT INVALID : sans temoin, C1 pourrait moyenner des"
+              f" pas de 60 s.{Z}")
+        sys.exit(5)
+    worst = max(inside, key=lambda s: abs(s[1] - tick_us))
+    off_pct = 100.0 * abs(worst[1] - tick_us) / tick_us
+    c5 = off_pct <= c3_bound_pct
+    print(f"  {mark(c5)} C5 gel termine       "
+          f"pire tick {worst[1]:.0f} us a {worst[0]:.0f} ms, "
+          f"{off_pct:.2f} % de l attendu (borne {c3_bound_pct:.2f} %)")
+
+    # --- les ecarts, convertis en NOMBRE DE PAS ------------------------------
+    gaps = [win[i + 1] - win[i] for i in range(len(win) - 1)]
+    counts = [int(round(g * 1000.0 / step_us)) for g in gaps]
+    total_steps = sum(counts)
+    measured_step_us = (win[-1] - win[0]) * 1000.0 / total_steps if total_steps else 0.0
+
+    # --- C1, la MOYENNE sur la fenetre --------------------------------------
+    c1_off = 100.0 * abs(measured_step_us - step_us) / step_us
+    c1 = c1_off <= c1_budget_pct
+    print(f"  {mark(c1)} C1 pas moyen         "
+          f"{measured_step_us / 1000.0:.2f} ms contre {step_us / 1000.0:.2f} "
+          f"attendu, ecart {c1_off:.2f} % (budget {c1_budget_pct:.2f} %)")
+
+    # --- C2, rotation cyclique du motif, sans phase --------------------------
+    act = sorted(x for x in steps if x < length)
+    expected = [(act[(i + 1) % len(act)] - act[i]) % length or length
+                for i in range(len(act))] if len(act) > 1 else []
+    # ⚠️ La fenetre peut contenir PLUS d ecarts qu un cycle : la suite attendue se
+    # repete autant de fois qu il faut avant d etre tronquee. Sans cela un cycle
+    # et demi rougirait un firmware correct.
+    def cycle_from(i):
+        need = -(-len(counts) // len(expected)) + 1
+        rot = expected[i:] + expected[:i]
+        return (rot * need)[:len(counts)]
+    c2 = any(counts == cycle_from(i) for i in range(len(expected))) if expected else False
+    print(f"  {mark(c2)} C2 rotation cyclique "
+          f"{counts} contre {expected} a une rotation pres")
+
+    # --- C3, l oscillation instantanee --------------------------------------
+    devs = [100.0 * abs(g * 1000.0 - c * step_us) / (c * step_us)
+            for g, c in zip(gaps, counts) if c > 0]
+    c3_worst = max(devs) if devs else 0.0
+    c3 = c3_worst <= c3_bound_pct
+    print(f"  {mark(c3)} C3 oscillation       "
+          f"pire ecart {c3_worst:.2f} % (borne derivee {c3_bound_pct:.2f} %)")
+
+    sys.exit(0 if (c1 and c2 and c3 and c5) else 1)
 
 lines_on = int(kv["lignes_actives"]); lines_exp = int(kv["attendu"])
 gaps_ok, gaps_total = (int(x) for x in kv["ecarts_ok"].split("/"))
