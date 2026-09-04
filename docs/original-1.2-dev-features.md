@@ -11,6 +11,8 @@ other document describes.
 more. No line here is a requirement, and no line here overrides
 `docs/original-conformity.md` or `docs/original-modes.md`.
 
+⚠️ **GATE stays a CANDIDATE, and the owner confirmed it on 2026-09-04.** Lot 11 of `WORKPLAN.md` rebuilds the channel tab of the original, and it runs **without** `GATE`. Two facts framed that decision. The released original has **three** modes, `byte mode; //0 - CLK, 1 - RND, 2 - SEQ` (`Gravity.ino:63`), and FlexSeq and `PRD.md` both carry three. `GATE` is a mode of the `1.2-dev` branch, so it lives in this catalogue and it carries no requirement. Adding it later is a product decision, and it goes to `PRD.md`, never to this file.
+
 Two facts to keep in mind before reading:
 
 - `1.2-dev` is **older** than `main` and was **never merged**. `main` is
