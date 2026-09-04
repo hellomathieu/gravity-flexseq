@@ -549,6 +549,60 @@ void test_the_main_parameter_is_centred_on_its_box() {
         "centree avec la LARGE police : 13 px par caractere dans le double");
 }
 
+MainScreenModel configTab() {
+    MainScreenModel m = legacyTab(flexseq::MODE_SEQ);
+    m.configPage = true;
+    m.patternIndex = 9;
+    m.length = 20;
+    m.subdiv = -4;
+    return m;
+}
+
+void test_the_config_page_shows_the_pattern_name_in_the_large_font() {
+    RecordingCanvas canvas;
+    drawMainScreen(canvas, configTab());
+    const Call* value = canvas.find("B2");
+    TEST_ASSERT_NOT_NULL_MESSAGE(value, "le pattern 9 s ecrit B2");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(ms::MAIN_VALUE_BASELINE_Y, value->y,
+        "en gros, sur la ligne de base du parametre principal");
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("PATTERN"), "et son etiquette");
+}
+
+void test_the_config_page_carries_length_subdiv_and_mod() {
+    RecordingCanvas canvas;
+    drawMainScreen(canvas, configTab());
+    const Call* len = canvas.find("LENGTH:");
+    TEST_ASSERT_NOT_NULL_MESSAGE(len, "ligne 1 : LENGTH");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(ms::LINE_0_BASELINE_Y, len->y, "ligne 1");
+    const Call* sub = canvas.find("SUBDIV:");
+    TEST_ASSERT_NOT_NULL_MESSAGE(sub, "ligne 2 : SUBDIV");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(ms::LINE_1_BASELINE_Y, sub->y, "ligne 2");
+    const Call* mod = canvas.find("MOD:");
+    TEST_ASSERT_NOT_NULL_MESSAGE(mod, "ligne 3 : MOD");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(ms::LINE_2_BASELINE_Y, mod->y, "ligne 3");
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("20"), "la longueur du canal");
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("x4"), "la subdivision du canal");
+}
+
+void test_the_config_page_shows_none_of_the_three_lines_of_a_mode_tab() {
+    RecordingCanvas canvas;
+    drawMainScreen(canvas, configTab());
+    TEST_ASSERT_NULL_MESSAGE(canvas.find("MODE:"), "MODE n est pas sur CONFIG");
+    TEST_ASSERT_NULL_MESSAGE(canvas.find("OFFSET:"), "ni OFFSET");
+    TEST_ASSERT_NULL_MESSAGE(canvas.find("SUBDIVISION"),
+        "ni l etiquette du parametre principal d un canal en CLOCK");
+}
+
+void test_a_seq_tab_without_the_config_flag_is_unchanged() {
+    RecordingCanvas canvas;
+    MainScreenModel m = configTab();
+    m.configPage = false;
+    m.legacyLayout = false;
+    drawMainScreen(canvas, m);
+    TEST_ASSERT_NULL_MESSAGE(canvas.find("LENGTH:"), "la page CONFIG ne fuit pas");
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("LEN"), "l onglet SEQ garde sa forme");
+}
+
 void test_random_shows_the_skip_chance_as_a_percentage() {
     RecordingCanvas canvas;
     drawMainScreen(canvas, legacyTab(flexseq::MODE_RANDOM));
@@ -596,6 +650,10 @@ int main() {
     RUN_TEST(test_a_clock_tab_draws_the_three_lines_at_the_geometry_of_the_original);
     RUN_TEST(test_a_random_tab_puts_the_subdivision_on_the_second_line);
     RUN_TEST(test_the_main_parameter_is_centred_on_its_box);
+    RUN_TEST(test_the_config_page_shows_the_pattern_name_in_the_large_font);
+    RUN_TEST(test_the_config_page_carries_length_subdiv_and_mod);
+    RUN_TEST(test_the_config_page_shows_none_of_the_three_lines_of_a_mode_tab);
+    RUN_TEST(test_a_seq_tab_without_the_config_flag_is_unchanged);
     RUN_TEST(test_random_shows_the_skip_chance_as_a_percentage);
     RUN_TEST(test_the_legacy_layout_draws_no_headline_and_no_old_field);
     RUN_TEST(test_a_seq_tab_keeps_the_old_layout);

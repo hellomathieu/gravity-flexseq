@@ -35,6 +35,7 @@ struct MainScreenModel {
     uint8_t mainParameter;
 
     bool legacyLayout;
+    bool configPage;
 
     uint16_t tempo;
     uint8_t clockSource;

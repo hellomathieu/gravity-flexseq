@@ -49,6 +49,7 @@ import {
   tabSlotX,
   barLabel,
   headlineOf,
+  patternName,
   sourceLabel,
   subdivLabel,
 } from "./MainScreenDisplay.js";
@@ -63,6 +64,8 @@ export const LBL_MOD = "MOD:";
 export const LBL_OFF = "OFF";
 export const LBL_SUBDIVISION = "SUBDIVISION";
 export const LBL_SKIP_CHANCE = "SKIP CHANCE";
+export const LBL_LENGTH = "LENGTH:";
+export const LBL_PATTERN = "PATTERN";
 
 const VELVETSCREEN_HEIGHT = 5;
 const STK_L_HEIGHT = 23;
@@ -146,12 +149,16 @@ function skipText(skipChance: number): string {
 }
 
 export function mainValueOf(model: MainScreenModel): string {
+  if (model.configPage || model.mainParameter === MainParameter.Pattern) {
+    return patternName(model.patternIndex);
+  }
   if (model.mainParameter === MainParameter.None) return "";
   if (model.mainParameter === MainParameter.SkipChance) return skipText(model.skipChance);
   return subdivLabel(model.subdiv);
 }
 
 export function mainLabelOf(model: MainScreenModel): string {
+  if (model.configPage || model.mainParameter === MainParameter.Pattern) return LBL_PATTERN;
   return model.mainParameter === MainParameter.SkipChance ? LBL_SKIP_CHANCE : LBL_SUBDIVISION;
 }
 
@@ -161,7 +168,14 @@ function modeText(mode: ChannelMode): string {
   return "SEQ";
 }
 
+export function configLine(model: MainScreenModel, index: number): [string, string] {
+  if (index === 0) return [LBL_LENGTH, String(model.length)];
+  if (index === 1) return [LBL_SUBDIV_FIELD, subdivLabel(model.subdiv)];
+  return [LBL_MOD, LBL_OFF];
+}
+
 export function legacyLine(model: MainScreenModel, index: number): [string, string] {
+  if (model.configPage) return configLine(model, index);
   if (index === 0) return [LBL_MODE, modeText(model.mode)];
   if (index === 1) {
     if (model.mode === ChannelMode.CLOCK) {
@@ -259,7 +273,8 @@ export interface Render {
 
 export function renderMainScreen(model: MainScreenModel): Render {
   const ink = new Ink();
-  const legacy = model.legacyLayout && model.tab !== 0 && model.tab !== TAB_COUNT - 1;
+  const legacy = (model.configPage || model.legacyLayout)
+    && model.tab !== 0 && model.tab !== TAB_COUNT - 1;
   const cursorOnHeadline = model.insideTab && model.cursor === 0;
 
   if (!legacy) {

@@ -54,6 +54,7 @@ function mainModel(over: Partial<MainScreenModel>): MainScreenModel {
     stepTicks: 24,
     mainParameter: MainParameter.Subdiv,
     legacyLayout: true,
+    configPage: false,
     tempo: 120,
     clockSource: 0,
     ...over,
@@ -165,8 +166,28 @@ const SHOTS: Shot[] = [
       + "que d ouvrir un niveau vide.",
     mainModel({ tab: 7, insideTab: false, legacyLayout: false }),
   ),
+  fromMain(
+    "10 — CONFIG PATTERN",
+    "La quatrieme page, ouverte par la ligne 3 d un canal en SEQ. Meme forme que "
+      + "l onglet : le nom du pattern en gros avec son etiquette, trois lignes a "
+      + "droite. Elle porte LENGTH et SUBDIV, qui quittent l onglet, et MOD. "
+      + "⚠️ Le dessin existe ; la navigation qui y mene est le lot 12.",
+    mainModel({
+      tab: 2,
+      insideTab: true,
+      cursor: 0,
+      configPage: true,
+      legacyLayout: false,
+      mode: ChannelMode.SEQ,
+      mainParameter: MainParameter.Pattern,
+      patternIndex: 9,
+      length: 20,
+      subdiv: -4,
+      fieldCount: 3,
+    }),
+  ),
   fromEdit(
-    "10 — EDIT PATTERN",
+    "11 — EDIT PATTERN",
     "Trois rangees de douze. Disque plein pour un step actif, anneau pour un step "
       + "vide, triangle pour un triolet, chiffre sous le step pour un ratchet, "
       + "simple point au-dela de la longueur. Les barres verticales sont les "
@@ -175,7 +196,7 @@ const SHOTS: Shot[] = [
     786,
   ),
   fromEdit(
-    "11 — EDIT PATTERN, sans separation",
+    "12 — EDIT PATTERN, sans separation",
     "La meme grille, la separation de mesure a zero.",
     editModel({ barLength: 0, cursor: 15 }),
   ),

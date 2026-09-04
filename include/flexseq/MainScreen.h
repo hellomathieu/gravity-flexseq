@@ -221,6 +221,8 @@ FLEXSEQ_LABEL(LBL_RAND, "RAND");
 FLEXSEQ_LABEL(LBL_SEQ, "SEQ");
 FLEXSEQ_LABEL(LBL_SUBDIVISION, "SUBDIVISION");
 FLEXSEQ_LABEL(LBL_SKIP_CHANCE, "SKIP CHANCE");
+FLEXSEQ_LABEL(LBL_LENGTH, "LENGTH:");
+FLEXSEQ_LABEL(LBL_PATTERN, "PATTERN");
 
 inline const char* modeText(uint8_t mode) {
     switch (static_cast<ChannelMode>(mode)) {
@@ -238,6 +240,10 @@ inline void skipText(uint8_t skipChance, char* out) {
 }
 
 inline void mainValueOf(const MainScreenModel& model, char* out) {
+    if (model.configPage || model.mainParameter == MAIN_PATTERN) {
+        patternName(model.patternIndex, out);
+        return;
+    }
     if (model.mainParameter == MAIN_NONE) {
         out[0] = '\0';
         return;
@@ -250,11 +256,34 @@ inline void mainValueOf(const MainScreenModel& model, char* out) {
 }
 
 inline const char* mainLabelOf(const MainScreenModel& model) {
+    if (model.configPage || model.mainParameter == MAIN_PATTERN) {
+        return LBL_PATTERN;
+    }
     return model.mainParameter == MAIN_SKIP_CHANCE ? LBL_SKIP_CHANCE : LBL_SUBDIVISION;
+}
+
+inline void configLine(const MainScreenModel& model, uint8_t index,
+                       const char** out, char* value) {
+    if (index == 0) {
+        *out = LBL_LENGTH;
+        writeUnsigned(value, model.length);
+        return;
+    }
+    if (index == 1) {
+        *out = LBL_SUBDIV_FIELD;
+        subdivLabel(model.subdiv, value);
+        return;
+    }
+    *out = LBL_MOD;
+    copyLabel(LBL_OFF, value);
 }
 
 inline void legacyLine(const MainScreenModel& model, uint8_t index,
                        const char** out, char* value) {
+    if (model.configPage) {
+        configLine(model, index, out, value);
+        return;
+    }
     if (index == 0) {
         *out = LBL_MODE;
         copyLabel(modeText(model.mode), value);
@@ -435,8 +464,8 @@ void drawMainScreen(Canvas& canvas, const MainScreenModel& model,
                     Band band = Band{0, screen::HEIGHT - 1}) {
     namespace ms = mainscreen;
 
-    const bool legacy = model.legacyLayout && model.tab != 0
-                        && model.tab != ms::TAB_COUNT - 1;
+    const bool legacy = (model.configPage || model.legacyLayout)
+                        && model.tab != 0 && model.tab != ms::TAB_COUNT - 1;
 
     const bool cursorOnHeadline = model.insideTab && model.cursor == 0;
     if (!legacy

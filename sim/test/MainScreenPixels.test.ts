@@ -34,6 +34,7 @@ const PANEL_MODEL: MainScreenModel = {
   stepTicks: 24,
   mainParameter: MainParameter.Subdiv,
   legacyLayout: true,
+  configPage: false,
   tempo: 120,
   clockSource: 0,
 };
