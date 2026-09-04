@@ -253,6 +253,30 @@ the range is crossed detent by detent. 20 to 200 is 180 detents; 30 to 300 is 27
 `A` and `B` for a pattern name, then `E`, `X`, `T`, `M`, `I` and `D` — because the
 clock tab writes `EXT` and `MIDI` large in place of the number (`UI.ino:81-86`).
 
+## What the two fonts of the original really cost — measured 2026-09-04
+
+The original draws with **two** fonts: `stkL` for the main parameter, and
+`velvetscreen` for every label. FlexSeq uses u8g2's `5x7` for everything.
+
+PRD §12.1 estimated the change at "about 200 bytes", from the arithmetic
+437 + 569 = 1006 against our single 804. **That estimate assumed the `5x7` font
+would be dropped, which is only true if nothing reads it.** Three counter-builds
+settle it, and `avr-nm` counted the fonts that survive in each image:
+
+| Configuration | Flash | RAM | Fonts in the image |
+|---|---|---|---|
+| u8g2 `5x7` alone, today | 26236 | 1502 | 1 |
+| `velvetscreen` alone, for the labels | **25870** | 1502 | 1 |
+| `velvetscreen` and `stkL`, both | **26464** | 1502 | 2 |
+
+**Moving the labels off u8g2's `5x7` RETURNS 366 bytes**, which matches
+804 − 437 = 367 to within one byte: the unread font is genuinely dropped. Adding
+`stkL` then costs 594. **The net cost of restoring the typography of the original
+is therefore +228 bytes of Flash**, and the estimate of §12.1 was good.
+
+⚠️ **RAM does not move at all**, in any of the three. u8g2 holds one font pointer,
+and that field already exists.
+
 ✅ **FLEXSEQ REUSES THIS FONT, decided by the owner on 2026-09-04.** Two facts made
 the decision. `GravityFW` and FlexSeq are both **GPLv3**, so the reuse is
 compatible and **attribution is the only duty** — PRD §12.1 already settled that

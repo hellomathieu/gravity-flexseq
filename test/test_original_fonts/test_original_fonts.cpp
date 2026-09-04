@@ -50,8 +50,48 @@ void test_the_font_ends_on_the_terminator_u8g2_expects() {
         "the last byte must be the terminator, or u8g2 walks past the array");
 }
 
+void test_the_label_font_holds_the_bytes_of_the_original() {
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(437, flexseq::FONT_VELVETSCREEN_BYTES,
+        "the label font of the original holds 437 bytes, terminator included");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(
+        0, flexseq::FONT_VELVETSCREEN[flexseq::FONT_VELVETSCREEN_BYTES - 1],
+        "the last byte must be the terminator, or u8g2 walks past the array");
+}
+
+void test_the_label_font_names_fifty_two_glyphs() {
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(
+        52, flexseq::FONT_VELVETSCREEN[flexseq::FONT_HEADER_GLYPH_COUNT_AT],
+        "space, the punctuation, the ten digits, A to Z, and the six glyphs of"
+        " the sequencer: p q r t w x");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(52, flexseq::FONT_VELVETSCREEN_GLYPHS,
+        "the declared glyph count must equal the one the bytes carry");
+}
+
+void test_the_label_font_is_five_by_five() {
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(
+        5, flexseq::FONT_VELVETSCREEN[flexseq::FONT_HEADER_MAX_WIDTH_AT],
+        "five pixels wide at most, and the advance is proportional");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(
+        5, flexseq::FONT_VELVETSCREEN[flexseq::FONT_HEADER_MAX_HEIGHT_AT],
+        "five pixels tall: two less than the 5x7 of u8g2 that FlexSeq uses today");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(5, flexseq::FONT_VELVETSCREEN_MAX_WIDTH, "declared width");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(5, flexseq::FONT_VELVETSCREEN_HEIGHT, "declared height");
+}
+
+void test_the_two_fonts_are_not_the_same_bytes() {
+    // Une copie collee deux fois passerait toutes les autres assertions.
+    TEST_ASSERT_NOT_EQUAL_MESSAGE(
+        flexseq::FONT_STK_L[flexseq::FONT_HEADER_MAX_HEIGHT_AT],
+        flexseq::FONT_VELVETSCREEN[flexseq::FONT_HEADER_MAX_HEIGHT_AT],
+        "23 px for the main parameter, 5 px for the labels");
+}
+
 int main() {
     UNITY_BEGIN();
+    RUN_TEST(test_the_label_font_holds_the_bytes_of_the_original);
+    RUN_TEST(test_the_label_font_names_fifty_two_glyphs);
+    RUN_TEST(test_the_label_font_is_five_by_five);
+    RUN_TEST(test_the_two_fonts_are_not_the_same_bytes);
     RUN_TEST(test_the_font_holds_the_bytes_of_the_original);
     RUN_TEST(test_the_header_of_the_font_names_twenty_one_glyphs);
     RUN_TEST(test_the_glyphs_are_fifteen_wide_at_most);
