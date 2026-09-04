@@ -1,0 +1,60 @@
+# NOTICE — third-party material reused in Gravity FlexSeq
+
+Gravity FlexSeq is licensed under the **GNU General Public License version 3**;
+see `LICENSE`.
+
+It reuses material from the **original Gravity firmware**, which carries the
+**same licence**, so the reuse is compatible and **attribution is the only
+duty**. This file records that attribution, item by item.
+
+## The original firmware
+
+- **Project:** Sitka Instruments Gravity Firmware
+- **Author:** Oleksiy Hrachov
+- **Licence:** GNU General Public License version 3
+- **Source:** https://git.sitkainstruments.com/Oleksiy/GravityFW
+- **Reference commit:** `main` @ `40d4aac`, the public release
+
+## What is reused, and where it lives
+
+### The `stkL` font — the large main parameter
+
+`src/hal/OriginalFonts.cpp` holds the font of the original **byte for byte**,
+569 bytes including the terminator, as `flexseq::FONT_STK_L`. It was copied from
+the string literal of `Gravity.ino`, not decoded and re-encoded, and the copy was
+verified identical byte for byte.
+
+It carries **21 glyphs**: the ten digits, then `/`, `x` and `%`, then `A` and `B`
+for a pattern name, then `E`, `X`, `T`, `M`, `I` and `D`, because the clock tab
+writes `EXT` and `MIDI` large.
+
+The decision to reuse rather than redraw is recorded in **PRD §12.1**, amended
+2026-09-04, and the decoded metrics live in `docs/original-conformity.md`.
+
+### The `velvetscreen` font — labels and glyphs
+
+`sim/src/sim/velvetscreen.font.json` holds the font of the original, decoded
+glyph by glyph by `tools/decode-velvetscreen.py`. The **decoder is ours**; the
+glyph data is the original's.
+
+It also carries the glyphs the navigation needs — `w` for the clock, `r` for
+play, `t` for stop — and the two step glyphs of the sequencer, `q` for an active
+step and `p` for an inactive one.
+
+### The factory patterns of `A1` to `A8`
+
+`src/domain/FactoryPatterns.cpp` carries the factory pattern content of the
+original. Those eight patterns are frozen in FlexSeq for exactly that reason:
+they are the content a Gravity ships with.
+
+## What is NOT reused
+
+FlexSeq is **not** a fork of the original firmware. Its technical base is
+`libGravity`, and the original is a **behavioural and reference source only** —
+`CLAUDE.md` and the source hierarchy of the project state that. No
+implementation of the original was copied into the domain: what is reused is
+**data** — glyphs and pattern content — and it is listed above.
+
+`libGravity` is reused as a dependency, through the project's own fork, pinned by
+commit in `platformio.ini`. Its licence is **MIT**, and the charter of what the
+fork may repair is **ADR 0008**.
