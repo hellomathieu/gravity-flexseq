@@ -77,12 +77,16 @@ void beginEditFrame(uint8_t channel) {
     flexseq::probe::writeReport(uiTitle);
 #endif
 
-    flexseq::PatternScreenModel model;
+    flexseq::PatternScreenModel model{};
     model.title = uiTitle;
-    model.titleWidth = 0;  // PagedScreen la mesure une fois par image
+    model.titleWidth = 0;
     model.pattern = engine.patternForChannel(channel);
     model.length = engine.getEffectiveLength(channel);
-    model.cursor = static_cast<int8_t>(ui.stepCursor());
+    model.sepSelected = ui.isOnHeader();
+    model.sepOpen = model.sepSelected && ui.fieldOpen();
+    model.cursor = model.sepSelected
+        ? static_cast<int8_t>(-1)
+        : static_cast<int8_t>(ui.stepCursor());
     model.playhead = engine.effectiveStep(channel);
     model.barLength = static_cast<uint8_t>(engine.getBarLength(channel));
 

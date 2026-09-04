@@ -425,7 +425,11 @@ void test_rotate_moves_the_step_cursor_and_wraps_at_thirty_six() {
     Rig r;
     r.enterEdit();
     r.ui.handle(UiController::EVENT_ROTATE, -1);
-    TEST_ASSERT_EQUAL_UINT8(35, r.ui.stepCursor());
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, r.ui.isOnHeader() ? 1 : 0,
+        "un cran a gauche depuis le step 0 monte dans l en-tete");
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, r.ui.isOnHeader() ? 1 : 0,
+        "l en-tete est un BUTOIR : un cran de plus a gauche n y change rien");
     r.ui.handle(UiController::EVENT_ROTATE, 1);
     TEST_ASSERT_EQUAL_UINT8(0, r.ui.stepCursor());
     for (uint8_t i = 0; i < 5; ++i) {
@@ -581,14 +585,75 @@ void test_the_step_cursor_reaches_35_and_wraps_at_36() {
         "le curseur doit atteindre le step 35");
     r.ui.handle(UiController::EVENT_ROTATE, 1);
     TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, r.ui.stepCursor(),
-        "le 36e cran doit ramener le curseur a 0");
+        "le 36e cran boucle sur le step 0, il ne passe PAS par l en-tete");
+    TEST_ASSERT_FALSE_MESSAGE(r.ui.isOnHeader(), "l en-tete ne s atteint que par la gauche");
 }
 
-void test_the_step_cursor_wraps_backwards_from_0_to_35() {
+// ⚠️ Le bouclage ARRIERE a disparu le 2026-09-04, decision du proprietaire :
+// un cran a gauche depuis le step 0 monte dans l en-tete, il ne boucle plus sur
+// le dernier step. Le bouclage AVANT, 35 -> 0, est conserve tel quel.
+void test_no_backward_wrap_the_header_takes_that_detent() {
     Rig r;
     r.enterEdit();
     r.ui.handle(UiController::EVENT_ROTATE, -1);
-    TEST_ASSERT_EQUAL_UINT8(35, r.ui.stepCursor());
+    TEST_ASSERT_TRUE_MESSAGE(r.ui.isOnHeader(), "l en-tete prend ce cran");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, r.ui.stepCursor(),
+        "et le curseur de pas ne bouge pas");
+}
+
+void test_the_header_field_cycles_the_measure_separation() {
+    Rig r;
+    r.enterEdit();
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    TEST_ASSERT_TRUE_MESSAGE(r.ui.isOnHeader(), "sur l en-tete");
+    TEST_ASSERT_FALSE_MESSAGE(r.ui.fieldOpen(), "le champ n est pas encore ouvert");
+    r.ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_TRUE_MESSAGE(r.ui.fieldOpen(), "un appui court l ouvre");
+    const int8_t before = r.engine.getBarLength(0);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_NOT_EQUAL_MESSAGE(before, r.engine.getBarLength(0),
+        "la rotation fait defiler SEP, et le curseur ne bouge plus");
+    TEST_ASSERT_TRUE_MESSAGE(r.ui.isOnHeader(), "on reste sur l en-tete");
+    r.ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_FALSE_MESSAGE(r.ui.fieldOpen(), "un second appui court valide");
+}
+
+void test_a_long_press_on_the_header_returns_to_the_first_step() {
+    Rig r;
+    r.enterEdit();
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    r.ui.handle(UiController::EVENT_PRESS);
+    r.ui.handle(UiController::EVENT_LONG_PRESS);
+    TEST_ASSERT_FALSE_MESSAGE(r.ui.isOnHeader(), "on quitte l en-tete");
+    TEST_ASSERT_FALSE_MESSAGE(r.ui.fieldOpen(), "et le champ se referme");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, r.ui.stepCursor(), "sur le step 0");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::LEVEL_EDIT, r.ui.level(),
+        "et on reste dans EDIT : l appui long n en sort pas depuis l en-tete");
+}
+
+void test_a_press_on_the_header_does_not_toggle_a_step() {
+    Rig r;
+    r.enterEdit();
+    flexseq::Pattern* p = r.engine.instanceForChannel(0);
+    bool before = false;
+    p->readStep(0, before);
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    r.ui.handle(UiController::EVENT_PRESS);
+    bool after = false;
+    p->readStep(0, after);
+    TEST_ASSERT_EQUAL_MESSAGE(before, after, "le step 0 n est pas bascule");
+}
+
+void test_shift_rotate_on_the_header_changes_no_ratchet() {
+    Rig r;
+    r.enterEdit();
+    flexseq::Pattern* p = r.engine.instanceForChannel(0);
+    p->writeStep(0, true);
+    const uint8_t before = p->getRatchet(0);
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(before, p->getRatchet(0),
+        "le ratchet n a pas de sens sur l en-tete");
 }
 
 void test_long_press_returns_from_the_grid_to_the_tab() {
@@ -1010,7 +1075,11 @@ int main(int, char**) {
     RUN_TEST(test_the_grid_follows_the_pattern_of_the_channel_selected_in_edit);
     RUN_TEST(test_shift_long_press_clears_the_pattern_steps_and_ratchets);
     RUN_TEST(test_the_step_cursor_reaches_35_and_wraps_at_36);
-    RUN_TEST(test_the_step_cursor_wraps_backwards_from_0_to_35);
+    RUN_TEST(test_no_backward_wrap_the_header_takes_that_detent);
+    RUN_TEST(test_the_header_field_cycles_the_measure_separation);
+    RUN_TEST(test_a_long_press_on_the_header_returns_to_the_first_step);
+    RUN_TEST(test_a_press_on_the_header_does_not_toggle_a_step);
+    RUN_TEST(test_shift_rotate_on_the_header_changes_no_ratchet);
     RUN_TEST(test_long_press_returns_from_the_grid_to_the_tab);
 
     RUN_TEST(test_play_toggles_the_transport_at_every_level);

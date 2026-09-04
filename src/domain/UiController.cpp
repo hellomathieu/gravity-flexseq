@@ -89,6 +89,7 @@ UiController::UiController(SequencerEngine& engine, Transport& transport)
       currentTab_(TAB_FIRST_CHANNEL),
       cursor_(0),
       stepCursor_(0),
+      onHeader_(false),
       fieldOpen_(false),
       tempo_(DEFAULT_TEMPO),
       clockSource_(0),
@@ -215,6 +216,7 @@ void UiController::handleTab(Event event, int8_t delta) {
             } else if (field() == FIELD_EDIT_ENTRY) {
                 level_ = LEVEL_EDIT;
                 stepCursor_ = 0;
+                onHeader_ = false;
             } else if (field() != FIELD_NONE) {
                 fieldOpen_ = true;
             }
@@ -232,19 +234,43 @@ void UiController::handleTab(Event event, int8_t delta) {
 }
 
 void UiController::handleEdit(Event event, int8_t delta) {
+    const int8_t step = oneStep(delta);
     switch (event) {
         case EVENT_ROTATE:
-            stepCursor_ = wrapIndex(stepCursor_, oneStep(delta), STEP_COUNT);
+            if (onHeader_) {
+                if (fieldOpen_) {
+                    adjustFieldValue(FIELD_BAR_LENGTH, delta);
+                } else if (step > 0) {
+                    onHeader_ = false;
+                    stepCursor_ = 0;
+                }
+            } else if (step < 0 && stepCursor_ == 0) {
+                onHeader_ = true;
+            } else {
+                stepCursor_ = wrapIndex(stepCursor_, step, STEP_COUNT);
+            }
             break;
         case EVENT_PRESS:
-            toggleStep();
+            if (onHeader_) {
+                fieldOpen_ = !fieldOpen_;
+            } else {
+                toggleStep();
+            }
             break;
         case EVENT_LONG_PRESS:
-            level_ = LEVEL_TAB;
-            fieldOpen_ = false;
+            if (onHeader_) {
+                onHeader_ = false;
+                fieldOpen_ = false;
+                stepCursor_ = 0;
+            } else {
+                level_ = LEVEL_TAB;
+                fieldOpen_ = false;
+            }
             break;
         case EVENT_SHIFT_ROTATE:
-            adjustRatchet(delta);
+            if (!onHeader_) {
+                adjustRatchet(delta);
+            }
             break;
         case EVENT_SHIFT_LONG_PRESS:
             clearPattern();

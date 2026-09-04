@@ -48,7 +48,7 @@ void onOutputTick(uint32_t) {
 // Ouvre une image. PagedScreen gele le modele, puis en rend une bande par appel
 // a advance() ; drawPatternScreen() doit rester pure.
 void beginFrame() {
-    flexseq::PatternScreenModel model;
+    flexseq::PatternScreenModel model{};
     model.title = "EDIT PATTERN A1";
     model.titleWidth = 0;  // PagedScreen la mesure une fois par image
     model.pattern = engine.instanceForChannel(CH);

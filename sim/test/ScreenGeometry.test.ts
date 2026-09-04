@@ -128,6 +128,7 @@ function production(family: Family, index: number): number | undefined {
     13: ps.BAR_HEIGHT, 14: ps.BAR_HALF_H,
     15: ps.TITLE_BASELINE_Y, 16: ps.HEADER_LINE_X, 17: ps.HEADER_LINE_Y,
     18: ps.HEADER_LINE_W, 19: ps.LAST_ROW_CY, 20: ps.GRID_BOTTOM_Y,
+    22: ps.SEP_LABEL_X, 23: ps.SEP_VALUE_X, 24: ps.SEP_LABEL_W,
   };
   return table[index];
 }

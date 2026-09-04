@@ -43,6 +43,8 @@ function panelModel(playhead = 0): PatternScreenPixelModel {
     cursor: 5,
     playhead,
     barLength: 3,
+    sepSelected: false,
+    sepOpen: false,
   };
 }
 
@@ -51,7 +53,7 @@ function panelModel(playhead = 0): PatternScreenPixelModel {
  * `env:wokwi`, remise en coordonnees logiques : `y logique = 63 - y panneau`.
  */
 const PANEL_ROWS: ReadonlyArray<readonly [number, number]> = [
-  [2, 34], [3, 21], [4, 32], [5, 19], [6, 27], [10, 120], [12, 3], [13, 3],
+  [2, 47], [3, 26], [4, 43], [5, 23], [6, 38], [10, 120], [12, 3], [13, 3],
   [14, 12], [15, 5], [16, 41], [17, 47], [18, 46], [19, 47], [20, 41],
   [21, 5], [22, 12], [23, 12], [24, 6], [25, 9], [26, 4], [27, 9], [30, 3],
   [31, 3], [32, 3], [33, 3], [34, 25], [35, 29], [36, 33], [37, 31], [38, 29],
@@ -60,7 +62,7 @@ const PANEL_ROWS: ReadonlyArray<readonly [number, number]> = [
   [57, 3], [58, 3], [59, 3], [60, 3],
 ];
 
-const PANEL_INK = 786;
+const PANEL_INK = 830;
 
 describe("l ecran EDIT, confronte au PANNEAU (risque 89)", () => {
   it("rend exactement l encre que le panneau recoit", () => {

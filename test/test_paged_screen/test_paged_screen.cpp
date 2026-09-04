@@ -179,7 +179,7 @@ FakeDisplay display;
 PagedScreen<FakeDisplay> paged;
 
 PatternScreenModel modelOf(const Pattern& pattern) {
-    PatternScreenModel model;
+    PatternScreenModel model{};
     model.title = "EDIT PATTERN A1";
     model.titleWidth = 0;
     model.pattern = &pattern;
@@ -489,7 +489,7 @@ void test_the_band_conversion_is_the_right_way_round(void) {
         if (display.strPerPage[i] > 0) ++bandsWithText;
     }
     TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, bandsWithText,
-        "le titre est le seul texte de l'ecran");
+        "le titre et le champ SEP tiennent dans UNE seule bande");
     TEST_ASSERT_GREATER_THAN_UINT8_MESSAGE(0, display.strPerPage[FakeDisplay::PAGES - 1],
         "le titre doit tomber dans la DERNIERE bande d'affichage");
     TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, display.strPerPage[0],

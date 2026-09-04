@@ -17,6 +17,12 @@ namespace screen = flexseq::screen;
 
 // Canvas d'enregistrement : modelise vraiment le 1-bit — setDrawColor(0) EFFACE
 // (c'est ainsi que le step joue creuse le centre d'un glyphe plein).
+struct Str {
+    char text[32];
+    uint8_t x;
+    uint8_t y;
+};
+
 struct RecordingCanvas {
     bool px[screen::HEIGHT][screen::WIDTH];
     uint8_t color;
@@ -28,6 +34,7 @@ struct RecordingCanvas {
     uint8_t lastStrX;
     uint8_t lastStrY;
     uint8_t strCalls;
+    Str strs[8];
 
     RecordingCanvas() { reset(); }
 
@@ -40,6 +47,14 @@ struct RecordingCanvas {
         lastStrX = 0;
         lastStrY = 0;
         strCalls = 0;
+        memset(strs, 0, sizeof(strs));
+    }
+
+    const Str* findStr(const char* text) const {
+        for (uint8_t i = 0; i < strCalls && i < 8; ++i) {
+            if (strcmp(strs[i].text, text) == 0) return &strs[i];
+        }
+        return nullptr;
     }
 
     void setDrawColor(uint8_t c) { color = c; }
@@ -58,6 +73,10 @@ struct RecordingCanvas {
         for (uint8_t i = 0; i < h; ++i) drawPixel(x, static_cast<uint8_t>(y + i));
     }
 
+    void drawBox(uint8_t x, uint8_t y, uint8_t w, uint8_t h) {
+        for (uint8_t r = 0; r < h; ++r) drawHLine(x, y + r, w);
+    }
+
     void drawFrame(uint8_t x, uint8_t y, uint8_t w, uint8_t h) {
         drawHLine(x, y, w);
         drawHLine(x, static_cast<uint8_t>(y + h - 1), w);
@@ -67,6 +86,12 @@ struct RecordingCanvas {
 
     // Le texte n'est pas rasterise nativement : on enregistre l'appel.
     uint8_t drawStr(uint8_t x, uint8_t y, const char* s) {
+        if (strCalls < 8) {
+            strncpy(strs[strCalls].text, s, sizeof(strs[0].text) - 1);
+            strs[strCalls].text[sizeof(strs[0].text) - 1] = '\0';
+            strs[strCalls].x = x;
+            strs[strCalls].y = y;
+        }
         ++strCalls;
         lastStrX = x;
         lastStrY = y;
@@ -104,7 +129,7 @@ void tearDown() {}
 
 static PatternScreenModel model(uint8_t length = 24, int8_t cursor = -1,
                                 int8_t playhead = -1, uint8_t bar = 0) {
-    PatternScreenModel m;
+    PatternScreenModel m{};
     m.title = nullptr; // pas de titre : on isole la grille
     m.titleWidth = 0;
     m.pattern = &pattern;
@@ -235,8 +260,14 @@ void test_ratchet_digit_is_drawn_under_the_step() {
     TEST_ASSERT_TRUE(canvas.at(cx + 1, y0));
     TEST_ASSERT_FALSE(canvas.at(cx - 1, y0 + 1)); // 001 : seule la droite
     TEST_ASSERT_TRUE(canvas.at(cx + 1, y0 + 1));
-    // aucune police utilisee pour les chiffres
-    TEST_ASSERT_EQUAL_UINT8(0, canvas.strCalls);
+    // aucune police utilisee pour les chiffres : le compte de textes ne bouge
+    // pas quand les ratchets apparaissent. L en-tete en dessine deux, SEP et sa
+    // valeur, donc la reference n est plus zero.
+    const uint8_t withDigits = canvas.strCalls;
+    canvas.reset();
+    drawPatternScreen(canvas, model(24));
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(canvas.strCalls, withDigits,
+        "les chiffres de ratchet sont dessines au pixel, sans police");
 }
 
 void test_ratchet_digit_is_3x5_and_clears_the_cursor_frame() {
@@ -281,13 +312,15 @@ void test_triplet_has_no_digit() {
     pattern.writeStep(0, true);
     pattern.setRatchet(0, RATCHET_TRIPLET);
     drawPatternScreen(canvas, model());
-    TEST_ASSERT_EQUAL_UINT8(0, canvas.strCalls); // le triangle suffit
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(2, canvas.strCalls,
+        "seuls l etiquette SEP et sa valeur emploient une police"); // le triangle suffit
 }
 
 void test_ratchet_digit_shows_on_an_inactive_step_too() {
     pattern.setRatchet(4, RATCHET_2);
     drawPatternScreen(canvas, model());
-    TEST_ASSERT_EQUAL_UINT8(0, canvas.strCalls); // chiffres dessines, pas ecrits
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(2, canvas.strCalls,
+        "seuls l etiquette SEP et sa valeur emploient une police"); // chiffres dessines, pas ecrits
     const uint8_t cx = screen::colX(4);
     const uint8_t y0 = static_cast<uint8_t>(screen::rowCY(4) + screen::DIGIT_DY);
     TEST_ASSERT_TRUE(canvas.at(cx - 1, y0)); // "2" : ligne haute pleine
@@ -414,10 +447,13 @@ void test_title_is_centred_on_its_baseline() {
     PatternScreenModel m = model();
     m.title = "EDIT PATTERN A1";
     drawPatternScreen(canvas, m);
-    TEST_ASSERT_EQUAL_STRING("EDIT PATTERN A1", canvas.lastStr);
-    TEST_ASSERT_EQUAL_UINT8(screen::TITLE_BASELINE_Y, canvas.lastStrY);
+    // Le titre n'est plus le DERNIER texte : l'en-tete porte aussi SEP. On le
+    // cherche donc par son nom.
+    const Str* t = canvas.findStr("EDIT PATTERN A1");
+    TEST_ASSERT_NOT_NULL_MESSAGE(t, "le titre est dessine");
+    TEST_ASSERT_EQUAL_UINT8(screen::TITLE_BASELINE_Y, t->y);
     const uint8_t w = canvas.getStrWidth("EDIT PATTERN A1");
-    TEST_ASSERT_EQUAL_UINT8((screen::WIDTH - w) / 2, canvas.lastStrX);
+    TEST_ASSERT_EQUAL_UINT8((screen::WIDTH - w) / 2, t->x);
     // le filet est trace
     TEST_ASSERT_TRUE(canvas.at(screen::HEADER_LINE_X, screen::HEADER_LINE_Y));
 }
@@ -485,7 +521,8 @@ void test_eight_bands_reunited_equal_the_whole_image(void) {
     TEST_ASSERT_EQUAL_UINT16(0, diff);
     TEST_ASSERT_EQUAL_UINT8_MESSAGE(whole.strCalls, banded.strCalls,
         "le texte n'est pas dessine le meme nombre de fois band par bande");
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, whole.strCalls, "titre");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(3, whole.strCalls,
+        "le titre, l etiquette SEP et sa valeur");
 }
 // Le decoupage doit AGIR. Avec trois rangees, plus aucune bande n'est vide :
 // ce qui reste verifiable est qu'une bande ne dessine QUE la rangee qu'elle

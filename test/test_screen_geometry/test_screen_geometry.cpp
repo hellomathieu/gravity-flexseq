@@ -210,6 +210,9 @@ bool production(char family, int index, int& out) {
             case 19: out = screen::LAST_ROW_CY; return true;
             case 20: out = screen::GRID_BOTTOM_Y; return true;
             case 21: out = screen::GLYPH_ASCENT; return true;
+            case 22: out = screen::SEP_LABEL_X; return true;
+            case 23: out = screen::SEP_VALUE_X; return true;
+            case 24: out = screen::SEP_LABEL_W; return true;
             default: return false;
         }
     }

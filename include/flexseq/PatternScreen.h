@@ -65,6 +65,20 @@ constexpr uint8_t HEADER_LINE_X = 4;
 constexpr uint8_t HEADER_LINE_Y = 10;
 constexpr uint8_t HEADER_LINE_W = 120;
 
+constexpr uint8_t SEP_LABEL_X = 102;
+constexpr uint8_t SEP_VALUE_X = 120;
+constexpr uint8_t SEP_LABEL_W = 14;
+
+static_assert(SEP_LABEL_X > WIDTH / 2 + 32,
+              "le champ SEP doit degager le titre centre, large de 65 px");
+static_assert(SEP_LABEL_X + SEP_LABEL_W < SEP_VALUE_X,
+              "l etiquette vient avant la valeur, sans la toucher");
+static_assert(SEP_VALUE_X + 6 <= WIDTH,
+              "le cadre de la valeur ouverte tient dans l ecran");
+static_assert(TITLE_BASELINE_Y + 1 <= 8,
+              "le titre ET le champ SEP tiennent dans la bande 0 : leur pave fait"
+              " hauteur + 2 depuis base - hauteur - 1, donc il ne deborde pas");
+
 // Ascendante de la police 5x7 du titre. Elle a servi a placer le pied, qui a
 // quitte l'ecran EDIT ; elle reste parce que le controle de rotation delimite la
 // bande du titre avec elle.
@@ -138,6 +152,8 @@ struct PatternScreenModel {
     int8_t cursor;     // step en cours d'edition, -1 pour masquer
     int8_t playhead;   // step joue, -1 pour masquer
     uint8_t barLength; // separation de mesure (0 = aucune) : GRAPHIQUE seule
+    bool sepSelected;  // le curseur est monte dans l'en-tete, sur le champ SEP
+    bool sepOpen;      // et la rotation fait defiler sa valeur
 };
 
 namespace detail {
@@ -181,6 +197,16 @@ void drawRatchetDigit(Canvas& c, uint8_t cx, uint8_t cy, uint8_t code) {
             }
         }
     }
+}
+
+inline void barText(uint8_t steps, char* out) {
+    if (steps == 0) {
+        out[0] = '-';
+        out[1] = '\0';
+        return;
+    }
+    out[0] = static_cast<char>('0' + steps);
+    out[1] = '\0';
 }
 
 template <typename Canvas>
@@ -235,6 +261,31 @@ void drawPatternScreen(Canvas& canvas, const PatternScreenModel& model,
     }
     if (touches(band, screen::HEADER_LINE_Y, screen::HEADER_LINE_Y)) {
         canvas.drawHLine(screen::HEADER_LINE_X, screen::HEADER_LINE_Y, screen::HEADER_LINE_W);
+    }
+
+    if (touches(band, 0, screen::TITLE_BASELINE_Y)) {
+        char sep[2];
+        detail::barText(model.barLength, sep);
+        const uint8_t base = screen::TITLE_BASELINE_Y;
+        const uint8_t h = FONT_VELVETSCREEN_HEIGHT;
+        if (model.sepSelected && !model.sepOpen) {
+            canvas.drawBox(static_cast<uint8_t>(screen::SEP_LABEL_X - 1),
+                           static_cast<uint8_t>(base - h - 1),
+                           static_cast<uint8_t>(screen::SEP_LABEL_W + 2),
+                           static_cast<uint8_t>(h + 2));
+            canvas.setDrawColor(0);
+            canvas.drawStr(screen::SEP_LABEL_X, base, "SEP");
+            canvas.setDrawColor(1);
+        } else {
+            canvas.drawStr(screen::SEP_LABEL_X, base, "SEP");
+        }
+        if (model.sepSelected && model.sepOpen) {
+            canvas.drawFrame(static_cast<uint8_t>(screen::SEP_VALUE_X - 1),
+                             static_cast<uint8_t>(base - h - 1),
+                             static_cast<uint8_t>(canvas.getStrWidth(sep) + 2),
+                             static_cast<uint8_t>(h + 2));
+        }
+        canvas.drawStr(screen::SEP_VALUE_X, base, sep);
     }
 
     // Separations de mesure : verticale dans la gouttiere, jamais en bord de ligne.

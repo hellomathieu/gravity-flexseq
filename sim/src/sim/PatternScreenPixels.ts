@@ -30,6 +30,9 @@ export const TITLE_BASELINE_Y = 7;
 export const HEADER_LINE_X = 4;
 export const HEADER_LINE_Y = 10;
 export const HEADER_LINE_W = 120;
+export const SEP_LABEL_X = 102;
+export const SEP_VALUE_X = 120;
+export const SEP_LABEL_W = 14;
 export const LAST_ROW_CY = ROW_CY_0 + (GRID_ROWS - 1) * ROW_SPACING;
 export const GRID_BOTTOM_Y = LAST_ROW_CY + DIGIT_DY + DIGIT_H - 1;
 
@@ -67,6 +70,8 @@ export interface PatternScreenPixelModel {
   cursor: number;
   playhead: number;
   barLength: number;
+  sepSelected: boolean;
+  sepOpen: boolean;
 }
 
 class Ink {
@@ -90,6 +95,10 @@ class Ink {
 
   drawVLine(x: number, y: number, len: number): void {
     for (let i = 0; i < len; ++i) this.plot(x, y + i);
+  }
+
+  drawBox(x: number, y: number, w: number, h: number): void {
+    for (let r = 0; r < h; ++r) this.drawHLine(x, y + r, w);
   }
 
   drawFrame(x: number, y: number, w: number, h: number): void {
@@ -189,6 +198,24 @@ export function renderPatternScreen(model: PatternScreenPixelModel): Render {
     ink.drawStr(Math.floor((OLED_W - w) / 2), TITLE_BASELINE_Y, model.title);
   }
   ink.drawHLine(HEADER_LINE_X, HEADER_LINE_Y, HEADER_LINE_W);
+
+  {
+    const sep = model.barLength === 0 ? "-" : String(model.barLength);
+    const base = TITLE_BASELINE_Y;
+    const h = 5;
+    if (model.sepSelected && !model.sepOpen) {
+      ink.drawBox(SEP_LABEL_X - 1, base - h - 1, SEP_LABEL_W + 2, h + 2);
+      ink.setDrawColor(0);
+      ink.drawStr(SEP_LABEL_X, base, "SEP");
+      ink.setDrawColor(1);
+    } else {
+      ink.drawStr(SEP_LABEL_X, base, "SEP");
+    }
+    if (model.sepSelected && model.sepOpen) {
+      ink.drawFrame(SEP_VALUE_X - 1, base - h - 1, textWidth(sep, VELVETSCREEN) + 2, h + 2);
+    }
+    ink.drawStr(SEP_VALUE_X, base, sep);
+  }
 
   if (model.barLength > 0) {
     for (let k = model.barLength; k < GRID_STEPS; k += model.barLength) {

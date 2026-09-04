@@ -90,6 +90,7 @@ public:
     bool fieldOpen() const { return fieldOpen_; }
 
     uint8_t stepCursor() const { return stepCursor_; }
+    bool isOnHeader() const { return onHeader_; }
 
     uint8_t revision() const { return revision_; }
 
@@ -123,6 +124,7 @@ private:
     uint8_t currentTab_;
     uint8_t cursor_;
     uint8_t stepCursor_;
+    bool onHeader_;
     bool fieldOpen_;
     uint16_t tempo_;
     uint8_t clockSource_;

@@ -78,6 +78,8 @@ function editModel(over: Partial<PatternScreenPixelModel> = {}): PatternScreenPi
     cursor: 5,
     playhead: 0,
     barLength: 3,
+    sepSelected: false,
+    sepOpen: false,
     ...over,
   };
 }
