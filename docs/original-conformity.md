@@ -65,14 +65,14 @@ Each row below carries the original's line, so the reading can be checked.
 
 | Element | Original | FlexSeq | Verdict |
 |---|---|---|---|
-| Main parameter, CLOCK | value `/N` or `xN`, label `SUBDIVISION` (`UI.ino:190-200,213-219`) | pattern name, always | **omission** — lot 11 |
-| Main parameter, RAND | value `N0%`, label `SKIP CHANCE` | pattern name, always | **omission** — lot 11 |
-| Main parameter, SEQ | value `A1` to `B8`, label `PATTERN` | pattern name | conform in content, not in size |
-| `MODE` | `CLOCK` / `RAND` / `SEQ` (`UI.ino:126,145-150`) | absent | **omission** — lot 11 |
-| Field 2, CLOCK | label `OFFSET:`, value `offset/pulsesPerStep` (`UI.ino:128,151-159`) | absent | **omission** — lot 11 |
-| Field 2, RAND | label `SUBDIV:`, value `/N` or `xN` (`UI.ino:130,160-165`) | absent | **omission** — lot 11 |
+| Main parameter, CLOCK | value `/N` or `xN`, label `SUBDIVISION` (`UI.ino:190-200,213-219`) | same, in `stkL`, since 2026-09-04 | **conform** — lot 11 |
+| Main parameter, RAND | value `N0%`, label `SKIP CHANCE` | same, in `stkL`, since 2026-09-04 | **conform** — lot 11 |
+| Main parameter, SEQ | value `A1` to `B8`, label `PATTERN` | pattern name, and the SEQ tab keeps the FlexSeq layout | conform in content, not in size — **lot 12**, by decision 2 of PRD §12.1 |
+| `MODE` | `CLOCK` / `RAND` / `SEQ` (`UI.ino:126,145-150`) | same, line 1 in the three modes, since 2026-09-04 | **conform** — lot 11. It is also what makes the mode reversible: PRD §12.1 decision 10 |
+| Field 2, CLOCK | label `OFFSET:`, value `offset/pulsesPerStep` (`UI.ino:128,151-159`) | same, since 2026-09-04 | **conform** — lot 11. The bound is `ticksPerStep - 1` capped by 255, applied by the engine |
+| Field 2, RAND | label `SUBDIV:`, value `/N` or `xN` (`UI.ino:130,160-165`) | same, since 2026-09-04 | **conform** — lot 11 |
 | Field 2, SEQ | label `EDIT PATTERN`, a filled box as the entry marker (`UI.ino:132,174-178`) | an entry field | conform |
-| `MOD` | `OFF` / `CV1` / `CV2` (`UI.ino:134,166-172`) | absent | **omission** — lot 13 |
+| `MOD` | `OFF` / `CV1` / `CV2` (`UI.ino:134,166-172`) | line 3 drawn since 2026-09-04, navigable, and it always reads `OFF` | **partial** — the field exists, the mechanism is lot 13. Its destinations depend on the mode: PRD §10.2 |
 | `LEN` | does not exist, 16 steps fixed | present | **addition**, PRD §1 |
 | `SEP` | does not exist | present | **addition**, PRD §6.2, moves into EDIT at lot 12 |
 
@@ -140,7 +140,7 @@ Each row below carries the original's line, so the reading can be checked.
 | Offset clamp | **inconsistent**: to `pulsesPerCycle` when edited (`Interactions.ino:260`), to `pulsesPerStep - 1` when the rate changes (`Interactions.ino:150`) | always `min(ticksPerStep - 1, 255)` | **FlexSeq is consistent where the original is not** — assumed |
 | Mode change | **clears** both CV targets (`Interactions.ino:249-250`) | the routing survives | **assumed divergence**, PRD §10 validated |
 | Saving | `saveState()` on **every** change | after a 3 s quiet delay | **assumed divergence**, PRD §11.1, with its reason |
-| Fonts | two: `stkL` for the main value, `velvetscreen` for the rest | one, `u8g2_font_5x7_tr` | **omission** — line 29 |
+| Fonts | two: `stkL` for the main value, `velvetscreen` for the rest | the same two, byte for byte, since 2026-09-04 | **conform** — lot 11. u8g2's own font left the production image; `env:bringup` keeps it |
 
 ## The six decisions — ANSWERED by the owner, 2026-08-23
 
