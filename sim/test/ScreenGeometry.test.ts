@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { OLED_H, OLED_W } from "../src/sim/OledDisplay.js";
 import * as md from "../src/sim/MainScreenDisplay.js";
 import { GRID_STEPS, ROW_WIDTH } from "../src/sim/PatternView.js";
+import * as ps from "../src/sim/PatternScreenPixels.js";
 import {
   GLYPH_HEIGHT,
   STK_L,
@@ -119,7 +120,15 @@ function production(family: Family, index: number): number | undefined {
     };
     return fonts[index];
   }
-  const table: Record<number, number> = { 0: ROW_WIDTH, 2: GRID_STEPS };
+  const table: Record<number, number> = {
+    0: ROW_WIDTH, 1: ps.GRID_ROWS, 2: GRID_STEPS,
+    3: ps.COL_SPACING, 4: ps.GRID_WIDTH, 5: ps.COL_X0,
+    6: ps.ROW_CY_0, 7: ps.ROW_SPACING, 8: ps.GLYPH_HALF,
+    9: ps.SELECT_SIZE, 10: ps.DIGIT_W, 11: ps.DIGIT_H, 12: ps.DIGIT_DY,
+    13: ps.BAR_HEIGHT, 14: ps.BAR_HALF_H,
+    15: ps.TITLE_BASELINE_Y, 16: ps.HEADER_LINE_X, 17: ps.HEADER_LINE_Y,
+    18: ps.HEADER_LINE_W, 19: ps.LAST_ROW_CY, 20: ps.GRID_BOTTOM_Y,
+  };
   return table[index];
 }
 
