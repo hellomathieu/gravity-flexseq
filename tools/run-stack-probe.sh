@@ -157,6 +157,8 @@ written = re.search(r"\((\d+) octets non vierges sur (\d+) lus\)", txt)
 if not m:
     print(f"  {mark(False)} sortie du harnais illisible"); print(txt); sys.exit(1)
 peak, free, margin = int(m[1]), int(m[2]), int(m[3])
+h = re.search(r"trous (\d+) plus_long (\d+) bas_sali (\d+)", txt)
+holes, longest, bottom_dirty = (int(h[1]), int(h[2]), int(h[3])) if h else (0, 0, 0)
 
 isrs = re.findall(r"^  (\S+\s+\S+.*?)\s+(\d+)$", txt, re.M)
 silent = [name.strip() for name, n in isrs if int(n) == 0]
@@ -175,6 +177,19 @@ else:
           f"{len(isrs) - len(silent)}/{len(isrs)} vecteurs parcourus"
           + (f"  {ERR}muets : {', '.join(silent)}{Z}" if silent else
              f"  {DIM}(encodeur, uClock, millis, MIDI, ADC){Z}"))
+# Le motif est sali jusqu'en bas de la RAM libre : une allocation ne se distingue
+# plus de la pile, donc la mesure n'est pas evaluable. C'est la raison pour
+# laquelle l'ancien balayage allait vers le bas ; elle devient une condition
+# nommee au lieu d'un biais qui sous-rapportait en silence.
+if bottom_dirty:
+    print(f"  {mark(False)} Pic de pile        NON EVALUABLE — le motif est sali "
+          f"jusqu'au premier octet au-dessus de _end")
+    print(f"  {DIM}   Une allocation en bas de la RAM libre y ressemblerait a une")
+    print(f"     pile descendue jusque-la. Les deux ne se separent pas ici.{Z}")
+    sys.exit(1)
+if holes:
+    print(f"  {DIM}   {holes} trou(s) de 8 o ou plus dans la zone, le plus long "
+          f"{longest} o — une trame allouee sans etre entierement ecrite{Z}")
 print(f"  {mark(fits_reserve)} Pic de pile        {peak:4d} o   "
       f"{DIM}— reserve exigee {reserve} o ({peak * 100 // reserve} % utilises){Z}")
 print(f"  {mark(fits_ram)} Marge              {margin:4d} o   "

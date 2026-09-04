@@ -334,15 +334,41 @@ int main(int argc, char** argv)
         }
     }
 
-    /* Frontiere du motif, depuis le haut. */
-    uint16_t watermark = ramend + 1;
-    for (uint16_t a = ramend; a > end_addr + PATTERN_RUN; --a) {
-        int clean = 1;
-        for (uint8_t k = 0; k < PATTERN_RUN; ++k)
-            if (avr->data[a - k] != PATTERN) { clean = 0; break; }
-        if (clean) { watermark = a; break; }
+    /* Le plus BAS octet sali, balaye depuis le bas.
+     *
+     * La version precedente balayait depuis le HAUT et s'arretait au premier
+     * motif intact de PATTERN_RUN octets. Elle sous-rapportait des qu'un trou de
+     * cette taille existait DANS la zone de pile — une trame allouee mais pas
+     * entierement ecrite. Mesure du 2026-09-04 : sur une image en mode SEQ elle
+     * rendait 26 o quand la pile etait descendue a 233, a cause d'un seul trou de
+     * 20 octets. Trois des quatre courses etaient touchees.
+     *
+     * Le balayage montant n'a pas ce defaut. Le risque qu'il porte est l'autre :
+     * une allocation au bas de la RAM libre salirait le motif sans que la pile y
+     * soit descendue. C'est pour cela que le sens descendant avait ete choisi. Ce
+     * risque est desormais une CONDITION NOMMEE et non un biais silencieux : si
+     * le tout premier octet au-dessus de _end est sali, on ne sait pas distinguer
+     * une allocation d'une pile, et la mesure n'est pas evaluable. */
+    uint16_t lowest = ramend + 1;
+    for (uint16_t a = end_addr; a <= ramend; ++a)
+        if (avr->data[a] != PATTERN) { lowest = a; break; }
+    const int bottom_dirty = (lowest == end_addr);
+    const uint16_t used = (lowest <= ramend)
+        ? (uint16_t)(ramend - lowest + 1) : 0;
+
+    /* Les trous propres a l'interieur de la zone : ils ne changent pas la mesure,
+     * ils expliquent pourquoi l'ancienne methode se trompait. */
+    uint16_t holes = 0, longest = 0, run = 0;
+    for (uint16_t a = lowest; a <= ramend && lowest <= ramend; ++a) {
+        if (avr->data[a] == PATTERN) {
+            ++run;
+            if (run > longest) longest = run;
+        } else {
+            if (run >= PATTERN_RUN) ++holes;
+            run = 0;
+        }
     }
-    const uint16_t used = (uint16_t)(ramend - watermark);
+    if (run >= PATTERN_RUN) ++holes;
 
     printf("=== INTERRUPTIONS PARCOURUES ===\n");
     for (size_t i = 0; i < WATCHED_COUNT; ++i)
@@ -426,5 +452,6 @@ int main(int argc, char** argv)
     printf("\n=== PILE ===\n");
     printf("  pic %u o sur %u libres, marge %u o\n", used, free_ram,
            (uint16_t)(free_ram - used));
+    printf("trous %u plus_long %u bas_sali %d\n", holes, longest, bottom_dirty);
     return 0;
 }
