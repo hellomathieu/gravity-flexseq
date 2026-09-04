@@ -32,6 +32,23 @@ export const COL_RIGHT_X = 66;
 export const COL_W = 60;
 export const TEXT_INSET = 2;
 
+export const ROW_A_BASELINE_Y = ROW_A_BOX_Y + 7;
+export const ROW_B_BASELINE_Y = ROW_B_BOX_Y + 7;
+export const HEADLINE_BASELINE_Y = 8;
+export const GLYPH_SIZE = 7;
+
+export const LINE_LABEL_X = 62;
+export const LINE_VALUE_X = 99;
+export const LINE_0_BASELINE_Y = 8;
+export const LINE_SPACING_Y = 11;
+export const LINE_1_BASELINE_Y = LINE_0_BASELINE_Y + LINE_SPACING_Y;
+export const LINE_2_BASELINE_Y = LINE_0_BASELINE_Y + 2 * LINE_SPACING_Y;
+
+export const MAIN_CENTRE_X = 29;
+export const MAIN_BOX_W = 55;
+export const MAIN_VALUE_BASELINE_Y = 28;
+export const MAIN_LABEL_BASELINE_Y = 41;
+
 export const CLOCK_SOURCE_LABELS = ["INT", "EXT24", "EXT4", "EXT2", "EXT1", "MIDI"] as const;
 
 

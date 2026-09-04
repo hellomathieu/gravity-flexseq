@@ -96,9 +96,15 @@ function production(family: Family, index: number): number | undefined {
       4: md.TAB_BASELINE_Y, 5: md.TAB_TOP_Y, 6: md.TAB_BOX_Y, 7: md.TAB_BOX_H,
       8: md.RULE_Y, 9: md.RULE_X, 10: md.RULE_W,
       11: md.HEADLINE_BOX_X, 12: md.HEADLINE_BOX_Y, 13: md.HEADLINE_BOX_W,
-      14: md.HEADLINE_BOX_H,
+      14: md.HEADLINE_BOX_H, 15: md.HEADLINE_BASELINE_Y,
       16: md.ROW_A_BOX_Y, 17: md.ROW_B_BOX_Y, 18: md.ROW_BOX_H,
       19: md.COL_LEFT_X, 20: md.COL_RIGHT_X, 21: md.COL_W, 22: md.TEXT_INSET,
+      23: md.GLYPH_SIZE, 24: md.ROW_A_BASELINE_Y, 25: md.ROW_B_BASELINE_Y,
+      26: md.LINE_LABEL_X, 27: md.LINE_VALUE_X,
+      28: md.LINE_0_BASELINE_Y, 29: md.LINE_1_BASELINE_Y, 30: md.LINE_2_BASELINE_Y,
+      31: md.MAIN_CENTRE_X, 32: md.MAIN_BOX_W,
+      33: md.MAIN_VALUE_BASELINE_Y, 34: md.MAIN_LABEL_BASELINE_Y,
+      35: md.LINE_SPACING_Y,
     };
     return table[index];
   }

@@ -92,8 +92,37 @@ export function textPixels(text: string, font: Font = VELVETSCREEN): Pixel[] {
   return px;
 }
 
-/** Largeur en pixels d'un texte, somme des avances comme u8g2::getStrWidth. */
+/**
+ * Largeur en pixels d un texte, exactement comme `u8g2_GetStrWidth`.
+ *
+ * ⚠️ **Ce n est PAS la somme des avances.** u8g2 retire l avance du DERNIER
+ * glyphe et ajoute a la place sa largeur d encre reelle plus son decalage
+ * horizontal — `u8g2_font.c` lignes 1361 a 1368. Pour `MOD:` la somme des
+ * avances vaut 18 et u8g2 rend 17, parce que le deux-points mesure 1 pixel
+ * d encre pour une avance de 2. L ecart d un pixel se voit sur chaque pave de
+ * curseur et sur chaque texte centre.
+ *
+ * L ajustement est saute quand le dernier glyphe n a aucune encre — un espace
+ * final, par exemple. C est le garde `glyph_width != 0` de u8g2.
+ */
 export function textWidth(text: string, font: Font = VELVETSCREEN): number {
+  let w = 0;
+  let last: Glyph | undefined;
+  for (const ch of text) {
+    const g = glyphFor(ch, font);
+    if (!g) continue;
+    w += g.advance;
+    last = g;
+  }
+  if (last !== undefined && last.w !== 0) {
+    w -= last.advance;
+    w += last.w + last.xoff;
+  }
+  return w;
+}
+
+/** Somme des avances, ce que rend `u8g2_DrawStr` — distinct de textWidth. */
+export function textAdvance(text: string, font: Font = VELVETSCREEN): number {
   let w = 0;
   for (const ch of text) w += advanceOf(glyphFor(ch, font));
   return w;
