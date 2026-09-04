@@ -96,6 +96,10 @@ Each row below carries the original's line, so the reading can be checked.
 | `REVERSE ENCODER` | toggles, saves, shows `DONE` (`Interactions.ino:64-68`) | preference stored, no page | **omission** — lot 14 |
 | `FACTORY RESET` | writes `memCode - 1` at 1023 then reboots (`Interactions.ino:69-71`) | absent | **omission** — lot 14 |
 | `DONE` overlay | a framed box after an action (`UI.ino:341-350`) | absent | **omission** — lot 14 |
+| `DONE`, its geometry | a box of **64 x 29** centred at `x=64`, baseline 32, with a **drop shadow of 2 px**, over two cleared boxes at `(18,13,93,32)` and `(18,16,96,30)` (`UI.ino:341-350`) | absent | **omission** — lot 14. ⚠️ **The clear starts at `x=18` while the labels start at `x=8`, so ten pixels of every line survive** to the left of the box, which reads as about two letters. **FlexSeq clears the full width instead — decided by the owner on 2026-09-04.** The stubs carry no information and a reader takes them for a defect. This removes no feature: it is a remainder of the original's clear rectangle, not a function |
+| `DONE`, what clears it | **the next release of the encoder button**, and that release does nothing else — it is consumed (`Interactions.ino:10-11`). **There is no timer** | absent | **omission** — lot 14. **FlexSeq keeps the behaviour of the original: no timer, decided by the owner on 2026-09-04.** An automatic return after two seconds was proposed and set aside |
+| `DONE`, when it appears | after `CALIBRATE CV INS` and after `REVERSE ENCODER`. ⚠️ **Not after `ROTATE SCREEN`**, which only flips the image (`Gravity.ino:679-685`) — the flip is its own answer. Not after `FACTORY RESET` either, which reboots | absent | **omission** — lot 14. The asymmetry is deliberate in the original and FlexSeq keeps it |
+| `FACTORY RESET`, no confirmation | writes `memCode - 1` at 1023 and **reboots at once** (`Interactions.ino:69-71`). One press destroys every pattern and every setting | absent | **omission, and FlexSeq ADDS a confirmation — decided by the owner on 2026-09-04**, conditional on the cost being close to zero. The estimate is 60 to 150 bytes of Flash, because the `DONE` machinery already exists and the addition is one state, one text and a branch with two outcomes. ⚠️ **That figure is an estimate and not a measurement**: it is measured inside the lot, and the owner accepts or refuses it then |
 
 ## The gestures
 
@@ -105,7 +109,7 @@ Each row below carries the original's line, so the reading can be checked.
 | Rotate, inside a tab | moves the menu item (`Interactions.ino:178-184`) | moves the cursor | conform |
 | Rotate, a field open | changes the value | changes the value | conform |
 | Press, short | enters the tab, or opens the field (`Interactions.ino:13,51`) | same | conform |
-| Press, long | goes back one level, threshold **300 ms** (`Interactions.ino:73-82`) | goes back, threshold **750 ms** | **divergence to decide** — question 3 |
+| Press, long | goes back one level, threshold **300 ms** (`Interactions.ino:73-82`) | goes back, threshold **750 ms** | **divergence DECIDED on 2026-09-04 by the owner: FlexSeq keeps 750 ms.** The 300 ms of the original is now measured and not deduced, which is what PRD §12.1 asked for: it read the gesture card, which says "about 1 s", and the card is wrong by a factor of three. FlexSeq is therefore **slower than the original by 450 ms** on every "go back", and that is a choice. ⚠️ The rule that the long press **closes an open field before it goes up a level** is conform: `Interactions.ino:74` tests the open field before everything else |
 | SHIFT + rotate, tab bar | changes the tab's **main parameter** (`Interactions.ino:117-171`) | changes the tab's main parameter: SUBDIV in CLOCK, the skip chance in RAND, the pattern in SEQ, the tempo on the clock tab | **conform** — closed by lot 19, 2026-08-23. The value is edited before it is **displayed** for CLOCK and RAND: the display is lot 11 |
 | SHIFT + rotate, in a tab | changes the selected value | changes the value | conform |
 | SHIFT + press, editor | **toggles the step** under the cursor (`Interactions.ino:397-399`) | encoder press toggles it | **divergence to decide** — question 2 |
@@ -232,6 +236,33 @@ values, so these are FlexSeq's own choices, not a branch difference.
 
 The tempo range matters twice over: PRD §16 removed the encoder acceleration, so
 the range is crossed detent by detent. 20 to 200 is 180 detents; 30 to 300 is 270.
+
+## The large font of the original — decoded on 2026-09-04
+
+`stkL` draws the main parameter of every tab. Its header was decoded from
+`Gravity.ino:173`, so these figures are read and not estimated:
+
+| Property | Value |
+|---|---|
+| Glyph count | **21** |
+| Maximum glyph width | **15 px** |
+| Glyph height | **23 px** |
+| Weight | **569 bytes** |
+
+**The 21 glyphs are accounted for**: the ten digits, then `/`, `x` and `%`, then
+`A` and `B` for a pattern name, then `E`, `X`, `T`, `M`, `I` and `D` — because the
+clock tab writes `EXT` and `MIDI` large in place of the number (`UI.ino:81-86`).
+
+✅ **FLEXSEQ REUSES THIS FONT, decided by the owner on 2026-09-04.** Two facts made
+the decision. `GravityFW` and FlexSeq are both **GPLv3**, so the reuse is
+compatible and **attribution is the only duty** — PRD §12.1 already settled that
+for the navigation glyphs. And the width fits by construction: the original itself
+draws `/128` inside the 55 px box of the main parameter.
+
+⚠️ **This supersedes the estimate of PRD §12.1**, which planned **ten** glyphs of
+our own at about 500 bytes, for the pattern name alone. The real need is **21**
+glyphs, and the original's font answers it for 569 bytes. Against the Flash margin
+of 3869 bytes measured on 2026-09-04, the cost is affordable.
 
 ## The modes, parameters and values of the original
 
