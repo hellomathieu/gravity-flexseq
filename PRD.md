@@ -393,6 +393,22 @@ The 2 inputs stay bipolar, ±5 V. `AnalogInput::Read()` returns a value **alread
 The **global BPM modulation** of Phase 2 is kept as it is: global, and not per channel. It composes with the SUBDIV of the channel, so there is **no priority to settle**. The mention "and the priorities" of the old wording was a false problem.
 ### 10.2 Destinations — per channel
 Destinations: `none / PATTERN / LENGTH / RESET / STEP`. The choice is **explicit**. Phase 2 deduced it from the **mode** of the channel, and that is no longer enough since LENGTH became an execution state per channel (§5.2): a channel in sequencer mode now holds **two** modulatable parameters instead of one.
+
+⚠️ **THE DESTINATIONS DEPEND ON THE MODE SINCE 2026-09-04, decided by the owner.** The paragraph above says the choice is explicit and never deduced from the mode. That now holds **for the SEQ mode alone**:
+
+\| Mode \| What `MOD` modulates \|
+\|---\|---\|
+\| `CLOCK` \| the `SUBDIVISION`, **as in the original** \|
+\| `RANDOM` \| the `SKIP CHANCE`, **as in the original** \|
+\| `SEQ` \| one of `PATTERN`, `LENGTH`, `RESET` or `STEP`, the FlexSeq extension \|
+
+**The reason the paragraph above gave still stands, and it is exactly why the rule splits.** A channel in SEQ mode holds two modulatable parameters, so there the choice must be explicit. A channel in CLOCK or in RANDOM holds **one**, which is its main parameter, so the mode names it without ambiguity — and that is what the original does (`UI.ino:134,166-172`).
+
+**What this restores.** `docs/original-conformity.md` recorded `MOD` as an omission of FlexSeq. Routing a CV to the subdivision or to the skip chance was impossible, because neither was in the destination list. This decision puts the feature of the original back.
+
+⚠️ **The mechanism does NOT exist yet, and lot 11 does not build it.** Lot 11 draws the `MOD:` line, and it reads `OFF`, which is true: no channel can be in any other state until the modulation of the subdivision and of the skip chance is implemented. That belongs to the CV routing lot, 13. The storage question — which code carries "the main parameter of the mode" in bytes 7 and 8 of the channel record — is settled there and not here. `NONE` staying 0 means any earlier image still reads without migration.
+
+⚠️ **The contradiction this closes** was line 88 of `docs/open-risks.md`, opened 2026-09-04: §12.1 gave a CLOCK tab a `MOD:` line while §10.2 offered no destination it could point at.
 - **PATTERN** — the channel plays `template[clamp(selectedPattern + f(cv), 0, 15)]`, the derived index, at the step boundary. The selected pattern that the user sets and the persistence stores does not move. The channel plays a separate copy of the template at the derived index. Its own instance keeps its edits, and the edit always goes into the instance, so a modulation destroys nothing (§5.0).
 - **LENGTH** — `effectiveLength = clamp(base + f(cv), 1, MAX_LENGTH)`, at the step boundary. `MAX_LENGTH` is **36 since lot SF3**, 2026-08-30.
 - **STEP** — a **read shift**: `readStep = positiveModulo(localStep + f(cv), effectiveLength)`. The clock keeps driving `localStep`, and **nothing is mutated**, so a return of the CV to zero puts the read exactly where it would be. §9 stays intact. ⚠️ **The result always holds `0 ≤ readStep < effectiveLength`**, for every valid input. §10.4 carries the range of `f(cv)`.
@@ -699,6 +715,20 @@ State: **designed, and not implemented**, except the v2 format, which is impleme
 **1. The layout of a channel tab is the one described above**, and it is now validated: one large parameter on the left with its label under it, and three lines on the right. The geometry comes from the original's drawing code, and it was checked with the real font, glyph by glyph: the longest line is `OFFSET:` with `0/24`, and it ends at `x=117` of 127. Nothing overlaps and nothing overflows.
 
 **2. Lot 11 delivers CLOCK and RANDOM, and it leaves the SEQ tab as it is.** Lot 12 then delivers the `CONFIG PATTERN` page and the target form of SEQ. The reason is not tidiness: the target form of SEQ sends `LENGTH` onto that page, so delivering it first would leave `LENGTH` **unreachable** between the two lots. The accepted price is that the layout of SEQ changes once.
+
+**3bis. BOTH FONTS OF THE ORIGINAL ARE REUSED, and the cheaper path is the faithful one — decided by the owner on 2026-09-04, on a measurement.** The original draws with two fonts: `stkL` for the main parameter, and `velvetscreen` for every label. FlexSeq uses u8g2's `5x7` for everything.
+
+\| Configuration \| Flash \| RAM \|
+\|---\|---\|---\|
+\| u8g2 `5x7` alone, before this decision \| 26236 \| 1502 \|
+\| u8g2 `5x7` kept for the labels, plus `stkL` \| 26832 \| 1502 \|
+\| **`velvetscreen` and `stkL`, both of the original** \| **26464** \| **1502** \|
+
+**Taking both fonts of the original costs 368 bytes LESS than keeping u8g2's font and adding `stkL`.** u8g2's `5x7` weighs 804 bytes and `velvetscreen` weighs 437, so dropping the first pays most of the second. **RAM does not move at all**: u8g2 holds one font pointer and that field already exists.
+
+**A second cost, and it is not in bytes.** The TypeScript preview already draws with `velvetscreen`. Keeping u8g2's font in the firmware would mean the module and its preview never show the same typography, and the divergence `tab_top_y` — 57 against 59, found by the geometry vector file of ADR 0012 — would stay open for good.
+
+⚠️ **The work is not in the bytes either.** A 5 px font in place of a 7 px one moves every text of every screen, so the pixel proof of `tools/run-screen-dump.sh` changes, and so do the layout constants tuned for seven pixels. That is measured and re-established as its own step, never mixed with a step that adds fields.
 
 **3. THE LARGE FONT OF THE ORIGINAL IS REUSED, and this SUPERSEDES the estimate below.** This section planned **ten** glyphs of our own, at about 500 bytes, for the pattern name alone. The original's `stkL` was decoded on 2026-09-04: **21 glyphs, 15 px wide at most, 23 px tall, 569 bytes**. The 21 are accounted for, and six of them are `E`, `X`, `T`, `M`, `I` and `D`, because the clock tab writes `EXT` and `MIDI` large. `GravityFW` and FlexSeq are both GPLv3, so **attribution is the only duty**, exactly as this section already decided for the navigation glyphs. The figures live in `docs/original-conformity.md`.
 
