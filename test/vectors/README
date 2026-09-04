@@ -1,8 +1,13 @@
-# Golden vectors — the CV specification of lot E3
+# Golden vectors — read by both languages
 
-`cv_spec_vectors.tsv` holds the expected results of the CV chain. The C++ suite
-and the TypeScript suite read the **same file**, so the two languages cannot
-diverge in silence.
+This directory holds the files that **both languages read**, so the two cannot
+diverge in silence. There are two:
+
+- `cv_spec_vectors.tsv` — the CV specification of lot E3, described below;
+- `screen_geometry_vectors.tsv` — the screen geometry, **ADR 0012**, described
+  at the end of this file.
+
+`cv_spec_vectors.tsv` holds the expected results of the CV chain.
 
 This directory holds **data only**. It is not a test module: its name does not
 start with `test_`, so no `test_filter` collects it, and that is deliberate.
@@ -101,3 +106,70 @@ offset. Several lines exist only to hold that rule.
 
 ⚠️ **A suite that loads zero vector must FAIL.** A green suite that checked
 nothing is worse than a red one.
+
+
+# `screen_geometry_vectors.tsv` — the screen geometry
+
+**Normative decision: ADR 0012.** A screen geometry existed twice, once in the
+AVR headers and once in the TypeScript preview. This file removes the copy: each
+side confronts its own constants to the same line.
+
+## Why the shape differs from the CV file
+
+The CV file carries `a`, `b` and `c` because a CV fact has one to three inputs.
+A geometry fact has exactly **one selector and one value**, so two always-empty
+columns would be dead weight. The **principles are unchanged**: the family alone
+decides how a line is read, the `id` is never parsed, a needed column that holds
+`-` is refused, and **a suite that loads zero vectors must fail**.
+
+## Format
+
+```text
+family	id	index	owners	expected
+```
+
+- `family` names the screen region. `M` is the main screen, `E` is the pattern
+  editor.
+- `id` is a stable name, for a human. ⚠️ **The reader never parses it.**
+- `index` selects the constant inside the family. It is the reader's only
+  discriminator besides the family.
+- `owners` says **which languages hold the fact**: `both`, `cpp` or `ts`.
+- `expected` is the value.
+
+## Why `owners` exists
+
+A reader that silently skipped a line it could not confront would be a hole in
+the guard. So each reader confronts the lines it owns, and **refuses** a
+`(family, index)` pair it does not know. A fact that only one language holds is
+therefore **recorded and visible**, never skipped in silence.
+
+The TypeScript view of the pattern editor is **textual and not graphical**, so
+most of family `E` is `cpp` today. That is a measured gap, not a defect.
+
+## Three properties, and the third is the mirror of the second
+
+1. the file loads, and it holds at least one case;
+2. every line the language owns equals its production constant;
+3. **every constant the reader knows is named by the file** — a constant the
+   reader could confront and the file does not name would be unguarded.
+
+## What the file found on its first run — 2026-09-04
+
+⚠️ **`tab_top_y` is 57 in C++ and 59 in TypeScript.** The cause is established:
+C++ computes `63 - 6` with u8g2's `5x7` font, which is 7 px tall, and TypeScript
+computes `63 - 4` with `velvetscreen`, which is 5 px tall. **The two languages do
+not use the same font**, so the top of a tab glyph sits two pixels higher in the
+firmware than in the preview.
+
+The line is therefore `cpp` today, and **not** `both`: the value is **derived**
+from a font height, and the firmware's font changes in lot 11, which gives it the
+original's fonts (PRD §12.1, amended 2026-09-04). When that lands, `tab_top_y`
+becomes 59 on both sides and the line moves to `both`. That move is a deliberate,
+reviewable act, which is the point of the column.
+
+## The counter-proofs
+
+Nine, and each was exercised and seen red on 2026-09-04, naming its own cause:
+an absent file, an empty file, zero cases, a line with the wrong field count, an
+unknown family, a false literal, a duplicated id, an `index` the reader does not
+know, and a constant the reader knows that the file does not name.

@@ -56,7 +56,7 @@ export function viewPattern(pattern: Pattern, length: number): CellView[] {
   return cells;
 }
 
-const ROW_WIDTH = 12;
+export const ROW_WIDTH = 12;
 
 /**
  * Rendu ASCII deterministe (utile pour les tests et le debug terminal).
