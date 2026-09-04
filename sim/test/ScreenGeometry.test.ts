@@ -5,7 +5,13 @@ import { fileURLToPath } from "node:url";
 import { OLED_H, OLED_W } from "../src/sim/OledDisplay.js";
 import * as md from "../src/sim/MainScreenDisplay.js";
 import { GRID_STEPS, ROW_WIDTH } from "../src/sim/PatternView.js";
-import { GLYPH_HEIGHT } from "../src/sim/oledFont.js";
+import {
+  GLYPH_HEIGHT,
+  STK_L,
+  STK_L_HEIGHT,
+  VELVETSCREEN,
+  type Font,
+} from "../src/sim/oledFont.js";
 
 /**
  * Geometrie d'ecran partagee — ADR 0012.
@@ -97,11 +103,24 @@ function production(family: Family, index: number): number | undefined {
     return table[index];
   }
   if (family === "F") {
-    const fonts: Record<number, number> = { 0: GLYPH_HEIGHT };
+    const fonts: Record<number, number> = {
+      0: GLYPH_HEIGHT,
+      1: STK_L_HEIGHT,
+      2: Object.keys(VELVETSCREEN).length,
+      3: Object.keys(STK_L).length,
+      4: maxWidthOf(VELVETSCREEN),
+      5: maxWidthOf(STK_L),
+    };
     return fonts[index];
   }
   const table: Record<number, number> = { 0: ROW_WIDTH, 2: GRID_STEPS };
   return table[index];
+}
+
+function maxWidthOf(font: Font): number {
+  let w = 0;
+  for (const g of Object.values(font)) if (g.w > w) w = g.w;
+  return w;
 }
 
 const vectors = loadVectors();

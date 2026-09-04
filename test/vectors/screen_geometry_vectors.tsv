@@ -58,4 +58,10 @@ M	main_value_baseline_y	33	cpp	MAIN_VALUE_BASELINE_Y	28
 M	main_label_baseline_y	34	cpp	MAIN_LABEL_BASELINE_Y	41
 M	line_spacing_y	35	cpp	LINE_SPACING_Y	11
 F	label_font_height	0	both	FONT_VELVETSCREEN_HEIGHT	5
-F	main_font_height	1	cpp	FONT_STK_L_HEIGHT	23
+F	main_font_height	1	both	FONT_STK_L_HEIGHT	23
+F	label_font_glyphs	2	both	FONT_VELVETSCREEN_GLYPHS	52
+F	main_font_glyphs	3	both	FONT_STK_L_GLYPHS	21
+F	label_font_max_width	4	both	FONT_VELVETSCREEN_MAX_WIDTH	5
+F	main_font_max_width	5	both	FONT_STK_L_MAX_WIDTH	15
+F	label_font_bytes	6	cpp	FONT_VELVETSCREEN_BYTES	437
+F	main_font_bytes	7	cpp	FONT_STK_L_BYTES	569

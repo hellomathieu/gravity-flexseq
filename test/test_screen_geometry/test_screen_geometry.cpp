@@ -177,6 +177,12 @@ bool production(char family, int index, int& out) {
         switch (index) {
             case 0: out = flexseq::FONT_VELVETSCREEN_HEIGHT; return true;
             case 1: out = flexseq::FONT_STK_L_HEIGHT; return true;
+            case 2: out = flexseq::FONT_VELVETSCREEN_GLYPHS; return true;
+            case 3: out = flexseq::FONT_STK_L_GLYPHS; return true;
+            case 4: out = flexseq::FONT_VELVETSCREEN_MAX_WIDTH; return true;
+            case 5: out = flexseq::FONT_STK_L_MAX_WIDTH; return true;
+            case 6: out = flexseq::FONT_VELVETSCREEN_BYTES; return true;
+            case 7: out = flexseq::FONT_STK_L_BYTES; return true;
             default: return false;
         }
     }
