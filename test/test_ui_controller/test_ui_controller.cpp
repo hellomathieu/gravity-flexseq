@@ -41,8 +41,17 @@ struct Rig {
         TEST_FAIL_MESSAGE("tab never reached");
     }
 
+    // LENGTH, SUBDIV et MOD ont quitte l'onglet pour la page CONFIG au lot 12 :
+    // le harnais y entre de lui-meme, sinon chaque test le repeterait.
     void gotoField(UiController::Field field) {
-        for (uint8_t guard = 0; guard < UiController::CHANNEL_TAB_FIELDS; ++guard) {
+        const bool onConfig = (field == UiController::FIELD_LENGTH
+                               || field == UiController::FIELD_SUBDIV
+                               || field == UiController::FIELD_MOD);
+        if (onConfig && !ui.isOnConfigPage()) {
+            gotoField(UiController::FIELD_CONFIG);
+            ui.handle(UiController::EVENT_PRESS);
+        }
+        for (uint8_t guard = 0; guard <= UiController::CHANNEL_TAB_FIELDS; ++guard) {
             if (ui.field() == field) {
                 return;
             }
@@ -146,11 +155,11 @@ void test_rotate_moves_the_field_cursor_and_wraps() {
     Rig r;
     r.enterTab();
     r.ui.handle(UiController::EVENT_ROTATE, 1);
-    TEST_ASSERT_EQUAL(UiController::FIELD_PATTERN, r.ui.field());
+    TEST_ASSERT_EQUAL(UiController::FIELD_EDIT_ENTRY, r.ui.field());
     r.ui.handle(UiController::EVENT_ROTATE, -1);
     TEST_ASSERT_EQUAL(UiController::FIELD_MODE, r.ui.field());
     r.ui.handle(UiController::EVENT_ROTATE, -1);
-    TEST_ASSERT_EQUAL(UiController::FIELD_EDIT_ENTRY, r.ui.field());
+    TEST_ASSERT_EQUAL(UiController::FIELD_CONFIG, r.ui.field());
     r.ui.handle(UiController::EVENT_ROTATE, 1);
     TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MODE, r.ui.field(),
         "la liste boucle sur son premier champ, qui est MODE");
@@ -244,10 +253,11 @@ void test_the_clock_source_field_never_reaches_the_sentinel() {
     TEST_ASSERT_EQUAL_UINT8(0, r.ui.clockSource());
 }
 
+// ⚠️ PATTERN a quitte la liste des champs au lot 12 : c'est le parametre
+// PRINCIPAL d'un canal en SEQ, et il s'ajuste par SHIFT plus rotation SUR LA
+// BARRE, ce que PRD §12.1 demande depuis le 2026-08-23.
 void test_the_pattern_field_is_clamped_to_the_bank() {
     Rig r;
-    r.enterTab();
-    r.gotoField(UiController::FIELD_PATTERN);
     for (uint8_t i = 0; i < SequencerEngine::PATTERN_COUNT + 5; ++i) {
         r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
     }
@@ -332,20 +342,23 @@ void test_the_subdiv_field_walks_the_libgravity_list_and_clamps() {
     TEST_ASSERT_EQUAL_INT16(-24, r.engine.getSubdiv(0));
 }
 
+// ⚠️ SEP a quitte l'onglet pour l'EN-TETE de l'ecran EDIT au lot 12 : un cran a
+// gauche depuis le step 0 l'y atteint, et la rotation la fait defiler.
 void test_the_bar_length_field_walks_only_the_allowed_values() {
     Rig r;
-    r.enterTab();
-    r.gotoField(UiController::FIELD_BAR_LENGTH);
+    r.enterEdit();
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    r.ui.handle(UiController::EVENT_PRESS);
     TEST_ASSERT_EQUAL_INT8(SequencerEngine::DEFAULT_BAR_LENGTH, r.engine.getBarLength(0));
-    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
     TEST_ASSERT_EQUAL_INT8(6, r.engine.getBarLength(0));
-    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
     TEST_ASSERT_EQUAL_INT8(6, r.engine.getBarLength(0));
     for (uint8_t i = 0; i < UiController::BAR_LENGTH_CHOICE_COUNT + 3; ++i) {
-        r.ui.handle(UiController::EVENT_SHIFT_ROTATE, -1);
+        r.ui.handle(UiController::EVENT_ROTATE, -1);
     }
     TEST_ASSERT_EQUAL_INT8(SequencerEngine::BAR_NONE, r.engine.getBarLength(0));
-    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
     TEST_ASSERT_EQUAL_INT8(2, r.engine.getBarLength(0));
 }
 
@@ -385,7 +398,9 @@ void test_short_lists_never_accelerate() {
     r.gotoField(UiController::FIELD_LENGTH);
     r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 3);
     TEST_ASSERT_EQUAL_UINT8(SequencerEngine::DEFAULT_LENGTH + 1, r.engine.getEffectiveLength(0));
-    r.gotoField(UiController::FIELD_PATTERN);
+    // et le pattern, desormais le parametre principal, depuis la barre
+    r.ui.handle(UiController::EVENT_LONG_PRESS);
+    r.ui.handle(UiController::EVENT_LONG_PRESS);
     r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 3);
     TEST_ASSERT_EQUAL_INT8(1, r.engine.getSelectedPattern(0));
 }
@@ -863,6 +878,13 @@ struct ModeRig {
         }
         ui.handle(UiController::EVENT_PRESS);
     }
+
+    void gotoField(UiController::Field target) {
+        for (uint8_t guard = 0; guard <= UiController::CHANNEL_TAB_FIELDS; ++guard) {
+            if (ui.field() == target) return;
+            ui.handle(UiController::EVENT_ROTATE, 1);
+        }
+    }
 };
 
 }  // namespace
@@ -885,38 +907,86 @@ void test_a_random_tab_puts_the_subdivision_on_the_second_line() {
     TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MOD, r.ui.fieldAt(2), "ligne 3");
 }
 
-void test_a_seq_tab_keeps_its_fields_and_gains_the_mode() {
+void test_a_seq_tab_takes_the_three_lines_of_the_original() {
     ModeRig r(flexseq::MODE_SEQ);
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(6, r.ui.fieldCount(),
-        "SEQ garde ses cinq champs jusqu au lot 12, et gagne MODE");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(3, r.ui.fieldCount(),
+        "trois lignes comme CLOCK et RANDOM, depuis le lot 12");
     TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MODE, r.ui.fieldAt(0),
         "MODE est la ligne 1 dans les TROIS modes : sans lui, SEQ serait un aller simple");
-    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_PATTERN, r.ui.fieldAt(1), "2");
-    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_LENGTH, r.ui.fieldAt(2), "3");
-    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_EDIT_ENTRY, r.ui.fieldAt(5), "6");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_EDIT_ENTRY, r.ui.fieldAt(1), "ligne 2 : EDIT");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_CONFIG, r.ui.fieldAt(2), "ligne 3 : CONFIG");
 }
 
 void test_the_published_field_indices_agree_with_fieldAt() {
     ModeRig r(flexseq::MODE_SEQ);
     TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, UiController::SEQ_FIELD_INDEX_MODE, "MODE vaut 0");
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, UiController::SEQ_FIELD_INDEX_PATTERN, "PATTERN vaut 1");
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(2, UiController::SEQ_FIELD_INDEX_LENGTH, "LENGTH vaut 2");
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(3, UiController::SEQ_FIELD_INDEX_SUBDIV, "SUBDIV vaut 3");
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(4, UiController::SEQ_FIELD_INDEX_BAR_LENGTH, "BAR vaut 4");
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(5, UiController::SEQ_FIELD_INDEX_EDIT_ENTRY, "EDIT vaut 5");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, UiController::SEQ_FIELD_INDEX_EDIT_ENTRY, "EDIT vaut 1");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(2, UiController::SEQ_FIELD_INDEX_CONFIG, "CONFIG vaut 2");
     TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MODE,
         r.ui.fieldAt(UiController::SEQ_FIELD_INDEX_MODE), "index et fieldAt : MODE");
-    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_PATTERN,
-        r.ui.fieldAt(UiController::SEQ_FIELD_INDEX_PATTERN), "PATTERN");
-    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_LENGTH,
-        r.ui.fieldAt(UiController::SEQ_FIELD_INDEX_LENGTH), "LENGTH");
-    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_SUBDIV,
-        r.ui.fieldAt(UiController::SEQ_FIELD_INDEX_SUBDIV), "SUBDIV");
-    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_BAR_LENGTH,
-        r.ui.fieldAt(UiController::SEQ_FIELD_INDEX_BAR_LENGTH), "BAR_LENGTH");
     TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_EDIT_ENTRY,
         r.ui.fieldAt(UiController::SEQ_FIELD_INDEX_EDIT_ENTRY), "EDIT_ENTRY");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_CONFIG,
+        r.ui.fieldAt(UiController::SEQ_FIELD_INDEX_CONFIG), "CONFIG");
 }
+
+void test_the_config_page_carries_length_subdiv_and_mod() {
+    ModeRig r(flexseq::MODE_SEQ);
+    r.gotoField(UiController::FIELD_CONFIG);
+    r.ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_TRUE_MESSAGE(r.ui.isOnConfigPage(), "un appui court ouvre la page");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(3, r.ui.fieldCount(), "trois champs");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, UiController::CONFIG_FIELD_INDEX_LENGTH, "LENGTH vaut 0");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, UiController::CONFIG_FIELD_INDEX_SUBDIV, "SUBDIV vaut 1");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(2, UiController::CONFIG_FIELD_INDEX_MOD, "MOD vaut 2");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_LENGTH,
+        r.ui.fieldAt(UiController::CONFIG_FIELD_INDEX_LENGTH), "ligne 1");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_SUBDIV,
+        r.ui.fieldAt(UiController::CONFIG_FIELD_INDEX_SUBDIV), "ligne 2");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MOD,
+        r.ui.fieldAt(UiController::CONFIG_FIELD_INDEX_MOD), "ligne 3");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_LENGTH, r.ui.field(),
+        "le curseur se pose sur LENGTH en entrant");
+}
+
+void test_a_long_press_leaves_the_config_page_for_the_tab() {
+    ModeRig r(flexseq::MODE_SEQ);
+    r.gotoField(UiController::FIELD_CONFIG);
+    r.ui.handle(UiController::EVENT_PRESS);
+    r.ui.handle(UiController::EVENT_LONG_PRESS);
+    TEST_ASSERT_FALSE_MESSAGE(r.ui.isOnConfigPage(), "on quitte la page");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::LEVEL_TAB, r.ui.level(),
+        "et on reste dans l onglet : l appui long monte d UN niveau");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_CONFIG, r.ui.field(),
+        "sur le champ par lequel on etait entre");
+    r.ui.handle(UiController::EVENT_LONG_PRESS);
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::LEVEL_TAB_BAR, r.ui.level(),
+        "le second appui long atteint la barre");
+}
+
+void test_the_config_page_is_left_behind_when_a_tab_is_entered_again() {
+    ModeRig r(flexseq::MODE_SEQ);
+    r.gotoField(UiController::FIELD_CONFIG);
+    r.ui.handle(UiController::EVENT_PRESS);
+    r.ui.handle(UiController::EVENT_LONG_PRESS);
+    r.ui.handle(UiController::EVENT_LONG_PRESS);
+    r.ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_FALSE_MESSAGE(r.ui.isOnConfigPage(),
+        "entrer dans un onglet part de ses propres champs, jamais de CONFIG");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MODE, r.ui.field(), "donc sur MODE");
+}
+
+void test_the_length_is_edited_on_the_config_page() {
+    ModeRig r(flexseq::MODE_SEQ);
+    r.gotoField(UiController::FIELD_CONFIG);
+    r.ui.handle(UiController::EVENT_PRESS);
+    r.ui.handle(UiController::EVENT_PRESS);
+    const uint8_t before = r.engine.getBaseLength(0);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(before + 1, r.engine.getBaseLength(0),
+        "la longueur s edite sur la page, et plus sur l onglet");
+}
+
 
 void test_the_mode_can_always_be_changed_back_out_of_seq() {
     ModeRig r(flexseq::MODE_SEQ);
@@ -946,10 +1016,10 @@ void test_the_mode_field_cycles_the_three_modes() {
 
 void test_the_cursor_never_designates_a_field_that_does_not_exist() {
     ModeRig r(flexseq::MODE_SEQ);
-    for (uint8_t i = 0; i < 4; ++i) {
+    for (uint8_t i = 0; i < 2; ++i) {
         r.ui.handle(UiController::EVENT_ROTATE, 1);
     }
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(4, r.ui.cursor(), "curseur au dernier champ de SEQ");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(2, r.ui.cursor(), "curseur au dernier champ de SEQ");
     r.engine.setChannelMode(0, flexseq::MODE_CLOCK);
     r.ui.handle(UiController::EVENT_ROTATE, 1);
     TEST_ASSERT_TRUE_MESSAGE(r.ui.cursor() < r.ui.fieldCount(),
@@ -1022,8 +1092,12 @@ int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_a_clock_tab_holds_the_three_lines_of_the_original);
     RUN_TEST(test_a_random_tab_puts_the_subdivision_on_the_second_line);
-    RUN_TEST(test_a_seq_tab_keeps_its_fields_and_gains_the_mode);
+    RUN_TEST(test_a_seq_tab_takes_the_three_lines_of_the_original);
     RUN_TEST(test_the_published_field_indices_agree_with_fieldAt);
+    RUN_TEST(test_the_config_page_carries_length_subdiv_and_mod);
+    RUN_TEST(test_a_long_press_leaves_the_config_page_for_the_tab);
+    RUN_TEST(test_the_config_page_is_left_behind_when_a_tab_is_entered_again);
+    RUN_TEST(test_the_length_is_edited_on_the_config_page);
     RUN_TEST(test_the_mode_can_always_be_changed_back_out_of_seq);
     RUN_TEST(test_the_mode_field_cycles_the_three_modes);
     RUN_TEST(test_the_cursor_never_designates_a_field_that_does_not_exist);

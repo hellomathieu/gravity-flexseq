@@ -90,6 +90,7 @@ UiController::UiController(SequencerEngine& engine, Transport& transport)
       cursor_(0),
       stepCursor_(0),
       onHeader_(false),
+      onConfigPage_(false),
       fieldOpen_(false),
       tempo_(DEFAULT_TEMPO),
       clockSource_(0),
@@ -121,7 +122,7 @@ uint8_t UiController::fieldCount() const {
         return CLOCK_TAB_FIELDS;
     }
     if (isChannelTab()) {
-        return isLegacyModeTab() ? LEGACY_TAB_FIELDS : CHANNEL_TAB_FIELDS;
+        return onConfigPage_ ? CONFIG_PAGE_FIELDS : CHANNEL_TAB_FIELDS;
     }
     return 0;
 }
@@ -133,6 +134,13 @@ UiController::Field UiController::fieldAt(uint8_t index) const {
     if (currentTab_ == TAB_CLOCK) {
         return index == 0 ? FIELD_TEMPO : FIELD_CLOCK_SOURCE;
     }
+    if (onConfigPage_) {
+        switch (index) {
+            case CONFIG_FIELD_INDEX_LENGTH: return FIELD_LENGTH;
+            case CONFIG_FIELD_INDEX_SUBDIV: return FIELD_SUBDIV;
+            default: return FIELD_MOD;
+        }
+    }
     if (isLegacyModeTab()) {
         const int8_t channel = selectedChannel();
         const ChannelMode mode = engine_.getChannelMode(static_cast<uint8_t>(channel));
@@ -143,12 +151,9 @@ UiController::Field UiController::fieldAt(uint8_t index) const {
         }
     }
     switch (index) {
-        case 0: return FIELD_MODE;
-        case 1: return FIELD_PATTERN;
-        case 2: return FIELD_LENGTH;
-        case 3: return FIELD_SUBDIV;
-        case 4: return FIELD_BAR_LENGTH;
-        default: return FIELD_EDIT_ENTRY;
+        case SEQ_FIELD_INDEX_MODE: return FIELD_MODE;
+        case SEQ_FIELD_INDEX_EDIT_ENTRY: return FIELD_EDIT_ENTRY;
+        default: return FIELD_CONFIG;
     }
 }
 
@@ -217,6 +222,9 @@ void UiController::handleTab(Event event, int8_t delta) {
                 level_ = LEVEL_EDIT;
                 stepCursor_ = 0;
                 onHeader_ = false;
+            } else if (field() == FIELD_CONFIG) {
+                onConfigPage_ = true;
+                cursor_ = CONFIG_FIELD_INDEX_LENGTH;
             } else if (field() != FIELD_NONE) {
                 fieldOpen_ = true;
             }
@@ -224,6 +232,9 @@ void UiController::handleTab(Event event, int8_t delta) {
         case EVENT_LONG_PRESS:
             if (fieldOpen_) {
                 fieldOpen_ = false;
+            } else if (onConfigPage_) {
+                onConfigPage_ = false;
+                cursor_ = SEQ_FIELD_INDEX_CONFIG;
             } else {
                 level_ = LEVEL_TAB_BAR;
             }

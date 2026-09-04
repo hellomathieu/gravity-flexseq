@@ -42,6 +42,7 @@ public:
         FIELD_MODE,
         FIELD_OFFSET,
         FIELD_MOD,
+        FIELD_CONFIG,
     };
 
     static constexpr uint8_t TAB_COUNT = 8;
@@ -50,15 +51,16 @@ public:
     static constexpr uint8_t TAB_SETTINGS = 7;
 
     static constexpr uint8_t CLOCK_TAB_FIELDS = 2;
-    static constexpr uint8_t CHANNEL_TAB_FIELDS = 6;
-    static constexpr uint8_t LEGACY_TAB_FIELDS = 3;
+    static constexpr uint8_t CHANNEL_TAB_FIELDS = 3;
+    static constexpr uint8_t CONFIG_PAGE_FIELDS = 3;
 
     static constexpr uint8_t SEQ_FIELD_INDEX_MODE = 0;
-    static constexpr uint8_t SEQ_FIELD_INDEX_PATTERN = 1;
-    static constexpr uint8_t SEQ_FIELD_INDEX_LENGTH = 2;
-    static constexpr uint8_t SEQ_FIELD_INDEX_SUBDIV = 3;
-    static constexpr uint8_t SEQ_FIELD_INDEX_BAR_LENGTH = 4;
-    static constexpr uint8_t SEQ_FIELD_INDEX_EDIT_ENTRY = 5;
+    static constexpr uint8_t SEQ_FIELD_INDEX_EDIT_ENTRY = 1;
+    static constexpr uint8_t SEQ_FIELD_INDEX_CONFIG = 2;
+
+    static constexpr uint8_t CONFIG_FIELD_INDEX_LENGTH = 0;
+    static constexpr uint8_t CONFIG_FIELD_INDEX_SUBDIV = 1;
+    static constexpr uint8_t CONFIG_FIELD_INDEX_MOD = 2;
 
 
     static constexpr uint8_t CLOCK_SOURCE_COUNT = 6;
@@ -91,6 +93,7 @@ public:
 
     uint8_t stepCursor() const { return stepCursor_; }
     bool isOnHeader() const { return onHeader_; }
+    bool isOnConfigPage() const { return onConfigPage_; }
 
     uint8_t revision() const { return revision_; }
 
@@ -125,6 +128,7 @@ private:
     uint8_t cursor_;
     uint8_t stepCursor_;
     bool onHeader_;
+    bool onConfigPage_;
     bool fieldOpen_;
     uint16_t tempo_;
     uint8_t clockSource_;

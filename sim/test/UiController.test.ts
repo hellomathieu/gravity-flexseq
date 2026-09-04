@@ -6,8 +6,11 @@ import {
   DEFAULT_TEMPO,
   MAX_TEMPO,
   MIN_TEMPO,
-  SEQ_FIELD_INDEX_LENGTH,
-  SEQ_FIELD_INDEX_SUBDIV,
+  CONFIG_FIELD_INDEX_LENGTH,
+  CONFIG_FIELD_INDEX_SUBDIV,
+  SEQ_FIELD_INDEX_CONFIG,
+  SEQ_FIELD_INDEX_EDIT_ENTRY,
+  SEQ_FIELD_INDEX_MODE,
   STEP_COUNT,
   TAB_CLOCK,
   TAB_COUNT,
@@ -47,7 +50,14 @@ function rig() {
     }
     throw new Error("tab never reached");
   };
-  const gotoField = (field: UiField) => {
+  const gotoField = (field: UiField): void => {
+    const onConfig = field === UiField.Length
+      || field === UiField.Subdiv
+      || field === UiField.Mod;
+    if (onConfig && !ui.isOnConfigPage) {
+      gotoField(UiField.Config);
+      ui.handle(UiEvent.Press);
+    }
     for (let guard = 0; guard <= CHANNEL_TAB_FIELDS; guard += 1) {
       if (ui.field === field) return;
       ui.handle(UiEvent.Rotate, 1);
@@ -147,11 +157,11 @@ describe("UiController — inside a tab", () => {
     const { ui, enterTab } = rig();
     enterTab();
     ui.handle(UiEvent.Rotate, 1);
-    expect(ui.field).toBe(UiField.Pattern);
+    expect(ui.field).toBe(UiField.EditEntry);
     ui.handle(UiEvent.Rotate, -1);
     expect(ui.field).toBe(UiField.Mode);
     ui.handle(UiEvent.Rotate, -1);
-    expect(ui.field).toBe(UiField.EditEntry);
+    expect(ui.field).toBe(UiField.Config);
     ui.handle(UiEvent.Rotate, 1);
     expect(ui.field).toBe(UiField.Mode);
   });
@@ -238,9 +248,7 @@ describe("UiController — inside a tab", () => {
   });
 
   it("the pattern field is clamped to the bank", () => {
-    const { ui, engine, enterTab, gotoField } = rig();
-    enterTab();
-    gotoField(UiField.Pattern);
+    const { ui, engine } = rig();
     for (let i = 0; i < PATTERN_COUNT + 5; i += 1) ui.handle(UiEvent.ShiftRotate, 1);
     expect(engine.getSelectedPattern(0)).toBe(PATTERN_COUNT - 1);
     for (let i = 0; i < PATTERN_COUNT + 5; i += 1) ui.handle(UiEvent.ShiftRotate, -1);
@@ -324,7 +332,10 @@ describe("UiController — inside a tab", () => {
     ui.handle(UiEvent.ShiftRotate, -3);
     expect(engine.getEffectiveLength(0)).toBe(1);
 
-    gotoField(UiField.Pattern);
+    // le pattern est le parametre PRINCIPAL depuis le lot 12 : il s ajuste
+    // par SHIFT plus rotation sur la BARRE, plus dans la liste des champs.
+    ui.handle(UiEvent.LongPress);
+    ui.handle(UiEvent.LongPress);
     for (let i = 0; i < 14; i += 1) ui.handle(UiEvent.ShiftRotate, 1);
     expect(engine.getSelectedPattern(0)).toBe(14);
     ui.handle(UiEvent.ShiftRotate, 3);
@@ -349,17 +360,19 @@ describe("UiController — inside a tab", () => {
   });
 
   it("the bar length field walks only the allowed values", () => {
-    const { ui, engine, enterTab, gotoField } = rig();
-    enterTab();
-    gotoField(UiField.BarLength);
+    // SEP vit dans l en-tete de l ecran EDIT depuis le lot 12.
+    const { ui, engine, enterEdit } = rig();
+    enterEdit();
+    ui.handle(UiEvent.Rotate, -1);
+    ui.handle(UiEvent.Press);
     expect(engine.getBarLength(0)).toBe(DEFAULT_BAR_LENGTH);
-    ui.handle(UiEvent.ShiftRotate, 1);
+    ui.handle(UiEvent.Rotate, 1);
     expect(engine.getBarLength(0)).toBe(6);
-    ui.handle(UiEvent.ShiftRotate, 1);
+    ui.handle(UiEvent.Rotate, 1);
     expect(engine.getBarLength(0)).toBe(6);
-    for (let i = 0; i < 8; i += 1) ui.handle(UiEvent.ShiftRotate, -1);
+    for (let i = 0; i < 8; i += 1) ui.handle(UiEvent.Rotate, -1);
     expect(engine.getBarLength(0)).toBe(0);
-    ui.handle(UiEvent.ShiftRotate, 1);
+    ui.handle(UiEvent.Rotate, 1);
     expect(engine.getBarLength(0)).toBe(2);
   });
 
@@ -396,7 +409,7 @@ describe("UiController — EDIT PATTERN", () => {
     const { ui, enterEdit } = rig();
     enterEdit();
     ui.handle(UiEvent.Rotate, -1);
-    expect(ui.stepCursor).toBe(35);
+    expect(ui.isOnHeader, "un cran a gauche monte dans l en-tete").toBe(true);
     ui.handle(UiEvent.Rotate, 1);
     expect(ui.stepCursor).toBe(0);
     for (let i = 0; i < 5; ++i) ui.handle(UiEvent.Rotate, 5);
@@ -691,21 +704,69 @@ describe("UiController — les trois modes et leurs champs", () => {
     expect(ui.fieldAt(2)).toBe(UiField.Mod);
   });
 
-  it("un onglet SEQ garde ses champs et gagne MODE", () => {
-    const { ui } = modeRig(ChannelMode.SEQ);
-    expect(ui.fieldCount).toBe(6);
-    expect(ui.fieldAt(0)).toBe(UiField.Mode);
-    expect(ui.fieldAt(1)).toBe(UiField.Pattern);
-    expect(ui.fieldAt(2)).toBe(UiField.Length);
-    expect(ui.fieldAt(5)).toBe(UiField.EditEntry);
-  });
 
   it("les index publies sont d'accord avec fieldAt", () => {
     const { ui } = modeRig(ChannelMode.SEQ);
-    expect(SEQ_FIELD_INDEX_LENGTH).toBe(2);
-    expect(SEQ_FIELD_INDEX_SUBDIV).toBe(3);
-    expect(ui.fieldAt(SEQ_FIELD_INDEX_LENGTH)).toBe(UiField.Length);
-    expect(ui.fieldAt(SEQ_FIELD_INDEX_SUBDIV)).toBe(UiField.Subdiv);
+    expect(SEQ_FIELD_INDEX_MODE).toBe(0);
+    expect(SEQ_FIELD_INDEX_EDIT_ENTRY).toBe(1);
+    expect(SEQ_FIELD_INDEX_CONFIG).toBe(2);
+    expect(ui.fieldAt(SEQ_FIELD_INDEX_MODE)).toBe(UiField.Mode);
+    expect(ui.fieldAt(SEQ_FIELD_INDEX_EDIT_ENTRY)).toBe(UiField.EditEntry);
+    expect(ui.fieldAt(SEQ_FIELD_INDEX_CONFIG)).toBe(UiField.Config);
+  });
+
+  it("la page CONFIG porte LENGTH, SUBDIV et MOD", () => {
+    const { ui } = modeRig(ChannelMode.SEQ);
+    ui.handle(UiEvent.Rotate, 1);
+    ui.handle(UiEvent.Rotate, 1);
+    expect(ui.field).toBe(UiField.Config);
+    ui.handle(UiEvent.Press);
+    expect(ui.isOnConfigPage).toBe(true);
+    expect(ui.fieldCount).toBe(3);
+    expect(CONFIG_FIELD_INDEX_LENGTH).toBe(0);
+    expect(CONFIG_FIELD_INDEX_SUBDIV).toBe(1);
+    expect(ui.fieldAt(CONFIG_FIELD_INDEX_LENGTH)).toBe(UiField.Length);
+    expect(ui.fieldAt(CONFIG_FIELD_INDEX_SUBDIV)).toBe(UiField.Subdiv);
+    expect(ui.fieldAt(2)).toBe(UiField.Mod);
+    expect(ui.field).toBe(UiField.Length);
+  });
+
+  it("un appui long quitte la page CONFIG pour l'onglet", () => {
+    const { ui } = modeRig(ChannelMode.SEQ);
+    ui.handle(UiEvent.Rotate, 1);
+    ui.handle(UiEvent.Rotate, 1);
+    ui.handle(UiEvent.Press);
+    ui.handle(UiEvent.LongPress);
+    expect(ui.isOnConfigPage).toBe(false);
+    expect(ui.level).toBe(UiLevel.Tab);
+    expect(ui.field).toBe(UiField.Config);
+  });
+
+  it("un onglet SEQ prend les trois lignes de l'original", () => {
+    const { ui } = modeRig(ChannelMode.SEQ);
+    expect(ui.fieldCount).toBe(3);
+    expect(ui.fieldAt(0)).toBe(UiField.Mode);
+    expect(ui.fieldAt(1)).toBe(UiField.EditEntry);
+    expect(ui.fieldAt(2)).toBe(UiField.Config);
+  });
+
+  it("SEP vit dans l'en-tete de l'ecran EDIT", () => {
+    const { ui, engine } = modeRig(ChannelMode.SEQ);
+    ui.handle(UiEvent.Rotate, 1);
+    ui.handle(UiEvent.Press);
+    expect(ui.level).toBe(UiLevel.Edit);
+    ui.handle(UiEvent.Rotate, -1);
+    expect(ui.isOnHeader).toBe(true);
+    ui.handle(UiEvent.Rotate, -1);
+    expect(ui.isOnHeader, "l en-tete est un butoir").toBe(true);
+    ui.handle(UiEvent.Press);
+    const before = engine.getBarLength(0);
+    ui.handle(UiEvent.Rotate, 1);
+    expect(engine.getBarLength(0)).not.toBe(before);
+    ui.handle(UiEvent.LongPress);
+    expect(ui.isOnHeader).toBe(false);
+    expect(ui.stepCursor).toBe(0);
+    expect(ui.level).toBe(UiLevel.Edit);
   });
 
   it("on peut toujours ressortir de SEQ", () => {

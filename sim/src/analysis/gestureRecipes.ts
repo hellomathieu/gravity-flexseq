@@ -60,7 +60,22 @@ export class GestureDriver {
     if (this.ui.level === UiLevel.TabBar) this.press();
   }
 
+  /**
+   * ⚠️ LENGTH, SUBDIV et MOD ont demenage sur la page CONFIG au lot 12 : la
+   * recette y entre d'elle-meme, sinon chaque appelant le repeterait.
+   */
   selectField(field: UiField): void {
+    const onConfig = field === UiField.Length
+      || field === UiField.Subdiv
+      || field === UiField.Mod;
+    if (onConfig && !this.ui.isOnConfigPage) {
+      this.selectField(UiField.Config);
+      this.press();
+    } else if (!onConfig && this.ui.isOnConfigPage) {
+      // et elle en SORT quand la cible n y vit pas : sans cela, viser EDIT
+      // depuis la page echouerait, ce champ n y existant pas.
+      this.longPress();
+    }
     for (let guard = 0; guard <= this.ui.fieldCount; ++guard) {
       if (this.ui.field === field) return;
       this.rotate(1);

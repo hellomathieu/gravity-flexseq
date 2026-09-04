@@ -71,7 +71,7 @@ export function mainScreenModelOf(ui: UiController, engine: SequencerEngine): Ma
     stepTicks: 0,
     mainParameter: parameterOf(ui.mainField),
     legacyLayout: ui.isLegacyModeTab,
-    configPage: false,
+    configPage: ui.isOnConfigPage,
     tempo: ui.tempo,
     clockSource: ui.clockSource,
   };

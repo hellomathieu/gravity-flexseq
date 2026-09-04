@@ -207,42 +207,37 @@ void test_split_writes_nothing_when_the_output_is_too_small(void)
     TEST_ASSERT_EQUAL_UINT8(0xAA, bursts[0]);
 }
 
-void test_only_the_length_field_index_carries_an_empirical_limit(void)
+void test_only_the_length_field_carries_an_empirical_limit(void)
 {
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(2, harness::FIELD_INDEX_LENGTH,
-        "LENGTH est le champ d index 2 depuis que MODE ouvre la liste");
-    TEST_ASSERT_EQUAL_UINT8(6, harness::limitForFieldIndex(2));
-    TEST_ASSERT_EQUAL_UINT8(NO_EMPIRICAL_LIMIT, harness::limitForFieldIndex(0));
-    TEST_ASSERT_EQUAL_UINT8(NO_EMPIRICAL_LIMIT, harness::limitForFieldIndex(1));
-    TEST_ASSERT_EQUAL_UINT8(NO_EMPIRICAL_LIMIT, harness::limitForFieldIndex(3));
-    TEST_ASSERT_EQUAL_UINT8(NO_EMPIRICAL_LIMIT, harness::limitForFieldIndex(4));
-    TEST_ASSERT_EQUAL_UINT8(NO_EMPIRICAL_LIMIT, harness::limitForFieldIndex(5));
+    using F = flexseq::UiController;
+    TEST_ASSERT_EQUAL_UINT8(6, harness::limitForField(F::FIELD_LENGTH));
+    TEST_ASSERT_EQUAL_UINT8(NO_EMPIRICAL_LIMIT, harness::limitForField(F::FIELD_MODE));
+    TEST_ASSERT_EQUAL_UINT8(NO_EMPIRICAL_LIMIT, harness::limitForField(F::FIELD_SUBDIV));
+    TEST_ASSERT_EQUAL_UINT8(NO_EMPIRICAL_LIMIT, harness::limitForField(F::FIELD_MOD));
+    TEST_ASSERT_EQUAL_UINT8(NO_EMPIRICAL_LIMIT, harness::limitForField(F::FIELD_CONFIG));
+    TEST_ASSERT_EQUAL_UINT8(NO_EMPIRICAL_LIMIT, harness::limitForField(F::FIELD_EDIT_ENTRY));
+    TEST_ASSERT_EQUAL_UINT8(NO_EMPIRICAL_LIMIT, harness::limitForField(F::FIELD_NONE));
 }
 
-void test_an_unknown_field_index_never_invents_an_empirical_limit(void)
+void test_the_field_resolution_agrees_with_the_named_limits(void)
 {
-    for (uint8_t index = 6; index < 200; ++index) {
-        TEST_ASSERT_EQUAL_UINT8(NO_EMPIRICAL_LIMIT, harness::limitForFieldIndex(index));
-    }
-}
-
-void test_the_field_index_resolution_agrees_with_the_named_limits(void)
-{
+    using F = flexseq::UiController;
     TEST_ASSERT_EQUAL_UINT8(harness::LENGTH_BURST_LIMIT,
-        harness::limitForFieldIndex(harness::FIELD_INDEX_LENGTH));
+        harness::limitForField(F::FIELD_LENGTH));
     TEST_ASSERT_EQUAL_UINT8(harness::SUBDIV_BURST_LIMIT,
-        harness::limitForFieldIndex(flexseq::UiController::SEQ_FIELD_INDEX_SUBDIV));
-    TEST_ASSERT_EQUAL_UINT8(harness::BAR_LENGTH_BURST_LIMIT, harness::limitForFieldIndex(4));
-    TEST_ASSERT_EQUAL_UINT8(harness::EDIT_ENTRY_BURST_LIMIT, harness::limitForFieldIndex(5));
+        harness::limitForField(F::FIELD_SUBDIV));
+    TEST_ASSERT_EQUAL_UINT8(harness::BAR_LENGTH_BURST_LIMIT,
+        harness::limitForField(F::FIELD_BAR_LENGTH));
+    TEST_ASSERT_EQUAL_UINT8(harness::EDIT_ENTRY_BURST_LIMIT,
+        harness::limitForField(F::FIELD_EDIT_ENTRY));
 }
 
 int main(int, char**)
 {
     UNITY_BEGIN();
 
-    RUN_TEST(test_only_the_length_field_index_carries_an_empirical_limit);
-    RUN_TEST(test_an_unknown_field_index_never_invents_an_empirical_limit);
-    RUN_TEST(test_the_field_index_resolution_agrees_with_the_named_limits);
+    RUN_TEST(test_only_the_length_field_carries_an_empirical_limit);
+    RUN_TEST(test_the_field_resolution_agrees_with_the_named_limits);
 
     RUN_TEST(test_the_physical_limit_alone_governs_an_unmeasured_target);
     RUN_TEST(test_an_empirical_limit_binds_before_the_physical_one);

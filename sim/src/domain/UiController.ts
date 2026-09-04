@@ -43,6 +43,7 @@ export enum UiField {
   Mode,
   Offset,
   Mod,
+  Config,
 }
 
 export const TAB_COUNT = 8;
@@ -51,11 +52,16 @@ export const TAB_FIRST_CHANNEL = 1;
 export const TAB_SETTINGS = 7;
 
 export const CLOCK_TAB_FIELDS = 2;
-export const CHANNEL_TAB_FIELDS = 6;
-export const LEGACY_TAB_FIELDS = 3;
+export const CHANNEL_TAB_FIELDS = 3;
+export const CONFIG_PAGE_FIELDS = 3;
 
-export const SEQ_FIELD_INDEX_LENGTH = 2;
-export const SEQ_FIELD_INDEX_SUBDIV = 3;
+export const SEQ_FIELD_INDEX_MODE = 0;
+export const SEQ_FIELD_INDEX_EDIT_ENTRY = 1;
+export const SEQ_FIELD_INDEX_CONFIG = 2;
+
+export const CONFIG_FIELD_INDEX_LENGTH = 0;
+export const CONFIG_FIELD_INDEX_SUBDIV = 1;
+export const CONFIG_FIELD_INDEX_MOD = 2;
 
 export const CLOCK_SOURCE_COUNT = 6;
 export const CLOCK_SOURCE_INTERNAL = 0;
@@ -93,6 +99,8 @@ export class UiController {
   private tab = TAB_FIRST_CHANNEL;
   private fieldCursor = 0;
   private step = 0;
+  private header = false;
+  private configPage = false;
   private open = false;
   private currentTempo = DEFAULT_TEMPO;
   private source = 0;
@@ -123,6 +131,14 @@ export class UiController {
     return this.isChannelTab ? this.tab - TAB_FIRST_CHANNEL : -1;
   }
 
+  get isOnHeader(): boolean {
+    return this.header;
+  }
+
+  get isOnConfigPage(): boolean {
+    return this.configPage;
+  }
+
   get isLegacyModeTab(): boolean {
     const channel = this.selectedChannel;
     if (channel < 0) return false;
@@ -133,7 +149,7 @@ export class UiController {
   get fieldCount(): number {
     if (this.tab === TAB_CLOCK) return CLOCK_TAB_FIELDS;
     if (this.isChannelTab) {
-      return this.isLegacyModeTab ? LEGACY_TAB_FIELDS : CHANNEL_TAB_FIELDS;
+      return this.configPage ? CONFIG_PAGE_FIELDS : CHANNEL_TAB_FIELDS;
     }
     return 0;
   }
@@ -142,6 +158,16 @@ export class UiController {
     if (index < 0 || index >= this.fieldCount) return UiField.None;
     if (this.tab === TAB_CLOCK) {
       return index === 0 ? UiField.Tempo : UiField.ClockSource;
+    }
+    if (this.configPage) {
+      switch (index) {
+        case CONFIG_FIELD_INDEX_LENGTH:
+          return UiField.Length;
+        case CONFIG_FIELD_INDEX_SUBDIV:
+          return UiField.Subdiv;
+        default:
+          return UiField.Mod;
+      }
     }
     if (this.isLegacyModeTab) {
       const mode = this.engine.getChannelMode(this.selectedChannel);
@@ -155,18 +181,12 @@ export class UiController {
       }
     }
     switch (index) {
-      case 0:
+      case SEQ_FIELD_INDEX_MODE:
         return UiField.Mode;
-      case 1:
-        return UiField.Pattern;
-      case 2:
-        return UiField.Length;
-      case 3:
-        return UiField.Subdiv;
-      case 4:
-        return UiField.BarLength;
-      default:
+      case SEQ_FIELD_INDEX_EDIT_ENTRY:
         return UiField.EditEntry;
+      default:
+        return UiField.Config;
     }
   }
 
@@ -265,6 +285,10 @@ export class UiController {
         } else if (this.field === UiField.EditEntry) {
           this.currentLevel = UiLevel.Edit;
           this.step = 0;
+          this.header = false;
+        } else if (this.field === UiField.Config) {
+          this.configPage = true;
+          this.fieldCursor = CONFIG_FIELD_INDEX_LENGTH;
         } else if (this.field !== UiField.None) {
           this.open = true;
         }
@@ -272,6 +296,9 @@ export class UiController {
       case UiEvent.LongPress:
         if (this.open) {
           this.open = false;
+        } else if (this.configPage) {
+          this.configPage = false;
+          this.fieldCursor = SEQ_FIELD_INDEX_CONFIG;
         } else {
           this.currentLevel = UiLevel.TabBar;
         }
@@ -283,18 +310,38 @@ export class UiController {
 
   private handleEdit(event: UiEvent, delta: number): void {
     switch (event) {
-      case UiEvent.Rotate:
-        this.step = wrapIndex(this.step, oneStep(delta), STEP_COUNT);
+      case UiEvent.Rotate: {
+        const s = oneStep(delta);
+        if (this.header) {
+          if (this.open) {
+            this.adjustFieldValue(UiField.BarLength, delta);
+          } else if (s > 0) {
+            this.header = false;
+            this.step = 0;
+          }
+        } else if (s < 0 && this.step === 0) {
+          this.header = true;
+        } else {
+          this.step = wrapIndex(this.step, s, STEP_COUNT);
+        }
         break;
+      }
       case UiEvent.Press:
-        this.toggleStep();
+        if (this.header) this.open = !this.open;
+        else this.toggleStep();
         break;
       case UiEvent.LongPress:
-        this.currentLevel = UiLevel.Tab;
-        this.open = false;
+        if (this.header) {
+          this.header = false;
+          this.open = false;
+          this.step = 0;
+        } else {
+          this.currentLevel = UiLevel.Tab;
+          this.open = false;
+        }
         break;
       case UiEvent.ShiftRotate:
-        this.adjustRatchet(delta);
+        if (!this.header) this.adjustRatchet(delta);
         break;
       case UiEvent.ShiftLongPress:
         this.clearPattern();

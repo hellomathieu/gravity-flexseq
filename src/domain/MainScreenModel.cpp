@@ -36,7 +36,7 @@ MainScreenModel mainScreenModelOf(const UiController& ui, const SequencerEngine&
         default:                              model.mainParameter = MAIN_NONE; break;
     }
     model.legacyLayout = ui.isLegacyModeTab();
-    model.configPage = false;
+    model.configPage = ui.isOnConfigPage();
     model.tempo = ui.tempo();
     model.clockSource = ui.clockSource();
     model.headlineWidth = 0;

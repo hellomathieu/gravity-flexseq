@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { GestureDriver } from '../src/analysis/gestureRecipes';
 import {
   CHANNEL_TAB_FIELDS,
+  CONFIG_PAGE_FIELDS,
   STEP_COUNT,
   TAB_FIRST_CHANNEL,
   UiController,
@@ -79,8 +80,10 @@ describe('couche 1 — recettes de gestes contre le MODELE de reference, jamais 
         .slice(before)
         .filter((g) => g.event === UiEvent.Rotate).length;
       expect(ui.field).toBe(UiField.Subdiv);
+      // deux crans sur l onglet pour atteindre CONFIG, un appui, puis un cran
+      // sur la page pour atteindre SUBDIV. Le champ a demenage au lot 12.
       expect(rotations).toBe(3);
-      expect(rotations).toBeLessThan(CHANNEL_TAB_FIELDS);
+      expect(rotations).toBeLessThan(CHANNEL_TAB_FIELDS + CONFIG_PAGE_FIELDS);
     });
 
     it('3. un appui long remonte d UN seul niveau', () => {
@@ -214,6 +217,8 @@ describe('couche 1 — recettes de gestes contre le MODELE de reference, jamais 
       const tab = TAB_FIRST_CHANNEL + 2;
       driver.goToTab(tab);
       driver.setLength(3);
+      // LENGTH vit sur la page CONFIG : deux niveaux separent la page de la barre.
+      driver.backOneLevel();
       driver.backOneLevel();
       expect(ui.level).toBe(UiLevel.TabBar);
       expect(ui.currentTab).toBe(tab);

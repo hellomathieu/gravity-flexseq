@@ -902,11 +902,24 @@ static void rotate(avr_t *avr, int detents, int aFirst)
     run_for(avr, FRAME_SETTLE_MS);
 }
 
+// LENGTH, SUBDIV et MOD ont demenage sur la page CONFIG au lot 12 : les
+// atteindre demande d'entrer dans la page, pas seulement de tourner. Le harnais
+// lit les index du domaine, jamais une copie -- la faute deja consignee deux
+// fois en ligne 68 de docs/open-risks.md.
+static void gotoConfigField(avr_t* avr, uint8_t index);
+
 static void alignTab(avr_t *avr, int tab)
 {
     constexpr int tabs = (int)flexseq::UiController::TAB_COUNT;
     const int steps = ((tab - selectedTab()) % tabs + tabs) % tabs;
     if (steps > 0) rotate(avr, steps, 1);
+}
+
+static void gotoConfigField(avr_t* avr, uint8_t index)
+{
+    rotate(avr, flexseq::UiController::SEQ_FIELD_INDEX_CONFIG, 1);
+    pressFor(avr, (double)PRESS_MS);
+    if (index > 0) rotate(avr, index, 1);
 }
 
 int main(int argc, char **argv)
@@ -1000,12 +1013,12 @@ int main(int argc, char **argv)
             return 2;
         }
     }
-    int r2Rotations = flexseq::UiController::SEQ_FIELD_INDEX_SUBDIV;
+    int r2Rotations = flexseq::UiController::CONFIG_FIELD_INDEX_SUBDIV;
     {
         const char *text = getenv("R2_ROTATIONS");
         if (text != NULL) r2Rotations = (int)strtol(text, NULL, 0);
         if (r2Rotations < 0 ||
-            r2Rotations > flexseq::UiController::CHANNEL_TAB_FIELDS - 1) {
+            r2Rotations > flexseq::UiController::CONFIG_PAGE_FIELDS - 1) {
             fprintf(stderr, "R2_ROTATIONS hors des champs : %d\n", r2Rotations);
             return 2;
         }
@@ -1284,7 +1297,7 @@ int main(int argc, char **argv)
             alignTab(avr, ongletDh);
         }
         pressFor(avr, (double)PRESS_MS);
-        rotate(avr, flexseq::UiController::SEQ_FIELD_INDEX_LENGTH, 1);
+        gotoConfigField(avr, flexseq::UiController::CONFIG_FIELD_INDEX_LENGTH);
         printChampInk("avant");
 
         uint32_t depart = g_ticks;
@@ -1346,7 +1359,7 @@ int main(int argc, char **argv)
             alignTab(avr, ongletDd);
         }
         pressFor(avr, (double)PRESS_MS);
-        rotate(avr, flexseq::UiController::SEQ_FIELD_INDEX_LENGTH, 1);
+        gotoConfigField(avr, flexseq::UiController::CONFIG_FIELD_INDEX_LENGTH);
 
         uint32_t depart = g_ticks;
         run_for(avr, 20000.0);
@@ -1406,7 +1419,7 @@ int main(int argc, char **argv)
             alignTab(avr, ongletDb);
         }
         pressFor(avr, (double)PRESS_MS);
-        rotate(avr, flexseq::UiController::SEQ_FIELD_INDEX_LENGTH, 1);
+        gotoConfigField(avr, flexseq::UiController::CONFIG_FIELD_INDEX_LENGTH);
         printChampInk("sur-LEN");
 
         struct { const char *nom; int crans; int aFirst; } salves[5] = {
@@ -1481,7 +1494,7 @@ int main(int argc, char **argv)
                 const uint32_t m = g_twi_bytes;
                 pressFor(avr, (double)PRESS_MS);
                 printChampInk("dans-tab");
-                rotate(avr, flexseq::UiController::SEQ_FIELD_INDEX_LENGTH, 1);
+                gotoConfigField(avr, flexseq::UiController::CONFIG_FIELD_INDEX_LENGTH);
                 printChampInk("sur-LEN");
                 twiGeste = g_twi_bytes - m;
             } else {
@@ -1534,7 +1547,7 @@ int main(int argc, char **argv)
                 alignTab(avr, ongletR5);
                 marque = g_twi_bytes;
                 pressFor(avr, (double)PRESS_MS);
-                rotate(avr, flexseq::UiController::SEQ_FIELD_INDEX_LENGTH, 1);
+                gotoConfigField(avr, flexseq::UiController::CONFIG_FIELD_INDEX_LENGTH);
                 if (!skipBGeste && r5Crans > 0) shiftRotate(avr, r5Crans, 1, harness::LENGTH_BURST_LIMIT, false);
                 twiGeste = g_twi_bytes - marque;
             } else if (etape == 2) {
@@ -1547,7 +1560,7 @@ int main(int argc, char **argv)
                 alignTab(avr, ongletR5);
                 marque = g_twi_bytes;
                 pressFor(avr, (double)PRESS_MS);
-                rotate(avr, flexseq::UiController::SEQ_FIELD_INDEX_SUBDIV, 1);
+                gotoConfigField(avr, flexseq::UiController::CONFIG_FIELD_INDEX_SUBDIV);
                 if (!skipBGeste) {
                     shiftRotate(avr, 50, 1, harness::SUBDIV_BURST_LIMIT, false);
                     if (r7CransRetour > 0) shiftRotate(avr, r7CransRetour, 0, harness::SUBDIV_BURST_LIMIT, false);
@@ -1616,7 +1629,7 @@ int main(int argc, char **argv)
         alignTab(avr, ongletR11);
         marque = g_twi_bytes;
         pressFor(avr, (double)PRESS_MS);
-        rotate(avr, flexseq::UiController::SEQ_FIELD_INDEX_SUBDIV, 1);
+        gotoConfigField(avr, flexseq::UiController::CONFIG_FIELD_INDEX_SUBDIV);
         if (!skipBGeste && r11CransSubdiv > 0)
             shiftRotate(avr, r11CransSubdiv, 0, harness::SUBDIV_BURST_LIMIT, false);
         printf("rD_nav_subdiv      onglet %d twi %u crans %d\n",
@@ -1678,7 +1691,7 @@ int main(int argc, char **argv)
         alignTab(avr, ongletR11);
         marque = g_twi_bytes;
         pressFor(avr, (double)PRESS_MS);
-        rotate(avr, flexseq::UiController::SEQ_FIELD_INDEX_SUBDIV, 1);
+        gotoConfigField(avr, flexseq::UiController::CONFIG_FIELD_INDEX_SUBDIV);
         if (!skipBGeste && r11CransSubdiv > 0)
             shiftRotate(avr, r11CransSubdiv, 1, harness::SUBDIV_BURST_LIMIT, false);
         run_for(avr, 2500.0);
@@ -1718,23 +1731,24 @@ int main(int argc, char **argv)
                 alignTab(avr, ongletR2);
                 marque = g_twi_bytes;
                 pressFor(avr, (double)PRESS_MS);
-                const int rotations =
-                    (etape == 1)
-                        ? flexseq::UiController::SEQ_FIELD_INDEX_LENGTH
-                        : r2Rotations;
-                if (rotations > 0) rotate(avr, rotations, 1);
+                const flexseq::UiController::Field champ =
+                    (etape == 1) ? flexseq::UiController::FIELD_LENGTH
+                                 : flexseq::UiController::FIELD_SUBDIV;
+                gotoConfigField(avr, (etape == 1)
+                    ? flexseq::UiController::CONFIG_FIELD_INDEX_LENGTH
+                    : (uint8_t)r2Rotations);
                 if (!skipBGeste)
                     shiftRotate(avr, 1, etape == 1 ? 1 : 0,
-                                harness::limitForFieldIndex((uint8_t)rotations), false);
+                                harness::limitForField(champ), false);
                 twiGeste = g_twi_bytes - marque;
             } else if (etape == 2 || etape == 4) {
                 marque = g_twi_bytes;
                 if (!skipBGeste)
                     shiftRotate(avr, 1, etape == 2 ? 0 : 1,
-                                harness::limitForFieldIndex((uint8_t)(
-                                    etape == 2
-                                        ? flexseq::UiController::SEQ_FIELD_INDEX_LENGTH
-                                        : r2Rotations)), false);
+                                harness::limitForField(
+                                    etape == 2 ? flexseq::UiController::FIELD_LENGTH
+                                               : flexseq::UiController::FIELD_SUBDIV),
+                                false);
                 twiGeste = g_twi_bytes - marque;
             }
 
@@ -1792,7 +1806,7 @@ int main(int argc, char **argv)
             printf("rB_r1_nav          k %d barre %d dedans %d twi %u\n",
                    k, surBarre, dedans, g_twi_bytes - marque);
 
-            rotate(avr, flexseq::UiController::SEQ_FIELD_INDEX_SUBDIV, 1);
+            gotoConfigField(avr, flexseq::UiController::CONFIG_FIELD_INDEX_SUBDIV);
 
             for (int etape = 0; etape < 2; ++etape) {
                 marque = g_twi_bytes;
@@ -1826,7 +1840,7 @@ int main(int argc, char **argv)
         pressFor(avr, (double)PRESS_MS);
         printf("rB_r13_nav         onglet %d twi %u\n", selectedTab(), g_twi_bytes - marque);
 
-        rotate(avr, flexseq::UiController::SEQ_FIELD_INDEX_LENGTH, 1);
+        gotoConfigField(avr, flexseq::UiController::CONFIG_FIELD_INDEX_LENGTH);
 
         for (int etape = 0; etape < 2; ++etape) {
             marque = g_twi_bytes;
@@ -1855,7 +1869,7 @@ int main(int argc, char **argv)
             if (etape == 0) {
                 alignTab(avr, cibleR13);
                 pressFor(avr, (double)PRESS_MS);
-                rotate(avr, flexseq::UiController::SEQ_FIELD_INDEX_LENGTH, 1);
+                gotoConfigField(avr, flexseq::UiController::CONFIG_FIELD_INDEX_LENGTH);
             }
         }
         return 0;
@@ -2101,7 +2115,7 @@ int main(int argc, char **argv)
                g, kept, gaps, dropped);
 
         pressFor(avr, (double)PRESS_MS);
-        rotate(avr, flexseq::UiController::SEQ_FIELD_INDEX_SUBDIV, 1);
+        gotoConfigField(avr, flexseq::UiController::CONFIG_FIELD_INDEX_SUBDIV);
 
         static const int marche[3] = { 7, 1, 1 };
         int cumule = 0;
@@ -2136,7 +2150,7 @@ int main(int argc, char **argv)
         }
 
         pressFor(avr, (double)PRESS_MS);
-        rotate(avr, flexseq::UiController::SEQ_FIELD_INDEX_LENGTH, 1);
+        gotoConfigField(avr, flexseq::UiController::CONFIG_FIELD_INDEX_LENGTH);
         const uint32_t tickLengthGesture = g_ticks;
         const uint32_t twiBeforeLength = g_twi_bytes;
         shiftRotate(avr, 3, 1, harness::LENGTH_BURST_LIMIT, false);
