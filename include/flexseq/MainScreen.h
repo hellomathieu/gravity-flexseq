@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include <flexseq/MainScreenModel.h>
+#include <flexseq/OriginalFonts.h>
 #include <flexseq/PatternScreen.h>
 
 namespace flexseq {
@@ -13,9 +14,11 @@ namespace mainscreen {
 constexpr uint8_t TAB_COUNT = 8;
 constexpr uint8_t TAB_SLOT_W = screen::WIDTH / TAB_COUNT;
 constexpr uint8_t TAB_BASELINE_Y = screen::HEIGHT - 1;
-constexpr uint8_t TAB_TOP_Y = TAB_BASELINE_Y - 6;
-constexpr uint8_t TAB_BOX_Y = TAB_TOP_Y - 1;
-constexpr uint8_t TAB_BOX_H = 8;
+constexpr uint8_t TAB_TOP_Y =
+    TAB_BASELINE_Y - (FONT_VELVETSCREEN_HEIGHT - 1);
+constexpr uint8_t TAB_BOX_H_ = 8;
+constexpr uint8_t TAB_BOX_Y = screen::HEIGHT - TAB_BOX_H_;
+constexpr uint8_t TAB_BOX_H = TAB_BOX_H_;
 constexpr uint8_t RULE_Y = 52;
 constexpr uint8_t RULE_X = 4;
 constexpr uint8_t RULE_W = 120;

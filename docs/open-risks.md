@@ -190,6 +190,15 @@ anyone decided to live with it.
 
 ## Method rules born from these subjects
 
+**A survey of the readers of a constant covers `tools/` too.** Written 2026-09-04, during
+step 5a of lot 11. `GLYPH_ASCENT` was declared in `PatternScreen.h` and a survey of
+`include/`, `src/`, `test/` and `sim/` found no reader, so it was removed as dead code. It
+was **not** dead: `tools/simavr-ssd1306/screen_dump.cpp` reads it, and the compilation of
+that harness caught the removal. The probes and the harnesses are readers of the domain
+like any other, and ADR 0012 rests on exactly that: a tool reads a constant of the domain,
+it never keeps a copy. A survey that skips `tools/` therefore reports a constant as unread
+while a harness depends on it.
+
 **A counter-proof must prove that its mutation applied.** Written 2026-09-04,
 during step 1 of lot 11. One of the nine counter-proofs of the geometry vector
 file came out **green**, and the guard was not at fault: the `sed` pattern named

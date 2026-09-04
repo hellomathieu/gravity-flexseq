@@ -1,3 +1,4 @@
+#include <flexseq/OriginalFonts.h>
 #include <Arduino.h>
 #include <libGravity.h>
 
@@ -65,7 +66,7 @@ void setup() {
     gravity.Init();
 
     // libGravity ne definit aucune police.
-    gravity.display.setFont(u8g2_font_5x7_tr);
+    gravity.display.setFont(flexseq::FONT_VELVETSCREEN);
 
     // Contenu de demonstration : couvre toute la legende du PRD.
     flexseq::Pattern* pattern = engine.instanceForChannel(CH);

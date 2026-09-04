@@ -270,6 +270,35 @@ settle it, and `avr-nm` counted the fonts that survive in each image:
 | `velvetscreen` alone, for the labels | **25870** | 1502 | 1 |
 | `velvetscreen` and `stkL`, both | **26464** | 1502 | 2 |
 
+✅ **THE SWITCH IS DONE since 2026-09-04, step 5a of lot 11, and the render is
+re-established.** `velvetscreen` draws every label of `main.cpp`, of `env:wokwi` and of
+`env:mainscreen`. The diagnostic firmware `env:bringup` keeps u8g2's font: it is
+hardware-validated, it has no pixel proof, and its budget is separate.
+
+**Measured, and each figure is read and not deduced:**
+
+| What | Before | After |
+|---|---|---|
+| Flash | 26308 | **25942** — the switch RETURNS 366 bytes |
+| RAM | 1506 | **1506** — unchanged |
+| Ink on the EDIT screen | 808 px | **786 px** |
+| The title | 155 px over 7 rows, y 56..62 | **99 px over 5 rows, y 56..60** |
+| Steps at their place | 36/36 | **36/36** |
+
+⚠️ **The steps did not move, and the reason is structural**: `drawDisc` draws them with
+primitives, not with font glyphs. Only the text shrank.
+
+**Two constants were coupled to the font by accident, and the switch exposed both.**
+`TAB_BOX_Y` was `TAB_TOP_Y - 1`, so the highlight box of a tab depended on the height of
+the glyphs; it now derives from the bottom of the screen, which is what the TypeScript view
+already did. And `GLYPH_ASCENT` was a hardcoded 6; it now derives from the height of the
+font. ⚠️ **That second one was called dead code and it was not**: `tools/screen_dump.cpp`
+reads it, and a survey that covered `include/`, `src/`, `test/` and `sim/` missed `tools/`.
+The compilation of the harness caught it.
+
+✅ **The `tab_top_y` divergence of ADR 0012 is CLOSED.** C++ and TypeScript now both hold
+59, and the line of the vector file moved from `cpp` to `both`.
+
 **Moving the labels off u8g2's `5x7` RETURNS 366 bytes**, which matches
 804 − 437 = 367 to within one byte: the unread font is genuinely dropped. Adding
 `stkL` then costs 594. **The net cost of restoring the typography of the original

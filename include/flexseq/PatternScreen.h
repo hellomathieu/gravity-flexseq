@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#include <flexseq/OriginalFonts.h>
+
 #include <flexseq/Pattern.h>
 
 namespace flexseq {
@@ -57,7 +59,8 @@ constexpr uint8_t BAR_HEIGHT = 2 * BAR_HALF_H + 1; // 13 px
 // redessinait tout le titre pour une seule ligne de pixels — 2,1 ms par image
 // mesurees (voir tools/run-blocking-probe.sh). Le titre monte d'un pixel ; l'ecart
 // au filet passe de 1 a 2 px.
-constexpr uint8_t TITLE_BASELINE_Y = 7; // drawStr() aligne sur la LIGNE DE BASE
+constexpr uint8_t TITLE_BASELINE_Y = 7;
+constexpr uint8_t GLYPH_ASCENT = FONT_VELVETSCREEN_HEIGHT - 1; // drawStr() aligne sur la LIGNE DE BASE
 constexpr uint8_t HEADER_LINE_X = 4;
 constexpr uint8_t HEADER_LINE_Y = 10;
 constexpr uint8_t HEADER_LINE_W = 120;
@@ -65,7 +68,6 @@ constexpr uint8_t HEADER_LINE_W = 120;
 // Ascendante de la police 5x7 du titre. Elle a servi a placer le pied, qui a
 // quitte l'ecran EDIT ; elle reste parce que le controle de rotation delimite la
 // bande du titre avec elle.
-constexpr uint8_t GLYPH_ASCENT = 6;
 constexpr uint8_t LAST_ROW_CY = ROW_CY_0 + (GRID_ROWS - 1) * ROW_SPACING;
 constexpr uint8_t GRID_BOTTOM_Y = LAST_ROW_CY + DIGIT_DY + DIGIT_H - 1;
 

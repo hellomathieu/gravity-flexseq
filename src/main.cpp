@@ -1,3 +1,4 @@
+#include <flexseq/OriginalFonts.h>
 #include <Arduino.h>
 #include <libGravity.h>
 
@@ -117,7 +118,7 @@ void setup() {
 
     // libGravity ne definit aucune police : police integree U8g2 (evite aussi
     // d'embarquer les donnees de police GPLv3 du firmware d'origine).
-    gravity.display.setFont(u8g2_font_5x7_tr);
+    gravity.display.setFont(flexseq::FONT_VELVETSCREEN);
 
     // Echantillonnage du CV SOUS INTERRUPTION. FlexSeq prend la propriete du
     // convertisseur : voir include/flexseq/CvSampler.h. La calibration est lue

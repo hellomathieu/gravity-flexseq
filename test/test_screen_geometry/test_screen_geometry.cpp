@@ -186,6 +186,7 @@ bool production(char family, int index, int& out) {
             case 18: out = screen::HEADER_LINE_W; return true;
             case 19: out = screen::LAST_ROW_CY; return true;
             case 20: out = screen::GRID_BOTTOM_Y; return true;
+            case 21: out = screen::GLYPH_ASCENT; return true;
             default: return false;
         }
     }

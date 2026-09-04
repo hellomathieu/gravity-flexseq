@@ -4,7 +4,7 @@ M	screen_height	1	both	HEIGHT	64
 M	tab_count	2	both	TAB_COUNT	8
 M	tab_slot_width	3	both	TAB_SLOT_W	16
 M	tab_baseline_y	4	both	TAB_BASELINE_Y	63
-M	tab_top_y	5	cpp	TAB_TOP_Y	57
+M	tab_top_y	5	both	TAB_TOP_Y	59
 M	tab_box_y	6	both	TAB_BOX_Y	56
 M	tab_box_height	7	both	TAB_BOX_H	8
 M	rule_y	8	both	RULE_Y	52
@@ -46,3 +46,4 @@ E	header_line_y	17	cpp	HEADER_LINE_Y	10
 E	header_line_width	18	cpp	HEADER_LINE_W	120
 E	last_row_centre_y	19	cpp	LAST_ROW_CY	54
 E	grid_bottom_y	20	cpp	GRID_BOTTOM_Y	63
+E	glyph_ascent	21	cpp	GLYPH_ASCENT	4
