@@ -60,7 +60,19 @@ def noms_du_fichier():
 
 
 def identifiants_lus():
+    """Les constantes que les gardes de MISE EN PAGE lisent.
+
+    Une garde qui nomme un tampon — un identifiant en `_SCRATCH` — ne garde pas
+    une mise en page : elle garde une CAPACITE. La difference n'est pas de forme
+    mais de sujet, et elle compte : une relation de mise en page est une
+    inegalite a jeu, tandis qu'une capacite est bornee contre une donnee reelle.
+    `sizeof(LBL_SUBDIVISION) <= LABEL_SCRATCH` mord des que l'etiquette depasse
+    le tampon, ce qu'une contre-epreuve a verifie a 10 contre 14. Ces gardes
+    sortent donc du perimetre, et le rapport dit combien il en a ecarte plutot
+    que de les taire.
+    """
     lus = {}
+    capacites = 0
     for entete in ENTETES:
         if not entete.is_file():
             invalide(f"en-tete absent : {entete}")
@@ -70,21 +82,28 @@ def identifiants_lus():
             invalide(f"aucun static_assert trouve dans {entete.name} :"
                      " l'extraction est cassee, ou les gardes ont disparu")
         for expression in trouves:
+            if re.search(r"\b[A-Z][A-Z0-9_]*_SCRATCH\b", expression):
+                capacites += 1
+                continue
             expression = re.sub(r'"[^"]*"', "", expression)
             for ident in re.findall(r"\b[A-Z][A-Z0-9_]{2,}\b", expression):
                 lus.setdefault(ident, set()).add(entete.name)
-    return lus
+    if not lus:
+        invalide("aucune garde de mise en page ne reste apres le tri :"
+                 " l'extraction est cassee")
+    return lus, capacites
 
 
 def main():
     noms = noms_du_fichier()
-    lus = identifiants_lus()
+    lus, capacites = identifiants_lus()
     manquants = sorted(i for i in lus if i not in noms)
 
     print("=" * 66)
     print("  COUVERTURE DE LA GEOMETRIE D'ECRAN (ADR 0012)")
     print("=" * 66)
     print(f"  identifiants lus par les static_assert : {len(lus)}")
+    print(f"  gardes de CAPACITE ecartees (elles nomment un tampon) : {capacites}")
     print(f"  identifiants nommes par le fichier     : {len(noms)}")
     print(f"  couverts                               : {len(lus) - len(manquants)}")
     print("=" * 66)

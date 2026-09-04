@@ -85,6 +85,25 @@ owner saw in the mockups on 2026-09-03. The TypeScript view must draw from the
 same convention, or the two languages will disagree on every box while both
 reading the same geometry file.
 
+### A capacity guard is not a layout relation — amended 2026-09-04
+
+`run-geometry-coverage.py` requires the vector file to name every constant a
+layout `static_assert` reads. Lot 11 added six guards of another kind: they bound
+the **capacity of a scratch buffer**, `sizeof(LBL_SUBDIVISION) <= LABEL_SCRATCH`
+and the arithmetic bound of `offset/ticksPerStep`.
+
+The tool skips them, and the difference is of **subject** and not of form. A
+layout relation is an inequality with slack, so its value can move while the
+relation stays true and nothing would see it — that is why the vector file
+exists. A capacity is bounded against a real datum: the guard bites as soon as a
+label outgrows its buffer, verified by a counter-proof at 10 against 14.
+
+The rule is mechanical: an expression naming an identifier that ends in
+`_SCRATCH` is a capacity guard. **The report says how many it skipped** rather
+than staying silent, and a counter-proof confirms the exclusion did not blind
+it: an invented constant read by a new layout `static_assert` is still reported
+and still exits 1.
+
 ## Alternatives set aside
 
 **Mirror the C++ renderers in TypeScript.** Refused. It duplicates code that

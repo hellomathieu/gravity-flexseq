@@ -276,6 +276,20 @@ inline void legacyLine(const MainScreenModel& model, uint8_t index,
     copyLabel(LBL_OFF, value);
 }
 
+constexpr uint8_t LABEL_SCRATCH = 14;
+constexpr uint8_t VALUE_SCRATCH = 10;
+
+static_assert(sizeof(LBL_SUBDIVISION) <= LABEL_SCRATCH,
+              "le tampon d'etiquette doit contenir la plus longue");
+static_assert(sizeof(LBL_SKIP_CHANCE) <= LABEL_SCRATCH,
+              "le tampon d'etiquette doit contenir la plus longue");
+static_assert(sizeof(LBL_OFFSET) <= LABEL_SCRATCH, "idem");
+static_assert(sizeof(LBL_SUBDIV_FIELD) <= LABEL_SCRATCH, "idem");
+static_assert(sizeof(LBL_CLOCK) <= VALUE_SCRATCH,
+              "le tampon de valeur doit contenir le nom d'un mode");
+static_assert(3 + 1 + 5 + 1 <= VALUE_SCRATCH,
+              "offset/ticksPerStep : trois chiffres, une barre, cinq chiffres, le zero final");
+
 template <typename Canvas>
 void measureMainScreen(Canvas& canvas, MainScreenModel& model) {
     if (model.headlineWidth == 0) {
@@ -288,22 +302,21 @@ void measureMainScreen(Canvas& canvas, MainScreenModel& model) {
     if (!model.legacyLayout) {
         return;
     }
-    char value[10];
+    char value[VALUE_SCRATCH];
     mainValueOf(model, value);
     if (value[0] != '\0') {
         canvas.setFont(FONT_STK_L);
         model.mainValueWidth = static_cast<uint8_t>(canvas.getStrWidth(value));
         canvas.setFont(FONT_VELVETSCREEN);
     }
-    char scratch[14];
+    char scratch[LABEL_SCRATCH];
     model.mainLabelWidth =
         static_cast<uint8_t>(canvas.getStrWidth(label(mainLabelOf(model), scratch)));
     for (uint8_t line = 0; line < 3; ++line) {
         const char* flashLabel = nullptr;
         legacyLine(model, line, &flashLabel, value);
-        char text[10];
         model.lineLabelWidth[line] =
-            static_cast<uint8_t>(canvas.getStrWidth(label(flashLabel, text)));
+            static_cast<uint8_t>(canvas.getStrWidth(label(flashLabel, scratch)));
         if (model.insideTab && model.fieldOpen && model.cursor == line && value[0] != '\0') {
             model.lineValueWidth = static_cast<uint8_t>(canvas.getStrWidth(value));
         }
