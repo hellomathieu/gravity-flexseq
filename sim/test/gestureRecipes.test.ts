@@ -67,7 +67,7 @@ describe('couche 1 — recettes de gestes contre le MODELE de reference, jamais 
       driver.goToTab(TAB_FIRST_CHANNEL + 1);
       expect(ui.level).toBe(UiLevel.Tab);
       expect(ui.currentTab).toBe(TAB_FIRST_CHANNEL + 1);
-      expect(ui.field).toBe(UiField.Pattern);
+      expect(ui.field).toBe(UiField.Mode);
     });
 
     it('2. la recette pose le curseur sur le champ demande, en autant de rotations que la distance', () => {
@@ -79,7 +79,7 @@ describe('couche 1 — recettes de gestes contre le MODELE de reference, jamais 
         .slice(before)
         .filter((g) => g.event === UiEvent.Rotate).length;
       expect(ui.field).toBe(UiField.Subdiv);
-      expect(rotations).toBe(2);
+      expect(rotations).toBe(3);
       expect(rotations).toBeLessThan(CHANNEL_TAB_FIELDS);
     });
 

@@ -2,6 +2,7 @@ import { Pattern, ratchetFitsStep, RATCHET_CODES } from "./Pattern.js";
 import {
   BAR_LENGTHS,
   CHANNEL_COUNT,
+  CHANNEL_MODE_COUNT,
   ChannelMode,
   MAX_LENGTH,
   MAX_SKIP_CHANCE,
@@ -39,6 +40,9 @@ export enum UiField {
   BarLength,
   EditEntry,
   SkipChance,
+  Mode,
+  Offset,
+  Mod,
 }
 
 export const TAB_COUNT = 8;
@@ -47,7 +51,11 @@ export const TAB_FIRST_CHANNEL = 1;
 export const TAB_SETTINGS = 7;
 
 export const CLOCK_TAB_FIELDS = 2;
-export const CHANNEL_TAB_FIELDS = 5;
+export const CHANNEL_TAB_FIELDS = 6;
+export const LEGACY_TAB_FIELDS = 3;
+
+export const SEQ_FIELD_INDEX_LENGTH = 2;
+export const SEQ_FIELD_INDEX_SUBDIV = 3;
 
 export const CLOCK_SOURCE_COUNT = 6;
 export const CLOCK_SOURCE_INTERNAL = 0;
@@ -115,9 +123,18 @@ export class UiController {
     return this.isChannelTab ? this.tab - TAB_FIRST_CHANNEL : -1;
   }
 
+  get isLegacyModeTab(): boolean {
+    const channel = this.selectedChannel;
+    if (channel < 0) return false;
+    const mode = this.engine.getChannelMode(channel);
+    return mode === ChannelMode.CLOCK || mode === ChannelMode.RANDOM;
+  }
+
   get fieldCount(): number {
     if (this.tab === TAB_CLOCK) return CLOCK_TAB_FIELDS;
-    if (this.isChannelTab) return CHANNEL_TAB_FIELDS;
+    if (this.isChannelTab) {
+      return this.isLegacyModeTab ? LEGACY_TAB_FIELDS : CHANNEL_TAB_FIELDS;
+    }
     return 0;
   }
 
@@ -126,14 +143,27 @@ export class UiController {
     if (this.tab === TAB_CLOCK) {
       return index === 0 ? UiField.Tempo : UiField.ClockSource;
     }
+    if (this.isLegacyModeTab) {
+      const mode = this.engine.getChannelMode(this.selectedChannel);
+      switch (index) {
+        case 0:
+          return UiField.Mode;
+        case 1:
+          return mode === ChannelMode.CLOCK ? UiField.Offset : UiField.Subdiv;
+        default:
+          return UiField.Mod;
+      }
+    }
     switch (index) {
       case 0:
-        return UiField.Pattern;
+        return UiField.Mode;
       case 1:
-        return UiField.Length;
+        return UiField.Pattern;
       case 2:
-        return UiField.Subdiv;
+        return UiField.Length;
       case 3:
+        return UiField.Subdiv;
+      case 4:
         return UiField.BarLength;
       default:
         return UiField.EditEntry;
@@ -327,6 +357,18 @@ export class UiController {
         if (index < 0) index = SUBDIVS.indexOf(DEFAULT_SUBDIV);
         const next = clampIndex(index, delta, SUBDIVS.length);
         this.engine.setSubdiv(channel, SUBDIVS[next]!);
+        break;
+      }
+      case UiField.Mode: {
+        if (channel < 0) break;
+        const current = this.engine.getChannelMode(channel) as number;
+        this.engine.setChannelMode(channel, clampIndex(current, delta, CHANNEL_MODE_COUNT));
+        break;
+      }
+      case UiField.Offset: {
+        if (channel < 0) break;
+        const candidate = this.engine.getOffset(channel) + delta;
+        this.engine.setOffset(channel, candidate < 0 ? 0 : candidate);
         break;
       }
       case UiField.SkipChance: {

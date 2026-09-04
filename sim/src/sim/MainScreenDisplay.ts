@@ -1,3 +1,9 @@
+export {
+  MainParameter,
+  mainScreenModelOf,
+  type MainScreenModel,
+} from "../domain/MainScreenModel.js";
+import type { MainScreenModel } from "../domain/MainScreenModel.js";
 import { GLYPH_HEIGHT, textPixels, textWidth } from "./oledFont.js";
 import { INK, OLED_H, OLED_W, PAPER, type OledCtx } from "./OledDisplay.js";
 
@@ -28,18 +34,6 @@ export const TEXT_INSET = 2;
 
 export const CLOCK_SOURCE_LABELS = ["INT", "EXT24", "EXT4", "EXT2", "EXT1", "MIDI"] as const;
 
-export interface MainScreenModel {
-  tab: number;
-  insideTab: boolean;
-  cursor: number;
-  fieldOpen: boolean;
-  patternIndex: number;
-  length: number;
-  subdiv: number;
-  barLength: number;
-  tempo: number;
-  clockSource: number;
-}
 
 export function tabSlotX(tab: number): number {
   return tab * TAB_SLOT_W;

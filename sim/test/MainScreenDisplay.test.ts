@@ -20,9 +20,12 @@ import {
   barLabel,
   tabCentreX,
   tabSlotX,
+  MainParameter,
   type MainScreenModel,
 } from "../src/sim/MainScreenDisplay.js";
 import { OLED_H, OLED_W, type OledCtx } from "../src/sim/OledDisplay.js";
+import { CHANNEL_TAB_FIELDS } from "../src/domain/UiController.js";
+import { ChannelMode } from "../src/domain/SequencerEngine.js";
 
 function recorder() {
   const painted = new Set<string>();
@@ -55,10 +58,17 @@ function channelTab(tab = 1): MainScreenModel {
     insideTab: false,
     cursor: 0,
     fieldOpen: false,
+    fieldCount: CHANNEL_TAB_FIELDS,
     patternIndex: 0,
     length: 16,
     subdiv: 1,
     barLength: 4,
+    mode: ChannelMode.SEQ,
+    offset: 0,
+    skipChance: 0,
+    stepTicks: 96,
+    mainParameter: MainParameter.Pattern,
+    legacyLayout: false,
     tempo: 120,
     clockSource: 0,
   };

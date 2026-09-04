@@ -6,6 +6,8 @@ import {
   DEFAULT_TEMPO,
   MAX_TEMPO,
   MIN_TEMPO,
+  SEQ_FIELD_INDEX_LENGTH,
+  SEQ_FIELD_INDEX_SUBDIV,
   STEP_COUNT,
   TAB_CLOCK,
   TAB_COUNT,
@@ -95,7 +97,7 @@ describe("UiController — tab bar", () => {
     enterTab();
     expect(ui.level).toBe(UiLevel.Tab);
     expect(ui.cursor).toBe(0);
-    expect(ui.field).toBe(UiField.Pattern);
+    expect(ui.field).toBe(UiField.Mode);
   });
 
   it("press does nothing on the settings tab while it is deferred", () => {
@@ -145,13 +147,13 @@ describe("UiController — inside a tab", () => {
     const { ui, enterTab } = rig();
     enterTab();
     ui.handle(UiEvent.Rotate, 1);
-    expect(ui.field).toBe(UiField.Length);
-    ui.handle(UiEvent.Rotate, -1);
     expect(ui.field).toBe(UiField.Pattern);
+    ui.handle(UiEvent.Rotate, -1);
+    expect(ui.field).toBe(UiField.Mode);
     ui.handle(UiEvent.Rotate, -1);
     expect(ui.field).toBe(UiField.EditEntry);
     ui.handle(UiEvent.Rotate, 1);
-    expect(ui.field).toBe(UiField.Pattern);
+    expect(ui.field).toBe(UiField.Mode);
   });
 
   it("press opens a value field and press closes it", () => {
@@ -236,8 +238,9 @@ describe("UiController — inside a tab", () => {
   });
 
   it("the pattern field is clamped to the bank", () => {
-    const { ui, engine, enterTab } = rig();
+    const { ui, engine, enterTab, gotoField } = rig();
     enterTab();
+    gotoField(UiField.Pattern);
     for (let i = 0; i < PATTERN_COUNT + 5; i += 1) ui.handle(UiEvent.ShiftRotate, 1);
     expect(engine.getSelectedPattern(0)).toBe(PATTERN_COUNT - 1);
     for (let i = 0; i < PATTERN_COUNT + 5; i += 1) ui.handle(UiEvent.ShiftRotate, -1);
@@ -659,5 +662,121 @@ describe("UiController — step cursor bound", () => {
     ui.handle(UiEvent.Rotate, 1);
     expect(ui.stepCursor).toBe(0);
     expect(STEP_COUNT).toBe(36);
+  });
+});
+
+function modeRig(mode: ChannelMode) {
+  const engine = new SequencerEngine();
+  for (let ch = 0; ch < engine.channelCount(); ++ch) engine.setChannelMode(ch, mode);
+  const transport = new Transport(engine);
+  const ui = new UiController(engine, transport);
+  ui.handle(UiEvent.Press);
+  return { engine, transport, ui };
+}
+
+describe("UiController — les trois modes et leurs champs", () => {
+  it("un onglet CLOCK porte les trois lignes de l'original", () => {
+    const { ui } = modeRig(ChannelMode.CLOCK);
+    expect(ui.fieldCount).toBe(3);
+    expect(ui.fieldAt(0)).toBe(UiField.Mode);
+    expect(ui.fieldAt(1)).toBe(UiField.Offset);
+    expect(ui.fieldAt(2)).toBe(UiField.Mod);
+  });
+
+  it("un onglet RANDOM met la subdivision sur la deuxieme ligne", () => {
+    const { ui } = modeRig(ChannelMode.RANDOM);
+    expect(ui.fieldCount).toBe(3);
+    expect(ui.fieldAt(0)).toBe(UiField.Mode);
+    expect(ui.fieldAt(1)).toBe(UiField.Subdiv);
+    expect(ui.fieldAt(2)).toBe(UiField.Mod);
+  });
+
+  it("un onglet SEQ garde ses champs et gagne MODE", () => {
+    const { ui } = modeRig(ChannelMode.SEQ);
+    expect(ui.fieldCount).toBe(6);
+    expect(ui.fieldAt(0)).toBe(UiField.Mode);
+    expect(ui.fieldAt(1)).toBe(UiField.Pattern);
+    expect(ui.fieldAt(2)).toBe(UiField.Length);
+    expect(ui.fieldAt(5)).toBe(UiField.EditEntry);
+  });
+
+  it("les index publies sont d'accord avec fieldAt", () => {
+    const { ui } = modeRig(ChannelMode.SEQ);
+    expect(SEQ_FIELD_INDEX_LENGTH).toBe(2);
+    expect(SEQ_FIELD_INDEX_SUBDIV).toBe(3);
+    expect(ui.fieldAt(SEQ_FIELD_INDEX_LENGTH)).toBe(UiField.Length);
+    expect(ui.fieldAt(SEQ_FIELD_INDEX_SUBDIV)).toBe(UiField.Subdiv);
+  });
+
+  it("on peut toujours ressortir de SEQ", () => {
+    const { ui, engine } = modeRig(ChannelMode.SEQ);
+    expect(ui.field).toBe(UiField.Mode);
+    ui.handle(UiEvent.Press);
+    ui.handle(UiEvent.Rotate, -1);
+    expect(engine.getChannelMode(0)).toBe(ChannelMode.RANDOM);
+    ui.handle(UiEvent.Rotate, -1);
+    expect(engine.getChannelMode(0)).toBe(ChannelMode.CLOCK);
+  });
+
+  it("le champ MODE parcourt les trois modes", () => {
+    const { ui, engine } = modeRig(ChannelMode.CLOCK);
+    expect(ui.field).toBe(UiField.Mode);
+    ui.handle(UiEvent.Press);
+    ui.handle(UiEvent.Rotate, 1);
+    expect(engine.getChannelMode(0)).toBe(ChannelMode.RANDOM);
+    ui.handle(UiEvent.Rotate, 1);
+    expect(engine.getChannelMode(0)).toBe(ChannelMode.SEQ);
+    ui.handle(UiEvent.Rotate, 1);
+    expect(engine.getChannelMode(0)).toBe(ChannelMode.SEQ);
+  });
+
+  it("le champ OFFSET deplace l'offset d'un pas par cran", () => {
+    const { ui, engine } = modeRig(ChannelMode.CLOCK);
+    ui.handle(UiEvent.Rotate, 1);
+    expect(ui.field).toBe(UiField.Offset);
+    ui.handle(UiEvent.Press);
+    const before = engine.getOffset(0);
+    ui.handle(UiEvent.Rotate, 1);
+    expect(engine.getOffset(0)).toBe(before + 1);
+    ui.handle(UiEvent.Rotate, -1);
+    expect(engine.getOffset(0)).toBe(before);
+  });
+
+  it("l'offset ne descend jamais sous zero", () => {
+    const { ui, engine } = modeRig(ChannelMode.CLOCK);
+    ui.handle(UiEvent.Rotate, 1);
+    ui.handle(UiEvent.Press);
+    for (let i = 0; i < 5; i += 1) ui.handle(UiEvent.Rotate, -1);
+    expect(engine.getOffset(0)).toBe(0);
+  });
+
+  it("l'offset s'arrete au dernier tick du pas", () => {
+    const { ui, engine } = modeRig(ChannelMode.CLOCK);
+    ui.handle(UiEvent.Rotate, 1);
+    ui.handle(UiEvent.Press);
+    for (let i = 0; i < 200; i += 1) ui.handle(UiEvent.Rotate, 1);
+    expect(engine.getOffset(0)).toBe(95);
+  });
+
+  it("un pas de plus de 255 ticks garde toute la plage d'offset", () => {
+    const { ui, engine } = modeRig(ChannelMode.CLOCK);
+    engine.setSubdiv(0, 4);
+    ui.handle(UiEvent.Rotate, 1);
+    ui.handle(UiEvent.Press);
+    for (let i = 0; i < 400; i += 1) ui.handle(UiEvent.Rotate, 1);
+    expect(engine.getOffset(0)).toBe(255);
+  });
+
+  it("le champ MOD est navigable et ne fait rien encore", () => {
+    const { ui, engine } = modeRig(ChannelMode.CLOCK);
+    ui.handle(UiEvent.Rotate, 1);
+    ui.handle(UiEvent.Rotate, 1);
+    expect(ui.field).toBe(UiField.Mod);
+    const a1 = engine.getCvDestination(0, 0);
+    const a2 = engine.getCvDestination(0, 1);
+    ui.handle(UiEvent.Press);
+    ui.handle(UiEvent.Rotate, 1);
+    expect(engine.getCvDestination(0, 0)).toBe(a1);
+    expect(engine.getCvDestination(0, 1)).toBe(a2);
   });
 });
