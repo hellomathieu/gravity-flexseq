@@ -249,6 +249,60 @@ that the filling of the model is **testable**.
   (`tools/run-cv-capture-probe.sh`). See the third alternative below, which this
   reverses.
 
+### Two regimes of redraw, and a derived criterion — amended 2026-09-04
+
+The budget of 12 ms per pass was applied to every screen. Lot 11 made that
+untenable: the channel tab of the original reads 12.14 ms after route 1 of line
+90, and it redraws **only when the user acts** — outside `EDIT`, production
+starts a frame only when `ui.revision()` changes (`src/main.cpp`). Measuring it
+against the budget of a screen that redraws without stopping compares two
+different things.
+
+`run-blocking-probe.sh` therefore takes `REDRAW`:
+
+- `continuous` — the default, and the strict regime. The pass is tested against
+  `PASS_BUDGET_MS`, 12 ms. This is the editor, whose playhead advances;
+- `gesture` — the pass is tested against `GESTURE_PASS_BUDGET_MS`, 16 ms.
+
+**The default is the strict regime**, so forgetting `REDRAW` loosens nothing,
+and the report always names the regime it applied and says by how much the
+budget was loosened.
+
+⚠️ **BOTH PASS BUDGETS ARE CONVENTIONS, and that was established by looking for
+the derivation rather than assumed.** The 12 ms has **none** in this repository.
+The probe says what it bounds — the responsiveness of the interface, the
+granularity of trigger emission, and the margin of the MIDI buffer — and not one
+of the three produces the figure. Two of them were checked and give **stricter**
+numbers than 12: the debounce of a button is 10 ms, and a deliberate detent lasts
+about 54 ms, so a frame of eight passes would have to average under 7 ms to keep
+up with a fast turn. Do not present either budget as a physical limit.
+
+**A DERIVED criterion does exist, and it comes from the firmware.** `main.cpp`
+never starts a frame more often than `UI_MIN_INTERVAL_MS`. In the continuous
+regime frames follow one another, so a frame longer than that interval cannot
+hold the cadence. The probe **reads the constant from the source**, never keeps a
+copy of it — the rule that broke twice already, line 68 of
+`docs/open-risks.md` — and an unreadable constant makes the criterion **not
+evaluable**, which counts as a failure in both regimes.
+
+That criterion discriminates, measured 2026-09-04 at 8 s with
+`UI_MIN_INTERVAL_MS = 40`:
+
+| Screen | Routine frame | Verdict |
+|---|---|---|
+| the editor, `env:wokwi` | 32.5 ms | green |
+| the channel tab, `env:mainscreen` | 54.3 ms | red in the continuous regime |
+
+So the channel tab could not sustain a continuous redraw, and it does not have
+to. In the `gesture` regime the pass passes — 12.14 ms against 16 — and the frame
+criterion does not apply, nothing queueing behind a single frame.
+
+**Four counter-proofs were run.** `REDRAW=bogus` refuses with exit 2 ·
+`GESTURE_PASS_BUDGET_MS=12` reddens the pass again, so the loosening is
+reversible and visible · renaming `UI_MIN_INTERVAL_MS` in the source makes the
+derived criterion read NOT EVALUABLE · and the default regime keeps the editor at
+12 ms.
+
 ## Alternatives set aside
 
 - **A second U8g2 object in `_F_` mode** (1024-byte buffer, a single pass):

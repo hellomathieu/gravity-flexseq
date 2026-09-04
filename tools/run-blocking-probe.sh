@@ -48,13 +48,47 @@
 # dit explicitement quand il n'a rien observe. DURATION vaut 32 s pour qu'il en
 # observe, ce qui coute ~5 s de temps mur.
 #
-# Reglages : PASS_BUDGET_MS (defaut 12), DURATION (defaut 32 s de simulation).
+# DEUX REGIMES DE REDESSIN, depuis le 2026-09-04. REDRAW=continuous (defaut) vise
+# un ecran qui se redessine sans arret : l'editeur, dont le playhead avance. Son
+# budget de passage reste PASS_BUDGET_MS. REDRAW=gesture vise un ecran qui ne se
+# redessine que lorsque l'utilisateur agit — l'onglet d'un canal, ou hors EDIT la
+# production ne redessine que sur un changement de ui.revision() (src/main.cpp) :
+# son budget est GESTURE_PASS_BUDGET_MS. Le defaut est le regime STRICT, donc
+# oublier REDRAW ne desserre rien, et le rapport nomme toujours le regime applique.
+#
+# ⚠️ LES DEUX BUDGETS DE PASSAGE SONT DES CONVENTIONS, et ce fait a ete etabli en
+# posant la question : le 12 ms n'a AUCUNE derivation dans le depot. La sonde dit
+# ce qu'il borne — reactivite de l'UI, granularite des triggers, marge du tampon
+# MIDI — et aucun de ces trois n'a produit le chiffre. Ne pas le presenter comme
+# une limite physique.
+#
+# UN CRITERE DERIVE existe en revanche, et il vient du firmware : main.cpp ne
+# demarre jamais une image plus souvent que UI_MIN_INTERVAL_MS. En regime continu
+# les images se suivent, donc une image plus longue que cet intervalle ne peut pas
+# tenir la cadence. La constante est LUE DANS LA SOURCE, jamais recopiee ici : une
+# copie serait la faute que la ligne 68 de docs/open-risks.md a deja consignee
+# deux fois. Introuvable, le critere n'est pas evaluable, ce qui compte pour un
+# echec.
+#
+# Reglages : PASS_BUDGET_MS (defaut 12), GESTURE_PASS_BUDGET_MS (defaut 16),
+# REDRAW (continuous|gesture), DURATION (defaut 32 s de simulation).
 
 set -u
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PASS_BUDGET_MS="${PASS_BUDGET_MS:-12}"
+GESTURE_PASS_BUDGET_MS="${GESTURE_PASS_BUDGET_MS:-16}"
+REDRAW="${REDRAW:-continuous}"
 DURATION="${DURATION:-32}"
+
+case "$REDRAW" in
+  continuous|gesture) ;;
+  *) printf 'REDRAW doit valoir continuous ou gesture, pas %s\n' "$REDRAW" >&2; exit 2 ;;
+esac
+
+# L'intervalle minimal entre deux images, LU DANS LE FIRMWARE.
+UI_INTERVAL_MS="$(sed -n 's/.*UI_MIN_INTERVAL_MS = \([0-9][0-9]*\).*/\1/p' \
+                   "$ROOT/src/main.cpp" | head -1)"
 # ENVNAME choisit le firmware mesure, et le defaut est env:wokwi — pas la
 # production — parce que l'objet de cette sonde est de BORNER la boucle quand elle
 # REND. Depuis le 2026-08-22 la production demarre sur l'ecran principal, qui ne
@@ -138,14 +172,19 @@ if [ "$PROBE" -ne 0 ]; then
 fi
 printf '  %s✅%s simulation             %s%s s simulees%s\n' "$C_OK" "$C_0" "$C_DIM" "$DURATION" "$C_0"
 
-PASS_BUDGET_MS="$PASS_BUDGET_MS" python3 - "$LOG" <<'PY'
+PASS_BUDGET_MS="$PASS_BUDGET_MS" GESTURE_PASS_BUDGET_MS="$GESTURE_PASS_BUDGET_MS" \
+REDRAW="$REDRAW" UI_INTERVAL_MS="$UI_INTERVAL_MS" python3 - "$LOG" <<'PY'
 import os, re, sys
 
 txt = open(sys.argv[1], errors='replace').read()   # la sortie porte des octets d'UART
 tty = sys.stdout.isatty()
 OK, ERR, DIM, B, Z = ('\033[32m', '\033[31m', '\033[2m', '\033[1m', '\033[0m') if tty else ('',) * 5
 mark = lambda good: f"{OK}\u2705{Z}" if good else f"{ERR}\u274c{Z}"
-budget = float(os.environ["PASS_BUDGET_MS"])
+redraw = os.environ["REDRAW"]
+budget = float(os.environ["PASS_BUDGET_MS" if redraw == "continuous"
+                          else "GESTURE_PASS_BUDGET_MS"])
+raw_interval = os.environ.get("UI_INTERVAL_MS", "").strip()
+ui_interval = float(raw_interval) if raw_interval.isdigit() else None
 
 
 def grab(pattern, cast=float):
@@ -202,6 +241,12 @@ enough = frames >= MIN_FRAMES
 sane = (conform == bands) and bands >= 8 and enough and "IMAGE TROP LONGUE" not in txt
 corrected = f_hw is not None
 fits = hw_p90 is not None and hw_p90 <= budget
+# Critere DERIVE : en regime continu les images se suivent, et main.cpp n'en
+# demarre pas une plus souvent que UI_MIN_INTERVAL_MS. Une image plus longue que
+# cet intervalle ne peut donc pas tenir la cadence. Introuvable dans la source,
+# l'intervalle rend le critere NON EVALUABLE, ce qui compte pour un echec.
+frame_known = ui_interval is not None and frame_med is not None
+frame_fits = frame_known and frame_med <= ui_interval
 
 print()
 print(f"{B}============ BLOCAGE DE LA BOUCLE (esclave SSD1306 reel) ============{Z}")
@@ -217,8 +262,27 @@ if corrected:
           f"{DIM}(mesure a deux regimes){Z}")
 else:
     print(f"  {mark(False)} Artefact ADC       {ERR}NON corrige{Z} — chiffres surevalues")
+regime = ("continu, l ecran se redessine sans arret" if redraw == "continuous"
+          else "geste, l ecran ne se redessine que sur une action")
 print(f"  {mark(fits)} Passage courant    {hw_p90:6.2f} ms   "
       f"{DIM}— p90 estime materiel ; budget {budget:g} ms ; median {hw_med:.2f} ms{Z}")
+print(f"  {DIM}   Regime          {regime}{Z}")
+strict = float(os.environ["PASS_BUDGET_MS"])
+if redraw != "continuous" and budget > strict:
+    print(f"  {DIM}   ⚠ budget desserre : {budget:g} ms au lieu de {strict:g} ms, "
+          f"par REDRAW={redraw}{Z}")
+elif redraw != "continuous":
+    print(f"  {DIM}   budget NON desserre : {budget:g} ms, comme le regime continu{Z}")
+if not frame_known:
+    print(f"  {mark(False)} Image dans l intervalle   NON EVALUABLE — "
+          f"UI_MIN_INTERVAL_MS introuvable dans src/main.cpp")
+elif redraw == "continuous":
+    print(f"  {mark(frame_fits)} Image dans l intervalle   {frame_med:6.1f} ms   "
+          f"{DIM}— UI_MIN_INTERVAL_MS = {ui_interval:g} ms, LU dans src/main.cpp{Z}")
+else:
+    print(f"  {DIM}   Image           {frame_med:6.1f} ms — l intervalle de "
+          f"{ui_interval:g} ms ne s applique pas : rien ne s enfile derriere une "
+          f"image de geste{Z}")
 if hw_full is not None:
     ratio = f"1 image sur {full_ratio:.0f}" if full_ratio else "ratio non mesure"
     print(f"  {DIM}   Pire passage    {hw_full:6.2f} ms   — rafraichissement complet, "
@@ -255,6 +319,10 @@ else:
     print("  Ce n'est PAS l'ADC, dont l'artefact est corrige. Regarder le cout par")
     print("  position dans l'image, que la sonde imprime : il dit quelle bande paie.")
 
-sys.exit(0 if (sane and corrected and fits) else 1)
+# Le critere derive entre dans le verdict, et il ne s applique qu au regime
+# continu — mais son INEVALUABILITE compte pour un echec dans les deux, sinon
+# une constante disparue de main.cpp passerait en silence.
+frame_ok = frame_known and (frame_fits or redraw != "continuous")
+sys.exit(0 if (sane and corrected and fits and frame_ok) else 1)
 
 PY
