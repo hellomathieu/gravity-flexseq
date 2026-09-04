@@ -227,7 +227,7 @@ values, so these are FlexSeq's own choices, not a branch difference.
 
 | Constant | Original | FlexSeq | Verdict |
 |---|---|---|---|
-| Tempo range | `MINBPM 20` to `MAXBPM 200` | 30 to 300 | **divergence to decide** |
+| Tempo range | `MINBPM 20` to `MAXBPM 200` | **20 to 300** since 2026-09-03 | **divergence DECIDED**, PRD §16 decision 8. The minimum aligns on the original; the maximum stays at 300, an addition that removes nothing, of the class of the four external clock rates. ⚠️ Keeping 300 also makes a persistence question disappear: the new range contains the old one, so no stored tempo can fall outside it |
 | Trigger width | `PULSE_LENGTH 120`, so 12 ms | 5 ms | **divergence to decide**, and `docs/open-risks.md` line 12 already measures FlexSeq's real width at 4.7 to 5.0 ms |
 
 The tempo range matters twice over: PRD §16 removed the encoder acceleration, so
