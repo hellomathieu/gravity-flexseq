@@ -714,6 +714,20 @@ State: **designed, and not implemented**, except the v2 format, which is impleme
 
 **1. The layout of a channel tab is the one described above**, and it is now validated: one large parameter on the left with its label under it, and three lines on the right. The geometry comes from the original's drawing code, and it was checked with the real font, glyph by glyph: the longest line is `OFFSET:` with `0/24`, and it ends at `x=117` of 127. Nothing overlaps and nothing overflows.
 
+✅ **LOT 12 IS DELIVERED, 2026-09-04.** A channel in `SEQ` holds `MODE`, `EDIT`
+and `CONFIG`, the same three lines as `CLOCK` and `RANDOM`, and `CONFIG` opens
+the fourth page with `LENGTH`, `SUBDIV` and `MOD`. **Three fields left the tab
+and each kept a way in**: `PATTERN` became the principal parameter, adjusted by
+`SHIFT` plus rotation on the bar; `LENGTH` and `SUBDIV` went to the page; `SEP`
+went to the header of `EDIT` (decision 11 below). Nothing became unreachable,
+which is the ordering the paragraph below demanded.
+
+**The page is a STATE of the tab, not a fourth level.** Entering it switches the
+field list; a long press clears it and returns to the tab, a second reaches the
+bar. Its large parameter is the **pattern name** with the label `PATTERN`, chosen
+by the owner on 2026-09-04, so the page says which of the sixteen patterns it
+configures.
+
 **2. Lot 11 delivers CLOCK and RANDOM, and it leaves the SEQ tab as it is.** Lot 12 then delivers the `CONFIG PATTERN` page and the target form of SEQ. The reason is not tidiness: the target form of SEQ sends `LENGTH` onto that page, so delivering it first would leave `LENGTH` **unreachable** between the two lots. The accepted price is that the layout of SEQ changes once.
 
 **3bis. BOTH FONTS OF THE ORIGINAL ARE REUSED, and the cheaper path is the faithful one — decided by the owner on 2026-09-04, on a measurement.** The original draws with two fonts: `stkL` for the main parameter, and `velvetscreen` for every label. FlexSeq uses u8g2's `5x7` for everything.
@@ -756,10 +770,34 @@ so nothing could bring it back to `CLOCK` or to `RANDOM`. That was a real defect
 of the first form of lot 11, and two mutants revealed it.
 
 **The index of a field is therefore a fact of the domain**, and no tool may hold
-a copy of it. `UiController::SEQ_FIELD_INDEX_LENGTH` publishes the one index a
-measurement harness needs, and a test binds it to `fieldAt()` so that the two
-cannot drift apart. The harness of the gesture probe read a literal `1` until
-2026-09-04, which the arrival of `MODE` made wrong without any test saying so.
+a copy of it. `UiController::SEQ_FIELD_INDEX_*` and `CONFIG_FIELD_INDEX_*`
+publish them, and a test binds each to `fieldAt()` so the two cannot drift apart.
+The harness of the gesture probe read a literal `1` until 2026-09-04, which the
+arrival of `MODE` made wrong without any test saying so.
+
+⚠️ **Their MEANING changed the same day, with lot 12, and the compiler named
+every stale reader** — eleven sites failed to compile instead of failing
+silently. `SEQ_FIELD_INDEX_*` is now `MODE` 0, `EDIT` 1, `CONFIG` 2, and
+`CONFIG_FIELD_INDEX_*` is `LENGTH` 0, `SUBDIV` 1, `MOD` 2. **An index is
+therefore no longer a unique key**: 0 is `MODE` on the tab and `LENGTH` on the
+page. The burst limit of the harness keys on the FIELD for that reason; keyed on
+the index it would have handed the limit of `LENGTH` to `MODE`.
+
+**11. THE MEASURE SEPARATION LIVES IN THE HEADER OF `EDIT`, and it costs no new
+gesture.** Decided by the owner on 2026-09-04, who refused a blind cycling
+gesture and asked for an editable value in the header instead. The cursor ring of
+`EDIT` gains one position above the grid: one detent left from step 1 goes up to
+the header, a short press opens `SEP`, rotation cycles its five values with the
+bars redrawing live, a second short press confirms, and a long press returns to
+step 1 — staying inside `EDIT`.
+
+⚠️ **The header is a HARD STOP, and the BACKWARD wrap disappears.** A detent left
+from the header changes nothing, and a detent right from step 36 still wraps to
+step 1. So the forward wrap this section asks for is kept exactly, while step 1
+to step 36 is gone: that detent belongs to the header now. **`SEP` is drawn at
+all times**, at the right of the header, which is why this form beats a blind
+gesture — the value is read rather than inferred from the bars. Measured: the
+title is 65 px of 128 and `SEP 3` is 22.
 
 — *the previous wording, partly replaced:*
 **Three screens**, exactly those of the original:
