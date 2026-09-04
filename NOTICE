@@ -28,14 +28,22 @@ It carries **21 glyphs**: the ten digits, then `/`, `x` and `%`, then `A` and `B
 for a pattern name, then `E`, `X`, `T`, `M`, `I` and `D`, because the clock tab
 writes `EXT` and `MIDI` large.
 
+`sim/src/sim/stkl.font.json` holds the same font decoded glyph by glyph, for the
+TypeScript preview. The **decoder is ours**; the glyph data is the original's.
+
 The decision to reuse rather than redraw is recorded in **PRD §12.1**, amended
 2026-09-04, and the decoded metrics live in `docs/original-conformity.md`.
 
 ### The `velvetscreen` font — labels and glyphs
 
-`sim/src/sim/velvetscreen.font.json` holds the font of the original, decoded
-glyph by glyph by `tools/decode-velvetscreen.py`. The **decoder is ours**; the
-glyph data is the original's.
+`src/hal/OriginalFonts.cpp` holds the font of the original **byte for byte**,
+437 bytes including the terminator, as `flexseq::FONT_VELVETSCREEN`.
+`sim/src/sim/velvetscreen.font.json` holds the same font decoded glyph by glyph
+by `tools/decode-original-font.py`. The **decoder is ours**; the glyph data is
+the original's.
+
+⚠️ **Both atlases are decoded from `src/hal/OriginalFonts.cpp`**, so the two
+languages start from the same bytes the firmware ships.
 
 It also carries the glyphs the navigation needs — `w` for the clock, `r` for
 play, `t` for stop — and the two step glyphs of the sequencer, `q` for an active

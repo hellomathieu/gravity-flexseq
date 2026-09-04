@@ -15,6 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SRC = ROOT.parent / "GravityFW" / "src" / "Gravity" / "Gravity.ino"
+DEFAULT_FONT = "velvetscreen"
 DEFAULT_OUT = ROOT / "sim" / "src" / "sim" / "velvetscreen.font.json"
 
 
@@ -110,8 +111,8 @@ def decode(data):
         r = BitReader(data, p + 2)
         w = r.u(bw); ht = r.u(bh)
         g = {"w": w, "h": ht, "xoff": 0, "yoff": 0, "advance": 0, "rows": []}
+        g["xoff"] = r.s(bx); g["yoff"] = r.s(by); g["advance"] = r.s(bd)
         if w > 0 and ht > 0:
-            g["xoff"] = r.s(bx); g["yoff"] = r.s(by); g["advance"] = r.s(bd)
             total = w * ht
             grid = [0] * total
             cur = 0
@@ -124,9 +125,6 @@ def decode(data):
                         if cur < total: grid[cur] = 1; cur += 1
                     if r.u(1) == 0: break
             g["rows"] = ["".join(str(grid[y*w + x]) for x in range(w)) for y in range(ht)]
-        else:
-            # blank glyph (e.g. space): width/height are 0, advance follows.
-            g["advance"] = r.s(bd)
         glyphs[enc] = g
         p += jump
     return glyph_cnt, glyphs
@@ -139,14 +137,18 @@ parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
 parser.add_argument("--src", help="chemin de Gravity.ino (defaut : clone GravityFW voisin)")
 parser.add_argument("--out", default=DEFAULT_OUT, type=Path,
                     help=f"atlas JSON a ecrire (defaut : {DEFAULT_OUT.relative_to(ROOT)})")
+parser.add_argument("--font", default=DEFAULT_FONT,
+                    help=f"nom de la variable C a extraire (defaut : {DEFAULT_FONT})")
+parser.add_argument("--name", default=None,
+                    help="nom porte par l atlas (defaut : la valeur de --font)")
 args = parser.parse_args()
 
 src = resolve_src(args.src)
 print(f"source : {src}")
 
 text = src.read_text()
-raw = c_unescape(extract_literal(text, "velvetscreen"))
-print(f"velvetscreen raw bytes = {len(raw)}")
+raw = c_unescape(extract_literal(text, args.font))
+print(f"{args.font} raw bytes = {len(raw)}")
 cnt, glyphs = decode(raw)
 print(f"declared glyph_cnt={cnt}, decoded={len(glyphs)}")
 for ch in "pqADEIT1":
@@ -161,5 +163,5 @@ for ch in "pqADEIT1":
 # emit atlas
 atlas = {str(k): v for k, v in glyphs.items()}
 with args.out.open("w") as fh:
-    json.dump({"name": "velvetscreen", "glyphs": atlas}, fh, indent=0)
+    json.dump({"name": args.name or args.font, "glyphs": atlas}, fh, indent=0)
 print(f"\nwrote {args.out}")
