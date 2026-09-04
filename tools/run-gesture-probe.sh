@@ -33,8 +33,13 @@ production simule, et verifie leur effet.
                                  deplacent l'attente de R2
   R2_ROTATIONS=<n>               nombre de rotations avant le cran de l'etape SUBDIV
   EXPECT_R11_NIBBLE_1 / EXPECT_R11_NIBBLE_TRIOLET / EXPECT_R11_CADENCE
-                                 deplacent l'attente de R11
-  R11_CRANS_SUBDIV=<n>           crans pour atteindre x24 depuis /1 (defaut 8)
+  EXPECT_R11_CADENCE_PALIER      deplacent l'attente de R11
+  R11_CRANS_SUBDIV=<n>           crans pour atteindre x24 depuis /1 (defaut : lu
+                                 dans le domaine). La descente est ETAGEE : n-1
+                                 crans jusqu'a un palier INTERIEUR a la liste,
+                                 mesure, puis 1 cran jusqu'a x24. Sans le palier,
+                                 le critere x24 passait pour tout n >= 8, l'index
+                                 0 etant ecrete.
   SKIP_SHIFT=1                   n'injecte pas le geste SHIFT (classe 1)
   INSTANCE_BASE_FORCE=<adr>      force la base du tampon observe (0 = pointeur nul)
   INSTANCE_CHANNEL_FORCE=<n>     force le canal lu par les accesseurs gardes
@@ -174,6 +179,7 @@ R2_LENGTH_BASE=16
 R2_LENGTH_APRES_ATTENDUE=17
 R11_ONGLET=4
 R11_CADENCE_BASE=96
+R11_CADENCE_PALIER_ATTENDUE=6
 R11_CADENCE_X24_ATTENDUE=4
 R11_NIBBLE_1_ATTENDU="02"
 R11_NIBBLE_TRIOLET_ATTENDU="07"
@@ -1894,28 +1900,35 @@ else
   W_R11_IMG=0
 fi
 
-D_ECH_OK=1; D_ECH_D=""
-for f in base x24 cadence_fin; do
+W_R11_ECH_DESC=1; W_R11_ECH_AVAL=1; D_ECH_D=""
+for f in base palier x24; do
   dd="$(d2 "$f" 5)"; rr="$(d2 "$f" 7)"
   { [ "${dd:-0}" -ge "$B_DIST_MIN" ] && [ "${rr:-0}" -ge "$B_RET_MIN" ]; } 2>/dev/null \
-    || { D_ECH_OK=0; D_ECH_D="$D_ECH_D $f:distances=$dd,retenues=$rr"; }
+    || { W_R11_ECH_DESC=0; D_ECH_D="$D_ECH_D $f:distances=$dd,retenues=$rr"; }
 done
-for g in nav_subdiv cran1 cran2 cran3 retour; do
+for g in nav_subdiv x24; do
   case "$g" in
     nav_subdiv) tw="$(d2 "$g" 5)" ;;
-    retour)     tw="$(d2 "$g" 9)" ;;
     *)          tw="$(d2 "$g" 11)" ;;
   esac
-  [ "${tw:-0}" -gt 0 ] 2>/dev/null || { D_ECH_OK=0; D_ECH_D="$D_ECH_D $g:sans-trafic"; }
+  [ "${tw:-0}" -gt 0 ] 2>/dev/null || { W_R11_ECH_DESC=0; D_ECH_D="$D_ECH_D $g:sans-trafic"; }
+done
+dd="$(d2 cadence_fin 5)"; rr="$(d2 cadence_fin 7)"
+{ [ "${dd:-0}" -ge "$B_DIST_MIN" ] && [ "${rr:-0}" -ge "$B_RET_MIN" ]; } 2>/dev/null \
+  || { W_R11_ECH_AVAL=0; D_ECH_D="$D_ECH_D cadence_fin:distances=$dd,retenues=$rr"; }
+for g in cran1 cran2 cran3 retour; do
+  case "$g" in
+    retour) tw="$(d2 "$g" 9)" ;;
+    *)      tw="$(d2 "$g" 11)" ;;
+  esac
+  [ "${tw:-0}" -gt 0 ] 2>/dev/null || { W_R11_ECH_AVAL=0; D_ECH_D="$D_ECH_D $g:sans-trafic"; }
 done
 NAVED_TWI="$(grep -E '^rD_nav_edit ' "$LOG7" | awk '{print $6}')"
-[ "${NAVED_TWI:-0}" -gt 0 ] 2>/dev/null || { D_ECH_OK=0; D_ECH_D="$D_ECH_D nav_edit:sans-trafic"; }
-if [ "$D_ECH_OK" = "1" ]; then
-  ok "R11 : echantillons" "planchers atteints sur les trois fenetres, trafic present sur les six gestes"
-  W_R11_ECH=1
+[ "${NAVED_TWI:-0}" -gt 0 ] 2>/dev/null || { W_R11_ECH_AVAL=0; D_ECH_D="$D_ECH_D nav_edit:sans-trafic"; }
+if [ "$W_R11_ECH_DESC" = "1" ] && [ "$W_R11_ECH_AVAL" = "1" ]; then
+  ok "R11 : echantillons" "planchers atteints sur les quatre fenetres, trafic present sur les sept gestes"
 else
-  inval "R11 : echantillons" "plancher ou trafic manquant —$D_ECH_D"
-  W_R11_ECH=0
+  inval "R11 : echantillons" "plancher ou trafic manquant —$D_ECH_D (descente $W_R11_ECH_DESC, aval $W_R11_ECH_AVAL)"
 fi
 
 if [ "$(d2 base 3)" = "$R11_CADENCE_BASE" ] && [ "$(d2 base 9)" = "0" ]; then
@@ -1937,14 +1950,31 @@ else
 fi
 
 garde_pointeur "$LOG7" "R11 : temoin du pointeur" || W_R11_IMG=0
-W_R11=$(( W_R11_IMG * W_R11_ECH * W_R11_BASE * W_R11_EDIT ))
+W_R11_DESC=$(( W_R11_IMG * W_R11_ECH_DESC * W_R11_BASE ))
+W_R11=$(( W_R11_DESC * W_R11_ECH_AVAL * W_R11_EDIT ))
+
+D_PAL="$(d2 palier 3)"
+D_PAL_ATTENDU="${EXPECT_R11_CADENCE_PALIER:-$R11_CADENCE_PALIER_ATTENDUE}"
+if [ "$W_R11_DESC" != "1" ]; then
+  inval "R11 : palier interieur" "temoins amont invalides"
+  W_R11_PAL=0
+elif [ "$D_PAL" = "$D_PAL_ATTENDU" ]; then
+  ok "R11 : palier interieur" "$D_PAL ticks par step apres $(d2 nav_subdiv 9) crans : un cran de plus ou de moins donnerait une autre cadence"
+  W_R11_PAL=1
+else
+  bad "R11 : palier interieur" "cadence $D_PAL au lieu de $D_PAL_ATTENDU apres $(d2 nav_subdiv 9) crans : la descente n a pas compte ses crans"
+  W_R11_PAL=0
+fi
 
 D_CAD="$(d2 x24 3)"
-if [ "$W_R11" != "1" ]; then
+if [ "$W_R11_DESC" != "1" ]; then
   inval "R11 : cadence x24" "temoins amont invalides"
   W_R11_CAD=0
+elif [ "$W_R11_PAL" != "1" ]; then
+  inval "R11 : cadence x24" "le palier interieur n est pas etabli : le point de depart du dernier cran est inconnu"
+  W_R11_CAD=0
 elif [ "$D_CAD" = "${EXPECT_R11_CADENCE:-$R11_CADENCE_X24_ATTENDUE}" ]; then
-  ok "R11 : cadence x24" "$D_CAD ticks par step, mesures sur OUT4 AVANT toute edition de ratchet"
+  ok "R11 : cadence x24" "$D_CAD ticks par step, un cran depuis le palier, mesures sur OUT4 AVANT toute edition de ratchet"
   W_R11_CAD=1
 else
   inval "R11 : cadence x24" "cadence $D_CAD au lieu de ${EXPECT_R11_CADENCE:-$R11_CADENCE_X24_ATTENDUE} : la premisse « incompatible a x24 » n est pas etablie"

@@ -25,6 +25,7 @@ static const uint8_t DIAGNOSTIC_MEASURES_THE_POLICY = burst::NO_EMPIRICAL_LIMIT;
 #include <flexseq/PatternScreen.h>
 #include <flexseq/FactoryPatterns.h>
 #include <flexseq/Persistence.h>
+#include <flexseq/Subdiv.h>
 
 // La grille du domaine, jamais une copie. Le harnais bouclait le curseur modulo
 // 24 alors que le lot F l'a portee a 36 : R10 visait le step 28 en croyant viser
@@ -1019,11 +1020,12 @@ int main(int argc, char **argv)
             return 2;
         }
     }
-    int r11CransSubdiv = 8;
+    int r11CransSubdiv = (int)flexseq::DEFAULT_SUBDIV_INDEX;
     {
         const char *text = getenv("R11_CRANS_SUBDIV");
         if (text != NULL) r11CransSubdiv = (int)strtol(text, NULL, 0);
-        if (r11CransSubdiv < 0 || r11CransSubdiv > 24) {
+        if (r11CransSubdiv < 0
+            || r11CransSubdiv > (int)flexseq::SUBDIV_CHOICE_COUNT - 1) {
             fprintf(stderr, "R11_CRANS_SUBDIV hors de la liste : %d\n", r11CransSubdiv);
             return 2;
         }
@@ -1641,14 +1643,19 @@ int main(int argc, char **argv)
         printf("rD_base            cadence %u distances %u retenues %u ecarts %u\n",
                cad, gaps, kept, ecarts);
 
+        static_assert(flexseq::DEFAULT_SUBDIV_INDEX >= 2,
+                      "the staged descent needs a stop inside the choice list");
+
+        const int cransPalier = (r11CransSubdiv > 0) ? r11CransSubdiv - 1 : 0;
+
         alignTab(avr, ongletR11);
         marque = g_twi_bytes;
         pressFor(avr, (double)PRESS_MS);
         gotoConfigField(avr, flexseq::UiController::CONFIG_FIELD_INDEX_SUBDIV);
-        if (!skipBGeste && r11CransSubdiv > 0)
-            shiftRotate(avr, r11CransSubdiv, 0, harness::SUBDIV_BURST_LIMIT, false);
-        printf("rD_nav_subdiv      onglet %d twi %u crans %d\n",
-               selectedTab(), g_twi_bytes - marque, r11CransSubdiv);
+        if (!skipBGeste && cransPalier > 0)
+            shiftRotate(avr, cransPalier, 0, harness::SUBDIV_BURST_LIMIT, false);
+        printf("rD_nav_subdiv      onglet %d twi %u crans %d palier %d\n",
+               selectedTab(), g_twi_bytes - marque, r11CransSubdiv, cransPalier);
 
         run_for(avr, 2500.0);
         depart = g_ticks;
@@ -1656,8 +1663,21 @@ int main(int argc, char **argv)
         readInstances(avr, vu);
         ecarts = instancesDiffCount(vu, expectedBytes, &premier);
         cad = gapGcdInWindow(&g_out[sortieR11], depart, g_ticks, &kept, &gaps, &dropped);
-        printf("rD_x24             cadence %u distances %u retenues %u ecarts %u\n",
-               cad, gaps, kept, ecarts);
+        printf("rD_palier          cadence %u distances %u retenues %u ecarts %u twi %u\n",
+               cad, gaps, kept, ecarts, g_twi_bytes - marque);
+
+        marque = g_twi_bytes;
+        if (!skipBGeste && r11CransSubdiv > 0)
+            shiftRotate(avr, 1, 0, harness::SUBDIV_BURST_LIMIT, false);
+
+        run_for(avr, 2500.0);
+        depart = g_ticks;
+        run_for(avr, 20000.0);
+        readInstances(avr, vu);
+        ecarts = instancesDiffCount(vu, expectedBytes, &premier);
+        cad = gapGcdInWindow(&g_out[sortieR11], depart, g_ticks, &kept, &gaps, &dropped);
+        printf("rD_x24             cadence %u distances %u retenues %u ecarts %u twi %u\n",
+               cad, gaps, kept, ecarts, g_twi_bytes - marque);
 
         pressFor(avr, (double)LONG_PRESS_MS);
         const int creneauxAvant = tabBandSlotsWithInk();
