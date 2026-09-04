@@ -188,6 +188,17 @@ anyone decided to live with it.
 
 ## Method rules born from these subjects
 
+**A counter-proof must prove that its mutation applied.** Written 2026-09-04,
+during step 1 of lot 11. One of the nine counter-proofs of the geometry vector
+file came out **green**, and the guard was not at fault: the `sed` pattern named
+`rule_w` where the file holds `rule_width`, so the mutation never applied and the
+suite ran on an intact file. A green counter-proof reads as "the guard is blind"
+when it can also mean "nothing was mutated", and the two are opposite
+conclusions. The rule: **assert that the mutation took effect before running the
+suite**, and treat a failed assertion as an invalid counter-proof rather than a
+result. Re-run that way, the case turned red in both languages, each naming the
+id, the family and the index.
+
 **A Flash figure is `.text` PLUS `.data`, and comparing one against the other
 costs a factor of four.** On 2026-08-31 the cost of six resident `Pattern`
 buffers was published as **+84 bytes** of Flash. It was **+318**. The measurement
