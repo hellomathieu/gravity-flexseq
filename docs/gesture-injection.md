@@ -183,6 +183,15 @@ that is `x24`. Eight detents give an injected hold of 30 + 8 × 54 = **462 ms**,
 below the 678 ms of a full burst and far below the threshold, so the recipe needs
 no splitting and its `SHIFT` hold stays valid.
 
+⚠️ **The simavr harness descends in TWO stages since 2026-09-04, and the reason is
+measurement, not timing.** Index 0 is the floor of the list, so a single burst of
+8 detents and a burst of 12 both land on `x24`: the criterion could not report a
+miscount. The course now sends `n - 1` detents to index 1, measures the cadence
+there, then sends one detent to index 0. Index 1 has a neighbour on each side, so
+a detent more or less moves the reading. Each stage holds `SHIFT` for less than
+the single burst did — 408 ms and 84 ms — so the ceiling is further away, not
+nearer. See `docs/open-risks.md` line 87.
+
 `GestureDriver.setRatchet()` then tests `ratchetFitsStep()` **before** rotating,
 so a code the rate refuses returns `applied: false` without emitting a single
 event: at 4 ticks per step, `RATCHET_6` costs zero detents and the triplet costs
