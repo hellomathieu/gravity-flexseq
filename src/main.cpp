@@ -89,29 +89,7 @@ void beginEditFrame(uint8_t channel) {
 }
 
 void beginMainFrame() {
-    const int8_t channel = ui.selectedChannel();
-
-    flexseq::MainScreenModel model;
-    model.tab = ui.currentTab();
-    model.insideTab = (ui.level() == flexseq::UiController::LEVEL_TAB);
-    model.cursor = ui.cursor();
-    model.fieldOpen = ui.fieldOpen();
-    model.fieldCount = ui.fieldCount();
-    model.patternIndex = channel >= 0
-        ? engine.getSelectedPattern(static_cast<uint8_t>(channel))
-        : -1;
-    // FIELD_LENGTH montre la longueur EDITABLE, jamais la longueur modulee.
-    model.length = channel >= 0
-        ? engine.getBaseLength(static_cast<uint8_t>(channel))
-        : 0;
-    model.subdiv = channel >= 0 ? engine.getSubdiv(static_cast<uint8_t>(channel)) : 0;
-    model.barLength = channel >= 0
-        ? static_cast<uint8_t>(engine.getBarLength(static_cast<uint8_t>(channel)))
-        : 0;
-    model.tempo = ui.tempo();
-    model.clockSource = ui.clockSource();
-    model.headlineWidth = 0;  // PagedScreen la mesure une fois par image
-
+    flexseq::MainScreenModel model = flexseq::mainScreenModelOf(ui, engine);
     uiScreen.begin(gravity.display, model);
 }
 

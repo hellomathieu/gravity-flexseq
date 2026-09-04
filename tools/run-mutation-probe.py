@@ -61,6 +61,28 @@ OK, ERR, DIM, B, Z = ("\033[32m", "\033[31m", "\033[2m", "\033[1m", "\033[0m") i
 
 # (etiquette, chemin relatif, motif, remplacement, suite)
 MUTANTS = [
+    ("cpp: the screen model derives the main field instead of carrying it",
+     "src/domain/MainScreenModel.cpp",
+     "    model.mainField = static_cast<uint8_t>(ui.mainField());",
+     "    model.mainField = static_cast<uint8_t>(UiController::FIELD_SUBDIV);",
+     "cpp-screen-model"),
+    ("cpp: the screen model reads the first channel instead of the selected one",
+     "src/domain/MainScreenModel.cpp",
+     "    const uint8_t ch = onChannel ? static_cast<uint8_t>(channel) : 0;",
+     "    const uint8_t ch = 0;",
+     "cpp-screen-model"),
+    ("cpp: the screen model swaps the offset and the skip chance",
+     "src/domain/MainScreenModel.cpp",
+     "    model.offset = onChannel ? engine.getOffset(ch) : 0;\n"
+     "    model.skipChance = onChannel ? engine.getSkipChance(ch) : 0;",
+     "    model.offset = onChannel ? engine.getSkipChance(ch) : 0;\n"
+     "    model.skipChance = onChannel ? engine.getOffset(ch) : 0;",
+     "cpp-screen-model"),
+    ("cpp: the screen model shows the derived length instead of the editable one",
+     "src/domain/MainScreenModel.cpp",
+     "    model.length = onChannel ? engine.getBaseLength(ch) : 0;",
+     "    model.length = onChannel ? engine.getEffectiveLength(ch) : 0;",
+     "cpp-screen-model"),
     ("cpp: the play path reads the shared template instead of the channel instance",
      "src/domain/SequencerEngine.cpp",
      "const Pattern* SequencerEngine::patternForChannel(uint8_t channel) const {\n    if (!validChannel(channel)) {\n        return nullptr;\n    }\n    if (modulated_ != nullptr\n        && modulated_->loaded[channel] != ModulatedPatternState::NOT_MODULATED) {\n        return &modulated_->pattern[channel];\n    }\n    return instanceForChannel(channel);\n}",
@@ -1499,6 +1521,7 @@ SUITES = {
            os.path.join(ROOT, "sim")),
     "cpp-ratchet": (["./tools/run-cpp-tests.sh", "test_ratchet_matrix"], ROOT),
     "cpp-screen": (["./tools/run-cpp-tests.sh", "test_pattern_screen"], ROOT),
+    "cpp-screen-model": (["./tools/run-cpp-tests.sh", "test_main_screen_model"], ROOT),
     "ts-pattern": (["npx", "vitest", "run", "test/Pattern.test.ts"],
                    os.path.join(ROOT, "sim")),
     "ts-view": (["npx", "vitest", "run", "test/PatternView.test.ts"],

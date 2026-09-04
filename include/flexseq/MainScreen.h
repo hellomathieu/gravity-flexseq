@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+#include <flexseq/MainScreenModel.h>
 #include <flexseq/PatternScreen.h>
 
 namespace flexseq {
@@ -66,23 +67,6 @@ inline uint8_t tabCentreX(uint8_t tab) {
 
 }  // namespace mainscreen
 
-struct MainScreenModel {
-    uint8_t tab;
-    bool insideTab;
-    uint8_t cursor;
-    bool fieldOpen;
-    uint8_t fieldCount;
-
-    int8_t patternIndex;
-    uint8_t length;
-    int16_t subdiv;
-    uint8_t barLength;
-
-    uint16_t tempo;
-    uint8_t clockSource;
-
-    uint8_t headlineWidth;
-};
 
 namespace detail {
 

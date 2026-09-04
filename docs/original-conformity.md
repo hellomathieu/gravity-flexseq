@@ -46,6 +46,7 @@ Each row below carries the original's line, so the reading can be checked.
 | Play/Stop indicator | separate glyph at x=121, `t` stopped and `r` playing, **only when the clock is internal** (`UI.ino:262-267`) | absent | **omission** — line 28, lot 16 |
 | Selected tab | inverted, and inverted again while SHIFT is held (`UI.ino:240-244`) | inverted | **divergence to decide** — FlexSeq does not react to SHIFT in the bar |
 | Rule under the bar | `drawHLine(0, 53, 128)` (`UI.ino:234`) | present | conform |
+| Tab at power-on | **the clock tab**: `byte displayTab = 0` (`Gravity.ino:125`) | **the first channel**: `currentTab_(TAB_FIRST_CHANNEL)` (`UiController.cpp:89`) | **divergence to decide, found 2026-09-04** during step 4 of lot 11. At power-on the original shows the tempo and FlexSeq shows a channel. Nothing decided it, and no document carried it. It is one line to align, in either direction |
 
 ## Screen 0 — the BPM tab
 
