@@ -307,8 +307,6 @@ void UiController::adjustFieldValue(Field target, int8_t raw) {
         return;
     }
 
-    // Tous les autres champs appartiennent a un channel. Le garde etait repete
-    // dans cinq cas, et l'index reconverti a chaque usage.
     const int8_t selected = selectedChannel();
     if (selected < 0) {
         return;
@@ -349,16 +347,9 @@ void UiController::adjustFieldValue(Field target, int8_t raw) {
             break;
         }
         case FIELD_OFFSET: {
-            // L'offset porte sur les impulsions du pas, donc sa borne haute est
-            // ticksPerStep - 1, elle-meme plafonnee par MAX_OFFSET. Un compte de
-            // 256 dans un uint8_t vaudrait ZERO : la plage doit rester en 16 bits.
-            const uint16_t span = engine_.currentStepTicks(ch);
-            const int16_t top = static_cast<int16_t>(
-                span > SequencerEngine::MAX_OFFSET ? SequencerEngine::MAX_OFFSET
-                                                   : (span > 0 ? span - 1 : 0));
-            engine_.setOffset(ch, static_cast<uint8_t>(clampRange(
-                static_cast<int16_t>(static_cast<int16_t>(engine_.getOffset(ch)) + delta),
-                static_cast<int16_t>(0), top)));
+            const int16_t candidate = static_cast<int16_t>(
+                static_cast<int16_t>(engine_.getOffset(ch)) + delta);
+            engine_.setOffset(ch, static_cast<uint16_t>(candidate < 0 ? 0 : candidate));
             break;
         }
         case FIELD_SKIP_CHANCE:
@@ -428,9 +419,6 @@ void UiController::adjustRatchet(int8_t delta) {
 }
 
 void UiController::togglePlay() {
-    // L'original ne demarre et n'arrete que l'horloge INTERNE : en source
-    // externe ou MIDI, c'est la source qui commande le transport, et PLAY reste
-    // inerte (Interactions.ino:372).
     if (clockSource_ != CLOCK_SOURCE_INTERNAL) {
         return;
     }

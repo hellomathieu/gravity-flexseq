@@ -50,8 +50,6 @@ constexpr uint8_t TEXT_INSET = 2;
 
 constexpr uint8_t GLYPH_SIZE = 7;
 
-// La colonne de trois lignes de l'original : UI.ino:136 pour les etiquettes,
-// UI.ino:180 pour les valeurs, UI.ino:126 pour les lignes de base.
 constexpr uint8_t LINE_LABEL_X = 62;
 constexpr uint8_t LINE_VALUE_X = 99;
 constexpr uint8_t LINE_0_BASELINE_Y = 8;
@@ -59,7 +57,6 @@ constexpr uint8_t LINE_1_BASELINE_Y = 19;
 constexpr uint8_t LINE_2_BASELINE_Y = 30;
 constexpr uint8_t LINE_SPACING_Y = 11;
 
-// Le parametre principal : UI.ino:225 pour la valeur, UI.ino:200 pour l'etiquette.
 constexpr uint8_t MAIN_CENTRE_X = 29;
 constexpr uint8_t MAIN_BOX_W = 55;
 constexpr uint8_t MAIN_VALUE_BASELINE_Y = 28;
@@ -201,9 +198,6 @@ void drawSettingsGlyph(Canvas& canvas, uint8_t cx, uint8_t cy) {
     canvas.drawBox(static_cast<uint8_t>(cx - 2), static_cast<uint8_t>(cy - 2), 5, 5);
 }
 
-// Sur AVR un litteral de chaine va en .data, donc en RAM : mesure du
-// 2026-09-04, les dix etiquettes de cet ecran y prenaient 69 octets. Elles
-// vivent donc en Flash, et se recopient dans un tampon avant d'etre dessinees.
 #if defined(__AVR__)
 #define FLEXSEQ_LABEL(name, text) static const char name[] PROGMEM = text
 inline const char* label(const char* flash, char* scratch) {
@@ -243,8 +237,6 @@ inline void skipText(uint8_t skipChance, char* out) {
     out[n + 2] = '\0';
 }
 
-// Le parametre principal, valeur puis etiquette. mainField dit lequel : le
-// renderer ne redecouvre pas la regle du mode.
 inline void mainValueOf(const MainScreenModel& model, char* out) {
     if (model.mainParameter == MAIN_NONE) {
         out[0] = '\0';
@@ -261,14 +253,10 @@ inline const char* mainLabelOf(const MainScreenModel& model) {
     return model.mainParameter == MAIN_SKIP_CHANCE ? LBL_SKIP_CHANCE : LBL_SUBDIVISION;
 }
 
-// Les trois lignes : etiquette et valeur, selon le mode.
 inline void legacyLine(const MainScreenModel& model, uint8_t index,
                        const char** out, char* value) {
     if (index == 0) {
         *out = LBL_MODE;
-        // ⚠️ modeText() rend un pointeur vers la FLASH. Une boucle qui le lit
-        // comme de la RAM lit le mauvais espace d'adressage sur AVR, et le
-        // texte disparait : mesure du 2026-09-04, 46 pixels perdus.
         copyLabel(modeText(model.mode), value);
         return;
     }
@@ -315,8 +303,6 @@ void drawLabelledField(Canvas& canvas, const Band& band, uint8_t x, uint8_t y,
 
 namespace detail {
 
-// L'onglet d'un channel en CLOCK ou en RANDOM : le parametre principal en gros
-// a gauche, les trois lignes de l'original a droite.
 template <typename Canvas>
 void drawLegacyChannel(Canvas& canvas, const Band& band, const MainScreenModel& model) {
     namespace ms = mainscreen;
@@ -363,9 +349,6 @@ void drawLegacyChannel(Canvas& canvas, const Band& band, const MainScreenModel& 
 
         const uint8_t labelW = canvas.getStrWidth(text);
         if (onCursor && !model.fieldOpen) {
-            // u8g2 place l'encre ENTIEREMENT au-dessus de la ligne de base :
-            // elle occupe base - HEIGHT .. base - 1. Le pave laisse donc un
-            // pixel de chaque cote en partant de base - HEIGHT - 1.
             canvas.drawBox(static_cast<uint8_t>(ms::LINE_LABEL_X - 1),
                            static_cast<uint8_t>(base - FONT_VELVETSCREEN_HEIGHT - 1),
                            static_cast<uint8_t>(labelW + 2),
