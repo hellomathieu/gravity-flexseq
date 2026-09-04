@@ -693,6 +693,26 @@ The reason `PPQN` disappears in INT and in MIDI is not cosmetic: in those two mo
 **The glyph on the right of the bar is `▶`**, as in the original, and not the `■` written further down.
 **Our own glyphs draw the large pattern name**, as they already draw the ratchet digits. Ten are enough: `A`, `B` and `1` to `8`. About 500 B estimated against 2646 for `logisoso26`, and no GPLv3 data.
 State: **designed, and not implemented**, except the v2 format, which is implemented since 2026-08-23 (§11.1, lot 10). The layouts of CLOCK and RANDOM, and the navigation **inside** CONFIG, are **assembled by Claude from the original**. They wait for a validation of the whole. `WORKPLAN.md` holds the breakdown, lots 11 to 14.
+
+✅ **VALIDATED ON 2026-09-04 BY THE OWNER, on drawn mockups.** The sentence above said the layouts of CLOCK and RANDOM waited for a validation of the whole. That validation is done: the owner read the ten target screens at their real size of 128 x 64 and accepted the layout. Nine decisions follow, and each one either fixes a point this section left open or supersedes a statement of it.
+
+**1. The layout of a channel tab is the one described above**, and it is now validated: one large parameter on the left with its label under it, and three lines on the right. The geometry comes from the original's drawing code, and it was checked with the real font, glyph by glyph: the longest line is `OFFSET:` with `0/24`, and it ends at `x=117` of 127. Nothing overlaps and nothing overflows.
+
+**2. Lot 11 delivers CLOCK and RANDOM, and it leaves the SEQ tab as it is.** Lot 12 then delivers the `CONFIG PATTERN` page and the target form of SEQ. The reason is not tidiness: the target form of SEQ sends `LENGTH` onto that page, so delivering it first would leave `LENGTH` **unreachable** between the two lots. The accepted price is that the layout of SEQ changes once.
+
+**3. THE LARGE FONT OF THE ORIGINAL IS REUSED, and this SUPERSEDES the estimate below.** This section planned **ten** glyphs of our own, at about 500 bytes, for the pattern name alone. The original's `stkL` was decoded on 2026-09-04: **21 glyphs, 15 px wide at most, 23 px tall, 569 bytes**. The 21 are accounted for, and six of them are `E`, `X`, `T`, `M`, `I` and `D`, because the clock tab writes `EXT` and `MIDI` large. `GravityFW` and FlexSeq are both GPLv3, so **attribution is the only duty**, exactly as this section already decided for the navigation glyphs. The figures live in `docs/original-conformity.md`.
+
+**4. THE GLYPH OF THE GLOBAL CONFIGURATION IS NOT A COGWHEEL, and this SUPERSEDES the sentence above.** This section says the project *creates a cogwheel*. A cogwheel at 5 x 5 is not readable, which the owner judged on the mockup. The chosen shape is **two sliders**, 5 x 5, and it is created by us. The glyph keeps the size of its neighbours in the bar, which are all 5 x 5.
+
+**5. The entry marker of `EDIT` is NOT drawn.** The original draws a filled box of 11 x 11 at the right of that line, and only while the cursor sits on it. FlexSeq draws **one** mark and not two: the label `EDIT` is already inverted when the cursor is there. Decided by the owner on 2026-09-04.
+
+**6. The `DONE` overlay clears the full width, and it carries no timer.** The original's clear rectangle starts at `x=18` while its labels start at `x=8`, so ten pixels of every line survive beside the box and read as a defect. FlexSeq clears the full width. And the overlay disappears on the **next press**, as in the original: an automatic return after two seconds was proposed and set aside.
+
+**7. `FACTORY RESET` asks for a confirmation.** The original reboots at once, and one press destroys every pattern and every setting. FlexSeq adds a confirmation, and the owner made that conditional on the cost being close to zero. ⚠️ **The cost is estimated at 60 to 150 bytes and it is NOT measured**: it is measured inside the lot, and the owner accepts or refuses it then.
+
+**8. The long press keeps its 750 ms.** This section asked for the threshold of the original to be measured instead of deduced from the gesture card. It is measured: **more than 300 ms** (`Interactions.ino:73`), where the card says about one second. FlexSeq is therefore slower than the original by 450 ms on every "go back", and that is a decision and not an oversight.
+
+**9. The four lines of the global configuration sit at the baselines 18, 28, 38 and 48.** The original places them at 19, 30, 41 and 52, on a **separate screen with no tab bar**. In FlexSeq that page is a tab, so the bar holds the last eleven rows and the rule sits on row 53: the fourth line of the original would fall on it. The four lines therefore move up, and their spacing tightens from 11 to 10 rows. This is FlexSeq's own geometry, and the owner accepted it on 2026-09-04.
 — *the previous wording, partly replaced:*
 **Three screens**, exactly those of the original:
 1. **The main screen** — the tab bar and the parameters of the active tab. **No** separate "CONFIG PATTERN" screen exists: the settings of a channel are the content of its tab.
