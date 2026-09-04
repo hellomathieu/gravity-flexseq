@@ -59,7 +59,7 @@
 set -u
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-RAM_RESERVE="${RAM_RESERVE:-256}"
+RAM_RESERVE="${RAM_RESERVE:-384}"
 DURATION="${DURATION:-8}"
 
 if [ -t 1 ]; then

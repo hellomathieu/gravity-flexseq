@@ -55,7 +55,18 @@
 # renderers dont l'interface a besoin.
 #
 # Seuils (surchargeables) :
-#   RAM_RESERVE=256     octets qui doivent rester libres pour la pile
+#   RAM_RESERVE=384     octets qui doivent rester libres pour la pile.
+#                       C'est la FRONTIERE entre les donnees et la pile, et le
+#                       meme repere sert dans les deux sens : ici les donnees
+#                       statiques doivent tenir sous 2048 - RESERVE, et dans
+#                       run-stack-probe.sh le pic de pile doit tenir SOUS elle.
+#                       Les deux gardes ensemble interdisent la collision.
+#                       Portee de 256 a 384 le 2026-09-04 : pic mesure 233 o,
+#                       le lot 11 en a coute 28 a lui seul (205 -> 233), et cinq
+#                       lots d'interface restent a ajouter de la profondeur.
+#                       233 + 5 x 28 = 373, que 384 couvre. Ce n'est pas un
+#                       desserrement : le plafond des donnees passe de 1792 a
+#                       1664 o, donc la croissance permise tombe de 281 a 153 o.
 #   FLASH_BUDGET_PCT=98 part de Flash au-dela de laquelle on refuse
 #   RAM_DRIFT=16        croissance de RAM acceptee sans acquittement
 #   FLASH_DRIFT=512     croissance de Flash acceptee sans acquittement
@@ -70,7 +81,7 @@ set -uo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
-RAM_RESERVE="${RAM_RESERVE:-256}"
+RAM_RESERVE="${RAM_RESERVE:-384}"
 FLASH_BUDGET_PCT="${FLASH_BUDGET_PCT:-98}"
 RAM_DRIFT="${RAM_DRIFT:-16}"
 FLASH_DRIFT="${FLASH_DRIFT:-512}"
