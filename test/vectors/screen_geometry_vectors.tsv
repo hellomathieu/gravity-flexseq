@@ -47,3 +47,15 @@ E	header_line_width	18	cpp	HEADER_LINE_W	120
 E	last_row_centre_y	19	cpp	LAST_ROW_CY	54
 E	grid_bottom_y	20	cpp	GRID_BOTTOM_Y	63
 E	glyph_ascent	21	cpp	GLYPH_ASCENT	4
+M	line_label_x	26	cpp	LINE_LABEL_X	62
+M	line_value_x	27	cpp	LINE_VALUE_X	99
+M	line_0_baseline_y	28	cpp	LINE_0_BASELINE_Y	8
+M	line_1_baseline_y	29	cpp	LINE_1_BASELINE_Y	19
+M	line_2_baseline_y	30	cpp	LINE_2_BASELINE_Y	30
+M	main_centre_x	31	cpp	MAIN_CENTRE_X	29
+M	main_box_width	32	cpp	MAIN_BOX_W	55
+M	main_value_baseline_y	33	cpp	MAIN_VALUE_BASELINE_Y	28
+M	main_label_baseline_y	34	cpp	MAIN_LABEL_BASELINE_Y	41
+M	line_spacing_y	35	cpp	LINE_SPACING_Y	11
+F	label_font_height	0	both	FONT_VELVETSCREEN_HEIGHT	5
+F	main_font_height	1	cpp	FONT_STK_L_HEIGHT	23

@@ -27,7 +27,15 @@ MainScreenModel mainScreenModelOf(const UiController& ui, const SequencerEngine&
         : static_cast<uint8_t>(DEFAULT_CHANNEL_MODE);
     model.offset = onChannel ? engine.getOffset(ch) : 0;
     model.skipChance = onChannel ? engine.getSkipChance(ch) : 0;
-    model.mainField = static_cast<uint8_t>(ui.mainField());
+    model.stepTicks = onChannel ? engine.currentStepTicks(ch) : 0;
+    switch (ui.mainField()) {
+        case UiController::FIELD_TEMPO:       model.mainParameter = MAIN_TEMPO; break;
+        case UiController::FIELD_SUBDIV:      model.mainParameter = MAIN_SUBDIV; break;
+        case UiController::FIELD_SKIP_CHANCE: model.mainParameter = MAIN_SKIP_CHANCE; break;
+        case UiController::FIELD_PATTERN:     model.mainParameter = MAIN_PATTERN; break;
+        default:                              model.mainParameter = MAIN_NONE; break;
+    }
+    model.legacyLayout = ui.isLegacyModeTab();
     model.tempo = ui.tempo();
     model.clockSource = ui.clockSource();
     model.headlineWidth = 0;

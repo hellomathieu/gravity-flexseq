@@ -8,6 +8,17 @@ namespace flexseq {
 class SequencerEngine;
 class UiController;
 
+// Le parametre principal, dans le vocabulaire du RENDERER. La regle qui le
+// choisit vit dans UiController::mainField(), et nulle part ailleurs :
+// mainScreenModelOf() traduit sa reponse ici, en un seul endroit.
+enum MainParameter : uint8_t {
+    MAIN_NONE = 0,
+    MAIN_TEMPO,
+    MAIN_SUBDIV,
+    MAIN_SKIP_CHANCE,
+    MAIN_PATTERN
+};
+
 // Ce que l'ecran principal doit savoir pour se dessiner, et rien de plus. Les
 // types sont des entiers nus, comme clockSource l'etait deja : le renderer
 // n'inclut donc pas UiController, dont il ne connait que les valeurs.
@@ -28,7 +39,12 @@ struct MainScreenModel {
     uint8_t mode;
     uint8_t offset;
     uint8_t skipChance;
-    uint8_t mainField;
+    uint16_t stepTicks;
+    uint8_t mainParameter;
+
+    // Vrai quand le mode prend les trois lignes de l'original. Le renderer ne
+    // DEDUIT pas la regle : isLegacyModeTab() en est la seule source.
+    bool legacyLayout;
 
     uint16_t tempo;
     uint8_t clockSource;

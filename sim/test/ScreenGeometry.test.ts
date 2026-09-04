@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { OLED_H, OLED_W } from "../src/sim/OledDisplay.js";
 import * as md from "../src/sim/MainScreenDisplay.js";
 import { GRID_STEPS, ROW_WIDTH } from "../src/sim/PatternView.js";
+import { GLYPH_HEIGHT } from "../src/sim/oledFont.js";
 
 /**
  * Geometrie d'ecran partagee — ADR 0012.
@@ -23,7 +24,7 @@ const VECTORS = fileURLToPath(
   new URL("../../test/vectors/screen_geometry_vectors.tsv", import.meta.url),
 );
 
-type Family = "M" | "E";
+type Family = "M" | "E" | "F";
 type Owners = "both" | "cpp" | "ts";
 
 interface Vector {
@@ -61,7 +62,7 @@ function loadVectors(): Vector[] {
     ) {
       throw new Error(`un champ manque : ${line}`);
     }
-    if (family !== "M" && family !== "E") throw new Error(`famille inconnue : ${line}`);
+    if (family !== "M" && family !== "E" && family !== "F") throw new Error(`famille inconnue : ${line}`);
     if (id.length === 0 || id === "-") throw new Error(`l'identifiant est necessaire : ${line}`);
     if (seen.has(id)) throw new Error(`identifiant duplique : ${line}`);
     seen.add(id);
@@ -95,6 +96,10 @@ function production(family: Family, index: number): number | undefined {
     };
     return table[index];
   }
+  if (family === "F") {
+    const fonts: Record<number, number> = { 0: GLYPH_HEIGHT };
+    return fonts[index];
+  }
   const table: Record<number, number> = { 0: ROW_WIDTH, 2: GRID_STEPS };
   return table[index];
 }
@@ -123,7 +128,7 @@ describe("geometrie d'ecran partagee (ADR 0012)", () => {
   });
 
   it("le fichier nomme chaque constante que le lecteur connait", () => {
-    for (const family of ["M", "E"] as Family[]) {
+    for (const family of ["M", "E", "F"] as Family[]) {
       for (let index = 0; index < 64; ++index) {
         if (production(family, index) === undefined) continue;
         const nommee = vectors.some((v) => v.family === family && v.index === index);

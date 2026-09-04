@@ -64,7 +64,7 @@ void test_the_model_reads_the_selected_channel_and_not_the_first() {
     TEST_ASSERT_EQUAL_UINT8_MESSAGE(5, m.offset, "l offset du channel 4");
 }
 
-void test_the_main_field_is_never_derived_twice() {
+void test_the_main_parameter_is_never_derived_twice() {
     // Le modele ne recalcule PAS la regle : il porte ce que mainField() dit.
     Rig r;
     const flexseq::ChannelMode modes[3] = {
@@ -73,9 +73,14 @@ void test_the_main_field_is_never_derived_twice() {
         Rig fresh;
         fresh.engine.setChannelMode(1, modes[i]);
         fresh.enterChannel(1);
-        TEST_ASSERT_EQUAL_UINT8_MESSAGE(
-            static_cast<uint8_t>(fresh.ui.mainField()), fresh.model().mainField,
-            "le modele doit porter la meme regle que l interface, pas une copie");
+        {
+            const uint8_t attendu =
+                modes[i] == flexseq::MODE_CLOCK  ? flexseq::MAIN_SUBDIV
+              : modes[i] == flexseq::MODE_RANDOM ? flexseq::MAIN_SKIP_CHANCE
+                                                 : flexseq::MAIN_PATTERN;
+            TEST_ASSERT_EQUAL_UINT8_MESSAGE(attendu, fresh.model().mainParameter,
+                "la traduction de mainField() doit suivre le mode");
+        }
     }
     (void)r;
 }
@@ -87,7 +92,7 @@ void test_clock_makes_the_subdivision_the_main_parameter() {
     r.enterChannel(0);
     const MainScreenModel m = r.model();
     TEST_ASSERT_EQUAL_UINT8_MESSAGE(
-        static_cast<uint8_t>(UiController::FIELD_SUBDIV), m.mainField,
+        flexseq::MAIN_SUBDIV, m.mainParameter,
         "en CLOCK le parametre principal est la SUBDIVISION");
     TEST_ASSERT_EQUAL_INT16_MESSAGE(4, m.subdiv, "la valeur suit");
 }
@@ -99,7 +104,7 @@ void test_random_makes_the_skip_chance_the_main_parameter() {
     r.enterChannel(0);
     const MainScreenModel m = r.model();
     TEST_ASSERT_EQUAL_UINT8_MESSAGE(
-        static_cast<uint8_t>(UiController::FIELD_SKIP_CHANCE), m.mainField,
+        flexseq::MAIN_SKIP_CHANCE, m.mainParameter,
         "en RANDOM le parametre principal est la CHANCE DE SAUT");
     TEST_ASSERT_EQUAL_UINT8_MESSAGE(3, m.skipChance, "la valeur suit");
 }
@@ -111,7 +116,7 @@ void test_seq_makes_the_pattern_the_main_parameter() {
     r.enterChannel(0);
     const MainScreenModel m = r.model();
     TEST_ASSERT_EQUAL_UINT8_MESSAGE(
-        static_cast<uint8_t>(UiController::FIELD_PATTERN), m.mainField,
+        flexseq::MAIN_PATTERN, m.mainParameter,
         "en SEQ le parametre principal est le PATTERN");
     TEST_ASSERT_EQUAL_INT8_MESSAGE(9, m.patternIndex, "la valeur suit");
 }
@@ -130,7 +135,7 @@ void test_the_clock_tab_makes_the_tempo_the_main_parameter() {
         "l onglet d horloge est atteignable en tournant");
     const MainScreenModel m = r.model();
     TEST_ASSERT_EQUAL_UINT8_MESSAGE(
-        static_cast<uint8_t>(UiController::FIELD_TEMPO), m.mainField,
+        flexseq::MAIN_TEMPO, m.mainParameter,
         "sur l onglet d horloge le parametre principal est le TEMPO");
     TEST_ASSERT_EQUAL_UINT16_MESSAGE(UiController::DEFAULT_TEMPO, m.tempo, "le tempo suit");
     TEST_ASSERT_EQUAL_INT8_MESSAGE(-1, m.patternIndex,
@@ -172,7 +177,7 @@ int main() {
     RUN_TEST(test_the_model_shows_the_editable_length_and_not_the_derived_one);
     RUN_TEST(test_the_model_carries_the_mode_of_the_selected_channel);
     RUN_TEST(test_the_model_reads_the_selected_channel_and_not_the_first);
-    RUN_TEST(test_the_main_field_is_never_derived_twice);
+    RUN_TEST(test_the_main_parameter_is_never_derived_twice);
     RUN_TEST(test_clock_makes_the_subdivision_the_main_parameter);
     RUN_TEST(test_random_makes_the_skip_chance_the_main_parameter);
     RUN_TEST(test_seq_makes_the_pattern_the_main_parameter);

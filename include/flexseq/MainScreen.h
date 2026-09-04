@@ -2,9 +2,16 @@
 #define FLEXSEQ_MAIN_SCREEN_H
 
 #include <stdint.h>
+#include <string.h>
 
+#if defined(__AVR__)
+#include <avr/pgmspace.h>
+#endif
+
+#include <flexseq/ChannelMode.h>
 #include <flexseq/MainScreenModel.h>
 #include <flexseq/OriginalFonts.h>
+#include <flexseq/Subdiv.h>
 #include <flexseq/PatternScreen.h>
 
 namespace flexseq {
@@ -42,6 +49,46 @@ constexpr uint8_t COL_W = 60;
 constexpr uint8_t TEXT_INSET = 2;
 
 constexpr uint8_t GLYPH_SIZE = 7;
+
+// La colonne de trois lignes de l'original : UI.ino:136 pour les etiquettes,
+// UI.ino:180 pour les valeurs, UI.ino:126 pour les lignes de base.
+constexpr uint8_t LINE_LABEL_X = 62;
+constexpr uint8_t LINE_VALUE_X = 99;
+constexpr uint8_t LINE_0_BASELINE_Y = 8;
+constexpr uint8_t LINE_1_BASELINE_Y = 19;
+constexpr uint8_t LINE_2_BASELINE_Y = 30;
+constexpr uint8_t LINE_SPACING_Y = 11;
+
+// Le parametre principal : UI.ino:225 pour la valeur, UI.ino:200 pour l'etiquette.
+constexpr uint8_t MAIN_CENTRE_X = 29;
+constexpr uint8_t MAIN_BOX_W = 55;
+constexpr uint8_t MAIN_VALUE_BASELINE_Y = 28;
+constexpr uint8_t MAIN_LABEL_BASELINE_Y = 41;
+
+static_assert(LINE_1_BASELINE_Y == LINE_0_BASELINE_Y + LINE_SPACING_Y,
+              "the three lines of the original are evenly spaced");
+static_assert(LINE_2_BASELINE_Y == LINE_0_BASELINE_Y + 2 * LINE_SPACING_Y,
+              "the three lines of the original are evenly spaced");
+static_assert(LINE_LABEL_X < LINE_VALUE_X,
+              "the label column comes before the value column");
+static_assert(LINE_0_BASELINE_Y < LINE_1_BASELINE_Y,
+              "the three lines go down the screen");
+static_assert(LINE_1_BASELINE_Y < LINE_2_BASELINE_Y,
+              "the three lines go down the screen");
+static_assert(LINE_1_BASELINE_Y - LINE_0_BASELINE_Y >= FONT_VELVETSCREEN_HEIGHT,
+              "two lines of the column must not overlap");
+static_assert(LINE_2_BASELINE_Y - LINE_1_BASELINE_Y >= FONT_VELVETSCREEN_HEIGHT,
+              "two lines of the column must not overlap");
+static_assert(LINE_2_BASELINE_Y < RULE_Y,
+              "the third line must clear the rule");
+static_assert(MAIN_CENTRE_X + MAIN_BOX_W / 2 < LINE_LABEL_X,
+              "the main parameter must clear the column of fields");
+static_assert(MAIN_VALUE_BASELINE_Y >= FONT_STK_L_HEIGHT - 1,
+              "the large value must fit above its baseline");
+static_assert(MAIN_LABEL_BASELINE_Y - MAIN_VALUE_BASELINE_Y >= FONT_VELVETSCREEN_HEIGHT,
+              "the label must clear the large value");
+static_assert(MAIN_LABEL_BASELINE_Y < RULE_Y,
+              "the label of the main parameter must clear the rule");
 
 static_assert(ROW_B_BASELINE_Y < RULE_Y, "the second field row must clear the rule");
 static_assert(RULE_Y < TAB_BOX_Y, "the rule must clear the tab bar");
@@ -154,6 +201,93 @@ void drawSettingsGlyph(Canvas& canvas, uint8_t cx, uint8_t cy) {
     canvas.drawBox(static_cast<uint8_t>(cx - 2), static_cast<uint8_t>(cy - 2), 5, 5);
 }
 
+// Sur AVR un litteral de chaine va en .data, donc en RAM : mesure du
+// 2026-09-04, les dix etiquettes de cet ecran y prenaient 69 octets. Elles
+// vivent donc en Flash, et se recopient dans un tampon avant d'etre dessinees.
+#if defined(__AVR__)
+#define FLEXSEQ_LABEL(name, text) static const char name[] PROGMEM = text
+inline const char* label(const char* flash, char* scratch) {
+    strcpy_P(scratch, flash);
+    return scratch;
+}
+inline void copyLabel(const char* flash, char* dest) { strcpy_P(dest, flash); }
+#else
+#define FLEXSEQ_LABEL(name, text) static const char name[] = text
+inline const char* label(const char* flash, char*) { return flash; }
+inline void copyLabel(const char* flash, char* dest) { strcpy(dest, flash); }
+#endif
+
+FLEXSEQ_LABEL(LBL_MODE, "MODE:");
+FLEXSEQ_LABEL(LBL_OFFSET, "OFFSET:");
+FLEXSEQ_LABEL(LBL_SUBDIV_FIELD, "SUBDIV:");
+FLEXSEQ_LABEL(LBL_MOD, "MOD:");
+FLEXSEQ_LABEL(LBL_OFF, "OFF");
+FLEXSEQ_LABEL(LBL_CLOCK, "CLOCK");
+FLEXSEQ_LABEL(LBL_RAND, "RAND");
+FLEXSEQ_LABEL(LBL_SEQ, "SEQ");
+FLEXSEQ_LABEL(LBL_SUBDIVISION, "SUBDIVISION");
+FLEXSEQ_LABEL(LBL_SKIP_CHANCE, "SKIP CHANCE");
+
+inline const char* modeText(uint8_t mode) {
+    switch (static_cast<ChannelMode>(mode)) {
+        case MODE_CLOCK:  return LBL_CLOCK;
+        case MODE_RANDOM: return LBL_RAND;
+        default:          return LBL_SEQ;
+    }
+}
+
+inline void skipText(uint8_t skipChance, char* out) {
+    const uint8_t n = writeUnsigned(out, skipChance);
+    out[n] = '0';
+    out[n + 1] = '%';
+    out[n + 2] = '\0';
+}
+
+// Le parametre principal, valeur puis etiquette. mainField dit lequel : le
+// renderer ne redecouvre pas la regle du mode.
+inline void mainValueOf(const MainScreenModel& model, char* out) {
+    if (model.mainParameter == MAIN_NONE) {
+        out[0] = '\0';
+        return;
+    }
+    if (model.mainParameter == MAIN_SKIP_CHANCE) {
+        skipText(model.skipChance, out);
+        return;
+    }
+    subdivLabel(model.subdiv, out);
+}
+
+inline const char* mainLabelOf(const MainScreenModel& model) {
+    return model.mainParameter == MAIN_SKIP_CHANCE ? LBL_SKIP_CHANCE : LBL_SUBDIVISION;
+}
+
+// Les trois lignes : etiquette et valeur, selon le mode.
+inline void legacyLine(const MainScreenModel& model, uint8_t index,
+                       const char** out, char* value) {
+    if (index == 0) {
+        *out = LBL_MODE;
+        // ⚠️ modeText() rend un pointeur vers la FLASH. Une boucle qui le lit
+        // comme de la RAM lit le mauvais espace d'adressage sur AVR, et le
+        // texte disparait : mesure du 2026-09-04, 46 pixels perdus.
+        copyLabel(modeText(model.mode), value);
+        return;
+    }
+    if (index == 1) {
+        if (model.mode == static_cast<uint8_t>(MODE_CLOCK)) {
+            *out = LBL_OFFSET;
+            const uint8_t n = writeUnsigned(value, model.offset);
+            value[n] = '/';
+            writeUnsigned(value + n + 1, model.stepTicks);
+            return;
+        }
+        *out = LBL_SUBDIV_FIELD;
+        subdivLabel(model.subdiv, value);
+        return;
+    }
+    *out = LBL_MOD;
+    copyLabel(LBL_OFF, value);
+}
+
 template <typename Canvas>
 void drawLabelledField(Canvas& canvas, const Band& band, uint8_t x, uint8_t y,
                        const char* label, const char* value, bool framed, bool inverted) {
@@ -179,13 +313,96 @@ void drawLabelledField(Canvas& canvas, const Band& band, uint8_t x, uint8_t y,
 
 }  // namespace detail
 
+namespace detail {
+
+// L'onglet d'un channel en CLOCK ou en RANDOM : le parametre principal en gros
+// a gauche, les trois lignes de l'original a droite.
+template <typename Canvas>
+void drawLegacyChannel(Canvas& canvas, const Band& band, const MainScreenModel& model) {
+    namespace ms = mainscreen;
+    char value[10];
+
+    const int16_t valueTop =
+        static_cast<int16_t>(ms::MAIN_VALUE_BASELINE_Y) - (FONT_STK_L_HEIGHT - 1);
+    if (touches(band, valueTop, ms::MAIN_VALUE_BASELINE_Y)) {
+        mainValueOf(model, value);
+        if (value[0] != '\0') {
+            canvas.setFont(FONT_STK_L);
+            const uint8_t w = canvas.getStrWidth(value);
+            canvas.drawStr(static_cast<uint8_t>(ms::MAIN_CENTRE_X - w / 2),
+                           ms::MAIN_VALUE_BASELINE_Y, value);
+            canvas.setFont(FONT_VELVETSCREEN);
+        }
+    }
+
+    const int16_t labelTop =
+        static_cast<int16_t>(ms::MAIN_LABEL_BASELINE_Y) - (FONT_VELVETSCREEN_HEIGHT - 1);
+    if (touches(band, labelTop, ms::MAIN_LABEL_BASELINE_Y)) {
+        canvas.setFont(FONT_VELVETSCREEN);
+        char scratch[14];
+        const char* text = label(mainLabelOf(model), scratch);
+        const uint8_t w = canvas.getStrWidth(text);
+        canvas.drawStr(static_cast<uint8_t>(ms::MAIN_CENTRE_X - w / 2),
+                       ms::MAIN_LABEL_BASELINE_Y, text);
+    }
+
+    for (uint8_t line = 0; line < 3; ++line) {
+        const uint8_t base = static_cast<uint8_t>(
+            ms::LINE_0_BASELINE_Y + line * ms::LINE_SPACING_Y);
+        const int16_t top =
+            static_cast<int16_t>(base) - (FONT_VELVETSCREEN_HEIGHT + 1);
+        if (!touches(band, top, static_cast<int16_t>(base) + 1)) {
+            continue;
+        }
+        canvas.setFont(FONT_VELVETSCREEN);
+        const char* flashLabel = nullptr;
+        legacyLine(model, line, &flashLabel, value);
+        char scratch[10];
+        const char* text = label(flashLabel, scratch);
+        const bool onCursor = model.insideTab && model.cursor == line;
+
+        const uint8_t labelW = canvas.getStrWidth(text);
+        if (onCursor && !model.fieldOpen) {
+            // u8g2 place l'encre ENTIEREMENT au-dessus de la ligne de base :
+            // elle occupe base - HEIGHT .. base - 1. Le pave laisse donc un
+            // pixel de chaque cote en partant de base - HEIGHT - 1.
+            canvas.drawBox(static_cast<uint8_t>(ms::LINE_LABEL_X - 1),
+                           static_cast<uint8_t>(base - FONT_VELVETSCREEN_HEIGHT - 1),
+                           static_cast<uint8_t>(labelW + 2),
+                           static_cast<uint8_t>(FONT_VELVETSCREEN_HEIGHT + 2));
+            canvas.setDrawColor(0);
+            canvas.drawStr(ms::LINE_LABEL_X, base, text);
+            canvas.setDrawColor(1);
+        } else {
+            canvas.drawStr(ms::LINE_LABEL_X, base, text);
+        }
+
+        if (value[0] != '\0') {
+            if (onCursor && model.fieldOpen) {
+                const uint8_t w = canvas.getStrWidth(value);
+                canvas.drawFrame(static_cast<uint8_t>(ms::LINE_VALUE_X - 2),
+                                 static_cast<uint8_t>(base - FONT_VELVETSCREEN_HEIGHT - 2),
+                                 static_cast<uint8_t>(w + 4),
+                                 static_cast<uint8_t>(FONT_VELVETSCREEN_HEIGHT + 4));
+            }
+            canvas.drawStr(ms::LINE_VALUE_X, base, value);
+        }
+    }
+}
+
+}  // namespace detail
+
 template <typename Canvas>
 void drawMainScreen(Canvas& canvas, const MainScreenModel& model,
                     Band band = Band{0, screen::HEIGHT - 1}) {
     namespace ms = mainscreen;
 
+    const bool legacy = model.legacyLayout && model.tab != 0
+                        && model.tab != ms::TAB_COUNT - 1;
+
     const bool cursorOnHeadline = model.insideTab && model.cursor == 0;
-    if (touches(band, ms::HEADLINE_BOX_Y, ms::HEADLINE_BOX_Y + ms::HEADLINE_BOX_H - 1)) {
+    if (!legacy
+        && touches(band, ms::HEADLINE_BOX_Y, ms::HEADLINE_BOX_Y + ms::HEADLINE_BOX_H - 1)) {
         char headline[6];
         detail::headlineOf(model, headline);
         if (headline[0] != '\0') {
@@ -215,6 +432,8 @@ void drawMainScreen(Canvas& canvas, const MainScreenModel& model,
                                   "SRC", detail::sourceLabel(model.clockSource),
                                   model.insideTab && model.cursor == 1,
                                   model.insideTab && model.cursor == 1 && model.fieldOpen);
+    } else if (legacy) {
+        detail::drawLegacyChannel(canvas, band, model);
     } else if (model.tab != ms::TAB_COUNT - 1) {
         char lengthText[4];
         detail::writeUnsigned(lengthText, model.length);

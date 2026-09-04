@@ -84,7 +84,7 @@ bool load() {
             return false;
         }
         v.family = cell[0][0];
-        if (v.family != 'M' && v.family != 'E') {
+        if (v.family != 'M' && v.family != 'E' && v.family != 'F') {
             loadError = "unknown family: " + line;
             return false;
         }
@@ -160,6 +160,23 @@ bool production(char family, int index, int& out) {
             case 23: out = ms::GLYPH_SIZE; return true;
             case 24: out = ms::ROW_A_BASELINE_Y; return true;
             case 25: out = ms::ROW_B_BASELINE_Y; return true;
+            case 26: out = ms::LINE_LABEL_X; return true;
+            case 27: out = ms::LINE_VALUE_X; return true;
+            case 28: out = ms::LINE_0_BASELINE_Y; return true;
+            case 29: out = ms::LINE_1_BASELINE_Y; return true;
+            case 30: out = ms::LINE_2_BASELINE_Y; return true;
+            case 31: out = ms::MAIN_CENTRE_X; return true;
+            case 32: out = ms::MAIN_BOX_W; return true;
+            case 33: out = ms::MAIN_VALUE_BASELINE_Y; return true;
+            case 34: out = ms::MAIN_LABEL_BASELINE_Y; return true;
+            case 35: out = ms::LINE_SPACING_Y; return true;
+            default: return false;
+        }
+    }
+    if (family == 'F') {
+        switch (index) {
+            case 0: out = flexseq::FONT_VELVETSCREEN_HEIGHT; return true;
+            case 1: out = flexseq::FONT_STK_L_HEIGHT; return true;
             default: return false;
         }
     }
@@ -228,7 +245,7 @@ void test_every_line_owned_by_cpp_matches_the_production_constant() {
 void test_the_file_covers_every_constant_the_reader_knows() {
     // Le miroir de la propriete precedente : une constante que le lecteur
     // connait mais que le fichier ne nomme pas serait non gardee.
-    for (char family : {'M', 'E'}) {
+    for (char family : {'M', 'E', 'F'}) {
         int probe = 0;
         for (int index = 0; production(family, index, probe); ++index) {
             bool named = false;

@@ -1,3 +1,4 @@
+#include <flexseq/OriginalFonts.h>
 #include <stdint.h>
 #include <string.h>
 #include <unity.h>
@@ -18,7 +19,7 @@ namespace {
 struct Call {
     uint8_t x;
     uint8_t y;
-    char text[8];
+    char text[16];   // SUBDIVISION et SKIP CHANCE font onze caracteres
 };
 
 struct RecordingCanvas {
@@ -77,9 +78,15 @@ struct RecordingCanvas {
         return getStrWidth(s);
     }
 
+    // Le double modelise DEUX polices : 5 px par caractere pour les etiquettes,
+    // 13 pour le gros parametre. Sans cela un test de centrage mesurerait faux.
+    void setFont(const uint8_t* font) { bigFont = (font == flexseq::FONT_STK_L); }
+
     uint8_t getStrWidth(const char* s) const {
-        return static_cast<uint8_t>(5 * strlen(s));
+        return static_cast<uint8_t>((bigFont ? 13 : 5) * strlen(s));
     }
+
+    bool bigFont = false;
 
     bool at(uint8_t x, uint8_t y) const { return px[y][x]; }
 
@@ -126,6 +133,32 @@ MainScreenModel channelTab(uint8_t tab = 1) {
     m.tempo = 120;
     m.clockSource = 0;
     m.headlineWidth = 0;
+    // ⚠️ Ces champs etaient NON INITIALISES, donc les tests passaient par
+    // hasard : legacyLayout decidait de la mise en page sur une valeur au
+    // hasard de la pile.
+    m.mode = static_cast<uint8_t>(flexseq::MODE_SEQ);
+    m.offset = 0;
+    m.skipChance = 0;
+    m.mainParameter = flexseq::MAIN_PATTERN;
+    m.legacyLayout = false;
+    return m;
+}
+
+// L'onglet d'un channel en CLOCK ou en RANDOM : les trois lignes de l'original.
+MainScreenModel legacyTab(flexseq::ChannelMode mode, uint8_t cursor = 0,
+                          bool insideTab = true, bool fieldOpen = false) {
+    MainScreenModel m = channelTab();
+    m.mode = static_cast<uint8_t>(mode);
+    m.legacyLayout = true;
+    m.fieldCount = 3;
+    m.cursor = cursor;
+    m.insideTab = insideTab;
+    m.fieldOpen = fieldOpen;
+    m.mainParameter = mode == flexseq::MODE_CLOCK
+        ? flexseq::MAIN_SUBDIV : flexseq::MAIN_SKIP_CHANCE;
+    m.subdiv = -4;
+    m.offset = 3;
+    m.skipChance = 3;
     return m;
 }
 
@@ -458,8 +491,115 @@ void test_the_rule_band_carries_the_rule_and_no_text() {
     TEST_ASSERT_TRUE(canvas.at(ms::RULE_X, ms::RULE_Y));
 }
 
+// ----------------------------------------------------------------------------
+// Les trois lignes de l'original — lot 11, etape 5b-ii
+//
+// ⚠️ u8g2 place l'encre ENTIEREMENT au-dessus de la ligne de base : un glyphe
+// de 5 px occupe base - 5 .. base - 1. Mesure sur le tampon du panneau reel,
+// 2026-09-04. Les positions ci-dessous suivent cette convention.
+// ----------------------------------------------------------------------------
+
+void test_a_clock_tab_draws_the_three_lines_at_the_geometry_of_the_original() {
+    RecordingCanvas canvas;
+    drawMainScreen(canvas, legacyTab(flexseq::MODE_CLOCK));
+    const Call* mode = canvas.find("MODE:");
+    TEST_ASSERT_NOT_NULL_MESSAGE(mode, "la ligne 1 porte MODE:");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(ms::LINE_LABEL_X, mode->x, "etiquette a x=62");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(ms::LINE_0_BASELINE_Y, mode->y, "ligne de base 8");
+
+    const Call* value = canvas.find("CLOCK");
+    TEST_ASSERT_NOT_NULL_MESSAGE(value, "sa valeur est CLOCK");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(ms::LINE_VALUE_X, value->x, "valeur a x=99");
+
+    const Call* offset = canvas.find("OFFSET:");
+    TEST_ASSERT_NOT_NULL_MESSAGE(offset, "la ligne 2 porte OFFSET: en CLOCK");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(ms::LINE_1_BASELINE_Y, offset->y, "ligne de base 19");
+
+    const Call* mod = canvas.find("MOD:");
+    TEST_ASSERT_NOT_NULL_MESSAGE(mod, "la ligne 3 porte MOD:");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(ms::LINE_2_BASELINE_Y, mod->y, "ligne de base 30");
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("OFF"),
+        "et sa valeur lit OFF : le mecanisme est au lot 13");
+}
+
+void test_a_random_tab_puts_the_subdivision_on_the_second_line() {
+    RecordingCanvas canvas;
+    drawMainScreen(canvas, legacyTab(flexseq::MODE_RANDOM));
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("SUBDIV:"),
+        "la ligne 2 porte SUBDIV: en RANDOM");
+    TEST_ASSERT_NULL_MESSAGE(canvas.find("OFFSET:"),
+        "et jamais OFFSET: : ce n est pas le mode CLOCK");
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("RAND"), "sa valeur de mode est RAND");
+}
+
+void test_the_main_parameter_is_centred_on_its_box() {
+    RecordingCanvas canvas;
+    drawMainScreen(canvas, legacyTab(flexseq::MODE_CLOCK));
+    const Call* label = canvas.find("SUBDIVISION");
+    TEST_ASSERT_NOT_NULL_MESSAGE(label, "l etiquette du parametre principal");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(ms::MAIN_LABEL_BASELINE_Y, label->y, "ligne de base 41");
+    const uint8_t w = 5 * 11;   // SUBDIVISION, onze caracteres du double
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(ms::MAIN_CENTRE_X - w / 2, label->x,
+        "centree sur x=29");
+
+    const Call* value = canvas.find("x4");
+    TEST_ASSERT_NOT_NULL_MESSAGE(value, "la valeur en gros, subdiv -4 donne x4");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(ms::MAIN_VALUE_BASELINE_Y, value->y, "ligne de base 28");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(ms::MAIN_CENTRE_X - (13 * 2) / 2, value->x,
+        "centree avec la LARGE police : 13 px par caractere dans le double");
+}
+
+void test_random_shows_the_skip_chance_as_a_percentage() {
+    RecordingCanvas canvas;
+    drawMainScreen(canvas, legacyTab(flexseq::MODE_RANDOM));
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("30%"),
+        "une chance de 3 s ecrit 30%, comme l original");
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("SKIP CHANCE"), "et son etiquette");
+}
+
+void test_the_legacy_layout_draws_no_headline_and_no_old_field() {
+    RecordingCanvas canvas;
+    drawMainScreen(canvas, legacyTab(flexseq::MODE_CLOCK));
+    TEST_ASSERT_NULL_MESSAGE(canvas.find("LEN"),
+        "LEN quitte l ecran en CLOCK : il ne change rien d audible la");
+    TEST_ASSERT_NULL_MESSAGE(canvas.find("SEP"), "SEP aussi");
+    TEST_ASSERT_NULL_MESSAGE(canvas.find("EDIT"), "et l entree en edition aussi");
+}
+
+void test_a_seq_tab_keeps_the_old_layout() {
+    RecordingCanvas canvas;
+    drawMainScreen(canvas, channelTab());
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("LEN"),
+        "SEQ garde sa forme jusqu au lot 12");
+    TEST_ASSERT_NULL_MESSAGE(canvas.find("MODE:"), "et ne prend pas les trois lignes");
+}
+
+void test_the_cursor_inverts_the_label_of_its_line() {
+    RecordingCanvas plain;
+    drawMainScreen(plain, legacyTab(flexseq::MODE_CLOCK, 2, false));
+    RecordingCanvas marked;
+    drawMainScreen(marked, legacyTab(flexseq::MODE_CLOCK, 2, true));
+    // Le pave d'inversion ajoute de l'encre autour de l etiquette de la ligne 3.
+    uint16_t plainInk = 0, markedInk = 0;
+    for (uint8_t y = ms::LINE_2_BASELINE_Y - 6; y <= ms::LINE_2_BASELINE_Y; ++y) {
+        for (uint8_t x = ms::LINE_LABEL_X - 1; x < ms::LINE_LABEL_X + 20; ++x) {
+            if (plain.at(x, y)) ++plainInk;
+            if (marked.at(x, y)) ++markedInk;
+        }
+    }
+    TEST_ASSERT_GREATER_THAN_MESSAGE(plainInk, markedInk,
+        "le curseur doit ajouter de l encre : sans cela il serait invisible");
+}
+
 int main() {
     UNITY_BEGIN();
+    RUN_TEST(test_a_clock_tab_draws_the_three_lines_at_the_geometry_of_the_original);
+    RUN_TEST(test_a_random_tab_puts_the_subdivision_on_the_second_line);
+    RUN_TEST(test_the_main_parameter_is_centred_on_its_box);
+    RUN_TEST(test_random_shows_the_skip_chance_as_a_percentage);
+    RUN_TEST(test_the_legacy_layout_draws_no_headline_and_no_old_field);
+    RUN_TEST(test_a_seq_tab_keeps_the_old_layout);
+    RUN_TEST(test_the_cursor_inverts_the_label_of_its_line);
 
     RUN_TEST(test_the_tab_bar_has_eight_evenly_spaced_slots);
     RUN_TEST(test_the_six_channel_digits_sit_at_their_slot_centres);

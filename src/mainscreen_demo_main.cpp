@@ -1,3 +1,4 @@
+#include <flexseq/MainScreenModel.h>
 #include <flexseq/OriginalFonts.h>
 #include <Arduino.h>
 #include <libGravity.h>
@@ -30,20 +31,7 @@ void onOutputTick(uint32_t) {
 }
 
 void freezeModel() {
-    const int8_t channel = ui.selectedChannel();
-    frozen.tab = ui.currentTab();
-    frozen.insideTab = (ui.level() == flexseq::UiController::LEVEL_TAB);
-    frozen.cursor = ui.cursor();
-    frozen.fieldOpen = ui.fieldOpen();
-    frozen.fieldCount = ui.fieldCount();
-    frozen.patternIndex = channel >= 0 ? engine.getSelectedPattern(static_cast<uint8_t>(channel)) : -1;
-    frozen.length = channel >= 0 ? engine.getEffectiveLength(static_cast<uint8_t>(channel)) : 0;
-    frozen.subdiv = channel >= 0 ? engine.getSubdiv(static_cast<uint8_t>(channel)) : 0;
-    frozen.barLength = channel >= 0
-        ? static_cast<uint8_t>(engine.getBarLength(static_cast<uint8_t>(channel)))
-        : 0;
-    frozen.tempo = ui.tempo();
-    frozen.clockSource = ui.clockSource();
+    frozen = flexseq::mainScreenModelOf(ui, engine);
     char headline[6];
     flexseq::detail::headlineOf(frozen, headline);
     frozen.headlineWidth = headline[0] == '\0'

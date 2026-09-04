@@ -190,6 +190,24 @@ anyone decided to live with it.
 
 ## Method rules born from these subjects
 
+**A measured figure that moves without explanation is a signal, not noise.** Written
+2026-09-04, during step 5b-ii of lot 11. The ink count of the channel tab went from 965 to
+919 pixels across two builds, and the change was recorded as "cause not established" and
+set aside. It was a **defect**: 46 pixels is exactly the width of the mode value, which had
+stopped being drawn. The figure was right there and it named the size of what was missing.
+The rule: an unexplained move in a measured figure is chased, or it is stated as an open
+question — never filed as noise.
+
+**The native tests CANNOT catch a Flash addressing error.** Written 2026-09-04, same step.
+The labels of the channel tab live in Flash, because a string literal otherwise goes to
+`.data` and therefore to RAM — measured at 69 bytes for ten labels. But a pointer into
+Flash is **not** read like a pointer into RAM on AVR, and one copy in the drawing code read
+it as RAM: the mode value disappeared from the screen. **The 669 native tests all passed**,
+and they always will, because on the host Flash and RAM are one address space and the
+attribute is a no-op. Only `tools/run-screen-dump.sh`, which reads the framebuffer the
+panel receives, can see it. The rule: a change that touches the Flash address space is
+proved on AVR, never on the host alone.
+
 **A survey of the readers of a constant covers `tools/` too.** Written 2026-09-04, during
 step 5a of lot 11. `GLYPH_ASCENT` was declared in `PatternScreen.h` and a survey of
 `include/`, `src/`, `test/` and `sim/` found no reader, so it was removed as dead code. It

@@ -1,3 +1,4 @@
+#include <flexseq/OriginalFonts.h>
 #include <stdint.h>
 #include <string.h>
 #include <unity.h>
@@ -73,6 +74,9 @@ struct RecordingCanvas {
         lastStr[sizeof(lastStr) - 1] = '\0';
         return getStrWidth(s);
     }
+
+    void setFont(const uint8_t*) {}
+
 
     uint8_t getStrWidth(const char* s) const {
         return static_cast<uint8_t>(5 * strlen(s)); // 5x7 : 5 px par glyphe

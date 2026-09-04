@@ -1,3 +1,4 @@
+#include <flexseq/OriginalFonts.h>
 #include <stdint.h>
 #include <string.h>
 #include <flexseq/PatternScreen.h>
@@ -160,8 +161,14 @@ struct FakeDisplay {
         return getStrWidth(s);
     }
 
+    // Le double modelise DEUX polices : 5 px par caractere pour les etiquettes,
+    // 13 pour le gros parametre. Sans cela un test de centrage mesurerait faux.
+    bool bigFont = false;
+
+    void setFont(const uint8_t* font) { bigFont = (font == flexseq::FONT_STK_L); }
+
     uint8_t getStrWidth(const char* s) const {
-        return static_cast<uint8_t>(5 * strlen(s));
+        return static_cast<uint8_t>((bigFont ? 13 : 5) * strlen(s));
     }
 };
 
