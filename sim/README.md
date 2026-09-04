@@ -29,10 +29,26 @@ persistence codec and the UI controller. It does not carry everything, and the
 gaps are deliberate.
 
 **The hardware boundary stays out.** `CvGate`, `CvSampler`, `EepromStorage`,
-`InputAdapter`, `TransportAdapter` and `TwiDisplay` have no mirror. The screens
-do not either: `MainScreen`, `PagedScreen` and `PatternScreen` live on the C++
-side, and the simulator draws its own view. `ChannelMode` and `Subdiv` ARE
-mirrored, inside `SequencerEngine.ts` and `subdiv.ts`.
+`InputAdapter`, `TransportAdapter` and `TwiDisplay` have no mirror.
+`ChannelMode` and `Subdiv` ARE mirrored, inside `SequencerEngine.ts` and
+`subdiv.ts`.
+
+⚠️ **THE TWO SCREENS ARE MIRRORED AT THE PIXEL SINCE 2026-09-04, and this
+paragraph said the opposite until then.** `MainScreenPixels.ts` mirrors
+`drawMainScreen` and `PatternScreenPixels.ts` mirrors `drawPatternScreen`, as
+pure functions returning a set of lit pixels. Given the models that
+`env:mainscreen` and `env:wokwi` freeze, they render **965** and **786** pixels
+of ink, with the same count on every row, as the framebuffer the panel receives
+— measured by `tools/run-screen-dump.sh`, zero divergent row.
+
+**`PagedScreen` still has no mirror**, and it does not need one: it spreads a
+render over eight bands (ADR 0001), which is a property of the AVR loop and not
+of the image. The mirrors render a whole frame at once and compare the result.
+
+⚠️ **What that does NOT establish.** The mirrors are compared to the panel of
+the SIMULATION, never to a physical module. And two models are compared, not
+every model: a layout that neither `env:mainscreen` nor `env:wokwi` shows has no
+panel reference, and `sim/mockups.html` says so on each of its screens.
 
 **One divergence sits INSIDE the shared domain, and it is a decision.** The C++
 firmware holds a modulation buffer, `ModulatedPatternState`, which a round robin
@@ -121,6 +137,9 @@ npm run typecheck # tsc --noEmit
 ```bash
 cd sim
 npm run dev   # http://localhost:5173 (Vite, hot reload)
+              #   /             le simulateur
+              #   /mockups.html le flux de navigation, rendu par les moteurs
+              #                 de rendu miroir, avec l encre de chaque ecran
 ```
 
 Architecture: `src/web/main.ts` (UI) → `src/sim/backend.ts` (`SimBackend`, the

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FlexSeq — le flux de navigation, rendu par le simulateur</title>
+    <style>
+      :root {
+        --bg: #14161a;
+        --panel: #1d2027;
+        --line: #2c313b;
+        --fg: #e6e8ec;
+        --muted: #8b93a1;
+        --ok: #43d17a;
+        --bad: #e05a5a;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 20px;
+        font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+        background: var(--bg);
+        color: var(--fg);
+      }
+      h1 { font-size: 16px; margin: 0 0 6px; }
+      .lede { color: var(--muted); font-size: 12px; margin: 0 0 6px; max-width: 78ch; }
+      #zoom { margin: 14px 0 20px; display: flex; gap: 6px; }
+      #zoom button {
+        font: inherit;
+        color: var(--fg);
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 4px 12px;
+        cursor: pointer;
+      }
+      #zoom button.on { border-color: var(--ok); color: var(--ok); }
+      #shots {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 18px;
+        align-items: start;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 14px;
+      }
+      .card h2 { font-size: 13px; margin: 0 0 10px; font-weight: 600; }
+      canvas.oled {
+        display: block;
+        image-rendering: pixelated;
+        border: 1px solid var(--line);
+        background: #05070a;
+      }
+      .ink { font-size: 11px; color: var(--muted); margin: 10px 0 6px; }
+      .ink.ok { color: var(--ok); }
+      .ink.bad { color: var(--bad); }
+      .note { font-size: 12px; color: var(--muted); margin: 0; }
+    </style>
+  </head>
+  <body>
+    <h1>FlexSeq — le flux de navigation</h1>
+    <p class="lede">
+      Chaque vignette sort des memes moteurs de rendu que les tests, pas d un
+      dessin approche. Deux d entre elles portent une encre MESUREE sur le
+      panneau simule, par <code>tools/run-screen-dump.sh</code> : elles doivent
+      etre identiques au pixel. Les autres n ont pas de mesure de panneau, et la
+      page le dit.
+    </p>
+    <p class="lede">
+      La geometrie que ces moteurs lisent est gardee des deux cotes par
+      <code>test/vectors/screen_geometry_vectors.tsv</code>, decision ADR 0012.
+      Deplacer une constante rougit les tests avant d atteindre cette page.
+    </p>
+    <div id="zoom"></div>
+    <div id="shots"></div>
+    <script type="module" src="/src/web/mockups.ts"></script>
+  </body>
+</html>
