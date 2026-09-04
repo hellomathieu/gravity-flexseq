@@ -89,9 +89,6 @@ void test_rotate_wraps_at_both_ends_of_the_tab_bar() {
     TEST_ASSERT_EQUAL_UINT8(UiController::TAB_SETTINGS, r.ui.currentTab());
 }
 
-// libGravity accelere une rotation rapide (x3 sous 16 ms). Sur une navigation
-// discrete cela fait sauter des selections — constate sur le module le
-// 2026-08-22. Un cran vaut donc UN onglet, quelle que soit l'acceleration.
 void test_an_accelerated_delta_moves_one_tab_not_three() {
     Rig r;
     r.ui.handle(UiController::EVENT_ROTATE, 3);
@@ -250,8 +247,6 @@ void test_the_clock_source_field_never_reaches_the_sentinel() {
 void test_the_pattern_field_is_clamped_to_the_bank() {
     Rig r;
     r.enterTab();
-    // SHIFT plus rotation ajuste le champ SELECTIONNE, et le curseur demarre
-    // sur MODE depuis l etape 5b : il faut donc aller sur PATTERN d abord.
     r.gotoField(UiController::FIELD_PATTERN);
     for (uint8_t i = 0; i < SequencerEngine::PATTERN_COUNT + 5; ++i) {
         r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
@@ -354,9 +349,6 @@ void test_the_bar_length_field_walks_only_the_allowed_values() {
     TEST_ASSERT_EQUAL_INT8(2, r.engine.getBarLength(0));
 }
 
-// LE TEMPO EST LA SEULE EXCEPTION : sa plage compte 271 valeurs, trop pour se
-// parcourir cran par cran. Il garde donc l'acceleration de libGravity, et c'est
-// la qu'un cran accelere doit atterrir sur la borne plutot que d'etre refuse.
 void test_no_field_keeps_the_acceleration_not_even_the_tempo() {
     Rig r;
     r.gotoTab(UiController::TAB_CLOCK);
@@ -387,8 +379,6 @@ void test_a_long_turn_on_the_tempo_lands_on_the_bound() {
     TEST_ASSERT_EQUAL_UINT16(UiController::MIN_TEMPO, r.ui.tempo());
 }
 
-// Les listes courtes n'accelerent pas : un cran, un pas, quelle que soit
-// l'amplitude que la dependance rapporte.
 void test_short_lists_never_accelerate() {
     Rig r;
     r.enterTab();
@@ -580,8 +570,6 @@ void test_shift_long_press_clears_the_pattern_steps_and_ratchets() {
     }
 }
 
-// 35 et 36 sont ECRITS EN TOUTES LETTRES. Une boucle bornee par STEP_COUNT
-// suivrait la constante et ne prouverait rien de sa valeur.
 void test_the_step_cursor_reaches_35_and_wraps_at_36() {
     Rig r;
     r.enterEdit();
@@ -636,9 +624,6 @@ void test_play_toggles_the_transport_at_every_level() {
     TEST_ASSERT_EQUAL(UiController::LEVEL_EDIT, r.ui.level());
 }
 
-// L'original ne demarre et n'arrete que l'horloge INTERNE : `if (masterClockMode
-// == 0)` (Interactions.ino:372). En source externe ou MIDI, PLAY ne fait rien —
-// c'est la source qui commande. Decide par le proprietaire le 2026-08-24.
 void test_play_does_nothing_when_the_clock_is_not_internal() {
     Rig r;
     TEST_ASSERT_TRUE(r.ui.setClockSource(1));  // externe, 24 PPQN
@@ -671,9 +656,6 @@ void test_play_realigns_the_channels_when_it_starts() {
     }
 }
 
-// Le compteur de revisions est ce qui declenche un redessin ET une sauvegarde
-// differee : s'il ne bougeait pas, une edition resterait invisible et non
-// persistee. Une revision de trop ne coute rien, une manquante coute l'edition.
 void test_every_handled_gesture_moves_the_revision() {
     Rig r;
     const uint8_t start = r.ui.revision();
@@ -849,9 +831,29 @@ void test_a_seq_tab_keeps_its_fields_and_gains_the_mode() {
     TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_EDIT_ENTRY, r.ui.fieldAt(5), "6");
 }
 
+void test_the_published_field_indices_agree_with_fieldAt() {
+    ModeRig r(flexseq::MODE_SEQ);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, UiController::SEQ_FIELD_INDEX_MODE, "MODE vaut 0");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, UiController::SEQ_FIELD_INDEX_PATTERN, "PATTERN vaut 1");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(2, UiController::SEQ_FIELD_INDEX_LENGTH, "LENGTH vaut 2");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(3, UiController::SEQ_FIELD_INDEX_SUBDIV, "SUBDIV vaut 3");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(4, UiController::SEQ_FIELD_INDEX_BAR_LENGTH, "BAR vaut 4");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(5, UiController::SEQ_FIELD_INDEX_EDIT_ENTRY, "EDIT vaut 5");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MODE,
+        r.ui.fieldAt(UiController::SEQ_FIELD_INDEX_MODE), "index et fieldAt : MODE");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_PATTERN,
+        r.ui.fieldAt(UiController::SEQ_FIELD_INDEX_PATTERN), "PATTERN");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_LENGTH,
+        r.ui.fieldAt(UiController::SEQ_FIELD_INDEX_LENGTH), "LENGTH");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_SUBDIV,
+        r.ui.fieldAt(UiController::SEQ_FIELD_INDEX_SUBDIV), "SUBDIV");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_BAR_LENGTH,
+        r.ui.fieldAt(UiController::SEQ_FIELD_INDEX_BAR_LENGTH), "BAR_LENGTH");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_EDIT_ENTRY,
+        r.ui.fieldAt(UiController::SEQ_FIELD_INDEX_EDIT_ENTRY), "EDIT_ENTRY");
+}
+
 void test_the_mode_can_always_be_changed_back_out_of_seq() {
-    // Le defaut que deux mutants survivants ont revele : sans MODE en SEQ, on
-    // n'en sort plus.
     ModeRig r(flexseq::MODE_SEQ);
     TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MODE, r.ui.field(), "MODE est atteignable");
     r.ui.handle(UiController::EVENT_PRESS);
@@ -913,6 +915,29 @@ void test_the_offset_never_goes_below_zero() {
     TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, r.engine.getOffset(0), "la borne basse tient");
 }
 
+void test_the_offset_stops_at_the_last_tick_of_the_step() {
+    ModeRig r(flexseq::MODE_CLOCK);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    r.ui.handle(UiController::EVENT_PRESS);
+    for (uint16_t i = 0; i < 200; ++i) {
+        r.ui.handle(UiController::EVENT_ROTATE, 1);
+    }
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(95, r.engine.getOffset(0),
+        "SUBDIV /1 fait 96 ticks, donc le dernier offset est 95");
+}
+
+void test_a_step_longer_than_255_ticks_keeps_the_full_offset_range() {
+    ModeRig r(flexseq::MODE_CLOCK);
+    r.engine.setSubdiv(0, 4);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    r.ui.handle(UiController::EVENT_PRESS);
+    for (uint16_t i = 0; i < 400; ++i) {
+        r.ui.handle(UiController::EVENT_ROTATE, 1);
+    }
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(255, r.engine.getOffset(0),
+        "SUBDIV /4 fait 384 ticks : la borne est plafonnee a 255, jamais repliee a 0");
+}
+
 void test_the_mod_field_is_navigable_and_does_nothing_yet() {
     ModeRig r(flexseq::MODE_CLOCK);
     r.ui.handle(UiController::EVENT_ROTATE, 1);
@@ -933,11 +958,14 @@ int main(int, char**) {
     RUN_TEST(test_a_clock_tab_holds_the_three_lines_of_the_original);
     RUN_TEST(test_a_random_tab_puts_the_subdivision_on_the_second_line);
     RUN_TEST(test_a_seq_tab_keeps_its_fields_and_gains_the_mode);
+    RUN_TEST(test_the_published_field_indices_agree_with_fieldAt);
     RUN_TEST(test_the_mode_can_always_be_changed_back_out_of_seq);
     RUN_TEST(test_the_mode_field_cycles_the_three_modes);
     RUN_TEST(test_the_cursor_never_designates_a_field_that_does_not_exist);
     RUN_TEST(test_the_offset_field_moves_the_offset);
     RUN_TEST(test_the_offset_never_goes_below_zero);
+    RUN_TEST(test_the_offset_stops_at_the_last_tick_of_the_step);
+    RUN_TEST(test_a_step_longer_than_255_ticks_keeps_the_full_offset_range);
     RUN_TEST(test_the_mod_field_is_navigable_and_does_nothing_yet);
 
     RUN_TEST(test_starts_on_the_tab_bar_over_the_first_channel);

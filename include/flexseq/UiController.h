@@ -50,10 +50,15 @@ public:
     static constexpr uint8_t TAB_SETTINGS = 7;
 
     static constexpr uint8_t CLOCK_TAB_FIELDS = 2;
-    // MODE est la ligne 1 dans les TROIS modes, comme l'original. Sans lui en
-    // SEQ, on ne pourrait plus sortir de SEQ : le mode serait un aller simple.
     static constexpr uint8_t CHANNEL_TAB_FIELDS = 6;
     static constexpr uint8_t LEGACY_TAB_FIELDS = 3;
+
+    static constexpr uint8_t SEQ_FIELD_INDEX_MODE = 0;
+    static constexpr uint8_t SEQ_FIELD_INDEX_PATTERN = 1;
+    static constexpr uint8_t SEQ_FIELD_INDEX_LENGTH = 2;
+    static constexpr uint8_t SEQ_FIELD_INDEX_SUBDIV = 3;
+    static constexpr uint8_t SEQ_FIELD_INDEX_BAR_LENGTH = 4;
+    static constexpr uint8_t SEQ_FIELD_INDEX_EDIT_ENTRY = 5;
 
 
     static constexpr uint8_t CLOCK_SOURCE_COUNT = 6;

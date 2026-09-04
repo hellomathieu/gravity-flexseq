@@ -209,26 +209,31 @@ void test_split_writes_nothing_when_the_output_is_too_small(void)
 
 void test_only_the_length_field_index_carries_an_empirical_limit(void)
 {
-    TEST_ASSERT_EQUAL_UINT8(6, harness::limitForFieldIndex(1));
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(2, harness::FIELD_INDEX_LENGTH,
+        "LENGTH est le champ d index 2 depuis que MODE ouvre la liste");
+    TEST_ASSERT_EQUAL_UINT8(6, harness::limitForFieldIndex(2));
     TEST_ASSERT_EQUAL_UINT8(NO_EMPIRICAL_LIMIT, harness::limitForFieldIndex(0));
-    TEST_ASSERT_EQUAL_UINT8(NO_EMPIRICAL_LIMIT, harness::limitForFieldIndex(2));
+    TEST_ASSERT_EQUAL_UINT8(NO_EMPIRICAL_LIMIT, harness::limitForFieldIndex(1));
     TEST_ASSERT_EQUAL_UINT8(NO_EMPIRICAL_LIMIT, harness::limitForFieldIndex(3));
     TEST_ASSERT_EQUAL_UINT8(NO_EMPIRICAL_LIMIT, harness::limitForFieldIndex(4));
+    TEST_ASSERT_EQUAL_UINT8(NO_EMPIRICAL_LIMIT, harness::limitForFieldIndex(5));
 }
 
 void test_an_unknown_field_index_never_invents_an_empirical_limit(void)
 {
-    for (uint8_t index = 5; index < 200; ++index) {
+    for (uint8_t index = 6; index < 200; ++index) {
         TEST_ASSERT_EQUAL_UINT8(NO_EMPIRICAL_LIMIT, harness::limitForFieldIndex(index));
     }
 }
 
 void test_the_field_index_resolution_agrees_with_the_named_limits(void)
 {
-    TEST_ASSERT_EQUAL_UINT8(harness::LENGTH_BURST_LIMIT, harness::limitForFieldIndex(1));
-    TEST_ASSERT_EQUAL_UINT8(harness::SUBDIV_BURST_LIMIT, harness::limitForFieldIndex(2));
-    TEST_ASSERT_EQUAL_UINT8(harness::BAR_LENGTH_BURST_LIMIT, harness::limitForFieldIndex(3));
-    TEST_ASSERT_EQUAL_UINT8(harness::EDIT_ENTRY_BURST_LIMIT, harness::limitForFieldIndex(4));
+    TEST_ASSERT_EQUAL_UINT8(harness::LENGTH_BURST_LIMIT,
+        harness::limitForFieldIndex(harness::FIELD_INDEX_LENGTH));
+    TEST_ASSERT_EQUAL_UINT8(harness::SUBDIV_BURST_LIMIT,
+        harness::limitForFieldIndex(flexseq::UiController::SEQ_FIELD_INDEX_SUBDIV));
+    TEST_ASSERT_EQUAL_UINT8(harness::BAR_LENGTH_BURST_LIMIT, harness::limitForFieldIndex(4));
+    TEST_ASSERT_EQUAL_UINT8(harness::EDIT_ENTRY_BURST_LIMIT, harness::limitForFieldIndex(5));
 }
 
 int main(int, char**)

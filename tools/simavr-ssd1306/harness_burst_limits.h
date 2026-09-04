@@ -3,6 +3,8 @@
 
 #include "burst_policy.h"
 
+#include <flexseq/UiController.h>
+
 namespace harness {
 
 const uint8_t LENGTH_BURST_LIMIT = 6;
@@ -12,7 +14,8 @@ const uint8_t EDIT_ENTRY_BURST_LIMIT = burst::NO_EMPIRICAL_LIMIT;
 const uint8_t RATCHET_BURST_LIMIT = burst::NO_EMPIRICAL_LIMIT;
 const uint8_t STEP_BURST_LIMIT = burst::NO_EMPIRICAL_LIMIT;
 
-const uint8_t FIELD_INDEX_LENGTH = 1;
+const uint8_t FIELD_INDEX_LENGTH =
+    flexseq::UiController::SEQ_FIELD_INDEX_LENGTH;
 
 inline uint8_t limitForFieldIndex(uint8_t index)
 {
