@@ -1,6 +1,6 @@
 # Empreinte de reference du firmware de production (env:nanoatmega328).
 # Mise a jour deliberee : ./tools/run-build-memory.sh --accept
-date=2026-09-04T16:50:24Z
-commit=beab60c
-ram=1505
-flash=27854
+date=2026-09-04T18:01:45Z
+commit=3796fa5
+ram=1511
+flash=28092

@@ -120,7 +120,7 @@ struct RecordingCanvas {
 RecordingCanvas canvas;
 
 MainScreenModel channelTab(uint8_t tab = 1) {
-    MainScreenModel m;
+    MainScreenModel m{};
     m.tab = tab;
     m.insideTab = false;
     m.cursor = 0;

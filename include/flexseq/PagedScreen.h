@@ -78,13 +78,7 @@ public:
         const bool switched = (mode_ != MODE_MAIN);
         mode_ = MODE_MAIN;
         main_ = model;
-        if (main_.headlineWidth == 0) {
-            char headline[6];
-            detail::headlineOf(main_, headline);
-            if (headline[0] != '\0') {
-                main_.headlineWidth = static_cast<uint8_t>(display.getStrWidth(headline));
-            }
-        }
+        detail::measureMainScreen(display, main_);
         startFrame(display, switched);
     }
 

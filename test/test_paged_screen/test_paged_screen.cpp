@@ -191,7 +191,7 @@ PatternScreenModel modelOf(const Pattern& pattern) {
 }
 
 MainScreenModel mainModelOf() {
-    MainScreenModel m;
+    MainScreenModel m{};
     m.tab = 1;
     m.insideTab = false;
     m.cursor = 0;
