@@ -106,12 +106,21 @@ int8_t UiController::selectedChannel() const {
     return static_cast<int8_t>(currentTab_ - TAB_FIRST_CHANNEL);
 }
 
+bool UiController::isLegacyModeTab() const {
+    const int8_t channel = selectedChannel();
+    if (channel < 0) {
+        return false;
+    }
+    const ChannelMode mode = engine_.getChannelMode(static_cast<uint8_t>(channel));
+    return mode == MODE_CLOCK || mode == MODE_RANDOM;
+}
+
 uint8_t UiController::fieldCount() const {
     if (currentTab_ == TAB_CLOCK) {
         return CLOCK_TAB_FIELDS;
     }
     if (isChannelTab()) {
-        return CHANNEL_TAB_FIELDS;
+        return isLegacyModeTab() ? LEGACY_TAB_FIELDS : CHANNEL_TAB_FIELDS;
     }
     return 0;
 }
@@ -123,11 +132,21 @@ UiController::Field UiController::fieldAt(uint8_t index) const {
     if (currentTab_ == TAB_CLOCK) {
         return index == 0 ? FIELD_TEMPO : FIELD_CLOCK_SOURCE;
     }
+    if (isLegacyModeTab()) {
+        const int8_t channel = selectedChannel();
+        const ChannelMode mode = engine_.getChannelMode(static_cast<uint8_t>(channel));
+        switch (index) {
+            case 0: return FIELD_MODE;
+            case 1: return mode == MODE_CLOCK ? FIELD_OFFSET : FIELD_SUBDIV;
+            default: return FIELD_MOD;
+        }
+    }
     switch (index) {
-        case 0: return FIELD_PATTERN;
-        case 1: return FIELD_LENGTH;
-        case 2: return FIELD_SUBDIV;
-        case 3: return FIELD_BAR_LENGTH;
+        case 0: return FIELD_MODE;
+        case 1: return FIELD_PATTERN;
+        case 2: return FIELD_LENGTH;
+        case 3: return FIELD_SUBDIV;
+        case 4: return FIELD_BAR_LENGTH;
         default: return FIELD_EDIT_ENTRY;
     }
 }
@@ -320,6 +339,26 @@ void UiController::adjustFieldValue(Field target, int8_t raw) {
             }
             engine_.setSubdiv(ch, subdivAtIndex(clampIndex(
                 static_cast<uint8_t>(index), delta, SUBDIV_CHOICE_COUNT)));
+            break;
+        }
+        case FIELD_MODE: {
+            const uint8_t next = clampIndex(
+                static_cast<uint8_t>(engine_.getChannelMode(ch)), delta,
+                CHANNEL_MODE_COUNT);
+            engine_.setChannelMode(ch, static_cast<ChannelMode>(next));
+            break;
+        }
+        case FIELD_OFFSET: {
+            // L'offset porte sur les impulsions du pas, donc sa borne haute est
+            // ticksPerStep - 1, elle-meme plafonnee par MAX_OFFSET. Un compte de
+            // 256 dans un uint8_t vaudrait ZERO : la plage doit rester en 16 bits.
+            const uint16_t span = engine_.currentStepTicks(ch);
+            const int16_t top = static_cast<int16_t>(
+                span > SequencerEngine::MAX_OFFSET ? SequencerEngine::MAX_OFFSET
+                                                   : (span > 0 ? span - 1 : 0));
+            engine_.setOffset(ch, static_cast<uint8_t>(clampRange(
+                static_cast<int16_t>(static_cast<int16_t>(engine_.getOffset(ch)) + delta),
+                static_cast<int16_t>(0), top)));
             break;
         }
         case FIELD_SKIP_CHANCE:

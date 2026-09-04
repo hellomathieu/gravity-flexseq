@@ -105,7 +105,8 @@ void test_press_enters_a_tab_that_has_fields() {
     r.enterTab();
     TEST_ASSERT_EQUAL(UiController::LEVEL_TAB, r.ui.level());
     TEST_ASSERT_EQUAL_UINT8(0, r.ui.cursor());
-    TEST_ASSERT_EQUAL(UiController::FIELD_PATTERN, r.ui.field());
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MODE, r.ui.field(),
+        "MODE est la ligne 1, comme dans l original");
 }
 
 void test_press_does_nothing_on_the_settings_tab_while_it_is_deferred() {
@@ -148,13 +149,14 @@ void test_rotate_moves_the_field_cursor_and_wraps() {
     Rig r;
     r.enterTab();
     r.ui.handle(UiController::EVENT_ROTATE, 1);
-    TEST_ASSERT_EQUAL(UiController::FIELD_LENGTH, r.ui.field());
-    r.ui.handle(UiController::EVENT_ROTATE, -1);
     TEST_ASSERT_EQUAL(UiController::FIELD_PATTERN, r.ui.field());
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    TEST_ASSERT_EQUAL(UiController::FIELD_MODE, r.ui.field());
     r.ui.handle(UiController::EVENT_ROTATE, -1);
     TEST_ASSERT_EQUAL(UiController::FIELD_EDIT_ENTRY, r.ui.field());
     r.ui.handle(UiController::EVENT_ROTATE, 1);
-    TEST_ASSERT_EQUAL(UiController::FIELD_PATTERN, r.ui.field());
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MODE, r.ui.field(),
+        "la liste boucle sur son premier champ, qui est MODE");
 }
 
 void test_press_opens_a_value_field_and_press_closes_it() {
@@ -248,6 +250,9 @@ void test_the_clock_source_field_never_reaches_the_sentinel() {
 void test_the_pattern_field_is_clamped_to_the_bank() {
     Rig r;
     r.enterTab();
+    // SHIFT plus rotation ajuste le champ SELECTIONNE, et le curseur demarre
+    // sur MODE depuis l etape 5b : il faut donc aller sur PATTERN d abord.
+    r.gotoField(UiController::FIELD_PATTERN);
     for (uint8_t i = 0; i < SequencerEngine::PATTERN_COUNT + 5; ++i) {
         r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
     }
@@ -797,8 +802,143 @@ void test_shift_play_is_reserved_and_does_not_toggle_the_transport() {
     TEST_ASSERT_TRUE(r.engine.isRunning());
 }
 
+namespace {
+
+struct ModeRig {
+    SequencerEngine engine;
+    Transport transport;
+    UiController ui;
+
+    explicit ModeRig(flexseq::ChannelMode mode)
+        : engine(), transport(engine), ui(engine, transport) {
+        for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+            engine.setChannelMode(ch, mode);
+        }
+        ui.handle(UiController::EVENT_PRESS);
+    }
+};
+
+}  // namespace
+
+void test_a_clock_tab_holds_the_three_lines_of_the_original() {
+    ModeRig r(flexseq::MODE_CLOCK);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(3, r.ui.fieldCount(),
+        "MODE, OFFSET et MOD : trois lignes, comme l original");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MODE, r.ui.fieldAt(0), "ligne 1");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_OFFSET, r.ui.fieldAt(1), "ligne 2 en CLOCK");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MOD, r.ui.fieldAt(2), "ligne 3");
+}
+
+void test_a_random_tab_puts_the_subdivision_on_the_second_line() {
+    ModeRig r(flexseq::MODE_RANDOM);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(3, r.ui.fieldCount(), "trois lignes aussi");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MODE, r.ui.fieldAt(0), "ligne 1");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_SUBDIV, r.ui.fieldAt(1),
+        "ligne 2 en RANDOM : la SUBDIVISION, et non l offset");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MOD, r.ui.fieldAt(2), "ligne 3");
+}
+
+void test_a_seq_tab_keeps_its_fields_and_gains_the_mode() {
+    ModeRig r(flexseq::MODE_SEQ);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(6, r.ui.fieldCount(),
+        "SEQ garde ses cinq champs jusqu au lot 12, et gagne MODE");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MODE, r.ui.fieldAt(0),
+        "MODE est la ligne 1 dans les TROIS modes : sans lui, SEQ serait un aller simple");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_PATTERN, r.ui.fieldAt(1), "2");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_LENGTH, r.ui.fieldAt(2), "3");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_EDIT_ENTRY, r.ui.fieldAt(5), "6");
+}
+
+void test_the_mode_can_always_be_changed_back_out_of_seq() {
+    // Le defaut que deux mutants survivants ont revele : sans MODE en SEQ, on
+    // n'en sort plus.
+    ModeRig r(flexseq::MODE_SEQ);
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MODE, r.ui.field(), "MODE est atteignable");
+    r.ui.handle(UiController::EVENT_PRESS);
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    TEST_ASSERT_EQUAL_MESSAGE(flexseq::MODE_RANDOM, r.engine.getChannelMode(0),
+        "on redescend de SEQ vers RANDOM");
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    TEST_ASSERT_EQUAL_MESSAGE(flexseq::MODE_CLOCK, r.engine.getChannelMode(0),
+        "puis vers CLOCK");
+}
+
+void test_the_mode_field_cycles_the_three_modes() {
+    ModeRig r(flexseq::MODE_CLOCK);
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MODE, r.ui.field(), "on demarre sur MODE");
+    r.ui.handle(UiController::EVENT_PRESS);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_MESSAGE(flexseq::MODE_RANDOM, r.engine.getChannelMode(0),
+        "CLOCK puis RANDOM");
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_MESSAGE(flexseq::MODE_SEQ, r.engine.getChannelMode(0), "puis SEQ");
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_MESSAGE(flexseq::MODE_SEQ, r.engine.getChannelMode(0),
+        "et la borne tient : pas de retour a CLOCK par debordement");
+}
+
+void test_the_cursor_never_designates_a_field_that_does_not_exist() {
+    ModeRig r(flexseq::MODE_SEQ);
+    for (uint8_t i = 0; i < 4; ++i) {
+        r.ui.handle(UiController::EVENT_ROTATE, 1);
+    }
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(4, r.ui.cursor(), "curseur au dernier champ de SEQ");
+    r.engine.setChannelMode(0, flexseq::MODE_CLOCK);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_TRUE_MESSAGE(r.ui.cursor() < r.ui.fieldCount(),
+        "le curseur doit rester dans la liste");
+    TEST_ASSERT_NOT_EQUAL_MESSAGE(UiController::FIELD_NONE, r.ui.field(),
+        "et le champ designe doit exister");
+}
+
+void test_the_offset_field_moves_the_offset() {
+    ModeRig r(flexseq::MODE_CLOCK);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_OFFSET, r.ui.field(), "sur OFFSET");
+    r.ui.handle(UiController::EVENT_PRESS);
+    const uint8_t avant = r.engine.getOffset(0);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(avant + 1, r.engine.getOffset(0), "un cran, un pas");
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(avant, r.engine.getOffset(0), "et retour");
+}
+
+void test_the_offset_never_goes_below_zero() {
+    ModeRig r(flexseq::MODE_CLOCK);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    r.ui.handle(UiController::EVENT_PRESS);
+    for (uint8_t i = 0; i < 5; ++i) {
+        r.ui.handle(UiController::EVENT_ROTATE, -1);
+    }
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, r.engine.getOffset(0), "la borne basse tient");
+}
+
+void test_the_mod_field_is_navigable_and_does_nothing_yet() {
+    ModeRig r(flexseq::MODE_CLOCK);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MOD, r.ui.field(), "sur MOD");
+    const flexseq::CvDestination a1 = r.engine.getCvDestination(0, flexseq::CV_SOURCE_1);
+    const flexseq::CvDestination a2 = r.engine.getCvDestination(0, flexseq::CV_SOURCE_2);
+    r.ui.handle(UiController::EVENT_PRESS);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_MESSAGE(a1, r.engine.getCvDestination(0, flexseq::CV_SOURCE_1),
+        "la source 1 ne bouge pas : le mecanisme est au lot 13");
+    TEST_ASSERT_EQUAL_MESSAGE(a2, r.engine.getCvDestination(0, flexseq::CV_SOURCE_2),
+        "ni la source 2");
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
+    RUN_TEST(test_a_clock_tab_holds_the_three_lines_of_the_original);
+    RUN_TEST(test_a_random_tab_puts_the_subdivision_on_the_second_line);
+    RUN_TEST(test_a_seq_tab_keeps_its_fields_and_gains_the_mode);
+    RUN_TEST(test_the_mode_can_always_be_changed_back_out_of_seq);
+    RUN_TEST(test_the_mode_field_cycles_the_three_modes);
+    RUN_TEST(test_the_cursor_never_designates_a_field_that_does_not_exist);
+    RUN_TEST(test_the_offset_field_moves_the_offset);
+    RUN_TEST(test_the_offset_never_goes_below_zero);
+    RUN_TEST(test_the_mod_field_is_navigable_and_does_nothing_yet);
 
     RUN_TEST(test_starts_on_the_tab_bar_over_the_first_channel);
     RUN_TEST(test_rotate_changes_tab);

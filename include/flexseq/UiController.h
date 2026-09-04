@@ -39,6 +39,9 @@ public:
         FIELD_BAR_LENGTH,
         FIELD_EDIT_ENTRY,
         FIELD_SKIP_CHANCE,
+        FIELD_MODE,
+        FIELD_OFFSET,
+        FIELD_MOD,
     };
 
     static constexpr uint8_t TAB_COUNT = 8;
@@ -47,7 +50,11 @@ public:
     static constexpr uint8_t TAB_SETTINGS = 7;
 
     static constexpr uint8_t CLOCK_TAB_FIELDS = 2;
-    static constexpr uint8_t CHANNEL_TAB_FIELDS = 5;
+    // MODE est la ligne 1 dans les TROIS modes, comme l'original. Sans lui en
+    // SEQ, on ne pourrait plus sortir de SEQ : le mode serait un aller simple.
+    static constexpr uint8_t CHANNEL_TAB_FIELDS = 6;
+    static constexpr uint8_t LEGACY_TAB_FIELDS = 3;
+
 
     static constexpr uint8_t CLOCK_SOURCE_COUNT = 6;
     static constexpr uint8_t CLOCK_SOURCE_INTERNAL = 0;
@@ -88,6 +95,7 @@ public:
     bool setClockSource(uint8_t source);
 
     Field mainField() const;
+    bool isLegacyModeTab() const;
 
 private:
     void handleTabBar(Event event, int8_t delta);

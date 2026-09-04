@@ -61,6 +61,25 @@ OK, ERR, DIM, B, Z = ("\033[32m", "\033[31m", "\033[2m", "\033[1m", "\033[0m") i
 
 # (etiquette, chemin relatif, motif, remplacement, suite)
 MUTANTS = [
+    ("cpp: a CLOCK tab keeps the five fields instead of the three of the original",
+     "src/domain/UiController.cpp",
+     "    return mode == MODE_CLOCK || mode == MODE_RANDOM;",
+     "    return false;",
+     "cpp-ui"),
+    ("cpp: a RANDOM tab puts the offset on line two instead of the subdivision",
+     "src/domain/UiController.cpp",
+     "            case 1: return mode == MODE_CLOCK ? FIELD_OFFSET : FIELD_SUBDIV;",
+     "            case 1: return FIELD_OFFSET;",
+     "cpp-ui"),
+    ("cpp: the mode field wraps instead of holding its bound",
+     "src/domain/UiController.cpp",
+     "            const uint8_t next = clampIndex(\n"
+     "                static_cast<uint8_t>(engine_.getChannelMode(ch)), delta,\n"
+     "                CHANNEL_MODE_COUNT);",
+     "            const uint8_t next = wrapIndex(\n"
+     "                static_cast<uint8_t>(engine_.getChannelMode(ch)), delta,\n"
+     "                CHANNEL_MODE_COUNT);",
+     "cpp-ui"),
     ("cpp: the screen model derives the main field instead of carrying it",
      "src/domain/MainScreenModel.cpp",
      "    model.mainField = static_cast<uint8_t>(ui.mainField());",
