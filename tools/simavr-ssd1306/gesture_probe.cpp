@@ -907,12 +907,27 @@ static void rotate(avr_t *avr, int detents, int aFirst)
 // lit les index du domaine, jamais une copie -- la faute deja consignee deux
 // fois en ligne 68 de docs/open-risks.md.
 static void gotoConfigField(avr_t* avr, uint8_t index);
+static void backToBar(avr_t* avr);
 
 static void alignTab(avr_t *avr, int tab)
 {
     constexpr int tabs = (int)flexseq::UiController::TAB_COUNT;
     const int steps = ((tab - selectedTab()) % tabs + tabs) % tabs;
     if (steps > 0) rotate(avr, steps, 1);
+}
+
+// Remonte a la BARRE sans supposer de quelle profondeur on part.
+//
+// ⚠️ La page CONFIG a ajoute un niveau au lot 12 : depuis elle, un appui long
+// rend l'onglet et non la barre, et le harnais qui n'en faisait qu'un restait
+// dans l'onglet precedent — alignTab() y tournait alors le curseur de champ au
+// lieu de l'onglet. Un appui long sur la barre est un no-op (handleTabBar n'a
+// pas de cas LONG_PRESS), donc en enchainer trois est idempotent : page ->
+// onglet -> barre -> rien. Le harnais cesse ainsi de supposer une profondeur
+// qu'il ne controle pas.
+static void backToBar(avr_t* avr)
+{
+    for (int i = 0; i < 3; ++i) pressFor(avr, (double)LONG_PRESS_MS);
 }
 
 static void gotoConfigField(avr_t* avr, uint8_t index)
@@ -1556,7 +1571,7 @@ int main(int argc, char **argv)
                                    shiftRotate(avr, 15, 1, harness::LENGTH_BURST_LIMIT, false); }
                 twiGeste = g_twi_bytes - marque;
             } else if (etape == 3) {
-                pressFor(avr, (double)LONG_PRESS_MS);
+                backToBar(avr);
                 alignTab(avr, ongletR5);
                 marque = g_twi_bytes;
                 pressFor(avr, (double)PRESS_MS);
@@ -1686,8 +1701,7 @@ int main(int argc, char **argv)
                    (unsigned)byteOfInstance(vu, canalR11, rangR11),
                ecarts, g_twi_bytes - marque);
 
-        pressFor(avr, (double)LONG_PRESS_MS);
-        pressFor(avr, (double)LONG_PRESS_MS);
+        backToBar(avr);
         alignTab(avr, ongletR11);
         marque = g_twi_bytes;
         pressFor(avr, (double)PRESS_MS);
@@ -1830,7 +1844,7 @@ int main(int argc, char **argv)
             }
 
             marque = g_twi_bytes;
-            pressFor(avr, (double)LONG_PRESS_MS);
+            backToBar(avr);
             printf("rB_r1_retour       k %d onglet %d creneaux %d twi %u\n",
                    k, selectedTab(), tabBandSlotsWithInk(), g_twi_bytes - marque);
         }
