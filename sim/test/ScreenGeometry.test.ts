@@ -31,6 +31,7 @@ interface Vector {
   id: string;
   index: number;
   owners: Owners;
+  cppName: string;
   expected: number;
 }
 
@@ -50,13 +51,13 @@ function loadVectors(): Vector[] {
   const seen = new Set<string>();
   for (const line of lines.slice(1)) {
     const cell = line.split("\t");
-    if (cell.length !== 5) throw new Error(`la ligne ne porte pas cinq champs : ${line}`);
-    const [family, id, index, owners, expected] = cell;
+    if (cell.length !== 6) throw new Error(`la ligne ne porte pas six champs : ${line}`);
+    const [family, id, index, owners, cppName, expected] = cell;
     // Le controle de longueur ci-dessus ne reduit pas les types : il faut le
     // dire au compilateur, sinon `tsc` refuse et vitest ne verrait rien.
     if (
       family === undefined || id === undefined || index === undefined
-      || owners === undefined || expected === undefined
+      || owners === undefined || cppName === undefined || expected === undefined
     ) {
       throw new Error(`un champ manque : ${line}`);
     }
@@ -72,6 +73,7 @@ function loadVectors(): Vector[] {
       id,
       index: wholeNumber(index, "l'index"),
       owners,
+      cppName,
       expected: wholeNumber(expected, "la valeur attendue"),
     });
   }

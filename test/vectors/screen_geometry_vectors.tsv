@@ -1,45 +1,48 @@
-family	id	index	owners	expected
-M	screen_width	0	both	128
-M	screen_height	1	both	64
-M	tab_count	2	both	8
-M	tab_slot_width	3	both	16
-M	tab_baseline_y	4	both	63
-M	tab_top_y	5	cpp	57
-M	tab_box_y	6	both	56
-M	tab_box_height	7	both	8
-M	rule_y	8	both	52
-M	rule_x	9	both	4
-M	rule_width	10	both	120
-M	headline_box_x	11	both	2
-M	headline_box_y	12	both	1
-M	headline_box_width	13	both	124
-M	headline_box_height	14	both	10
-M	headline_baseline_y	15	cpp	8
-M	row_a_box_y	16	both	14
-M	row_b_box_y	17	both	22
-M	row_box_height	18	both	8
-M	column_left_x	19	both	2
-M	column_right_x	20	both	66
-M	column_width	21	both	60
-M	text_inset	22	both	2
-M	tab_glyph_size	23	cpp	7
-E	steps_per_row	0	both	12
-E	grid_rows	1	cpp	3
-E	grid_steps	2	both	36
-E	column_spacing	3	cpp	10
-E	grid_width	4	cpp	110
-E	first_column_x	5	cpp	9
-E	first_row_centre_y	6	cpp	18
-E	row_spacing	7	cpp	18
-E	step_glyph_half	8	cpp	2
-E	select_frame_size	9	cpp	9
-E	digit_width	10	cpp	3
-E	digit_height	11	cpp	5
-E	digit_offset_below_step	12	cpp	5
-E	measure_bar_height	13	cpp	13
-E	title_baseline_y	14	cpp	7
-E	header_line_x	15	cpp	4
-E	header_line_y	16	cpp	10
-E	header_line_width	17	cpp	120
-E	last_row_centre_y	18	cpp	54
-E	grid_bottom_y	19	cpp	63
+family	id	index	owners	cpp	expected
+M	screen_width	0	both	WIDTH	128
+M	screen_height	1	both	HEIGHT	64
+M	tab_count	2	both	TAB_COUNT	8
+M	tab_slot_width	3	both	TAB_SLOT_W	16
+M	tab_baseline_y	4	both	TAB_BASELINE_Y	63
+M	tab_top_y	5	cpp	TAB_TOP_Y	57
+M	tab_box_y	6	both	TAB_BOX_Y	56
+M	tab_box_height	7	both	TAB_BOX_H	8
+M	rule_y	8	both	RULE_Y	52
+M	rule_x	9	both	RULE_X	4
+M	rule_width	10	both	RULE_W	120
+M	headline_box_x	11	both	HEADLINE_BOX_X	2
+M	headline_box_y	12	both	HEADLINE_BOX_Y	1
+M	headline_box_width	13	both	HEADLINE_BOX_W	124
+M	headline_box_height	14	both	HEADLINE_BOX_H	10
+M	headline_baseline_y	15	cpp	HEADLINE_BASELINE_Y	8
+M	row_a_box_y	16	both	ROW_A_BOX_Y	14
+M	row_b_box_y	17	both	ROW_B_BOX_Y	22
+M	row_box_height	18	both	ROW_BOX_H	8
+M	column_left_x	19	both	COL_LEFT_X	2
+M	column_right_x	20	both	COL_RIGHT_X	66
+M	column_width	21	both	COL_W	60
+M	text_inset	22	both	TEXT_INSET	2
+M	tab_glyph_size	23	cpp	GLYPH_SIZE	7
+M	row_a_baseline_y	24	cpp	ROW_A_BASELINE_Y	21
+M	row_b_baseline_y	25	cpp	ROW_B_BASELINE_Y	29
+E	steps_per_row	0	both	PER_ROW	12
+E	grid_rows	1	cpp	GRID_ROWS	3
+E	grid_steps	2	both	GRID_STEPS	36
+E	column_spacing	3	cpp	COL_SPACING	10
+E	grid_width	4	cpp	GRID_WIDTH	110
+E	first_column_x	5	cpp	COL_X0	9
+E	first_row_centre_y	6	cpp	ROW_CY_0	18
+E	row_spacing	7	cpp	ROW_SPACING	18
+E	step_glyph_half	8	cpp	GLYPH_HALF	2
+E	select_frame_size	9	cpp	SELECT_SIZE	9
+E	digit_width	10	cpp	DIGIT_W	3
+E	digit_height	11	cpp	DIGIT_H	5
+E	digit_offset_below_step	12	cpp	DIGIT_DY	5
+E	measure_bar_height	13	cpp	BAR_HEIGHT	13
+E	measure_bar_half	14	cpp	BAR_HALF_H	6
+E	title_baseline_y	15	cpp	TITLE_BASELINE_Y	7
+E	header_line_x	16	cpp	HEADER_LINE_X	4
+E	header_line_y	17	cpp	HEADER_LINE_Y	10
+E	header_line_width	18	cpp	HEADER_LINE_W	120
+E	last_row_centre_y	19	cpp	LAST_ROW_CY	54
+E	grid_bottom_y	20	cpp	GRID_BOTTOM_Y	63

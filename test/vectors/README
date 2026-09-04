@@ -125,7 +125,7 @@ decides how a line is read, the `id` is never parsed, a needed column that holds
 ## Format
 
 ```text
-family	id	index	owners	expected
+family	id	index	owners	cpp	expected
 ```
 
 - `family` names the screen region. `M` is the main screen, `E` is the pattern
@@ -134,7 +134,17 @@ family	id	index	owners	expected
 - `index` selects the constant inside the family. It is the reader's only
   discriminator besides the family.
 - `owners` says **which languages hold the fact**: `both`, `cpp` or `ts`.
+- `cpp` is the **exact C++ identifier**, or `-` when no C++ constant holds the
+  fact. A line owned by `cpp` must name one.
 - `expected` is the value.
+
+## Why the `cpp` column exists
+
+`tools/run-geometry-coverage.py` extracts the identifiers that the layout
+`static_assert` read, and it requires the file to name each one. This column is
+what makes that check **mechanical and free of any copy**: the tool matches the
+identifier the header uses against the identifier the file states, so no mapping
+table exists to fall out of date.
 
 ## Why `owners` exists
 
@@ -173,3 +183,35 @@ Nine, and each was exercised and seen red on 2026-09-04, naming its own cause:
 an absent file, an empty file, zero cases, a line with the wrong field count, an
 unknown family, a false literal, a duplicated id, an `index` the reader does not
 know, and a constant the reader knows that the file does not name.
+
+
+## The gap the `static_assert` leave, and the tool that closes it
+
+⚠️ **A `static_assert` runs at compile time. It cannot read this file.** The two
+mechanisms are complementary, and neither replaces the other.
+
+The `static_assert` of `PatternScreen.h` and `MainScreen.h` guard **relations**:
+two rows must not overlap, the second field row must clear the rule, the tab bar
+must fit in one 8-pixel band. Those are **inequalities, so they have slack**: a
+value can move, keep every relation true, and go unnoticed.
+
+This file guards **values**. Together they are tight; alone, each leaves a hole.
+
+`tools/run-geometry-coverage.py` closes the hole between them. It extracts the
+identifiers the `static_assert` read and requires this file to name each one.
+**Measured on 2026-09-04: 25 identifiers read, 25 named.** Two were missing when
+the check was written — `BAR_HALF_H` and `ROW_B_BASELINE_Y` — and that is what
+the tool exists to catch.
+
+It runs inside `tools/run-all-tests.sh`, deliberately. A check that lives outside
+the routine pass rots: the gesture probe was red for days and nobody knew.
+
+Its counter-proofs, each exercised and seen red on 2026-09-04: a constant removed
+from the file (exit 1, and it names the constant and its header), a new
+`static_assert` on a constant the file does not name (exit 1), an absent file
+(exit 2), a file with no case (exit 2), and a broken extraction that finds zero
+`static_assert` (exit 2). ⚠️ **A check that cannot be evaluated exits 2 and counts
+as a failure**, on the same principle as a suite that loads zero vectors.
+
+And the `static_assert` themselves were seen to fire: `ROW_B_BOX_Y` moved from 22
+to 48 makes the compilation fail on two of them, each printing its own sentence.

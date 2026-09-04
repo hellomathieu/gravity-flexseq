@@ -43,6 +43,7 @@ ts_status="skip"
 tc_status="skip"
 lib_status="skip"
 img_status="skip"
+geo_status="skip"
 ad_status="skip"
 col_status="skip"
 
@@ -122,6 +123,18 @@ if [ "$RUN_CPP" = "1" ]; then
   echo
 fi
 
+if [ "$RUN_CPP" = "1" ]; then
+  echo "=========================================="
+  echo "  Couverture de la geometrie d'ecran"
+  echo "=========================================="
+  if "$REPO_ROOT/tools/run-geometry-coverage.py"; then
+    geo_status="OK"
+  else
+    geo_status="ECHEC"
+  fi
+  echo
+fi
+
 if [ "$RUN_LIB" = "1" ]; then
   echo "=========================================="
   echo "  Caracterisation libGravity"
@@ -139,6 +152,7 @@ printf "  Collecte des tests (D5)    : %s\n" "$col_status"
 printf "  C++ acceptation (native)   : %s\n" "$cpp_status"
 printf "  Adaptateur d'entrees       : %s\n" "$ad_status"
 printf "  Image EEPROM generee       : %s\n" "$img_status"
+printf "  Geometrie d'ecran (ADR 12) : %s\n" "$geo_status"
 printf "  TypeScript (sim/)          : %s\n" "$ts_status"
 printf "  Typage TypeScript          : %s\n" "$tc_status"
 printf "  libGravity caracterisation : %s\n" "$lib_status"
@@ -148,6 +162,7 @@ echo "============================================"
 if [ "$col_status" = "ECHEC" ] || [ "$cpp_status" = "ECHEC" ] \
    || [ "$ad_status" = "ECHEC" ] || [ "$ts_status" = "ECHEC" ] \
    || [ "$tc_status" = "ECHEC" ] || [ "$img_status" = "ECHEC" ] \
+   || [ "$geo_status" = "ECHEC" ] \
    || [ "$lib_status" = "ECHEC" ]; then
   exit 1
 fi

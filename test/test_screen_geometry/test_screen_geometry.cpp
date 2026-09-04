@@ -27,6 +27,7 @@ struct Vector {
     std::string id;
     int index;
     bool ownedByCpp;
+    std::string cppName;
     int expected;
 };
 
@@ -67,14 +68,14 @@ bool load() {
             continue;
         }
         std::istringstream ls(line);
-        std::string cell[5];
+        std::string cell[6];
         size_t count = 0;
-        while (count < 5 && std::getline(ls, cell[count], '\t')) {
+        while (count < 6 && std::getline(ls, cell[count], '\t')) {
             ++count;
         }
         std::string extra;
-        if (count != 5 || std::getline(ls, extra, '\t')) {
-            loadError = "line does not hold exactly five fields: " + line;
+        if (count != 6 || std::getline(ls, extra, '\t')) {
+            loadError = "line does not hold exactly six fields: " + line;
             return false;
         }
         Vector v;
@@ -110,7 +111,12 @@ bool load() {
             loadError = "owners is not both, cpp or ts: " + line;
             return false;
         }
-        if (!wholeNumber(cell[4], v.expected)) {
+        v.cppName = cell[4];
+        if (v.ownedByCpp && (v.cppName.empty() || v.cppName == "-")) {
+            loadError = "a line owned by cpp must name its C++ identifier: " + line;
+            return false;
+        }
+        if (!wholeNumber(cell[5], v.expected)) {
             loadError = "the expected value is a needed column: " + line;
             return false;
         }
@@ -152,6 +158,8 @@ bool production(char family, int index, int& out) {
             case 21: out = ms::COL_W; return true;
             case 22: out = ms::TEXT_INSET; return true;
             case 23: out = ms::GLYPH_SIZE; return true;
+            case 24: out = ms::ROW_A_BASELINE_Y; return true;
+            case 25: out = ms::ROW_B_BASELINE_Y; return true;
             default: return false;
         }
     }
@@ -171,12 +179,13 @@ bool production(char family, int index, int& out) {
             case 11: out = screen::DIGIT_H; return true;
             case 12: out = screen::DIGIT_DY; return true;
             case 13: out = screen::BAR_HEIGHT; return true;
-            case 14: out = screen::TITLE_BASELINE_Y; return true;
-            case 15: out = screen::HEADER_LINE_X; return true;
-            case 16: out = screen::HEADER_LINE_Y; return true;
-            case 17: out = screen::HEADER_LINE_W; return true;
-            case 18: out = screen::LAST_ROW_CY; return true;
-            case 19: out = screen::GRID_BOTTOM_Y; return true;
+            case 14: out = screen::BAR_HALF_H; return true;
+            case 15: out = screen::TITLE_BASELINE_Y; return true;
+            case 16: out = screen::HEADER_LINE_X; return true;
+            case 17: out = screen::HEADER_LINE_Y; return true;
+            case 18: out = screen::HEADER_LINE_W; return true;
+            case 19: out = screen::LAST_ROW_CY; return true;
+            case 20: out = screen::GRID_BOTTOM_Y; return true;
             default: return false;
         }
     }
