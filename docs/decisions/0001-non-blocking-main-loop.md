@@ -94,6 +94,23 @@ that copy: `PatternScreenModel` (8 bytes) **plus a copy of the `Pattern`**
 is shared and editable during playback (PRD §6.3): without it, two bands of the
 same frame could show different content.
 
+**The renderer never DEDUCES, and the model carries every decision.** Amended
+2026-09-04, when the main screen took the shape of the original. The renderer of
+the main screen must know which parameter is the principal one, and which of the
+two layouts to draw. Neither is computed there:
+
+- `UiController::mainField()` is the single rule that chooses the principal
+  parameter. `mainScreenModelOf()` translates its answer into `mainParameter`, a
+  value of the renderer's own vocabulary, in **one** place;
+- `UiController::isLegacyModeTab()` is the single rule that says whether the mode
+  takes the three lines of the original. It arrives as `legacyLayout`.
+
+The model therefore holds plain integers, and the renderer includes no header of
+the interface. Two reasons, and the second is the one that matters: a rule
+duplicated in the renderer could disagree with the interface, and a rule that
+lived in `main.cpp` was reachable by no test. `mainScreenModelOf()` exists so
+that the filling of the model is **testable**.
+
 ## Consequences
 
 - Worst-case blocking goes from the whole frame down to **one band**. A frame

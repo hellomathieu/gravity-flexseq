@@ -254,6 +254,25 @@ the range is crossed detent by detent. 20 to 200 is 180 detents; 30 to 300 is 27
 `A` and `B` for a pattern name, then `E`, `X`, `T`, `M`, `I` and `D` — because the
 clock tab writes `EXT` and `MIDI` large in place of the number (`UI.ino:81-86`).
 
+## Where the layout of the channel tab is read in the original — 2026-09-04
+
+The lines of the original are not invented. Each part of the layout FlexSeq
+rebuilds has one place in `Gravity.ino` and its companions:
+
+| Part of the layout | Source in the original |
+|---|---|
+| the labels of the three lines | `UI.ino:136` |
+| the values of the three lines | `UI.ino:180` |
+| the baselines of the three lines | `UI.ino:126` |
+| the value of the main parameter, large | `UI.ino:225` |
+| the label under the main parameter | `UI.ino:200` |
+| the three modes and their names | `UI.ino:126,145-150` |
+| the destinations of `MOD`, internal clock only | `UI.ino:33,57-62` |
+
+These references belonged to comments in `include/flexseq/MainScreen.h` until
+2026-09-04. They live here now, because a code file carries no comment in this
+repository and a reference lost with its comment is a documentary regression.
+
 ## What the two fonts of the original really cost — measured 2026-09-04
 
 The original draws with **two** fonts: `stkL` for the main parameter, and

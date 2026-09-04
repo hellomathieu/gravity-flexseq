@@ -57,7 +57,7 @@ below.
 | 26 | **FlexSeq drops features and pages of the original firmware, and no rule caught it.** The owner restated the project rule on 2026-08-23: **keep every original feature and every original page; only the SEQ mode evolves.** Three omissions are already measured -- the three channel modes (found 2026-08-22, PRD §4.2), the fields of the BPM tab (line 27), and the navigation (line 28). The class of defect is the same each time: a page was rebuilt from a design instead of from the original | **high** | **an inventory, original screen by original screen and field by field**, is the only thing that closes this. Lot 15 of `WORKPLAN.md`. Each gap then goes to a lot or becomes an explicit decision. Until the inventory exists, no one can say how many omissions are left |
 | 27 | **The BPM tab exposes ONE field where the original has four.** The original draws `MODE` (INT / EXT / MIDI), `MOD` (CV1 / CV2), `RANGE` and `PPQN`, and the number of fields changes with the mode (`UI.ino`, `displayTab == 0`). FlexSeq draws `SRC` alone, with five values that fuse the source and the PPQN. `RANGE` -- the tempo modulation depth, 1 to 5, shown x10 -- is in PRD §10.1 but has no field | **high** | lot 16 of `WORKPLAN.md`. The fusion of source and PPQN is a divergence that was never decided: the inventory of line 26 must state whether FlexSeq keeps it or restores the original split |
 | 28 | **The navigation lacks two elements of the original, and one glyph is misleading.** The original tab bar carries 7 tabs plus a **separate status glyph** at x=121: `t` when stopped, `r` when playing, drawn only when the clock is internal. FlexSeq has 8 NAVIGABLE tabs, and the eighth draws `drawBox(cx - 2, cy - 2, 5, 5)` -- a filled 5x5 square. The owner read it as a Play/Stop indicator on the module, which is what a filled square looks like | **high** | lot 16. Target agreed 2026-08-23: BPM, channels 1 to 6, **global config with a gear icon**, then the **Play/Stop indicator at the far right, not navigable**. That is 8 tabs plus one indicator |
-| 29 | **One font for everything, so no parameter reads as the main one.** The original uses its `velvetscreen` font and draws the main parameter large. FlexSeq calls `setFont(u8g2_font_5x7_tr)` once in `main.cpp` and never changes it, so the pattern name and the tempo have the size of a label. `logisoso26` was removed to save 808 B of Flash, and the ten custom glyphs meant to replace it are **designed, not implemented** (PRD §12.1, ~500 B estimated against 2646) | medium | **the arbitration is decided (2026-08-23, owner): FlexSeq keeps the design of the original pages, with the glyphs and the fonts already there; a font too heavy for the Flash is REDRAWN by us, never dropped.** So what is left is work, not a decision: draw the glyphs. The Flash budget frames it -- **534 B** stay under the guard as of 2026-08-23, and the ten glyphs are estimated at ~500 B against 2646 for `logisoso26`. **And part of the work is not to draw at all**: `GravityFW` and FlexSeq are both **GPLv3**, so the original's `velvetscreen` glyphs may be reused, attribution being the only duty. `tools/decode-velvetscreen.py` decodes them one by one -- the clock (`w`), Play (`r`) and Stop (`t`) are the three the navigation needs |
+| 29 | **One font for everything, so no parameter reads as the main one.** The original uses its `velvetscreen` font and draws the main parameter large. FlexSeq calls `setFont(u8g2_font_5x7_tr)` once in `main.cpp` and never changes it, so the pattern name and the tempo have the size of a label. `logisoso26` was removed to save 808 B of Flash, and the ten custom glyphs meant to replace it are **designed, not implemented** (PRD §12.1, ~500 B estimated against 2646) | medium | **the arbitration is decided (2026-08-23, owner): FlexSeq keeps the design of the original pages, with the glyphs and the fonts already there; a font too heavy for the Flash is REDRAWN by us, never dropped.** So what is left is work, not a decision: draw the glyphs. The Flash budget frames it -- **534 B** stay under the guard as of 2026-08-23, and the ten glyphs are estimated at ~500 B against 2646 for `logisoso26`. **And part of the work is not to draw at all**: `GravityFW` and FlexSeq are both **GPLv3**, so the original's `velvetscreen` glyphs may be reused, attribution being the only duty. `tools/decode-original-font.py` decodes them one by one -- the clock (`w`), Play (`r`) and Stop (`t`) are the three the navigation needs |
 | 30 | **A fast turn lags on the module, and the cause read from the code is NOT the cause.** libGravity multiplies the accumulated movement by 3 below 16 ms and by 2 below 32 ms, and `oneStep()` collapses any magnitude to 1, so reading the code says detents are lost. **Measured on the module 2026-08-23** with `env:encoderprobe`: every one of 24 callbacks carried `\|change\| = 1`, none carried 2, 3, or more. The acceleration needs more than 62 detents per second for the factor 3, and more than 31 for the factor 2 -- rates a hand does not reach. The main-loop pass measured 19 ms at worst, with none at 32 ms or above, so detents do not accumulate between two polls either | medium | **the code path is closed, the symptom is open.** ADR 0003 records the decision: FlexSeq does not try to recover a detent count. What is left is whether libGravity loses detents **upstream**, in its quadrature decoding or its interrupt -- it carries no debounce and says so. The measurement that would settle it needs a KNOWN physical amount of rotation, which hand-counted detents do not give: two attempts on 2026-08-23 disagreed even in direction (9 counted for 13 movements, then 10 counted for 6). The encoder has no end stop and the schematic names no part (`Device:RotaryEncoder_Switch`, no manufacturer reference, no datasheet), so the detents per revolution are not documented anywhere. **Left aside by the owner on 2026-08-23** for want of a reliable measurement  **Seen again on the module on 2026-08-23, after both corrections**: the tempo sometimes sticks on a value while the encoder keeps turning, then moves on. It therefore **survives** the deferred rate change and the new gesture map, and it shows best on the tempo, where one detent is exactly 1 BPM. Left aside by the owner |
 | 37 | **`MAX_SKIP_CHANCE` is 10 in the code and 9 in the PRD.** PRD §16 capped the skip chance at **9** on 2026-08-23, which is the 90 % the original shows and the value its interface clamps to (`Interactions.ino:162`). `include/flexseq/ChannelMode.h:15` still declares `MAX_SKIP_CHANCE = 10`. The original's two ceilings are both real and they govern different quantities: the value the user sets is clamped to 9, the value **plus its CV modulation** is clamped to 10 in the generator. FlexSeq's constant governs the value the user sets, so the PRD wins | medium | **lot 16**, by the owner's decision of 2026-08-23. The contradiction is identified, not reconciled. It became reachable on 2026-08-23: lot 19 put the skip chance on SHIFT plus a rotation from the tab bar, so the gesture currently offers eleven steps instead of ten |
 | 31 | **SHIFT plus a rotation does nothing on the tab bar, where the original changes the tab's MAIN parameter.** The owner's gesture card for the original reads: hold shift and rotate to change the selected parameter, *or the main parameter if you are in the tabs menu*. `handleTabBar()` handles `EVENT_ROTATE` and `EVENT_PRESS` only. This is what made SHIFT look dead on the module: on the tab bar it is | medium | **lot 19**, with lot 15 for the inventory. The owner also **moved the ratchet gesture onto an original one on 2026-08-23**: SHIFT plus rotation in EDIT, on a step that is selected **and active**, sets the step's ratchet. `Press plus rotation` is **abandoned**, so `EVENT_ROTATE_HELD` loses its only client. Two decisions belong to the audit: where the **channel change in EDIT** goes, since SHIFT plus rotation is now taken, and whether SHIFT plus a long press in EDIT (which **clears the pattern**) is on the original's card at all |
@@ -139,7 +139,7 @@ reopens them without knowing what has already been established or costed.
 | 7 | 15.3 ms peak on the full refresh, 1 frame in 16.0 | **design property** | ADR 0001. Both ways of getting rid of it are costed below; do not reopen without a better number |
 | 8 | Mixed state during a transfer, ~4.6 ms | **arithmetically impossible to fix** | the only remedy is a full 1024 B buffer, against 264 B available. See below |
 | 9 | Wokwi unverified: `"rotate"` and the wiring | **accepted 2026-08-21** (decision) | off the critical path since `run-screen-dump.sh` validates the render. `env:wokwi` stays useful: it is that probe's target, under simavr, unrelated to Wokwi |
-| 10 | `decode-velvetscreen.py` requires the neighbouring `GravityFW` clone | **acceptable** | single-use tool; `--src`, `$GRAVITY_FW_INO`, and an explicit error carrying the clone URL |
+| 10 | `decode-original-font.py` requires the neighbouring `GravityFW` clone | **acceptable** | single-use tool; `--src`, `$GRAVITY_FW_INO`, and an explicit error carrying the clone URL |
 | 11 | `CLAUDE.md` survives no `git clone` | **closed by decision** (2026-08-19) | the owner's explicit decision, deliberate non-versioning |
 | 13 | The MIDI expander's `PULSE` stays silent | **observation, not a defect** | `main.cpp` does not drive `gravity.pulse`: the expander is not in the path yet (PRD §16) |
 | 16 | `wokwi_main.cpp` was the last active caller of `gravity.Process()`, the function with the uninitialized loop index | **closed 2026-08-21** | commit `9dda448` calls the pieces instead, exactly as `main.cpp` does. No active caller remains; `run-screen-dump.sh` stays green (24/24 steps, rotation 180), so the render harness no longer runs undefined behaviour. The two calls in `test_gravity.cpp` stay -- they characterize the pinned dependency |
@@ -820,3 +820,84 @@ a derived budget, and it is why criterion C5 exists apart: it reads the timer
 witness and refuses a window that still sits inside the freeze. A budget that
 widens with the uncertainty must be paired with a guard on the conditions of the
 measurement.
+
+**A count of 256 held in a `uint8_t` is ZERO, so a bound must be computed in 16
+bits.** The `OFFSET` field of a channel bounds the offset by `ticksPerStep - 1`,
+itself capped by `MAX_OFFSET = 255`. A first form computed that bound in a
+`uint8_t`. At SUBDIV `/2` a step lasts 192 ticks and the form worked; a step of
+256 ticks or more made the bound wrap to 0 and emptied the whole range, with no
+warning from the compiler. The bound is now computed in `uint16_t` and `int16_t`.
+The new field test found it on its first run, which is why the range is asserted
+against a literal and not against the constant. The same trap waits for any
+count, length or span that can reach 256.
+
+**A bound duplicated between the interface and the engine costs Flash and proves
+nothing.** Measured 2026-09-04, during lot 11. The `OFFSET` field computed its
+own upper bound — `ticksPerStep - 1`, capped by `MAX_OFFSET` — before calling
+`setOffset()`. The engine already applies exactly those two clamps in
+`setOffset()` and in `clampOffset()`. Removing the bound from the interface left
+**67 tests out of 67 green** and returned **56 bytes of Flash**. The duplicated
+bound was therefore an equivalent mutant in waiting: no test could ever have
+distinguished it from its absence.
+
+⚠️ **The two tests that remain are NOT redundant, and each names its guard.** A
+counter-proof was run on both: `ticksPerStep - 1` changed to `ticksPerStep`
+reddens the `/1` case only (`Expected 95 Was 96`), and dropping the `MAX_OFFSET`
+cap reddens the `/4` case only (`Expected 255 Was 144`). Before the simplification
+the same tests bit a **different** defect — a bound truncated to 8 bits, which
+made the range read 127. The rule: when a guard moves, re-run the counter-proof,
+because a test can keep passing while it stops guarding what it used to.
+
+**THE SAME RULE BROKE A SECOND TIME, and this time it hid five defects at once.**
+The rule "a measurement tool reads a constant of the domain, it never keeps a
+copy" was written on 2026-08-31, after the gesture probe looped its step cursor
+on 24 while the grid held 36. On 2026-09-04, lot 11 added `MODE` as the first
+field of a channel tab, and the gesture probe held **sixteen** copies of a field
+index, as literal detent counts: one detent to reach `LENGTH`, two to reach
+`SUBDIV`, four to reach `EDIT PATTERN`. Every one of them moved by one.
+
+The probe then reported **six defects of the firmware** where the firmware was
+correct. Two of the six were the harness editing the wrong field, and the four
+others were consequences downstream. The sixteen sites now read
+`UiController::SEQ_FIELD_INDEX_*`, and a test binds those five constants to
+`fieldAt()` so that a future reordering cannot separate them.
+
+⚠️ **Three sites had to STAY as they were, and a bulk replacement would have
+broken them**: two move the step cursor inside `EDIT PATTERN`, which is not a
+field at all, and one moves **relatively** from `LENGTH` to `SUBDIV`, which is
+still one detent after the insertion. The classification was made site by site,
+from the burst limit each one passes and from the label it prints.
+
+**The lesson is about the guard, not the copy.** A test did exist on the harness
+constant — `test_burst_policy` — and it stayed green, because it compared
+`limitForFieldIndex(1)` against the same literal `1` the harness held. The two
+agreed with each other and both disagreed with the domain. This is the defect of
+2026-08-23 again, in a new place: an assertion must not compare against the
+constant it tests.
+
+**A DEFECT OF THE DECODER PRETENDED TO BE A DEFECT OF THE FONT, and the
+workaround happened to be right.** `tools/decode-original-font.py` read the
+`xoff` and `yoff` of a glyph only when the glyph had pixels. u8g2 reads `x`, `y`
+and `delta_x` for **every** glyph, blank ones included — `u8g2_font.c` lines 590
+to 625, with no guard around the three signed reads. The space of `velvetscreen`
+therefore came out with an advance of **minus six**, which was in fact its
+`xoff`.
+
+Two things followed from that one line, and both were wrong in the same
+direction:
+
+- `sim/src/sim/oledFont.ts` forced `SPACE_ADVANCE = 3` to repair a rendering the
+  owner saw pulled six pixels back. The corrected decoder now reads **3** from
+  the data. The workaround was right and its reason was not;
+- a real fear was raised and is now **refuted**: that the firmware itself drew
+  `SKIP CHANCE` with its two words overlapping. It does not. u8g2 advances by 3
+  on that space, exactly like the atlas.
+
+**The tracking of one pixel per character is REMOVED, and the data says why.**
+`textPixels` and `textWidth` added one pixel after every glyph. The advances of
+the atlas already carry the separation — `A` is 4 wide for an advance of 5, `I`
+is 1 wide for an advance of 2 — so the pixel was counted twice and every
+TypeScript width was too large by the length of the string. ⚠️ **No test caught
+it**, because no test asserted an absolute width: the removal left 595 tests
+green. That is a hole in the coverage, not a proof, and it closes when the
+TypeScript view is rebuilt on the shared geometry.

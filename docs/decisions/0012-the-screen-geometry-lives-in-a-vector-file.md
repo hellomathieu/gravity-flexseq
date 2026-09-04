@@ -72,6 +72,19 @@ counter-proofs. The mockups become maintained code instead of a throwaway file.
 The exact line format and the families are not fixed by this ADR: it fixes that
 one file feeds both languages, and that the file is the only source.
 
+### The baseline convention of u8g2, which both languages must share
+
+Added 2026-09-04. u8g2 places the ink of a glyph **entirely above the baseline**:
+a glyph of height `h` drawn at the baseline `b` occupies the rows `b - h` to
+`b - 1`, and the row `b` itself stays empty. A selection box that leaves one
+pixel of air on each side therefore starts at `b - h - 1` and is `h + 2` tall.
+
+This is not a detail of style. A box centred on `b` instead of on the ink is off
+by two pixels on one side and one on the other, which is exactly the error the
+owner saw in the mockups on 2026-09-03. The TypeScript view must draw from the
+same convention, or the two languages will disagree on every box while both
+reading the same geometry file.
+
 ## Alternatives set aside
 
 **Mirror the C++ renderers in TypeScript.** Refused. It duplicates code that
