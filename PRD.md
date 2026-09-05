@@ -406,6 +406,28 @@ Destinations: `none / PATTERN / LENGTH / RESET / STEP`. The choice is **explicit
 
 **What this restores.** `docs/original-conformity.md` recorded `MOD` as an omission of FlexSeq. Routing a CV to the subdivision or to the skip chance was impossible, because neither was in the destination list. This decision puts the feature of the original back.
 
+✅ **THE `MOD` FIELD OF A SEQ CHANNEL HOLDS ELEVEN VALUES, decided by the owner on 2026-09-05.** One field carries the routing of both inputs, and its value names the destinations in order: the first takes `CV1`, the second takes `CV2`.
+
+\| Value \| `CV1` goes to \| `CV2` goes to \|
+\|---\|---\|---\|
+\| `OFF` \| nothing \| nothing \|
+\| `PAT` \| `PATTERN` \| nothing \|
+\| `LEN` \| `LENGTH` \| nothing \|
+\| `RST` \| `RESET` \| nothing \|
+\| `STP` \| `STEP` \| nothing \|
+\| `P+L` \| `PATTERN` \| `LENGTH` \|
+\| `P+R` \| `PATTERN` \| `RESET` \|
+\| `P+S` \| `PATTERN` \| `STEP` \|
+\| `L+R` \| `LENGTH` \| `RESET` \|
+\| `L+S` \| `LENGTH` \| `STEP` \|
+\| `R+S` \| `RESET` \| `STEP` \|
+
+**The list is complete for the pairs**: four destinations taken two at a time give six, and the six are there.
+
+⚠️ **The ORDER is fixed, and that is a deliberate reduction.** The reverse of a pair is not offered: `L+P` does not exist, only `P+L`. Offering both would give twelve pairs instead of six. **The consequence is real and it is accepted**: a user who wants `CV2` to drive the pattern must move the patch cable, and a single destination always takes `CV1`.
+
+⚠️ **The two new destinations of the table above — `SUBDIVISION` in `CLOCK` and `SKIP CHANCE` in `RANDOM` — are NOT in lot 13, by a decision of the owner on 2026-09-05.** Lot 13 wires the field on the four destinations that already exist and are measured on the pins. The two others need a quantisation rule that §10.4 does not carry: its grid is dimensioned from the sixteen patterns, while the subdivision is an index into a list of twenty-five and the skip chance runs from 0 to 10. A `CLOCK` or a `RANDOM` tab therefore keeps `MOD: OFF`, and that stays true.
+
 ⚠️ **The mechanism does NOT exist yet, and lot 11 does not build it.** Lot 11 draws the `MOD:` line, and it reads `OFF`, which is true: no channel can be in any other state until the modulation of the subdivision and of the skip chance is implemented. That belongs to the CV routing lot, 13. The storage question — which code carries "the main parameter of the mode" in bytes 7 and 8 of the channel record — is settled there and not here. `NONE` staying 0 means any earlier image still reads without migration.
 
 ⚠️ **The contradiction this closes** was line 88 of `docs/open-risks.md`, opened 2026-09-04: §12.1 gave a CLOCK tab a `MOD:` line while §10.2 offered no destination it could point at.
