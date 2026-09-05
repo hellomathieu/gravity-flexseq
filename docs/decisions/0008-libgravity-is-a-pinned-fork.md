@@ -68,7 +68,8 @@ The fork licence stays **MIT**, with Adam Wonak's copyright intact.
   behaviour of another consumer **without that consumer asking for it**;
 - a musical behaviour. uClock stays as it is. ⚠️ **Amended on 2026-09-03**, see
   below: a change that measurement proves equivalent is not a change of
-  behaviour.
+  behaviour. ⚠️ **Amended again on 2026-09-05**, see below: a defect that
+  produces a musical behaviour nobody asked for is not an intended behaviour.
 
 ⚠️ **The second line said "an API" until 2026-08-25, and that was too broad.**
 The owner asked why an improvement offered upstream should be forbidden, and the
@@ -154,6 +155,93 @@ FlexSeq can work around from its adapter layer stays out of the fork.
 host. A `float` there is IEEE 32 bits, as on the AVR, but this measurement does
 not verify the rounding of the AVR division. Condition 5 covers that gap.
 
+### Amendment of 2026-09-05 — a defect that produces an unwanted musical behaviour
+
+The charter also permits this: **repair a defect of the dependency that produces
+a musical behaviour nobody asked for.**
+
+**The line this amends is "a musical behaviour. uClock stays as it is."** That
+line protects an **intended** behaviour. It was never meant to protect a defect.
+The distinction was not written. ⚠️ **The fork repaired such a defect on
+2026-09-03, before this amendment existed**, and this section closes that gap.
+
+**The case that produced it.** The external clock froze the module for 2.5 to 60
+seconds after the user selected it. The delay grew as the input rate fell.
+`handleTimerInt()` ran its external sync branch with no guard on `clock_state`,
+so the branch ran before the first pulse. `ext_interval` was still 0, so a
+subtraction on a `uint32_t` underflowed. `freqToBpm()` of that value is almost
+zero. `constrainBpm()` clamped it to `MIN_BPM`, and the timer programmed an
+output tick of 625 milliseconds. One quarter-note step then lasted 60 seconds.
+
+**No consumer can want that behaviour.** The interface promises a clock that
+follows its source. The freeze is the absence of that promise, and not a choice
+of the author. Entry 12 of `docs/upstream-defects.md` carries the full account.
+
+**Six conditions apply to such a repair, and all are mandatory:**
+
+1. the defect is entered in `docs/upstream-defects.md` **before** the repair,
+   with its mechanism read in the source of the dependency;
+2. the mechanism is established on the code, and not inferred from the symptom.
+   A symptom names a suspect, never a cause;
+3. the wrong behaviour is measured before the repair. The repaired behaviour is
+   measured after, by the same harness;
+4. a proof course guards the repair in the routine pass. Without one, nothing
+   detects the return of the defect;
+5. the repair stays minimal. It restores the behaviour the interface already
+   promises, and it adds no feature;
+6. the pin bump is a re-audit, by the list this ADR gives.
+
+**What this amendment does NOT permit:**
+
+- a change of an **intended** musical behaviour. The shape of the clock, the
+  swing and the ratchets stay as the dependency writes them;
+- a repair of one of the seven audited anomalies. They stay, and 68 assertions
+  describe them;
+- a repair that FlexSeq can work around from its adapter layer. That work belongs
+  to `InputAdapter`, and ADR 0002 says so.
+
+**The other forbidden line stays satisfied.** The charter forbids a change that
+alters the behaviour of another consumer **without that consumer asking for it**.
+A consumer asks for the behaviour the interface promises. It never asks for the
+freeze, so the repair gives every consumer what it already expected.
+
+**The measurement of the case, for the record.** The witness is `EXT_TRACE_MS` of
+the trigger probe. It reads `OCR1A` and the prescaler of `TCCR1B`, so it reports
+the period the timer really applies.
+
+- **before**, at input PPQN 24: 5208 microseconds at 20 ms, **624992 at 380 ms**,
+  and 5198 at 2880 ms. The prediction for PPQN 2 was 48 times 625 ms, so 30
+  seconds. The measurement gave **30900 ms**, against a start at 900 ms;
+- **after**: the tick stays between 5205 and 5208 microseconds for the whole run.
+  The four input rates play the step within **0.01 %** of the expected duration;
+- **the repair**: the sync branch now waits for `ext_clock_tick` to be non-zero.
+  That is the condition under which `ext_interval` carries a measured value.
+  **One line, 26 bytes of Flash**, and the RAM does not move.
+
+**The repair also unblocked the test coverage.** The simulated time of the
+external courses falls from 183 to 87 seconds. The four input rates and the MIDI
+course now run in the routine pass of `run-trigger-probe.sh`.
+
+⚠️ **A limit of the proof, named.** The repair is measured in simulation, on the
+simulated pins. The project records **no measurement of it on the module**. The
+proof covers the firmware and the dependency. It does not cover the wiring of the
+external clock jack.
+
+⚠️ **The repair is not yet offered upstream.** The "Per commit" rule below asks
+for that offer, and `docs/upstream-defects.md` entry 12 carries its state.
+
+⚠️ **The repair of 2026-09-03 does not meet all six conditions, and the record
+says which.** The conditions govern the repairs that come after this amendment.
+For the one that came before it:
+
+- **conditions 2 to 5 are met**, and the record shows it. The mechanism is read
+  in the source. The two measurements come from the same harness. The course
+  `extclock` runs in the routine pass. The repair is one line;
+- **condition 1 is not established.** The entry and the repair belong to the same
+  day, and no record fixes their order;
+- **condition 6 is met in part.** The gates and the memory are recorded. The
+  comparison of the resolved tree to the archive of the commit is not.
+
 ### Per commit
 
 One correction per commit. Each commit names the entry of
@@ -200,7 +288,8 @@ find it.
 **The fork must disappear.** Every correction accepted upstream brings that
 closer. The fork is a working tool, not a divergence to maintain.
 
-**The fork carries one repair, and it is additive.** `LIBGRAVITY_DISPLAY_TYPE`
+**The fork carries THREE changes, and only the first is additive.** ⚠️ **This
+paragraph said "one repair" until 2026-09-05.** `LIBGRAVITY_DISPLAY_TYPE`
 makes the display transport selectable, with the previous class as the default.
 The reason is measured: the SSD1306 is write only, libGravity never reads from
 the bus, and the Arduino Wire transport it forces brings a bidirectional,
@@ -212,6 +301,12 @@ polled transfer avoids one interrupt entry and exit per byte.
 The choice stays opt-in on purpose. Two drivers cannot share the TWI
 peripheral, so a lighter transport enabled by default would break a consumer
 that also reads an I2C sensor through Wire.
+
+**The two other changes arrived on 2026-09-03.** `3254fc3` replaces the
+floating-point tempo computation of uClock, under the amendment of 2026-09-03.
+`c2ec8ab` repairs the freeze of the external clock, under the amendment of
+2026-09-05. Neither one is additive, and each one carries its own conditions
+above.
 
 **The audited base moved on 2026-08-24**, from `9be88be1f4` to `5c0c34f`, the
 fork head. The whole compiled surface of the move is seven added lines in
