@@ -24,6 +24,7 @@ static const uint8_t DIAGNOSTIC_MEASURES_THE_POLICY = burst::NO_EMPIRICAL_LIMIT;
 #include <flexseq/MainScreen.h>
 #include <flexseq/PatternScreen.h>
 #include <flexseq/FactoryPatterns.h>
+#include <flexseq/ChannelMode.h>
 #include <flexseq/Persistence.h>
 #include <flexseq/Subdiv.h>
 
@@ -931,6 +932,24 @@ static void backToBar(avr_t* avr)
     for (int i = 0; i < 3; ++i) pressFor(avr, (double)LONG_PRESS_MS);
 }
 
+// EDIT n'existe que sur un canal en SEQ : c'est une decision du proprietaire,
+// PRD 12.1. Le champ MODE ecrete sur CHANNEL_MODE_COUNT, donc tourner de ce
+// nombre de crans depuis n'importe quel mode arrive sur SEQ, et le geste est
+// idempotent sur un canal deja en SEQ.
+static void setChannelModeToSeq(avr_t* avr, int tab)
+{
+    backToBar(avr);
+    alignTab(avr, tab);
+    const uint32_t avant = screenSignature();
+    pressFor(avr, (double)PRESS_MS);
+    pressFor(avr, (double)PRESS_MS);
+    rotate(avr, (int)flexseq::CHANNEL_MODE_COUNT, 1);
+    pressFor(avr, (double)PRESS_MS);
+    backToBar(avr);
+    printf("mode_seq           onglet %d signature %08x %08x\n",
+           tab, avant, screenSignature());
+}
+
 static void gotoConfigField(avr_t* avr, uint8_t index)
 {
     rotate(avr, flexseq::UiController::SEQ_FIELD_INDEX_CONFIG, 1);
@@ -1679,7 +1698,7 @@ int main(int argc, char **argv)
         printf("rD_x24             cadence %u distances %u retenues %u ecarts %u twi %u\n",
                cad, gaps, kept, ecarts, g_twi_bytes - marque);
 
-        pressFor(avr, (double)LONG_PRESS_MS);
+        setChannelModeToSeq(avr, ongletR11);
         const int creneauxAvant = tabBandSlotsWithInk();
         marque = g_twi_bytes;
         pressFor(avr, (double)PRESS_MS);
@@ -2005,6 +2024,7 @@ int main(int argc, char **argv)
         printf("\n");
 
         uint32_t marque = g_twi_bytes;
+        setChannelModeToSeq(avr, ongletInstances);
         alignTab(avr, ongletInstances);
         const int ongletAligne = selectedTab();
         const int creneauxBarre = tabBandSlotsWithInk();
@@ -2061,6 +2081,7 @@ int main(int argc, char **argv)
         const int creneauxAvant = tabBandSlotsWithInk();
         marque = g_twi_bytes;
         if (!skipEdit) {
+            setChannelModeToSeq(avr, ongletA);
             alignTab(avr, ongletA);
             pressFor(avr, (double)PRESS_MS);
             rotate(avr, flexseq::UiController::SEQ_FIELD_INDEX_EDIT_ENTRY, 1);
@@ -2254,6 +2275,7 @@ int main(int argc, char **argv)
     const int slotsBeforeEdit = tabBandSlotsWithInk();
     twiMark = g_twi_bytes;
     if (!skipEdit) {
+        setChannelModeToSeq(avr, ongletPrincipal);
         alignTab(avr, ongletPrincipal);
         pressFor(avr, (double)PRESS_MS);
         rotate(avr, flexseq::UiController::SEQ_FIELD_INDEX_EDIT_ENTRY, 1);
