@@ -352,12 +352,31 @@ precise** than the firmware it replaces? The sources are the original firmware a
 `main` @ `40d4aac`, the upstream library at `5c0c34f`, and measurements on the
 current build.
 
-### The fork changes no behaviour of the library
+### The fork carries three changes, and each one is named
 
-The pin `4c5b4d0` differs from the upstream head `5c0c34f` by **two files**: the
-README, and 21 lines of `libGravity.h`. The lines make the display transport
-selectable. A consumer that defines neither macro gets the previous class, so no
-existing build changes. This is the charter of ADR 0008, and the diff holds to it.
+⚠️ **This section was titled "The fork changes no behaviour of the library"
+until 2026-09-05, and it described the pin `4c5b4d0`.** The pin is `c2ec8ab`
+since 2026-09-03. The fork carries three changes on top of the audited base
+`5c0c34f`:
+
+- **`4c5b4d0`, 2026-08-25 — the display transport becomes selectable.** The diff
+  holds two files: the README, and 21 lines of `libGravity.h`. A consumer that
+  defines neither macro gets the previous class, so no existing build changes;
+- **`3254fc3`, 2026-09-03 — the tempo arithmetic of uClock becomes integer.** The
+  amendment of ADR 0008 permits it, and it demands a measured equivalence. Lot
+  S2.1 measured **1092 bytes of Flash returned**;
+- **`c2ec8ab`, 2026-09-03 — the external clock no longer freezes the module.**
+  One line, **26 bytes of Flash**. Entry 12 of `docs/upstream-defects.md` carries
+  the defect and its measurement.
+
+**The third change changes a behaviour, and it does so on purpose.** The module
+froze for 2.5 to 60 seconds after the user selected the external clock, and the
+delay grew as the input rate fell. The owner decided it is a defect. The old
+title is therefore false, and this one replaces it.
+
+**The seven audited anomalies are unchanged, and that is the hard line of the
+charter.** `tools/run-libgravity-tests.sh` reproduces exactly those seven on the
+pin `c2ec8ab`, no more and no fewer.
 
 ### Where FlexSeq costs LESS than the original
 
