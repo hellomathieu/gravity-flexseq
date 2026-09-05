@@ -406,27 +406,22 @@ Destinations: `none / PATTERN / LENGTH / RESET / STEP`. The choice is **explicit
 
 **What this restores.** `docs/original-conformity.md` recorded `MOD` as an omission of FlexSeq. Routing a CV to the subdivision or to the skip chance was impossible, because neither was in the destination list. This decision puts the feature of the original back.
 
-✅ **THE `MOD` FIELD OF A SEQ CHANNEL HOLDS ELEVEN VALUES, decided by the owner on 2026-09-05.** One field carries the routing of both inputs, and its value names the destinations in order: the first takes `CV1`, the second takes `CV2`.
+✅ **THE `MOD` FIELD OF A SEQ CHANNEL HOLDS TWENTY-ONE VALUES, decided by the owner on 2026-09-05.** One field carries the routing of **both** inputs. **The position names the input**: what stands before the slash goes to `CV1`, what stands after goes to `CV2`, and a dash means that input is not routed. The four destinations are written with their initial — `P` for `PATTERN`, `L` for `LENGTH`, `R` for `RESET`, `S` for `STEP`.
 
-\| Value \| `CV1` goes to \| `CV2` goes to \|
+\| Group \| Values \| Count \|
 \|---\|---\|---\|
-\| `OFF` \| nothing \| nothing \|
-\| `PAT` \| `PATTERN` \| nothing \|
-\| `LEN` \| `LENGTH` \| nothing \|
-\| `RST` \| `RESET` \| nothing \|
-\| `STP` \| `STEP` \| nothing \|
-\| `P+L` \| `PATTERN` \| `LENGTH` \|
-\| `P+R` \| `PATTERN` \| `RESET` \|
-\| `P+S` \| `PATTERN` \| `STEP` \|
-\| `L+R` \| `LENGTH` \| `RESET` \|
-\| `L+S` \| `LENGTH` \| `STEP` \|
-\| `R+S` \| `RESET` \| `STEP` \|
+\| not routed \| `OFF` \| 1 \|
+\| `CV1` alone \| `P/-` `L/-` `R/-` `S/-` \| 4 \|
+\| `CV2` alone \| `-/P` `-/L` `-/R` `-/S` \| 4 \|
+\| both inputs \| `P/L` `P/R` `P/S` `L/P` `L/R` `L/S` `R/P` `R/L` `R/S` `S/P` `S/L` `S/R` \| 12 \|
 
-**The list is complete for the pairs**: four destinations taken two at a time give six, and the six are there.
+**The symmetry is complete**, and that is the point of the shape: every destination is reachable from either input, alone or paired, so **no patch cable ever has to move**. The reverse of each pair is offered, which is why there are twelve ordered pairs and not six.
 
-⚠️ **The ORDER is fixed, and that is a deliberate reduction.** The reverse of a pair is not offered: `L+P` does not exist, only `P+L`. Offering both would give twelve pairs instead of six. **The consequence is real and it is accepted**: a user who wants `CV2` to drive the pattern must move the patch cable, and a single destination always takes `CV1`.
+⚠️ **The field does NOT offer two inputs on the SAME destination**, so `P/P` is not in the cycle. ⚠️ **The engine keeps that capability, and nothing is removed**: §10.4 still adds the two zones and clamps once, the golden vectors `length_two_sources_*` and `pattern_two_sources_*` still hold, and the range of −30 to +30 that STEP absorbs by its modulo is unchanged. The owner weighed the removal on 2026-09-05 and refused it, because it would have reversed the decision of 2026-08-22 and emptied six normative vectors.
 
-⚠️ **The two new destinations of the table above — `SUBDIVISION` in `CLOCK` and `SKIP CHANCE` in `RANDOM` — are NOT in lot 13, by a decision of the owner on 2026-09-05.** Lot 13 wires the field on the four destinations that already exist and are measured on the pins. The two others need a quantisation rule that §10.4 does not carry: its grid is dimensioned from the sixteen patterns, while the subdivision is an index into a list of twenty-five and the skip chance runs from 0 to 10. A `CLOCK` or a `RANDOM` tab therefore keeps `MOD: OFF`, and that stays true.
+**The label of a routing is TOTAL, and the cycle is not.** The function that names a routing accepts the twenty-five combinations the format can hold, so a same-destination routing displays as `P/P` and the screen never lies. The rotation walks the twenty-one values above and can never produce the other four. **No marker of error is needed**, and no state is undisplayable.
+
+⚠️ **The two destinations of the table above that do not exist — `SUBDIVISION` in `CLOCK` and `SKIP CHANCE` in `RANDOM` — are NOT in lot 13, by a decision of the owner on 2026-09-05.** Lot 13 wires the field on the four destinations that already exist and are measured on the pins. The two others need a quantisation rule that §10.4 does not carry: its grid is dimensioned from the sixteen patterns, while the subdivision is an index into a list of twenty-five and the skip chance runs from 0 to 10. A `CLOCK` or a `RANDOM` tab therefore keeps `MOD: OFF`, and that stays true.
 
 ⚠️ **The mechanism does NOT exist yet, and lot 11 does not build it.** Lot 11 draws the `MOD:` line, and it reads `OFF`, which is true: no channel can be in any other state until the modulation of the subdivision and of the skip chance is implemented. That belongs to the CV routing lot, 13. The storage question — which code carries "the main parameter of the mode" in bytes 7 and 8 of the channel record — is settled there and not here. `NONE` staying 0 means any earlier image still reads without migration.
 
