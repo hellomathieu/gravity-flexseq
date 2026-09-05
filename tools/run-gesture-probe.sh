@@ -195,9 +195,10 @@ RIG_MASQUE_BASE="0221"
 SALVES_MIN_A=5
 SALVES_MIN_B=2
 
-WORK="$(mktemp -d)"
+WORK="${KEEP_WORK:-$(mktemp -d)}"
+mkdir -p "$WORK"
 LOG="$WORK/log"
-trap 'rm -rf "$WORK"' EXIT
+trap '[ -n "${KEEP_WORK:-}" ] || rm -rf "$WORK"' EXIT
 
 printf '%s=== SONDE DE GESTES (P2.1 a P2.5, puis fractionnement) ===%s\n' "$C_B" "$C_0"
 
