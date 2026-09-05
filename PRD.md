@@ -33,7 +33,7 @@ no parallel French copy: that copy is what
 
 **An alternative firmware for the Sitka Instruments Gravity Eurorack module.** **Its Trigger Sequencer holds patterns of 36 steps, and the interface adjusts the length from 1 to 36 since lot SF3, 2026-08-30.**
 > **Status:** the normative version. It carries the decisions the TypeScript POC and the C++ firmware alignment validated: the native tests green, the simavr verification, and the RAM measured on the ATmega328P.
-> **Software base:** `libGravity` (Adam Wonak), resolved from the **fork of the project** `github.com/hellomathieu/libGravity`, frozen at the commit `4c5b4d0b4f38a9e04055ad48f1f7e2d90541c93c`. `platformio.ini` is the authority, and the charter of what the fork may repair is **ADR 0008**. The old pin `9be88be1f4` is obsolete.
+> **Software base:** `libGravity` (Adam Wonak), resolved from the **fork of the project** `github.com/hellomathieu/libGravity`, frozen at the commit `c2ec8ab09c8cd768323437a24b29cc763bf4b399`. `platformio.ini` is the authority, and the charter of what the fork may repair is **ADR 0008**. The old pin `9be88be1f4` is obsolete.
 > **Hardware:** the Gravity, strictly unchanged.
 ---
 ## 1. Vision
@@ -53,7 +53,7 @@ This rule **settles a question that was open**: the single font of FlexSeq (`set
 - Application Flash: **30720 B**.
 - The Gravity hardware, the MIDI Expander and the Expansion Header: **unchanged**.
 - No replacement of the MCU.
-- Toolchain: PlatformIO / Arduino AVR. The project resolves `libGravity` from its own fork, frozen at commit `4c5b4d0b4f38…` (ADR 0008). The old pin `9be88be1f4` is obsolete.
+- Toolchain: PlatformIO / Arduino AVR. The project resolves `libGravity` from its own fork, frozen at commit `c2ec8ab09c8c…` (ADR 0008). The old pin `9be88be1f4` is obsolete.
 >
 > **The flash path — verified on the sources on 2026-08-21, then MEASURED on the module the same day. This path holds no way to brick the module.** The KiCad schematic of `GravityHW` puts an **Arduino Nano v2.x** on the board, and the upload goes through the **USB bootloader** of the Nano. It **writes no fuse**, and it does not use the ISP. The fuses are the only way to make an AVR unreachable. The original firmware is itself an Arduino project (`.ino`), and the manufacturer uploads it the same way: to flash FlexSeq is the operation the manufacturer performs. The successful read of the Flash confirms the argument, instead of only reasoning it.
 >
@@ -1084,7 +1084,7 @@ Two findings reported and not asserted. The pulse was measured at **8.8 ms** on 
 Levels: the Domain → the Virtual and the Simulator → the AVR firmware (simavr for the signals, Wokwi for the screen) → the real Hardware.
 ---
 ## 15. Memory footprint (measured)
-The build is `nanoatmega328`, with `libGravity` frozen at the commit `4c5b4d0b4f38…` of the fork of the project.
+The build is `nanoatmega328`, with `libGravity` frozen at the commit `c2ec8ab09c8c…` of the fork of the project.
 **✅ CURRENT FIGURES, measured on 2026-08-31.** Every figure below carries the tool that produced it. Everything after this block is earlier, and the document keeps it as history.
 ⚠️ **The figures come from five heads of the same day, and they describe ONE binary.** `git diff 1b59407..HEAD -- src/ include/ platformio.ini` is empty, so no commit of that day touched the firmware. The memory figures therefore hold across the window, and the reader does not have to suppose it.
 **Memory**, by `tools/run-build-memory.sh` and `tools/run-stack-probe.sh`:
