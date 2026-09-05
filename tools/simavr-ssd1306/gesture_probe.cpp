@@ -1901,7 +1901,7 @@ int main(int argc, char **argv)
             if (!skipBGeste) shiftRotate(avr, 3, etape == 0 ? 1 : 0, harness::LENGTH_BURST_LIMIT, false);
             const uint32_t twiGeste = g_twi_bytes - marque;
             const uint32_t twiRetour0 = g_twi_bytes;
-            pressFor(avr, (double)LONG_PRESS_MS);
+            backToBar(avr);
             const uint32_t twiRetour = g_twi_bytes - twiRetour0;
             run_for(avr, 2000.0);
             const uint32_t depart = g_ticks;
