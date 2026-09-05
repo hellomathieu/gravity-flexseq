@@ -897,6 +897,7 @@ static void pressFor(avr_t *avr, double ms)
 
 static void rotate(avr_t *avr, int detents, int aFirst)
 {
+    if (detents > 0) run_for(avr, DETENT_SETTLE_MS);
     for (int i = 0; i < detents; ++i) {
         if (aFirst) detentAfirst(avr); else detentBfirst(avr);
         run_for(avr, DETENT_SETTLE_MS);
