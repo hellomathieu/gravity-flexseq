@@ -178,6 +178,10 @@ B_PAS_CHANGE=48
 B_DIST_MIN=6
 B_RET_MIN=2
 CURSEUR_BARRE=-1
+MOD_ONGLET=4
+MOD_PERIODE_BASE=1536
+MOD_PERIODE_ROUTEE="${MOD_PERIODE_ROUTEE:-2496}"
+MOD_CV1_MV="${MOD_CV1_MV:-4150}"
 R13_ONGLET=3
 R13_PERIODE_BASE=1536
 R13_PERIODE_CHANGE_ATTENDUE=1824
@@ -1880,6 +1884,47 @@ else
   else
     bad "R2 : retour a la barre" "onglet $RB_ONG, $RB_CRE creneaux, curseur $RB_CUR (barre = $CURSEUR_BARRE)"
   fi
+fi
+
+LOG8b="$WORK/log8b"
+progress "recette MOD (P2.6.6)"
+CV1_MV="$MOD_CV1_MV" "$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" \
+     "$INSTANCE_PTR_ADDR" "$BOOT_MS" "$WORK/rig.bin" 384 recetteMOD \
+     "$SUPPRESSED_ADDR" > "$LOG8b" 2>&1
+RC=$?
+if [ "$RC" != "0" ]; then
+  cat "$LOG8b"
+  die "la phase MOD s'est terminee anormalement (code $RC)"
+fi
+
+printf '\n%s--- RECETTE MOD : LE ROUTAGE POSE PAR UN GESTE (P2.6.6) ---%s\n' "$C_B" "$C_0"
+grep -E '^rM_' "$LOG8b" | sed 's/^/  /'
+printf '\n'
+
+MOD_INJ="$(grep -E '^rM_injection ' "$LOG8b" | awk '{print $3}')"
+MOD_AV="$(grep -E '^rM_avant ' "$LOG8b" | awk '{print $3}')"
+MOD_AP="$(grep -E '^rM_apres ' "$LOG8b" | awk '{print $3}')"
+MOD_TWI="$(grep -E '^rM_geste ' "$LOG8b" | awk '{print $3}')"
+MOD_W=1
+if [ "${MOD_INJ:-0}" != "1" ]; then
+  inval "MOD : injection du CV" "aucune injection : le routage ne pourrait rien changer"
+  MOD_W=0
+elif [ "$MOD_AV" != "$MOD_PERIODE_BASE" ]; then
+  inval "MOD : etat de depart" "periode $MOD_AV au lieu de $MOD_PERIODE_BASE : le canal ne joue pas sa longueur de base"
+  MOD_W=0
+elif [ "${MOD_TWI:-0}" -eq 0 ] 2>/dev/null; then
+  inval "MOD : geste injecte" "aucun trafic : l interface n a jamais vu le geste"
+  MOD_W=0
+else
+  ok "MOD : etat de depart" "periode $MOD_AV ticks sans routage, et le CV est injecte : il n agit pas encore"
+fi
+
+if [ "$MOD_W" != "1" ]; then
+  inval "MOD : le geste route le CV" "temoins amont invalides"
+elif [ "$MOD_AP" = "$MOD_PERIODE_ROUTEE" ]; then
+  ok "MOD : le geste route le CV" "periode $MOD_AV -> $MOD_AP ticks : deux crans sur MOD ont mis CV1 sur LENGTH, et les broches le montrent"
+else
+  bad "MOD : le geste route le CV" "periode $MOD_AP au lieu de $MOD_PERIODE_ROUTEE apres le geste"
 fi
 
 LOG7="$WORK/log7"

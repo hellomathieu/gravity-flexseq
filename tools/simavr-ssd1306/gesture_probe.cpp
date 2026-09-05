@@ -11,6 +11,7 @@ extern "C" {
 #include <avr_twi.h>
 #include <avr_ioport.h>
 #include <avr_uart.h>
+#include <avr_adc.h>
 #include <avr_eeprom.h>
 #include <parts/ssd1306_virt.h>
 }
@@ -253,6 +254,22 @@ static const struct { char port; uint8_t bit; const char *name; } OUTS[OUT_COUNT
 
 typedef struct { uint32_t tick[MAX_ONSETS]; uint32_t n; int last; } outline_t;
 static outline_t g_out[OUT_COUNT];
+
+// Injection de CV, portee depuis trigger_probe.c : la sonde repond en
+// millivolts a chaque conversion. Sans elle la course MOD ne pourrait pas
+// montrer sur les broches l'effet du routage qu'un geste vient de poser.
+static avr_irq_t *g_adc_irq[2];
+static int g_cv_mv[2];
+static int g_cv_inject;
+
+static void adc_trigger_hook(struct avr_irq_t *irq, uint32_t value, void *param)
+{
+    (void)irq; (void)param;
+    avr_adc_mux_t mux;
+    memcpy(&mux, &value, sizeof(mux) < sizeof(value) ? sizeof(mux) : sizeof(value));
+    if (mux.src == 7) avr_raise_irq(g_adc_irq[0], g_cv_mv[0]);
+    else if (mux.src == 6) avr_raise_irq(g_adc_irq[1], g_cv_mv[1]);
+}
 
 static void tick_hook(struct avr_irq_t *irq, uint32_t value, void *param)
 {
@@ -1022,6 +1039,7 @@ int main(int argc, char **argv)
     const int skipBGeste = getenv("SKIP_B_GESTE") != NULL;
     const int recetteR2 = strcmp(phase, "recetteR2") == 0;
     const int recetteR11 = strcmp(phase, "recetteR11") == 0;
+    const int recetteMOD = strcmp(phase, "recetteMOD") == 0;
     const int recetteR5R7 = strcmp(phase, "recetteR5R7") == 0;
     const int diagDa = strcmp(phase, "diagDa") == 0;
     const int diagDb = strcmp(phase, "diagDb") == 0;
@@ -1097,6 +1115,16 @@ int main(int argc, char **argv)
         if (r13CransLength < 1 || r13CransLength > SHIFT_BURST_DETENTS) {
             fprintf(stderr, "R13_CRANS_LENGTH hors de 1..%d : %d\n",
                     SHIFT_BURST_DETENTS, r13CransLength);
+            return 2;
+        }
+    }
+    int modCransMOD = 2;
+    {
+        const char *text = getenv("MOD_CRANS");
+        if (text != NULL) modCransMOD = (int)strtol(text, NULL, 0);
+        if (modCransMOD < 1 || modCransMOD >= (int)flexseq::MOD_CHOICE_COUNT) {
+            fprintf(stderr, "MOD_CRANS hors de 1..%d : %d\n",
+                    (int)flexseq::MOD_CHOICE_COUNT - 1, modCransMOD);
             return 2;
         }
     }
@@ -1223,6 +1251,21 @@ int main(int argc, char **argv)
     avr_connect_irq(twi_out, g_oled.irq + IRQ_SSD1306_TWI_OUT);
     avr_connect_irq(g_oled.irq + IRQ_SSD1306_TWI_IN, twi_in);
     avr_irq_register_notify(twi_out, twi_hook, NULL);
+
+    {
+        const char *mv1 = getenv("CV1_MV");
+        const char *mv2 = getenv("CV2_MV");
+        if (mv1 != NULL || mv2 != NULL) {
+            g_cv_mv[0] = (mv1 != NULL) ? (int)strtol(mv1, NULL, 10) : 2625;
+            g_cv_mv[1] = (mv2 != NULL) ? (int)strtol(mv2, NULL, 10) : 2625;
+            g_cv_inject = 1;
+            g_adc_irq[0] = avr_io_getirq(avr, AVR_IOCTL_ADC_GETIRQ, ADC_IRQ_ADC7);
+            g_adc_irq[1] = avr_io_getirq(avr, AVR_IOCTL_ADC_GETIRQ, ADC_IRQ_ADC6);
+            avr_irq_register_notify(
+                avr_io_getirq(avr, AVR_IOCTL_ADC_GETIRQ, ADC_IRQ_OUT_TRIGGER),
+                adc_trigger_hook, NULL);
+        }
+    }
 
     avr_irq_t *enc_a = avr_io_getirq(avr, AVR_IOCTL_IOPORT_GETIRQ(ENC_A_PORT), ENC_A_BIT);
     avr_irq_t *enc_b = avr_io_getirq(avr, AVR_IOCTL_IOPORT_GETIRQ(ENC_B_PORT), ENC_B_BIT);
@@ -1819,6 +1862,46 @@ int main(int argc, char **argv)
         cad = gapGcdInWindow(&g_out[sortieR11], depart, g_ticks, &kept, &gaps, &dropped);
         printf("rD_cadence_fin     cadence %u distances %u retenues %u ecarts %u twi %u\n",
                cad, gaps, kept, ecarts, g_twi_bytes - marque);
+        return 0;
+    }
+
+    if (recetteMOD) {
+        constexpr int ongletMOD = 4;
+        constexpr int8_t canalMOD = channelOfTab(ongletMOD);
+        constexpr int sortieMOD = canalMOD;
+        static_assert(canalMOD == 3, "tab 4 drives channel 3");
+        const uint32_t pasActifs = activeStepsInInstance(expectedBytes, canalMOD);
+
+        playPress(avr);
+        run_for(avr, 1000.0);
+        printf("rM_injection       cv %d %d %d\n", g_cv_inject, g_cv_mv[0], g_cv_mv[1]);
+
+        rotate(avr, 1, 1);
+        run_for(avr, 2500.0);
+        uint32_t depart = g_ticks;
+        run_for(avr, 20000.0);
+        uint32_t onsets = 0;
+        uint32_t avant = periodOverOnsets(&g_out[sortieMOD], depart, g_ticks,
+                                          pasActifs, &onsets);
+        printf("rM_avant           periode %u onsets %u\n", avant, onsets);
+
+        backToBar(avr);
+        alignTab(avr, ongletMOD);
+        const uint32_t marque = g_twi_bytes;
+        pressFor(avr, (double)PRESS_MS);
+        gotoConfigField(avr, flexseq::UiController::CONFIG_FIELD_INDEX_MOD);
+        pressFor(avr, (double)PRESS_MS);
+        rotate(avr, modCransMOD, 1);
+        printf("rM_geste           crans %d twi %u curseur %d\n",
+               modCransMOD, g_twi_bytes - marque, highlightedLine());
+
+        run_for(avr, 2500.0);
+        depart = g_ticks;
+        run_for(avr, 20000.0);
+        onsets = 0;
+        const uint32_t apres = periodOverOnsets(&g_out[sortieMOD], depart, g_ticks,
+                                                pasActifs, &onsets);
+        printf("rM_apres           periode %u onsets %u\n", apres, onsets);
         return 0;
     }
 
