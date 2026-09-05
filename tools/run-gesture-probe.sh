@@ -168,6 +168,7 @@ B_PAS_BASE=96
 B_PAS_CHANGE=48
 B_DIST_MIN=6
 B_RET_MIN=2
+CURSEUR_BARRE=-1
 R13_ONGLET=3
 R13_PERIODE_BASE=1536
 R13_PERIODE_CHANGE_ATTENDUE=1824
@@ -898,19 +899,21 @@ EDIT_TWI="$(grep -E '^entree_edit ' "$LOG" | awk '{print $5}')"
 EDIT_SLOTS_BEFORE="$(grep -E '^entree_edit ' "$LOG" | awk '{print $7}')"
 EDIT_SLOTS_AFTER="$(grep -E '^entree_edit ' "$LOG" | awk '{print $8}')"
 EDIT_DISTINCT="$(grep -E '^entree_edit ' "$LOG" | awk '{print $10}')"
+EDIT_CURSEUR="$(grep -E '^entree_edit ' "$LOG" | awk '{print $12}')"
 W_EDIT=0
 if [ -z "$EDIT_TWI" ]; then
   inval "entree dans EDIT" "aucune mesure de navigation publiee"
 elif [ "${EDIT_TWI:-0}" -eq 0 ] 2>/dev/null; then
   inval "entree dans EDIT" "aucun trafic : le geste de navigation n a pas ete injecte"
-elif [ "${EDIT_SLOTS_BEFORE:-0}" != "$TAB_SLOTS" ]; then
-  inval "entree dans EDIT" "avant le geste, ${EDIT_SLOTS_BEFORE:-?} creneaux encres au lieu de $TAB_SLOTS : l ecran de depart n est pas la barre d onglets"
+elif [ "${EDIT_SLOTS_BEFORE:-0}" != "$TAB_SLOTS" ] \
+     || [ "${EDIT_CURSEUR:-x}" != "$CURSEUR_BARRE" ]; then
+  inval "entree dans EDIT" "avant le geste, ${EDIT_SLOTS_BEFORE:-?} creneaux et curseur ${EDIT_CURSEUR:-rien} : l ecran de depart n est pas la barre d onglets"
 elif [ "${EDIT_SLOTS_AFTER:-$TAB_SLOTS}" -ge "$TAB_SLOTS" ] 2>/dev/null; then
   inval "entree dans EDIT" "la barre d onglets est toujours dessinee (${EDIT_SLOTS_AFTER} creneaux) : EDIT n est pas etabli"
 elif [ "$EDIT_DISTINCT" != "1" ]; then
   inval "entree dans EDIT" "l ecran n est distinct ni de la barre d onglets ni du niveau tab"
 else
-  ok "entree dans EDIT" "$EDIT_TWI octets, creneaux encres $EDIT_SLOTS_BEFORE -> $EDIT_SLOTS_AFTER, ecran distinct"
+  ok "entree dans EDIT" "$EDIT_TWI octets, depart sur la BARRE (aucune ligne surlignee), creneaux $EDIT_SLOTS_BEFORE -> $EDIT_SLOTS_AFTER, ecran distinct"
   W_EDIT=1
 fi
 
@@ -1672,7 +1675,8 @@ if [ -z "$R13_NAV" ] || [ -z "$R13_CHG" ] || [ -z "$R13_RES" ]; then
 elif [ "$R1_OK" != "1" ]; then
   inval "R13 : composition" "R1 n a pas etabli la carte onglet -> sortie : l effet n est pas attribuable"
 else
-  R13_ONSETS="$(printf '%s' "$R13_CHG" | awk '{print $NF}')"
+  R13_ONSETS="$(printf '%s' "$R13_CHG" | awk '{print $17}')"
+  R13_CUR="$(printf '%s' "$R13_CHG" | awk '{print $19}')"
   R13_TWI="$(printf '%s' "$R13_CHG" | awk '{print $7}')"
   R13_TWIR="$(printf '%s' "$R13_CHG" | awk '{print $8}')"
   R13_ONG="$(printf '%s' "$R13_CHG" | awk '{print $3}')"
@@ -1682,8 +1686,9 @@ else
     inval "R13 : composition" "geste sans trafic : NON INJECTE"
   elif [ "${R13_ONSETS:-0}" -lt "$ONSETS_MIN" ] 2>/dev/null; then
     inval "R13 : composition" "${R13_ONSETS:-0} onsets, minimum $ONSETS_MIN soit deux cycles : rien a conclure"
-  elif [ "$R13_ONG" != "$R13_ONGLET" ] || [ "$R13_CRE" != "$TAB_COUNT_ECRAN" ]; then
-    inval "R13 : composition" "apres le retour : onglet $R13_ONG, $R13_CRE creneaux — l etat d interface n est pas etabli"
+  elif [ "$R13_ONG" != "$R13_ONGLET" ] || [ "$R13_CRE" != "$TAB_COUNT_ECRAN" ] \
+       || [ "${R13_CUR:-x}" != "$CURSEUR_BARRE" ]; then
+    inval "R13 : composition" "apres le retour : onglet $R13_ONG, $R13_CRE creneaux, curseur ${R13_CUR:-rien} — l etat d interface n est pas etabli"
   else
     R13_PER_OK=1; R13_PER_D=""
     for o in 1 2 3 4 5 6; do
@@ -1855,14 +1860,16 @@ else
   RB_ONG="$(grep -E '^rC_retour_barre ' "$LOG6" | awk '{print $3}')"
   RB_CRE="$(grep -E '^rC_retour_barre ' "$LOG6" | awk '{print $5}')"
   RB_TWI="$(grep -E '^rC_retour_barre ' "$LOG6" | awk '{print $7}')"
-  if [ -z "$RB_ONG" ]; then
+  RB_CUR="$(grep -E '^rC_retour_barre ' "$LOG6" | awk '{print $9}')"
+  if [ -z "$RB_ONG" ] || [ -z "$RB_CUR" ]; then
     inval "R2 : retour a la barre" "aucune mesure de retour publiee"
   elif [ "${RB_TWI:-0}" -eq 0 ] 2>/dev/null; then
     inval "R2 : retour a la barre" "aucun trafic : appui long NON INJECTE"
-  elif [ "$RB_ONG" = "$R2_ONGLET" ] && [ "$RB_CRE" = "$TAB_COUNT_ECRAN" ]; then
-    ok "R2 : retour a la barre" "onglet $RB_ONG conserve, $RB_CRE creneaux encres"
+  elif [ "$RB_ONG" = "$R2_ONGLET" ] && [ "$RB_CRE" = "$TAB_COUNT_ECRAN" ] \
+       && [ "$RB_CUR" = "$CURSEUR_BARRE" ]; then
+    ok "R2 : retour a la barre" "onglet $RB_ONG conserve, $RB_CRE creneaux, aucune ligne surlignee : la BARRE, et pas l interieur d un onglet"
   else
-    bad "R2 : retour a la barre" "onglet $RB_ONG, $RB_CRE creneaux"
+    bad "R2 : retour a la barre" "onglet $RB_ONG, $RB_CRE creneaux, curseur $RB_CUR (barre = $CURSEUR_BARRE)"
   fi
 fi
 

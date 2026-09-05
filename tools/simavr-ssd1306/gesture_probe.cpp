@@ -433,6 +433,35 @@ static int tabBandSlotsWithInk(void)
     return slots;
 }
 
+// Le curseur d'un champ INVERSE le libelle de sa ligne : drawBox remplit la
+// boite avant que le texte soit ecrit en couleur 0, donc la rangee du HAUT de
+// cette boite porte de l'encre et rien d'autre n'en met la. Sur la barre
+// d'onglets aucune ligne n'est inversee. Compter les creneaux encres de la
+// bande d'onglets ne sait pas faire cette difference : l'ecran dessine la barre
+// a tous les niveaux de l'ecran principal.
+static int inkLineCursorTopRow(uint8_t line)
+{
+    const uint8_t base =
+        (uint8_t)(ms::LINE_0_BASELINE_Y + line * ms::LINE_SPACING_Y);
+    const uint8_t y0 = (uint8_t)(base - flexseq::FONT_VELVETSCREEN_HEIGHT - 1);
+    const uint8_t x0 = (uint8_t)(ms::LINE_LABEL_X - 1);
+    const uint8_t w  = (uint8_t)(ms::LINE_VALUE_X - 2 - x0);
+    return inkInBox(x0, y0, w, 1);
+}
+
+#define CURSEUR_SUR_LA_BARRE   (-1)
+#define CURSEUR_INDETERMINE    (-2)
+
+static int highlightedLine(void)
+{
+    int found = CURSEUR_SUR_LA_BARRE, count = 0;
+    for (uint8_t line = 0; line < 3; ++line) {
+        if (inkLineCursorTopRow(line) > 0) { found = (int)line; ++count; }
+    }
+    if (count == 0) return CURSEUR_SUR_LA_BARRE;
+    return count == 1 ? found : CURSEUR_INDETERMINE;
+}
+
 static int selectedTab(void)
 {
     int best = -1, bestInk = -1, ties = 0;
@@ -1829,8 +1858,9 @@ int main(int argc, char **argv)
             if (etape == 2) {
                 marque = g_twi_bytes;
                 backToBar(avr);
-                printf("rC_retour_barre    onglet %d creneaux %d twi %u\n",
-                       selectedTab(), tabBandSlotsWithInk(), g_twi_bytes - marque);
+                printf("rC_retour_barre    onglet %d creneaux %d twi %u curseur %d\n",
+                       selectedTab(), tabBandSlotsWithInk(), g_twi_bytes - marque,
+                       highlightedLine());
             }
         }
         return 0;
@@ -1919,7 +1949,7 @@ int main(int argc, char **argv)
                 printf(" %u", p);
                 if (onsets < minOnsets) minOnsets = onsets;
             }
-            printf(" onsets %u\n", minOnsets);
+            printf(" onsets %u curseur %d\n", minOnsets, highlightedLine());
             if (etape == 0) {
                 alignTab(avr, cibleR13);
                 pressFor(avr, (double)PRESS_MS);
@@ -2274,6 +2304,7 @@ int main(int argc, char **argv)
                   "the ratchet of step 0 is buffer byte 5 on channel 0");
 
     const int slotsBeforeEdit = tabBandSlotsWithInk();
+    const int curseurBeforeEdit = highlightedLine();
     twiMark = g_twi_bytes;
     if (!skipEdit) {
         setChannelModeToSeq(avr, ongletPrincipal);
@@ -2283,9 +2314,10 @@ int main(int argc, char **argv)
         pressFor(avr, (double)PRESS_MS);
     }
     const uint32_t sigEdit = screenSignature();
-    printf("entree_edit        signature %08x twi %u creneaux %d %d distincte %d\n",
+    printf("entree_edit        signature %08x twi %u creneaux %d %d distincte %d curseur %d\n",
            sigEdit, g_twi_bytes - twiMark, slotsBeforeEdit, tabBandSlotsWithInk(),
-           (sigEdit != sigTabBar && sigEdit != sigAfterShort) ? 1 : 0);
+           (sigEdit != sigTabBar && sigEdit != sigAfterShort) ? 1 : 0,
+           curseurBeforeEdit);
 
     static uint8_t instancesBeforeShift[OBSERVED_INSTANCE_BYTES];
     readInstances(avr, instancesBeforeShift);
