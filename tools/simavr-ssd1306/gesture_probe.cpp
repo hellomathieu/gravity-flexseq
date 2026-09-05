@@ -1828,7 +1828,7 @@ int main(int argc, char **argv)
 
             if (etape == 2) {
                 marque = g_twi_bytes;
-                pressFor(avr, (double)LONG_PRESS_MS);
+                backToBar(avr);
                 printf("rC_retour_barre    onglet %d creneaux %d twi %u\n",
                        selectedTab(), tabBandSlotsWithInk(), g_twi_bytes - marque);
             }
