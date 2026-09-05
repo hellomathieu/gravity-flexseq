@@ -76,6 +76,7 @@ namespace scr = flexseq::screen;
 static double g_de_entry_ms   = (double)BUTTON_MARGIN_MS;
 static double g_de_release_ms = (double)BUTTON_MARGIN_MS;
 static double g_di_settle_ms  = (double)DETENT_SETTLE_MS;
+static double g_edge_spacing_ms = (double)EDGE_SPACING_MS;
 #define SHIFT_BURST_GAP_MS    (BUTTON_DEBOUNCE_MS + LOOP_POLL_RESERVE_MS + BUTTON_MARGIN_MS)
 
 static_assert(SHIFT_BURST_DETENTS >= 1,
@@ -776,18 +777,18 @@ static void setPin(avr_irq_t *pin, int *level, int value)
 
 static void detentAfirst(avr_t *avr)
 {
-    setPin(g_enc_a, &g_level_a, 0); run_for(avr, EDGE_SPACING_MS);
-    setPin(g_enc_b, &g_level_b, 0); run_for(avr, EDGE_SPACING_MS);
-    setPin(g_enc_a, &g_level_a, 1); run_for(avr, EDGE_SPACING_MS);
-    setPin(g_enc_b, &g_level_b, 1); run_for(avr, EDGE_SPACING_MS);
+    setPin(g_enc_a, &g_level_a, 0); run_for(avr, g_edge_spacing_ms);
+    setPin(g_enc_b, &g_level_b, 0); run_for(avr, g_edge_spacing_ms);
+    setPin(g_enc_a, &g_level_a, 1); run_for(avr, g_edge_spacing_ms);
+    setPin(g_enc_b, &g_level_b, 1); run_for(avr, g_edge_spacing_ms);
 }
 
 static void detentBfirst(avr_t *avr)
 {
-    setPin(g_enc_b, &g_level_b, 0); run_for(avr, EDGE_SPACING_MS);
-    setPin(g_enc_a, &g_level_a, 0); run_for(avr, EDGE_SPACING_MS);
-    setPin(g_enc_b, &g_level_b, 1); run_for(avr, EDGE_SPACING_MS);
-    setPin(g_enc_a, &g_level_a, 1); run_for(avr, EDGE_SPACING_MS);
+    setPin(g_enc_b, &g_level_b, 0); run_for(avr, g_edge_spacing_ms);
+    setPin(g_enc_a, &g_level_a, 0); run_for(avr, g_edge_spacing_ms);
+    setPin(g_enc_b, &g_level_b, 1); run_for(avr, g_edge_spacing_ms);
+    setPin(g_enc_a, &g_level_a, 1); run_for(avr, g_edge_spacing_ms);
 }
 
 static int g_shift_bursts;
@@ -797,7 +798,7 @@ static double shiftBurst(avr_t *avr, int detents, int aFirst)
 {
     const double holdPlanned =
         g_de_entry_ms
-        + (double)detents * (EDGES_PER_DETENT * EDGE_SPACING_MS + g_di_settle_ms)
+        + (double)detents * (EDGES_PER_DETENT * g_edge_spacing_ms + g_di_settle_ms)
         + g_de_release_ms;
     if (detents < 1 || detents > SHIFT_BURST_DETENTS
         || SHIFT_HOLD_MS(detents) >= SHIFT_HOLD_CEILING_MS
@@ -1032,6 +1033,12 @@ int main(int argc, char **argv)
     {
         const char *e = getenv("DE_ENTRY_MS");
         const char *r = getenv("DE_RELEASE_MS");
+        const char *sp = getenv("EDGE_SPACING_MS");
+        if (sp != NULL) g_edge_spacing_ms = atof(sp);
+        if (g_edge_spacing_ms < 0.1 || g_edge_spacing_ms > 50.0) {
+            fprintf(stderr, "EDGE_SPACING_MS hors de 0.1..50\n");
+            return 2;
+        }
         const char *t = getenv("DI_SETTLE_MS");
         if (t != NULL) g_di_settle_ms = atof(t);
         if (g_di_settle_ms < 1.0 || g_di_settle_ms > 500.0) {
@@ -1091,6 +1098,19 @@ int main(int argc, char **argv)
             fprintf(stderr, "R13_CRANS_LENGTH hors de 1..%d : %d\n",
                     SHIFT_BURST_DETENTS, r13CransLength);
             return 2;
+        }
+    }
+    int r13CransDescente = -1;
+    {
+        const char *text = getenv("R13_CRANS_DESCENTE");
+        if (text != NULL) {
+            r13CransDescente = (int)strtol(text, NULL, 0);
+            r13LimiteLevee = true;
+            if (r13CransDescente < 1 || r13CransDescente > SHIFT_BURST_DETENTS) {
+                fprintf(stderr, "R13_CRANS_DESCENTE hors de 1..%d : %d\n",
+                        SHIFT_BURST_DETENTS, r13CransDescente);
+                return 2;
+            }
         }
     }
     int r2Rotations = flexseq::UiController::CONFIG_FIELD_INDEX_SUBDIV;
@@ -1942,8 +1962,11 @@ int main(int argc, char **argv)
 
         for (int etape = 0; etape < 2; ++etape) {
             marque = g_twi_bytes;
+            const int cransEtape =
+                (etape == 1 && r13CransDescente > 0) ? r13CransDescente
+                                                     : r13CransLength;
             if (!skipBGeste)
-                shiftRotate(avr, r13CransLength, etape == 0 ? 1 : 0,
+                shiftRotate(avr, cransEtape, etape == 0 ? 1 : 0,
                             r13LimiteLevee ? burst::NO_EMPIRICAL_LIMIT
                                            : harness::LENGTH_BURST_LIMIT,
                             false);
