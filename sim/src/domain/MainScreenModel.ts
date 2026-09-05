@@ -31,7 +31,6 @@ export interface MainScreenModel {
   stepTicks: number;
   mainParameter: MainParameter;
 
-  legacyLayout: boolean;
   configPage: boolean;
 
   tempo: number;
@@ -70,7 +69,6 @@ export function mainScreenModelOf(ui: UiController, engine: SequencerEngine): Ma
     skipChance: 0,
     stepTicks: 0,
     mainParameter: parameterOf(ui.mainField),
-    legacyLayout: ui.isLegacyModeTab,
     configPage: ui.isOnConfigPage,
     tempo: ui.tempo,
     clockSource: ui.clockSource,

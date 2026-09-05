@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { renderMainScreen } from "../src/sim/MainScreenPixels.js";
+import { legacyLine, renderMainScreen } from "../src/sim/MainScreenPixels.js";
 import { MainParameter, type MainScreenModel } from "../src/domain/MainScreenModel.js";
 import { ChannelMode } from "../src/domain/SequencerEngine.js";
 import { STK_L, VELVETSCREEN, textAdvance, textWidth } from "../src/sim/oledFont.js";
@@ -33,7 +33,6 @@ const PANEL_MODEL: MainScreenModel = {
   skipChance: 0,
   stepTicks: 24,
   mainParameter: MainParameter.Subdiv,
-  legacyLayout: true,
   configPage: false,
   tempo: 120,
   clockSource: 0,
@@ -134,5 +133,56 @@ describe("la convention verticale de u8g2 (ADR 0012)", () => {
       expect(rows[y], `rangee ${y} entre l etiquette et le filet`).toBe(0);
     }
     expect(rows[RULE_Y]).toBe(120);
+  });
+});
+
+/**
+ * Le meme releve, pour un onglet de canal en SEQ. Lu sur `env:mainscreen`
+ * compile avec `-DFLEXSEQ_DEMO_MODE_SEQ=1`, meme methode et meme modele : seuls
+ * le mode et le parametre principal changent.
+ */
+const SEQ_PANEL_ROWS: ReadonlyArray<readonly [number, number]> = [
+  [3, 20], [4, 14], [5, 35], [6, 32], [7, 41], [8, 15], [9, 12], [10, 12],
+  [11, 9], [12, 9], [13, 10], [14, 26], [15, 22], [16, 27], [17, 20],
+  [18, 22], [19, 11], [20, 10], [21, 9], [22, 9], [23, 9], [24, 39],
+  [25, 40], [26, 43], [27, 39], [28, 18], [29, 19], [30, 29], [36, 20],
+  [37, 12], [38, 19], [39, 11], [40, 13], [52, 120], [56, 16], [57, 16],
+  [58, 25], [59, 29], [60, 34], [61, 31], [62, 33], [63, 23],
+];
+
+const SEQ_PANEL_INK = 1003;
+
+describe("l onglet d un canal en SEQ", () => {
+  const seq: MainScreenModel = {
+    ...PANEL_MODEL,
+    mode: ChannelMode.SEQ,
+    mainParameter: MainParameter.Pattern,
+  };
+
+  it("rend exactement l encre que le panneau recoit", () => {
+    expect(renderMainScreen(seq).count).toBe(SEQ_PANEL_INK);
+  });
+
+  it("rend la meme encre RANGEE PAR RANGEE", () => {
+    const rows = renderMainScreen(seq).rows;
+    const expected = new Map(SEQ_PANEL_ROWS);
+    for (let y = 0; y < rows.length; ++y) {
+      expect(rows[y], `rangee ${y}`).toBe(expected.get(y) ?? 0);
+    }
+  });
+
+  it("le total des rangees attendues vaut bien l encre attendue", () => {
+    expect(SEQ_PANEL_ROWS.reduce((s, [, n]) => s + n, 0)).toBe(SEQ_PANEL_INK);
+  });
+
+  it("porte MODE, EDIT et CONFIG, les trois lignes de l original", () => {
+    expect(legacyLine(seq, 0)).toEqual(["MODE:", "SEQ"]);
+    expect(legacyLine(seq, 1)).toEqual(["EDIT", ""]);
+    expect(legacyLine(seq, 2)).toEqual(["CONFIG", ""]);
+  });
+
+  it("EDIT et CONFIG sont des entrees : elles ne portent aucune valeur", () => {
+    expect(legacyLine(seq, 1)[1]).toBe("");
+    expect(legacyLine(seq, 2)[1]).toBe("");
   });
 });

@@ -211,10 +211,16 @@ inline const char* label(const char* flash, char*) { return flash; }
 inline void copyLabel(const char* flash, char* dest) { strcpy(dest, flash); }
 #endif
 
+inline bool isChannelTab(const MainScreenModel& model) {
+    return model.tab != 0 && model.tab != mainscreen::TAB_COUNT - 1;
+}
+
 FLEXSEQ_LABEL(LBL_MODE, "MODE:");
 FLEXSEQ_LABEL(LBL_OFFSET, "OFFSET:");
 FLEXSEQ_LABEL(LBL_SUBDIV_FIELD, "SUBDIV:");
 FLEXSEQ_LABEL(LBL_MOD, "MOD:");
+FLEXSEQ_LABEL(LBL_EDIT, "EDIT");
+FLEXSEQ_LABEL(LBL_CONFIG, "CONFIG");
 FLEXSEQ_LABEL(LBL_OFF, "OFF");
 FLEXSEQ_LABEL(LBL_CLOCK, "CLOCK");
 FLEXSEQ_LABEL(LBL_RAND, "RAND");
@@ -289,6 +295,11 @@ inline void legacyLine(const MainScreenModel& model, uint8_t index,
         copyLabel(modeText(model.mode), value);
         return;
     }
+    if (model.mode == static_cast<uint8_t>(MODE_SEQ)) {
+        *out = index == 1 ? LBL_EDIT : LBL_CONFIG;
+        value[0] = '\0';
+        return;
+    }
     if (index == 1) {
         if (model.mode == static_cast<uint8_t>(MODE_CLOCK)) {
             *out = LBL_OFFSET;
@@ -328,7 +339,7 @@ void measureMainScreen(Canvas& canvas, MainScreenModel& model) {
             model.headlineWidth = static_cast<uint8_t>(canvas.getStrWidth(headline));
         }
     }
-    if (!model.legacyLayout) {
+    if (!isChannelTab(model)) {
         return;
     }
     char value[VALUE_SCRATCH];
@@ -464,8 +475,7 @@ void drawMainScreen(Canvas& canvas, const MainScreenModel& model,
                     Band band = Band{0, screen::HEIGHT - 1}) {
     namespace ms = mainscreen;
 
-    const bool legacy = (model.configPage || model.legacyLayout)
-                        && model.tab != 0 && model.tab != ms::TAB_COUNT - 1;
+    const bool legacy = detail::isChannelTab(model);
 
     const bool cursorOnHeadline = model.insideTab && model.cursor == 0;
     if (!legacy
@@ -501,30 +511,6 @@ void drawMainScreen(Canvas& canvas, const MainScreenModel& model,
                                   model.insideTab && model.cursor == 1 && model.fieldOpen);
     } else if (legacy) {
         detail::drawLegacyChannel(canvas, band, model);
-    } else if (model.tab != ms::TAB_COUNT - 1) {
-        char lengthText[4];
-        detail::writeUnsigned(lengthText, model.length);
-        char subdivText[6];
-        detail::subdivLabel(model.subdiv, subdivText);
-        char barText[4];
-        detail::barLabel(model.barLength, barText);
-
-        detail::drawLabelledField(canvas, band, ms::COL_LEFT_X, ms::ROW_A_BOX_Y,
-                                  "LEN", lengthText,
-                                  model.insideTab && model.cursor == 1,
-                                  model.insideTab && model.cursor == 1 && model.fieldOpen);
-        detail::drawLabelledField(canvas, band, ms::COL_RIGHT_X, ms::ROW_A_BOX_Y,
-                                  "SUB", subdivText,
-                                  model.insideTab && model.cursor == 2,
-                                  model.insideTab && model.cursor == 2 && model.fieldOpen);
-        detail::drawLabelledField(canvas, band, ms::COL_LEFT_X, ms::ROW_B_BOX_Y,
-                                  "SEP", barText,
-                                  model.insideTab && model.cursor == 3,
-                                  model.insideTab && model.cursor == 3 && model.fieldOpen);
-        detail::drawLabelledField(canvas, band, ms::COL_RIGHT_X, ms::ROW_B_BOX_Y,
-                                  "EDIT", nullptr,
-                                  model.insideTab && model.cursor == 4,
-                                  false);
     }
 
     if (touches(band, ms::RULE_Y, ms::RULE_Y)) {

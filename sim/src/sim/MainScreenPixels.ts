@@ -61,6 +61,8 @@ export const LBL_MODE = "MODE:";
 export const LBL_OFFSET = "OFFSET:";
 export const LBL_SUBDIV_FIELD = "SUBDIV:";
 export const LBL_MOD = "MOD:";
+export const LBL_EDIT = "EDIT";
+export const LBL_CONFIG = "CONFIG";
 export const LBL_OFF = "OFF";
 export const LBL_SUBDIVISION = "SUBDIVISION";
 export const LBL_SKIP_CHANCE = "SKIP CHANCE";
@@ -177,6 +179,9 @@ export function configLine(model: MainScreenModel, index: number): [string, stri
 export function legacyLine(model: MainScreenModel, index: number): [string, string] {
   if (model.configPage) return configLine(model, index);
   if (index === 0) return [LBL_MODE, modeText(model.mode)];
+  if (model.mode === ChannelMode.SEQ) {
+    return [index === 1 ? LBL_EDIT : LBL_CONFIG, ""];
+  }
   if (index === 1) {
     if (model.mode === ChannelMode.CLOCK) {
       return [LBL_OFFSET, `${writeUnsigned(model.offset)}/${writeUnsigned(model.stepTicks)}`];
@@ -273,8 +278,7 @@ export interface Render {
 
 export function renderMainScreen(model: MainScreenModel): Render {
   const ink = new Ink();
-  const legacy = (model.configPage || model.legacyLayout)
-    && model.tab !== 0 && model.tab !== TAB_COUNT - 1;
+  const legacy = model.tab !== 0 && model.tab !== TAB_COUNT - 1;
   const cursorOnHeadline = model.insideTab && model.cursor === 0;
 
   if (!legacy) {
@@ -313,18 +317,6 @@ export function renderMainScreen(model: MainScreenModel): Render {
     );
   } else if (legacy) {
     drawLegacyChannel(ink, model);
-  } else if (model.tab !== TAB_COUNT - 1) {
-    drawLabelledField(ink, COL_LEFT_X, ROW_A_BOX_Y, "LEN", writeUnsigned(model.length),
-      model.insideTab && model.cursor === 1,
-      model.insideTab && model.cursor === 1 && model.fieldOpen);
-    drawLabelledField(ink, COL_RIGHT_X, ROW_A_BOX_Y, "SUB", subdivLabel(model.subdiv),
-      model.insideTab && model.cursor === 2,
-      model.insideTab && model.cursor === 2 && model.fieldOpen);
-    drawLabelledField(ink, COL_LEFT_X, ROW_B_BOX_Y, "SEP", barLabel(model.barLength),
-      model.insideTab && model.cursor === 3,
-      model.insideTab && model.cursor === 3 && model.fieldOpen);
-    drawLabelledField(ink, COL_RIGHT_X, ROW_B_BOX_Y, "EDIT", null,
-      model.insideTab && model.cursor === 4, false);
   }
 
   ink.drawHLine(RULE_X, RULE_Y, RULE_W);

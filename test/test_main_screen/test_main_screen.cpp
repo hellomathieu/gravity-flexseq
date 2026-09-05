@@ -125,7 +125,7 @@ MainScreenModel channelTab(uint8_t tab = 1) {
     m.insideTab = false;
     m.cursor = 0;
     m.fieldOpen = false;
-    m.fieldCount = 5;
+    m.fieldCount = 3;
     m.patternIndex = 0;
     m.length = 16;
     m.subdiv = 1;
@@ -133,14 +133,10 @@ MainScreenModel channelTab(uint8_t tab = 1) {
     m.tempo = 120;
     m.clockSource = 0;
     m.headlineWidth = 0;
-    // ⚠️ Ces champs etaient NON INITIALISES, donc les tests passaient par
-    // hasard : legacyLayout decidait de la mise en page sur une valeur au
-    // hasard de la pile.
     m.mode = static_cast<uint8_t>(flexseq::MODE_SEQ);
     m.offset = 0;
     m.skipChance = 0;
     m.mainParameter = flexseq::MAIN_PATTERN;
-    m.legacyLayout = false;
     return m;
 }
 
@@ -149,7 +145,6 @@ MainScreenModel legacyTab(flexseq::ChannelMode mode, uint8_t cursor = 0,
                           bool insideTab = true, bool fieldOpen = false) {
     MainScreenModel m = channelTab();
     m.mode = static_cast<uint8_t>(mode);
-    m.legacyLayout = true;
     m.fieldCount = 3;
     m.cursor = cursor;
     m.insideTab = insideTab;
@@ -235,25 +230,30 @@ void test_the_clock_and_settings_tabs_are_glyphs_not_digits() {
  * Contenu d'un onglet de channel
  */
 
-void test_the_headline_is_the_pattern_name_centred_on_its_baseline() {
+void test_the_pattern_name_is_the_main_parameter_of_a_seq_tab() {
     canvas.reset();
     MainScreenModel m = channelTab();
-    m.patternIndex = 9; // B2
+    m.patternIndex = 9;
     drawMainScreen(canvas, m);
-    const Call* call = canvas.findOnBaseline("B2", ms::HEADLINE_BASELINE_Y);
-    TEST_ASSERT_NOT_NULL(call);
-    TEST_ASSERT_EQUAL_UINT8((screen::WIDTH - canvas.getStrWidth("B2")) / 2, call->x);
+    const Call* call = canvas.findOnBaseline("B2", ms::MAIN_VALUE_BASELINE_Y);
+    TEST_ASSERT_NOT_NULL_MESSAGE(call, "le nom du pattern est le gros parametre");
+    canvas.setFont(flexseq::FONT_STK_L);
+    const uint8_t w = canvas.getStrWidth("B2");
+    canvas.setFont(flexseq::FONT_VELVETSCREEN);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(ms::MAIN_CENTRE_X - w / 2, call->x,
+        "il est centre sur la moitie gauche, comme dans l original");
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("PATTERN"), "et son etiquette est PATTERN");
 }
 
 // Un seul jeu de glyphes : le renderer ne change JAMAIS de police, donc rien ne
 // peut rester dans le mauvais etat pour l'element suivant.
-void test_the_renderer_never_switches_font() {
+void test_the_renderer_restores_the_label_font_after_the_main_parameter() {
     canvas.reset();
     drawMainScreen(canvas, channelTab());
+    TEST_ASSERT_FALSE_MESSAGE(canvas.bigFont,
+        "la grande police ne reste pas armee pour l element suivant");
     const Call* digit = canvas.findOnBaseline("1", ms::TAB_BASELINE_Y);
-    TEST_ASSERT_NOT_NULL(digit);
-    const Call* headline = canvas.findOnBaseline("A1", ms::HEADLINE_BASELINE_Y);
-    TEST_ASSERT_NOT_NULL(headline);
+    TEST_ASSERT_NOT_NULL_MESSAGE(digit, "le chiffre de l onglet est dessine");
 }
 
 // L'espace laisse libre sous la seconde rangee est REEL : c'est la place des
@@ -267,43 +267,26 @@ void test_the_space_below_the_rows_is_reserved_and_empty() {
     TEST_ASSERT_EQUAL_UINT16(0, canvas.inkInRows(top, ms::RULE_Y - 1));
 }
 
-void test_a_channel_tab_shows_length_subdiv_separation_and_the_edit_entry() {
-    canvas.reset();
-    MainScreenModel m = channelTab();
-    m.length = 20;
-    m.subdiv = -4;
-    m.barLength = 3;
-    drawMainScreen(canvas, m);
-
-    TEST_ASSERT_NOT_NULL(canvas.find("LEN"));
-    TEST_ASSERT_NOT_NULL(canvas.find("20"));
-    TEST_ASSERT_NOT_NULL(canvas.find("SUB"));
-    TEST_ASSERT_NOT_NULL(canvas.find("x4"));
-    TEST_ASSERT_NOT_NULL(canvas.find("SEP"));
-    TEST_ASSERT_NOT_NULL(canvas.find("3"));
-    TEST_ASSERT_NOT_NULL(canvas.find("EDIT"));
-}
-
-void test_the_five_fields_of_a_channel_tab_fit_without_scrolling() {
+void test_a_seq_tab_draws_its_three_lines_at_the_geometry_of_the_original() {
     canvas.reset();
     drawMainScreen(canvas, channelTab());
-    const uint8_t rowA = canvas.find("LEN")->y;
-    const uint8_t rowB = canvas.find("SEP")->y;
 
-    // Les positions sont verifiees les unes PAR RAPPORT aux autres, jamais contre
-    // la constante qu'elles devraient controler : une assertion ecrite ainsi
-    // passe quelle que soit la valeur de cette constante.
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(rowA, canvas.find("SUB")->y,
-                                    "LEN et SUB doivent partager une rangee");
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(rowB, canvas.find("EDIT")->y,
-                                    "SEP et EDIT doivent partager une rangee");
-    TEST_ASSERT_TRUE_MESSAGE(rowB >= rowA + ms::ROW_BOX_H,
-                             "les deux rangees se chevauchent");
-    TEST_ASSERT_TRUE(canvas.find("LEN")->x < canvas.find("SUB")->x);
-    TEST_ASSERT_TRUE(canvas.find("SEP")->x < canvas.find("EDIT")->x);
-    TEST_ASSERT_TRUE_MESSAGE(rowA > ms::HEADLINE_BOX_Y + ms::HEADLINE_BOX_H - 1,
-                             "la premiere rangee empiete sur la grande police");
-    TEST_ASSERT_TRUE_MESSAGE(rowB < ms::RULE_Y, "la seconde rangee empiete sur le filet");
+    const Call* mode = canvas.find("MODE:");
+    TEST_ASSERT_NOT_NULL_MESSAGE(mode, "la ligne 1 porte MODE:");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(ms::LINE_LABEL_X, mode->x, "etiquette a x=62");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(ms::LINE_0_BASELINE_Y, mode->y, "ligne de base 8");
+
+    const Call* edit = canvas.find("EDIT");
+    TEST_ASSERT_NOT_NULL_MESSAGE(edit, "la ligne 2 porte EDIT");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(ms::LINE_LABEL_X, edit->x, "etiquette a x=62");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(ms::LINE_1_BASELINE_Y, edit->y, "ligne de base 19");
+
+    const Call* config = canvas.find("CONFIG");
+    TEST_ASSERT_NOT_NULL_MESSAGE(config, "la ligne 3 porte CONFIG");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(ms::LINE_2_BASELINE_Y, config->y, "ligne de base 30");
+
+    TEST_ASSERT_NULL_MESSAGE(canvas.find("OFF"),
+        "EDIT et CONFIG sont des entrees, elles ne portent aucune valeur");
 }
 
 void test_subdiv_is_shown_the_gravity_way() {
@@ -386,38 +369,52 @@ void test_the_settings_tab_is_empty_while_it_is_deferred() {
  * Curseur et champ ouvert
  */
 
-void test_the_cursor_frames_the_field_it_is_on() {
-    canvas.reset();
-    MainScreenModel m = channelTab();
-    m.insideTab = true;
-    m.cursor = 2; // SUB, colonne de droite
-    drawMainScreen(canvas, m);
-    TEST_ASSERT_TRUE(canvas.at(ms::COL_RIGHT_X, ms::ROW_A_BOX_Y));
-    TEST_ASSERT_TRUE(canvas.at(static_cast<uint8_t>(ms::COL_RIGHT_X + ms::COL_W - 1),
-                               ms::ROW_A_BOX_Y));
-    TEST_ASSERT_FALSE_MESSAGE(canvas.at(ms::COL_LEFT_X, ms::ROW_A_BOX_Y),
-                              "la colonne de gauche est encadree a tort");
+static uint16_t inkInBoxOf(const RecordingCanvas& c, uint8_t x0, uint8_t w,
+                           uint8_t baseline) {
+    uint16_t ink = 0;
+    for (uint8_t y = static_cast<uint8_t>(baseline - 6); y <= baseline; ++y) {
+        for (uint8_t x = x0; x < x0 + w; ++x) {
+            if (c.at(x, y)) ++ink;
+        }
+    }
+    return ink;
 }
 
-void test_an_open_field_is_inverted_and_the_frame_alone_is_not() {
+void test_the_cursor_marks_the_line_it_is_on_and_no_other() {
+    canvas.reset();
     MainScreenModel m = channelTab();
     m.insideTab = true;
-    m.cursor = 1; // LEN
+    m.cursor = 1;
+    drawMainScreen(canvas, m);
+    const uint16_t line0 = inkInBoxOf(canvas, ms::LINE_LABEL_X - 1, 40,
+                                      ms::LINE_0_BASELINE_Y);
+    const uint16_t line1 = inkInBoxOf(canvas, ms::LINE_LABEL_X - 1, 40,
+                                      ms::LINE_1_BASELINE_Y);
+    const uint16_t line2 = inkInBoxOf(canvas, ms::LINE_LABEL_X - 1, 40,
+                                      ms::LINE_2_BASELINE_Y);
+    TEST_ASSERT_TRUE_MESSAGE(line1 > line0, "la ligne du curseur porte le pave");
+    TEST_ASSERT_TRUE_MESSAGE(line1 > line2, "et elle seule");
+}
+
+void test_opening_a_field_moves_the_mark_from_the_label_to_the_value() {
+    canvas.reset();
+    drawMainScreen(canvas, legacyTab(flexseq::MODE_CLOCK, 0, true, false));
+    const uint16_t labelClosed = inkInBoxOf(canvas, ms::LINE_LABEL_X - 1, 36,
+                                            ms::LINE_0_BASELINE_Y);
+    const uint16_t valueClosed = inkInBoxOf(canvas, ms::LINE_VALUE_X - 2, 28,
+                                            ms::LINE_0_BASELINE_Y);
 
     canvas.reset();
-    m.fieldOpen = false;
-    drawMainScreen(canvas, m);
-    const uint16_t framed = canvas.inkInRows(ms::ROW_A_BOX_Y,
-        static_cast<uint8_t>(ms::ROW_A_BOX_Y + ms::ROW_BOX_H - 1));
+    drawMainScreen(canvas, legacyTab(flexseq::MODE_CLOCK, 0, true, true));
+    const uint16_t labelOpen = inkInBoxOf(canvas, ms::LINE_LABEL_X - 1, 36,
+                                          ms::LINE_0_BASELINE_Y);
+    const uint16_t valueOpen = inkInBoxOf(canvas, ms::LINE_VALUE_X - 2, 28,
+                                          ms::LINE_0_BASELINE_Y);
 
-    canvas.reset();
-    m.fieldOpen = true;
-    drawMainScreen(canvas, m);
-    const uint16_t inverted = canvas.inkInRows(ms::ROW_A_BOX_Y,
-        static_cast<uint8_t>(ms::ROW_A_BOX_Y + ms::ROW_BOX_H - 1));
-
-    TEST_ASSERT_TRUE_MESSAGE(inverted > framed,
-                             "un champ ouvert doit poser plus d'encre qu'un simple cadre");
+    TEST_ASSERT_TRUE_MESSAGE(labelClosed > labelOpen,
+        "le pave quitte l etiquette quand le champ s ouvre");
+    TEST_ASSERT_TRUE_MESSAGE(valueOpen > valueClosed,
+        "et un cadre entoure la valeur");
 }
 
 void test_no_cursor_is_drawn_while_on_the_tab_bar() {
@@ -593,14 +590,14 @@ void test_the_config_page_shows_none_of_the_three_lines_of_a_mode_tab() {
         "ni l etiquette du parametre principal d un canal en CLOCK");
 }
 
-void test_a_seq_tab_without_the_config_flag_is_unchanged() {
+void test_a_seq_tab_without_the_config_flag_shows_its_own_lines() {
     RecordingCanvas canvas;
     MainScreenModel m = configTab();
     m.configPage = false;
-    m.legacyLayout = false;
     drawMainScreen(canvas, m);
     TEST_ASSERT_NULL_MESSAGE(canvas.find("LENGTH:"), "la page CONFIG ne fuit pas");
-    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("LEN"), "l onglet SEQ garde sa forme");
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("EDIT"), "l onglet SEQ reprend EDIT");
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("CONFIG"), "et CONFIG");
 }
 
 void test_random_shows_the_skip_chance_as_a_percentage() {
@@ -620,12 +617,17 @@ void test_the_legacy_layout_draws_no_headline_and_no_old_field() {
     TEST_ASSERT_NULL_MESSAGE(canvas.find("EDIT"), "et l entree en edition aussi");
 }
 
-void test_a_seq_tab_keeps_the_old_layout() {
+void test_a_seq_tab_takes_the_three_lines_of_the_original() {
     RecordingCanvas canvas;
     drawMainScreen(canvas, channelTab());
-    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("LEN"),
-        "SEQ garde sa forme jusqu au lot 12");
-    TEST_ASSERT_NULL_MESSAGE(canvas.find("MODE:"), "et ne prend pas les trois lignes");
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("MODE:"), "la premiere ligne est MODE");
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("EDIT"), "la deuxieme est EDIT");
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("CONFIG"), "la troisieme est CONFIG");
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("PATTERN"),
+        "et le parametre principal est le nom du pattern");
+    TEST_ASSERT_NULL_MESSAGE(canvas.find("LEN"), "LEN a quitte l onglet");
+    TEST_ASSERT_NULL_MESSAGE(canvas.find("SUB"), "SUB aussi");
+    TEST_ASSERT_NULL_MESSAGE(canvas.find("SEP"), "SEP aussi");
 }
 
 void test_the_cursor_inverts_the_label_of_its_line() {
@@ -653,10 +655,10 @@ int main() {
     RUN_TEST(test_the_config_page_shows_the_pattern_name_in_the_large_font);
     RUN_TEST(test_the_config_page_carries_length_subdiv_and_mod);
     RUN_TEST(test_the_config_page_shows_none_of_the_three_lines_of_a_mode_tab);
-    RUN_TEST(test_a_seq_tab_without_the_config_flag_is_unchanged);
+    RUN_TEST(test_a_seq_tab_without_the_config_flag_shows_its_own_lines);
     RUN_TEST(test_random_shows_the_skip_chance_as_a_percentage);
     RUN_TEST(test_the_legacy_layout_draws_no_headline_and_no_old_field);
-    RUN_TEST(test_a_seq_tab_keeps_the_old_layout);
+    RUN_TEST(test_a_seq_tab_takes_the_three_lines_of_the_original);
     RUN_TEST(test_the_cursor_inverts_the_label_of_its_line);
 
     RUN_TEST(test_the_tab_bar_has_eight_evenly_spaced_slots);
@@ -664,11 +666,10 @@ int main() {
     RUN_TEST(test_the_selected_tab_is_inverted);
     RUN_TEST(test_the_clock_and_settings_tabs_are_glyphs_not_digits);
 
-    RUN_TEST(test_the_headline_is_the_pattern_name_centred_on_its_baseline);
-    RUN_TEST(test_the_renderer_never_switches_font);
+    RUN_TEST(test_the_pattern_name_is_the_main_parameter_of_a_seq_tab);
+    RUN_TEST(test_the_renderer_restores_the_label_font_after_the_main_parameter);
     RUN_TEST(test_the_space_below_the_rows_is_reserved_and_empty);
-    RUN_TEST(test_a_channel_tab_shows_length_subdiv_separation_and_the_edit_entry);
-    RUN_TEST(test_the_five_fields_of_a_channel_tab_fit_without_scrolling);
+    RUN_TEST(test_a_seq_tab_draws_its_three_lines_at_the_geometry_of_the_original);
     RUN_TEST(test_subdiv_is_shown_the_gravity_way);
     RUN_TEST(test_a_separation_of_none_is_shown_as_a_dash);
     RUN_TEST(test_every_pattern_of_the_bank_has_a_distinct_name);
@@ -677,8 +678,8 @@ int main() {
     RUN_TEST(test_the_six_clock_sources_have_distinct_labels);
     RUN_TEST(test_the_settings_tab_is_empty_while_it_is_deferred);
 
-    RUN_TEST(test_the_cursor_frames_the_field_it_is_on);
-    RUN_TEST(test_an_open_field_is_inverted_and_the_frame_alone_is_not);
+    RUN_TEST(test_the_cursor_marks_the_line_it_is_on_and_no_other);
+    RUN_TEST(test_opening_a_field_moves_the_mark_from_the_label_to_the_value);
     RUN_TEST(test_no_cursor_is_drawn_while_on_the_tab_bar);
 
     RUN_TEST(test_eight_bands_reunited_equal_the_whole_image);

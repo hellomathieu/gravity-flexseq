@@ -1,3 +1,4 @@
+#include <flexseq/ChannelMode.h>
 #include <flexseq/MainScreenModel.h>
 #include <flexseq/OriginalFonts.h>
 #include <Arduino.h>
@@ -68,6 +69,9 @@ void setup() {
     gravity.Init();
     gravity.display.setFont(flexseq::FONT_VELVETSCREEN);
 
+#if defined(FLEXSEQ_DEMO_MODE_SEQ)
+    engine.setChannelMode(DEMO_TAB - 1, flexseq::MODE_SEQ);
+#endif
     engine.setSelectedPattern(DEMO_TAB - 1, 9);
     engine.setBaseLength(DEMO_TAB - 1, 20);
     engine.setSubdiv(DEMO_TAB - 1, -4);

@@ -53,7 +53,6 @@ function mainModel(over: Partial<MainScreenModel>): MainScreenModel {
     skipChance: 3,
     stepTicks: 24,
     mainParameter: MainParameter.Subdiv,
-    legacyLayout: true,
     configPage: false,
     tempo: 120,
     clockSource: 0,
@@ -152,7 +151,6 @@ const SHOTS: Shot[] = [
       cursor: 1,
       mode: ChannelMode.SEQ,
       mainParameter: MainParameter.Pattern,
-      legacyLayout: false,
       fieldCount: 6,
     }),
   ),
@@ -160,13 +158,13 @@ const SHOTS: Shot[] = [
     "8 — l onglet de l horloge",
     "Le tempo en grand, la source en dessous. Le glyphe de l onglet est celui de "
       + "l original.",
-    mainModel({ tab: 0, insideTab: true, cursor: 1, legacyLayout: false }),
+    mainModel({ tab: 0, insideTab: true, cursor: 1 }),
   ),
   fromMain(
     "9 — l onglet des reglages",
     "Il ne porte aucun champ pour l instant, donc un appui n y fait rien plutot "
       + "que d ouvrir un niveau vide.",
-    mainModel({ tab: 7, insideTab: false, legacyLayout: false }),
+    mainModel({ tab: 7, insideTab: false }),
   ),
   fromMain(
     "10 — CONFIG PATTERN",
@@ -179,7 +177,6 @@ const SHOTS: Shot[] = [
       insideTab: true,
       cursor: 0,
       configPage: true,
-      legacyLayout: false,
       mode: ChannelMode.SEQ,
       mainParameter: MainParameter.Pattern,
       patternIndex: 9,

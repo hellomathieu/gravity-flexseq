@@ -34,7 +34,6 @@ struct MainScreenModel {
     uint16_t stepTicks;
     uint8_t mainParameter;
 
-    bool legacyLayout;
     bool configPage;
 
     uint16_t tempo;
