@@ -722,6 +722,32 @@ and each kept a way in**: `PATTERN` became the principal parameter, adjusted by
 went to the header of `EDIT` (decision 11 below). Nothing became unreachable,
 which is the ordering the paragraph below demanded.
 
+⚠️ **THE DRAWING FOLLOWED ONLY ON 2026-09-05, and the paragraph above was true
+of the controller alone.** Lot 12 moved the field list of a `SEQ` tab to `MODE`,
+`EDIT` and `CONFIG`. It left the **screen** on the layout of before lot 11: four
+fields `LEN`, `SUB`, `SEP` and `EDIT`, keyed to the cursors 1 to 4. A channel tab
+carries three cursor positions, so two of those fields were **unreachable**, and
+the two that were reachable showed a label that did not name what they did. The
+`TypeScript` mirror carried the same fault, and the tests of both languages froze
+it as expected behaviour.
+
+**A channel tab now uses the layout of the original in EVERY mode**, and only the
+content changes: the main parameter is the subdivision in `CLOCK`, the skip
+chance in `RANDOM`, and the **pattern name** in `SEQ`. The three lines are `MODE`,
+`OFFSET` or `SUBDIV`, and `MOD` outside `SEQ`; they are `MODE`, `EDIT` and
+`CONFIG` in `SEQ`. `EDIT` and `CONFIG` are entries, so they carry no value.
+
+⚠️ **`EDIT` is reachable from a channel in `SEQ` ONLY, and that is a decision of
+the owner of 2026-09-05, not a defect.** `EDIT` is a feature of `SEQ`. A channel
+in `CLOCK` or in `RANDOM` therefore has no `EDIT` field and no `CONFIG` field,
+and the factory default is `CLOCK`. Any tool that wants the `EDIT` screen sets
+the mode first, by the gesture a user makes.
+
+**Measured**: the change RETURNS **RAM 15 B and Flash 340 B**, because the
+four-field branch and the `legacyLayout` field of the screen model leave with it.
+The panel of `env:mainscreen` inks **1003 pixels** on a `SEQ` tab, and the
+`TypeScript` mirror renders the same number, row by row.
+
 **The page is a STATE of the tab, not a fourth level.** Entering it switches the
 field list; a long press clears it and returns to the tab, a second reaches the
 bar. Its large parameter is the **pattern name** with the label `PATTERN`, chosen
