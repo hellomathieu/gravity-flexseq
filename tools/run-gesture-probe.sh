@@ -47,6 +47,15 @@ production simule, et verifie leur effet.
                                  les deux lectures du parcours instances
   R11_STEP_ROTATIONS=<n>         crans de deplacement du curseur dans R11 (defaut 5)
   SKIP_EDIT=1                    n'entre pas dans EDIT (classe 2)
+  R13_CRANS_LENGTH=<1..12>       crans de la salve LENGTH de R13 (defaut 3). Le
+                                 poser leve la limite empirique, pour balayer la
+                                 plage entiere
+  R13_CRANS_DESCENTE=<1..12>     crans de la salve INVERSE de R13, pour separer
+                                 la valeur de depart du nombre de crans
+  EDGE_SPACING_MS=<0.1..50>      delai entre les quatre fronts d'un cran
+                                 (defaut 1). L'elargir CREUSE la perte de la
+                                 ligne 44 au lieu de la supprimer : mesure du
+                                 2026-09-05
   EXPECT_RATCHET_APRES=<hh>      change l'attente du ratchet (classe 3)
 
 Le harnais charge le binaire de production, attache l'ecran, lit les instances de
