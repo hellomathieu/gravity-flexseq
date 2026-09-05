@@ -1079,6 +1079,20 @@ int main(int argc, char **argv)
             return 2;
         }
     }
+    int r13CransLength = 3;
+    bool r13LimiteLevee = false;
+    {
+        const char *text = getenv("R13_CRANS_LENGTH");
+        if (text != NULL) {
+            r13CransLength = (int)strtol(text, NULL, 0);
+            r13LimiteLevee = true;
+        }
+        if (r13CransLength < 1 || r13CransLength > SHIFT_BURST_DETENTS) {
+            fprintf(stderr, "R13_CRANS_LENGTH hors de 1..%d : %d\n",
+                    SHIFT_BURST_DETENTS, r13CransLength);
+            return 2;
+        }
+    }
     int r2Rotations = flexseq::UiController::CONFIG_FIELD_INDEX_SUBDIV;
     {
         const char *text = getenv("R2_ROTATIONS");
@@ -1928,7 +1942,11 @@ int main(int argc, char **argv)
 
         for (int etape = 0; etape < 2; ++etape) {
             marque = g_twi_bytes;
-            if (!skipBGeste) shiftRotate(avr, 3, etape == 0 ? 1 : 0, harness::LENGTH_BURST_LIMIT, false);
+            if (!skipBGeste)
+                shiftRotate(avr, r13CransLength, etape == 0 ? 1 : 0,
+                            r13LimiteLevee ? burst::NO_EMPIRICAL_LIMIT
+                                           : harness::LENGTH_BURST_LIMIT,
+                            false);
             const uint32_t twiGeste = g_twi_bytes - marque;
             const uint32_t twiRetour0 = g_twi_bytes;
             backToBar(avr);
