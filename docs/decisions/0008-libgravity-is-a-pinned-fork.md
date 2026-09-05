@@ -191,6 +191,10 @@ of the author. Entry 12 of `docs/upstream-defects.md` carries the full account.
    promises, and it adds no feature;
 6. the pin bump is a re-audit, by the list this ADR gives.
 
+**The owner validated these six conditions on 2026-09-05, and kept them without
+a change.** The draft of this amendment proposed them. The amendment of
+2026-09-03 is different: seven of its thirteen conditions came from the owner.
+
 **What this amendment does NOT permit:**
 
 - a change of an **intended** musical behaviour. The shape of the clock, the
