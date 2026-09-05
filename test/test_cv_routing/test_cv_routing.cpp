@@ -929,6 +929,48 @@ void test_a_step_routing_in_clock_keeps_a_null_zone_and_one_trigger_per_step() {
     TEST_ASSERT_EQUAL_UINT8(1, t.triggerCount(0));
 }
 
+static char modInitial(flexseq::CvDestination d) {
+    switch (d) {
+        case flexseq::CV_DEST_PATTERN: return 'P';
+        case flexseq::CV_DEST_LENGTH:  return 'L';
+        case flexseq::CV_DEST_RESET:   return 'R';
+        case flexseq::CV_DEST_STEP:    return 'S';
+        default:                       return '-';
+    }
+}
+
+void test_the_mod_cycle_holds_the_twenty_one_values_of_the_prd() {
+    static const char* attendu[21] = {
+        "-/-",
+        "P/-", "L/-", "R/-", "S/-",
+        "-/P", "-/L", "-/R", "-/S",
+        "P/L", "P/R", "P/S",
+        "L/P", "L/R", "L/S",
+        "R/P", "R/L", "R/S",
+        "S/P", "S/L", "S/R"
+    };
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(21, flexseq::MOD_CHOICE_COUNT,
+        "le cycle porte vingt et une valeurs");
+    for (uint8_t index = 0; index < 21; ++index) {
+        flexseq::CvDestination a = flexseq::CV_DEST_NONE;
+        flexseq::CvDestination b = flexseq::CV_DEST_NONE;
+        flexseq::modChoiceAt(index, &a, &b);
+        char lu[4] = { modInitial(a), '/', modInitial(b), '\0' };
+        TEST_ASSERT_EQUAL_STRING_MESSAGE(attendu[index], lu,
+            "l ordre du cycle est celui du PRD 10.2");
+        TEST_ASSERT_EQUAL_INT8_MESSAGE(static_cast<int8_t>(index),
+            flexseq::modIndexOf(a, b), "l index se retrouve depuis la paire");
+    }
+}
+
+void test_the_cycle_never_puts_two_sources_on_the_same_destination() {
+    for (uint8_t d = 1; d < flexseq::CV_DESTINATION_COUNT; ++d) {
+        const flexseq::CvDestination dest = static_cast<flexseq::CvDestination>(d);
+        TEST_ASSERT_EQUAL_INT8_MESSAGE(-1, flexseq::modIndexOf(dest, dest),
+            "la rotation ne peut pas produire deux entrees sur la meme cible");
+    }
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_the_five_destination_codes_hold_their_persisted_values);
@@ -988,5 +1030,7 @@ int main() {
     RUN_TEST(test_a_ratchet_six_on_the_local_step_alone_gives_one_trigger);
     RUN_TEST(test_a_source_routed_to_the_step_moves_neither_the_length_nor_the_pattern_index);
     RUN_TEST(test_a_step_routing_in_clock_keeps_a_null_zone_and_one_trigger_per_step);
+    RUN_TEST(test_the_mod_cycle_holds_the_twenty_one_values_of_the_prd);
+    RUN_TEST(test_the_cycle_never_puts_two_sources_on_the_same_destination);
     return UNITY_END();
 }

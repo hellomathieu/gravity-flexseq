@@ -1,5 +1,12 @@
 import { Pattern, ratchetFitsStep, RATCHET_CODES } from "./Pattern.js";
 import {
+  CV_SOURCE_1,
+  CV_SOURCE_2,
+  MOD_CHOICE_COUNT,
+  modChoiceAt,
+  modIndexOf,
+} from "./CvDestination.js";
+import {
   BAR_LENGTHS,
   CHANNEL_COUNT,
   CHANNEL_MODE_COUNT,
@@ -410,6 +417,20 @@ export class UiController {
         if (channel < 0) break;
         const current = this.engine.getChannelMode(channel) as number;
         this.engine.setChannelMode(channel, clampIndex(current, delta, CHANNEL_MODE_COUNT));
+        break;
+      }
+      case UiField.Mod: {
+        if (channel < 0) break;
+        if (this.isLegacyModeTab) break;
+        const current = modIndexOf(
+          this.engine.getCvDestination(channel, CV_SOURCE_1),
+          this.engine.getCvDestination(channel, CV_SOURCE_2),
+        );
+        const [first, second] = modChoiceAt(
+          clampIndex(current < 0 ? 0 : current, delta, MOD_CHOICE_COUNT),
+        );
+        this.engine.setCvDestination(channel, CV_SOURCE_1, first);
+        this.engine.setCvDestination(channel, CV_SOURCE_2, second);
         break;
       }
       case UiField.Offset: {

@@ -949,6 +949,73 @@ void test_the_config_page_carries_length_subdiv_and_mod() {
         "le curseur se pose sur LENGTH en entrant");
 }
 
+void test_a_rotation_of_mod_sets_both_destinations_and_clamps() {
+    ModeRig r(flexseq::MODE_SEQ);
+    r.gotoField(UiController::FIELD_CONFIG);
+    r.ui.handle(UiController::EVENT_PRESS);
+    r.gotoField(UiController::FIELD_MOD);
+    r.ui.handle(UiController::EVENT_PRESS);
+
+    for (int i = 0; i < 9; ++i) {
+        r.ui.handle(UiController::EVENT_ROTATE, 1);
+    }
+    TEST_ASSERT_EQUAL_MESSAGE(flexseq::CV_DEST_PATTERN,
+        r.engine.getCvDestination(0, flexseq::CV_SOURCE_1),
+        "la neuvieme valeur du cycle est P/L");
+    TEST_ASSERT_EQUAL_MESSAGE(flexseq::CV_DEST_LENGTH,
+        r.engine.getCvDestination(0, flexseq::CV_SOURCE_2),
+        "et elle pose les DEUX destinations");
+
+    for (int i = 0; i < 40; ++i) {
+        r.ui.handle(UiController::EVENT_ROTATE, 1);
+    }
+    TEST_ASSERT_EQUAL_MESSAGE(flexseq::CV_DEST_STEP,
+        r.engine.getCvDestination(0, flexseq::CV_SOURCE_1), "le cycle ecrete sur S/R");
+    TEST_ASSERT_EQUAL_MESSAGE(flexseq::CV_DEST_RESET,
+        r.engine.getCvDestination(0, flexseq::CV_SOURCE_2), "la vingt et unieme valeur");
+
+    for (int i = 0; i < 40; ++i) {
+        r.ui.handle(UiController::EVENT_ROTATE, -1);
+    }
+    TEST_ASSERT_EQUAL_MESSAGE(flexseq::CV_DEST_NONE,
+        r.engine.getCvDestination(0, flexseq::CV_SOURCE_1), "et ecrete sur OFF");
+    TEST_ASSERT_EQUAL_MESSAGE(flexseq::CV_DEST_NONE,
+        r.engine.getCvDestination(0, flexseq::CV_SOURCE_2), "les deux entrees liberees");
+}
+
+void test_a_single_value_of_mod_frees_the_second_input() {
+    ModeRig r(flexseq::MODE_SEQ);
+    r.engine.setCvDestination(0, flexseq::CV_SOURCE_1, flexseq::CV_DEST_PATTERN);
+    r.engine.setCvDestination(0, flexseq::CV_SOURCE_2, flexseq::CV_DEST_LENGTH);
+    r.gotoField(UiController::FIELD_CONFIG);
+    r.ui.handle(UiController::EVENT_PRESS);
+    r.gotoField(UiController::FIELD_MOD);
+    r.ui.handle(UiController::EVENT_PRESS);
+
+    for (int i = 0; i < 8; ++i) {
+        r.ui.handle(UiController::EVENT_ROTATE, -1);
+    }
+    TEST_ASSERT_EQUAL_MESSAGE(flexseq::CV_DEST_PATTERN,
+        r.engine.getCvDestination(0, flexseq::CV_SOURCE_1), "P reste sur CV1");
+    TEST_ASSERT_EQUAL_MESSAGE(flexseq::CV_DEST_NONE,
+        r.engine.getCvDestination(0, flexseq::CV_SOURCE_2),
+        "une valeur simple LIBERE la seconde entree");
+}
+
+void test_a_clock_channel_does_not_edit_its_routing() {
+    ModeRig r(flexseq::MODE_CLOCK);
+    r.gotoField(UiController::FIELD_MOD);
+    r.ui.handle(UiController::EVENT_PRESS);
+    for (int i = 0; i < 5; ++i) {
+        r.ui.handle(UiController::EVENT_ROTATE, 1);
+    }
+    TEST_ASSERT_EQUAL_MESSAGE(flexseq::CV_DEST_NONE,
+        r.engine.getCvDestination(0, flexseq::CV_SOURCE_1),
+        "en CLOCK la destination du PRD 10.2 n existe pas encore : rien ne bouge");
+    TEST_ASSERT_EQUAL_MESSAGE(flexseq::CV_DEST_NONE,
+        r.engine.getCvDestination(0, flexseq::CV_SOURCE_2), "ni sur la seconde entree");
+}
+
 void test_a_long_press_leaves_the_config_page_for_the_tab() {
     ModeRig r(flexseq::MODE_SEQ);
     r.gotoField(UiController::FIELD_CONFIG);
@@ -1095,6 +1162,9 @@ int main(int, char**) {
     RUN_TEST(test_a_seq_tab_takes_the_three_lines_of_the_original);
     RUN_TEST(test_the_published_field_indices_agree_with_fieldAt);
     RUN_TEST(test_the_config_page_carries_length_subdiv_and_mod);
+    RUN_TEST(test_a_rotation_of_mod_sets_both_destinations_and_clamps);
+    RUN_TEST(test_a_single_value_of_mod_frees_the_second_input);
+    RUN_TEST(test_a_clock_channel_does_not_edit_its_routing);
     RUN_TEST(test_a_long_press_leaves_the_config_page_for_the_tab);
     RUN_TEST(test_the_config_page_is_left_behind_when_a_tab_is_entered_again);
     RUN_TEST(test_the_length_is_edited_on_the_config_page);

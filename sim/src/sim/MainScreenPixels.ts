@@ -55,6 +55,7 @@ import {
 } from "./MainScreenDisplay.js";
 import { MainParameter, type MainScreenModel } from "../domain/MainScreenModel.js";
 import { ChannelMode } from "../domain/SequencerEngine.js";
+import { CvDestination } from "../domain/CvDestination.js";
 import { STK_L, VELVETSCREEN, glyphFor, textWidth, type Font } from "./oledFont.js";
 
 export const LBL_MODE = "MODE:";
@@ -173,7 +174,27 @@ function modeText(mode: ChannelMode): string {
 export function configLine(model: MainScreenModel, index: number): [string, string] {
   if (index === 0) return [LBL_LENGTH, String(model.length)];
   if (index === 1) return [LBL_SUBDIV_FIELD, subdivLabel(model.subdiv)];
-  return [LBL_MOD, LBL_OFF];
+  return [LBL_MOD, modText(model)];
+}
+
+// Le nommage est TOTAL : il accepte les vingt-cinq combinaisons que le format
+// peut porter, dont les quatre que le cycle de MOD ne produit pas. L'ecran ne
+// peut donc jamais tomber sur un routage qu'il ne sait pas nommer.
+export function modLetter(destination: number): string {
+  switch (destination) {
+    case CvDestination.PATTERN: return "P";
+    case CvDestination.LENGTH: return "L";
+    case CvDestination.RESET: return "R";
+    case CvDestination.STEP: return "S";
+    default: return "-";
+  }
+}
+
+export function modText(model: MainScreenModel): string {
+  if (model.cv1Target === CvDestination.NONE && model.cv2Target === CvDestination.NONE) {
+    return LBL_OFF;
+  }
+  return `${modLetter(model.cv1Target)}/${modLetter(model.cv2Target)}`;
 }
 
 export function legacyLine(model: MainScreenModel, index: number): [string, string] {
@@ -188,7 +209,7 @@ export function legacyLine(model: MainScreenModel, index: number): [string, stri
     }
     return [LBL_SUBDIV_FIELD, subdivLabel(model.subdiv)];
   }
-  return [LBL_MOD, LBL_OFF];
+  return [LBL_MOD, modText(model)];
 }
 
 function drawClockGlyph(ink: Ink, cx: number, cy: number): void {

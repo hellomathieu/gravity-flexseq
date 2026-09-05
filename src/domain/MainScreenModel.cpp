@@ -35,6 +35,12 @@ MainScreenModel mainScreenModelOf(const UiController& ui, const SequencerEngine&
         case UiController::FIELD_PATTERN:     model.mainParameter = MAIN_PATTERN; break;
         default:                              model.mainParameter = MAIN_NONE; break;
     }
+    model.cv1Target = onChannel
+        ? static_cast<uint8_t>(engine.getCvDestination(ch, CV_SOURCE_1))
+        : static_cast<uint8_t>(CV_DEST_NONE);
+    model.cv2Target = onChannel
+        ? static_cast<uint8_t>(engine.getCvDestination(ch, CV_SOURCE_2))
+        : static_cast<uint8_t>(CV_DEST_NONE);
     model.configPage = ui.isOnConfigPage();
     model.tempo = ui.tempo();
     model.clockSource = ui.clockSource();

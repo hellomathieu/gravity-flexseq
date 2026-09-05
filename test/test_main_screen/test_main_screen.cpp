@@ -590,6 +590,60 @@ void test_the_config_page_shows_none_of_the_three_lines_of_a_mode_tab() {
         "ni l etiquette du parametre principal d un canal en CLOCK");
 }
 
+void test_the_mod_line_names_the_routing_of_both_inputs() {
+    RecordingCanvas canvas;
+    MainScreenModel m = configTab();
+    m.cv1Target = flexseq::CV_DEST_PATTERN;
+    m.cv2Target = flexseq::CV_DEST_LENGTH;
+    drawMainScreen(canvas, m);
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("MOD:"), "la ligne 3 porte MOD");
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("P/L"),
+        "la position nomme l entree : CV1 avant la barre, CV2 apres");
+    TEST_ASSERT_NULL_MESSAGE(canvas.find("OFF"), "et OFF a disparu");
+}
+
+void test_a_single_routing_shows_a_dash_for_the_free_input() {
+    RecordingCanvas canvas;
+    MainScreenModel m = configTab();
+    m.cv1Target = flexseq::CV_DEST_NONE;
+    m.cv2Target = flexseq::CV_DEST_STEP;
+    drawMainScreen(canvas, m);
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("-/S"),
+        "CV1 libre s ecrit avec un tiret, et CV2 porte STEP");
+}
+
+void test_no_routing_shows_off() {
+    RecordingCanvas canvas;
+    MainScreenModel m = configTab();
+    m.cv1Target = flexseq::CV_DEST_NONE;
+    m.cv2Target = flexseq::CV_DEST_NONE;
+    drawMainScreen(canvas, m);
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("OFF"), "aucun routage se lit OFF");
+}
+
+// Le cycle ne peut pas produire deux entrees sur la meme destination, mais le
+// format le peut. Le nommage doit donc l accepter, sinon l ecran mentirait.
+void test_the_naming_accepts_a_routing_the_cycle_cannot_produce() {
+    RecordingCanvas canvas;
+    MainScreenModel m = configTab();
+    m.cv1Target = flexseq::CV_DEST_PATTERN;
+    m.cv2Target = flexseq::CV_DEST_PATTERN;
+    drawMainScreen(canvas, m);
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("P/P"),
+        "deux entrees sur PATTERN se nomment, elles ne se taisent pas");
+    TEST_ASSERT_NULL_MESSAGE(canvas.find("OFF"), "et surtout elles ne se lisent pas OFF");
+}
+
+void test_a_clock_tab_names_the_routing_it_carries() {
+    RecordingCanvas canvas;
+    MainScreenModel m = legacyTab(flexseq::MODE_CLOCK);
+    m.cv1Target = flexseq::CV_DEST_RESET;
+    m.cv2Target = flexseq::CV_DEST_NONE;
+    drawMainScreen(canvas, m);
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("R/-"),
+        "un canal passe en CLOCK garde son routage, et l ecran le dit");
+}
+
 void test_a_seq_tab_without_the_config_flag_shows_its_own_lines() {
     RecordingCanvas canvas;
     MainScreenModel m = configTab();
@@ -655,6 +709,11 @@ int main() {
     RUN_TEST(test_the_config_page_shows_the_pattern_name_in_the_large_font);
     RUN_TEST(test_the_config_page_carries_length_subdiv_and_mod);
     RUN_TEST(test_the_config_page_shows_none_of_the_three_lines_of_a_mode_tab);
+    RUN_TEST(test_the_mod_line_names_the_routing_of_both_inputs);
+    RUN_TEST(test_a_single_routing_shows_a_dash_for_the_free_input);
+    RUN_TEST(test_no_routing_shows_off);
+    RUN_TEST(test_the_naming_accepts_a_routing_the_cycle_cannot_produce);
+    RUN_TEST(test_a_clock_tab_names_the_routing_it_carries);
     RUN_TEST(test_a_seq_tab_without_the_config_flag_shows_its_own_lines);
     RUN_TEST(test_random_shows_the_skip_chance_as_a_percentage);
     RUN_TEST(test_the_legacy_layout_draws_no_headline_and_no_old_field);

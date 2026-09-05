@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { legacyLine, renderMainScreen } from "../src/sim/MainScreenPixels.js";
+import { legacyLine, modText, renderMainScreen } from "../src/sim/MainScreenPixels.js";
 import { MainParameter, type MainScreenModel } from "../src/domain/MainScreenModel.js";
 import { ChannelMode } from "../src/domain/SequencerEngine.js";
+import { CvDestination } from "../src/domain/CvDestination.js";
 import { STK_L, VELVETSCREEN, textAdvance, textWidth } from "../src/sim/oledFont.js";
 import {
   LINE_0_BASELINE_Y,
@@ -33,6 +34,8 @@ const PANEL_MODEL: MainScreenModel = {
   skipChance: 0,
   stepTicks: 24,
   mainParameter: MainParameter.Subdiv,
+  cv1Target: 0,
+  cv2Target: 0,
   configPage: false,
   tempo: 120,
   clockSource: 0,
@@ -184,5 +187,75 @@ describe("l onglet d un canal en SEQ", () => {
   it("EDIT et CONFIG sont des entrees : elles ne portent aucune valeur", () => {
     expect(legacyLine(seq, 1)[1]).toBe("");
     expect(legacyLine(seq, 2)[1]).toBe("");
+  });
+});
+
+describe("la ligne MOD nomme le routage des deux entrees", () => {
+  const avec = (a: number, b: number): MainScreenModel =>
+    ({ ...PANEL_MODEL, mode: ChannelMode.SEQ, configPage: true, cv1Target: a, cv2Target: b });
+
+  it("la position nomme l entree, CV1 avant CV2", () => {
+    expect(modText(avec(CvDestination.PATTERN, CvDestination.LENGTH))).toBe("P/L");
+    expect(modText(avec(CvDestination.LENGTH, CvDestination.PATTERN))).toBe("L/P");
+  });
+
+  it("une entree libre s ecrit avec un tiret", () => {
+    expect(modText(avec(CvDestination.RESET, CvDestination.NONE))).toBe("R/-");
+    expect(modText(avec(CvDestination.NONE, CvDestination.STEP))).toBe("-/S");
+  });
+
+  it("aucun routage se lit OFF", () => {
+    expect(modText(avec(CvDestination.NONE, CvDestination.NONE))).toBe("OFF");
+  });
+
+  it("le nommage accepte un routage que le cycle ne produit pas", () => {
+    expect(modText(avec(CvDestination.PATTERN, CvDestination.PATTERN))).toBe("P/P");
+  });
+
+  it("la ligne 3 de la page CONFIG porte ce nom", () => {
+    expect(legacyLine(avec(CvDestination.STEP, CvDestination.RESET), 2)).toEqual(["MOD:", "S/R"]);
+  });
+});
+
+/**
+ * Le meme releve, pour la page CONFIG PATTERN d'un canal en SEQ dont CV1 va au
+ * PATTERN et CV2 a la LENGTH, curseur sur MOD. Lu sur `env:mainscreen` compile
+ * avec `-DFLEXSEQ_DEMO_MOD=1`.
+ */
+const CONFIG_PANEL_ROWS: ReadonlyArray<readonly [number, number]> = [
+  [3, 19], [4, 13], [5, 36], [6, 34], [7, 42], [8, 15], [9, 12], [10, 12],
+  [11, 9], [12, 9], [13, 10], [14, 31], [15, 30], [16, 37], [17, 28],
+  [18, 29], [19, 11], [20, 10], [21, 9], [22, 9], [23, 9], [24, 29],
+  [25, 40], [26, 38], [27, 40], [28, 15], [29, 18], [30, 19], [36, 20],
+  [37, 12], [38, 19], [39, 11], [40, 13], [52, 120], [56, 16], [57, 16],
+  [58, 25], [59, 29], [60, 34], [61, 31], [62, 33], [63, 23],
+];
+
+const CONFIG_PANEL_INK = 1015;
+
+describe("la page CONFIG PATTERN, confrontee au PANNEAU", () => {
+  const config: MainScreenModel = {
+    ...PANEL_MODEL,
+    mode: ChannelMode.SEQ,
+    mainParameter: MainParameter.Pattern,
+    configPage: true,
+    cv1Target: CvDestination.PATTERN,
+    cv2Target: CvDestination.LENGTH,
+  };
+
+  it("rend exactement l encre que le panneau recoit", () => {
+    expect(renderMainScreen(config).count).toBe(CONFIG_PANEL_INK);
+  });
+
+  it("rend la meme encre RANGEE PAR RANGEE", () => {
+    const rows = renderMainScreen(config).rows;
+    const expected = new Map(CONFIG_PANEL_ROWS);
+    for (let y = 0; y < rows.length; ++y) {
+      expect(rows[y], `rangee ${y}`).toBe(expected.get(y) ?? 0);
+    }
+  });
+
+  it("le total des rangees attendues vaut bien l encre attendue", () => {
+    expect(CONFIG_PANEL_ROWS.reduce((s, [, n]) => s + n, 0)).toBe(CONFIG_PANEL_INK);
   });
 });

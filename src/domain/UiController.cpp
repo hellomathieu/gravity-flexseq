@@ -383,6 +383,24 @@ void UiController::adjustFieldValue(Field target, int8_t raw) {
             engine_.setChannelMode(ch, static_cast<ChannelMode>(next));
             break;
         }
+        case FIELD_MOD: {
+            if (isLegacyModeTab()) {
+                break;
+            }
+            int8_t index = modIndexOf(engine_.getCvDestination(ch, CV_SOURCE_1),
+                                      engine_.getCvDestination(ch, CV_SOURCE_2));
+            if (index < 0) {
+                index = 0;
+            }
+            CvDestination first = CV_DEST_NONE;
+            CvDestination second = CV_DEST_NONE;
+            modChoiceAt(clampIndex(static_cast<uint8_t>(index), delta,
+                                   MOD_CHOICE_COUNT),
+                        &first, &second);
+            engine_.setCvDestination(ch, CV_SOURCE_1, first);
+            engine_.setCvDestination(ch, CV_SOURCE_2, second);
+            break;
+        }
         case FIELD_OFFSET: {
             const int16_t candidate = static_cast<int16_t>(
                 static_cast<int16_t>(engine_.getOffset(ch)) + delta);

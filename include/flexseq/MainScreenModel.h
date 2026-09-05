@@ -34,6 +34,9 @@ struct MainScreenModel {
     uint16_t stepTicks;
     uint8_t mainParameter;
 
+    uint8_t cv1Target;
+    uint8_t cv2Target;
+
     bool configPage;
 
     uint16_t tempo;

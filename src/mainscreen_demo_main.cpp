@@ -77,6 +77,11 @@ void setup() {
     engine.setSubdiv(DEMO_TAB - 1, -4);
     engine.setBarLength(DEMO_TAB - 1, 3);
 
+#if defined(FLEXSEQ_DEMO_MOD)
+    engine.setChannelMode(DEMO_TAB - 1, flexseq::MODE_SEQ);
+    engine.setCvDestination(DEMO_TAB - 1, flexseq::CV_SOURCE_1, flexseq::CV_DEST_PATTERN);
+    engine.setCvDestination(DEMO_TAB - 1, flexseq::CV_SOURCE_2, flexseq::CV_DEST_LENGTH);
+#endif
     while (ui.currentTab() != DEMO_TAB) {
         ui.handle(flexseq::UiController::EVENT_ROTATE, 1);
     }
@@ -87,6 +92,12 @@ void setup() {
         }
     }
 
+#if defined(FLEXSEQ_DEMO_MOD)
+    ui.handle(flexseq::UiController::EVENT_PRESS);
+    for (uint8_t i = 0; i < flexseq::UiController::CONFIG_FIELD_INDEX_MOD; ++i) {
+        ui.handle(flexseq::UiController::EVENT_ROTATE, 1);
+    }
+#endif
     gravity.clock.AttachIntHandler(onOutputTick);
     transport.start();
 }

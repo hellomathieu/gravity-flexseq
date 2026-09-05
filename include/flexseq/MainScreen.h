@@ -9,6 +9,7 @@
 #endif
 
 #include <flexseq/ChannelMode.h>
+#include <flexseq/CvDestination.h>
 #include <flexseq/MainScreenModel.h>
 #include <flexseq/OriginalFonts.h>
 #include <flexseq/Subdiv.h>
@@ -268,6 +269,30 @@ inline const char* mainLabelOf(const MainScreenModel& model) {
     return model.mainParameter == MAIN_SKIP_CHANCE ? LBL_SKIP_CHANCE : LBL_SUBDIVISION;
 }
 
+// Le nommage est TOTAL : il accepte les vingt-cinq combinaisons que le format
+// peut porter, dont les quatre que le cycle de MOD ne produit pas. L'ecran ne
+// peut donc jamais tomber sur un routage qu'il ne sait pas nommer.
+inline char modLetter(uint8_t destination) {
+    switch (destination) {
+        case CV_DEST_PATTERN: return 'P';
+        case CV_DEST_LENGTH:  return 'L';
+        case CV_DEST_RESET:   return 'R';
+        case CV_DEST_STEP:    return 'S';
+        default:              return '-';
+    }
+}
+
+inline void modText(const MainScreenModel& model, char* out) {
+    if (model.cv1Target == CV_DEST_NONE && model.cv2Target == CV_DEST_NONE) {
+        copyLabel(LBL_OFF, out);
+        return;
+    }
+    out[0] = modLetter(model.cv1Target);
+    out[1] = '/';
+    out[2] = modLetter(model.cv2Target);
+    out[3] = '\0';
+}
+
 inline void configLine(const MainScreenModel& model, uint8_t index,
                        const char** out, char* value) {
     if (index == 0) {
@@ -281,7 +306,7 @@ inline void configLine(const MainScreenModel& model, uint8_t index,
         return;
     }
     *out = LBL_MOD;
-    copyLabel(LBL_OFF, value);
+    modText(model, value);
 }
 
 inline void legacyLine(const MainScreenModel& model, uint8_t index,
@@ -313,7 +338,7 @@ inline void legacyLine(const MainScreenModel& model, uint8_t index,
         return;
     }
     *out = LBL_MOD;
-    copyLabel(LBL_OFF, value);
+    modText(model, value);
 }
 
 constexpr uint8_t LABEL_SCRATCH = 14;

@@ -68,6 +68,8 @@ function channelTab(tab = 1): MainScreenModel {
     skipChance: 0,
     stepTicks: 96,
     mainParameter: MainParameter.Pattern,
+    cv1Target: 0,
+    cv2Target: 0,
     configPage: false,
     tempo: 120,
     clockSource: 0,

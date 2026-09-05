@@ -33,7 +33,14 @@ import {
 } from "../src/domain/SequencerEngine.js";
 import { RATCHET_CODES, RATCHET_NONE, RATCHET_2, RATCHET_3, RATCHET_TRIPLET } from "../src/domain/Pattern.js";
 import { DEFAULT_SUBDIV, SUBDIVS } from "../src/domain/subdiv.js";
-import { CvDestination, CV_SOURCE_1 } from "../src/domain/CvDestination.js";
+import {
+  CV_SOURCE_1,
+  CV_SOURCE_2,
+  CvDestination,
+  MOD_CHOICE_COUNT,
+  modChoiceAt,
+  modIndexOf,
+} from "../src/domain/CvDestination.js";
 
 function rig() {
   const engine = new SequencerEngine();
@@ -839,5 +846,70 @@ describe("UiController — les trois modes et leurs champs", () => {
     ui.handle(UiEvent.Rotate, 1);
     expect(engine.getCvDestination(0, 0)).toBe(a1);
     expect(engine.getCvDestination(0, 1)).toBe(a2);
+  });
+});
+
+describe("le champ MOD, PRD 10.2", () => {
+  const initiale = (d: CvDestination): string =>
+    d === CvDestination.PATTERN ? "P"
+    : d === CvDestination.LENGTH ? "L"
+    : d === CvDestination.RESET ? "R"
+    : d === CvDestination.STEP ? "S" : "-";
+
+  it("porte les vingt et une valeurs du PRD, dans leur ordre", () => {
+    const attendu = [
+      "-/-",
+      "P/-", "L/-", "R/-", "S/-",
+      "-/P", "-/L", "-/R", "-/S",
+      "P/L", "P/R", "P/S",
+      "L/P", "L/R", "L/S",
+      "R/P", "R/L", "R/S",
+      "S/P", "S/L", "S/R",
+    ];
+    expect(MOD_CHOICE_COUNT).toBe(21);
+    for (let index = 0; index < 21; ++index) {
+      const [a, b] = modChoiceAt(index);
+      expect(`${initiale(a)}/${initiale(b)}`, `valeur ${index}`).toBe(attendu[index]);
+      expect(modIndexOf(a, b), `retour ${index}`).toBe(index);
+    }
+  });
+
+  it("ne peut pas produire deux entrees sur la meme destination", () => {
+    for (const d of [CvDestination.PATTERN, CvDestination.LENGTH,
+                     CvDestination.RESET, CvDestination.STEP]) {
+      expect(modIndexOf(d, d)).toBe(-1);
+    }
+  });
+
+  it("une rotation pose les DEUX destinations et ecrete aux deux bouts", () => {
+    const r = rig();
+    r.enterTab();
+    r.gotoField(UiField.Mod);
+    r.ui.handle(UiEvent.Press);
+
+    for (let i = 0; i < 9; ++i) r.ui.handle(UiEvent.Rotate, 1);
+    expect(r.engine.getCvDestination(0, CV_SOURCE_1)).toBe(CvDestination.PATTERN);
+    expect(r.engine.getCvDestination(0, CV_SOURCE_2)).toBe(CvDestination.LENGTH);
+
+    for (let i = 0; i < 40; ++i) r.ui.handle(UiEvent.Rotate, 1);
+    expect(r.engine.getCvDestination(0, CV_SOURCE_1)).toBe(CvDestination.STEP);
+    expect(r.engine.getCvDestination(0, CV_SOURCE_2)).toBe(CvDestination.RESET);
+
+    for (let i = 0; i < 40; ++i) r.ui.handle(UiEvent.Rotate, -1);
+    expect(r.engine.getCvDestination(0, CV_SOURCE_1)).toBe(CvDestination.NONE);
+    expect(r.engine.getCvDestination(0, CV_SOURCE_2)).toBe(CvDestination.NONE);
+  });
+
+  it("un canal en CLOCK ne modifie pas son routage", () => {
+    const r = rig();
+    r.engine.setChannelMode(0, ChannelMode.CLOCK);
+    r.enterTab();
+    r.ui.handle(UiEvent.Rotate, 1);
+    r.ui.handle(UiEvent.Rotate, 1);
+    expect(r.ui.field, "la ligne 3 d un onglet CLOCK est MOD").toBe(UiField.Mod);
+    r.ui.handle(UiEvent.Press);
+    for (let i = 0; i < 5; ++i) r.ui.handle(UiEvent.Rotate, 1);
+    expect(r.engine.getCvDestination(0, CV_SOURCE_1)).toBe(CvDestination.NONE);
+    expect(r.engine.getCvDestination(0, CV_SOURCE_2)).toBe(CvDestination.NONE);
   });
 });

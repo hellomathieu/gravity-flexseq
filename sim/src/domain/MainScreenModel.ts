@@ -3,6 +3,7 @@ import {
   DEFAULT_CHANNEL_MODE,
   type SequencerEngine,
 } from "./SequencerEngine.js";
+import { CV_SOURCE_1, CV_SOURCE_2, CvDestination } from "./CvDestination.js";
 import { UiField, UiLevel, type UiController } from "./UiController.js";
 
 export enum MainParameter {
@@ -31,6 +32,8 @@ export interface MainScreenModel {
   stepTicks: number;
   mainParameter: MainParameter;
 
+  cv1Target: number;
+  cv2Target: number;
   configPage: boolean;
 
   tempo: number;
@@ -69,6 +72,8 @@ export function mainScreenModelOf(ui: UiController, engine: SequencerEngine): Ma
     skipChance: 0,
     stepTicks: 0,
     mainParameter: parameterOf(ui.mainField),
+    cv1Target: CvDestination.NONE,
+    cv2Target: CvDestination.NONE,
     configPage: ui.isOnConfigPage,
     tempo: ui.tempo,
     clockSource: ui.clockSource,
@@ -82,6 +87,8 @@ export function mainScreenModelOf(ui: UiController, engine: SequencerEngine): Ma
     model.offset = engine.getOffset(channel);
     model.skipChance = engine.getSkipChance(channel);
     model.stepTicks = engine.currentStepTicks(channel);
+    model.cv1Target = engine.getCvDestination(channel, CV_SOURCE_1);
+    model.cv2Target = engine.getCvDestination(channel, CV_SOURCE_2);
   }
   return model;
 }
