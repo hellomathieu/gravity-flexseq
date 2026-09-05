@@ -1321,7 +1321,7 @@ int main(int argc, char **argv)
         struct Cas { const char *nom; int crans; uint8_t emp; bool split; };
         static const Cas cas[6] = {
             { "V4_length_30_sans_split",  30, harness::LENGTH_BURST_LIMIT, false },
-            { "V4_length_7_sans_split",    7, harness::LENGTH_BURST_LIMIT, false },
+            { "V4_length_8_sans_split",    8, harness::LENGTH_BURST_LIMIT, false },
             { "V5_length_30_avec_split",  30, harness::LENGTH_BURST_LIMIT, true  },
             { "V6_subdiv_8_non_mesure",    8, harness::SUBDIV_BURST_LIMIT, false },
             { "V6_subdiv_7_non_mesure",    7, harness::SUBDIV_BURST_LIMIT, false },

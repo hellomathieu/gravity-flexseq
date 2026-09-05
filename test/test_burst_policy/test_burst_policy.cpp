@@ -69,22 +69,22 @@ void test_an_empirical_limit_above_the_physical_one_has_no_effect(void)
     TEST_ASSERT_EQUAL_UINT8(12, verdict.effectiveLimit);
 }
 
-void test_the_length_boundary_accepts_six_and_refuses_seven(void)
+void test_the_length_boundary_accepts_seven_and_refuses_eight(void)
 {
-    Verdict verdict = burst::decide(ask(6, harness::LENGTH_BURST_LIMIT, false));
+    Verdict verdict = burst::decide(ask(7, harness::LENGTH_BURST_LIMIT, false));
     TEST_ASSERT_EQUAL(ACCEPT_SINGLE_BURST, verdict.decision);
 
-    verdict = burst::decide(ask(7, harness::LENGTH_BURST_LIMIT, false));
+    verdict = burst::decide(ask(8, harness::LENGTH_BURST_LIMIT, false));
     TEST_ASSERT_EQUAL(REFUSE_EMPIRICAL_LIMIT, verdict.decision);
-    TEST_ASSERT_EQUAL_UINT8(6, verdict.bindingLimit);
+    TEST_ASSERT_EQUAL_UINT8(7, verdict.bindingLimit);
 }
 
-void test_the_length_limit_is_six(void)
+void test_the_length_limit_is_seven(void)
 {
-    TEST_ASSERT_EQUAL_UINT8(6, harness::LENGTH_BURST_LIMIT);
+    TEST_ASSERT_EQUAL_UINT8(7, harness::LENGTH_BURST_LIMIT);
 }
 
-void test_a_target_without_an_empirical_limit_is_never_capped_at_six(void)
+void test_a_target_without_an_empirical_limit_is_never_capped_at_seven(void)
 {
     const uint8_t sizes[3] = { 8, 10, 12 };
     for (uint8_t i = 0; i < 3; ++i) {
@@ -210,7 +210,7 @@ void test_split_writes_nothing_when_the_output_is_too_small(void)
 void test_only_the_length_field_carries_an_empirical_limit(void)
 {
     using F = flexseq::UiController;
-    TEST_ASSERT_EQUAL_UINT8(6, harness::limitForField(F::FIELD_LENGTH));
+    TEST_ASSERT_EQUAL_UINT8(7, harness::limitForField(F::FIELD_LENGTH));
     TEST_ASSERT_EQUAL_UINT8(NO_EMPIRICAL_LIMIT, harness::limitForField(F::FIELD_MODE));
     TEST_ASSERT_EQUAL_UINT8(NO_EMPIRICAL_LIMIT, harness::limitForField(F::FIELD_SUBDIV));
     TEST_ASSERT_EQUAL_UINT8(NO_EMPIRICAL_LIMIT, harness::limitForField(F::FIELD_MOD));
@@ -242,9 +242,9 @@ int main(int, char**)
     RUN_TEST(test_the_physical_limit_alone_governs_an_unmeasured_target);
     RUN_TEST(test_an_empirical_limit_binds_before_the_physical_one);
     RUN_TEST(test_an_empirical_limit_above_the_physical_one_has_no_effect);
-    RUN_TEST(test_the_length_boundary_accepts_six_and_refuses_seven);
-    RUN_TEST(test_the_length_limit_is_six);
-    RUN_TEST(test_a_target_without_an_empirical_limit_is_never_capped_at_six);
+    RUN_TEST(test_the_length_boundary_accepts_seven_and_refuses_eight);
+    RUN_TEST(test_the_length_limit_is_seven);
+    RUN_TEST(test_a_target_without_an_empirical_limit_is_never_capped_at_seven);
     RUN_TEST(test_the_subdiv_target_carries_no_empirical_limit);
     RUN_TEST(test_a_refusal_yields_no_burst_at_all);
     RUN_TEST(test_thirty_detents_split_into_five_bursts_of_six);

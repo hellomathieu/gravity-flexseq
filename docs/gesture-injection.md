@@ -130,21 +130,36 @@ sufficient.** The campaign of 2026-08-25 measured two distinct defects of this
 harness. Neither is a firmware defect: the bank stays at 0 diff and the five
 untouched outputs stay at 96 / 1536 in every course.
 
-**Defect 1 -- a burst above six detents is not reliable on LENGTH.** A single
-burst applies exactly its detents up to **6**, and becomes erratic from **7**:
-3, 5, 7, 5, 1 and 4 applied for 7 to 12 requested. Slowing 6 detents to a 654 ms
-hold keeps them exact; accelerating 8 detents to a 222 ms hold keeps them wrong,
-with the same deficit. So the factor is the **detent count**, not the hold, not
-the rhythm. ⚠️ The limit is **not universal**: on SUBDIV, bursts of 7 (`rig`) and
-8 (R11) apply in full. The contradiction is open -- `docs/open-risks.md` line 44.
+⚠️ **DEFECT 1 IS RE-MEASURED ON 2026-09-05, AND ITS FIGURES ARE REFUTED.** The
+paragraph below is kept because the campaign of 2026-08-25 is part of the
+account, and because it shows how a harness defect can look like a law.
+
+**Defect 1 -- a burst of 8 detents DOWN on LENGTH applies 6.** Swept over 1 to
+12 detents, the whole range a SHIFT hold allows, in both directions.
+Twenty-three of the twenty-four cases apply every detent they ask for. The one
+that does not reproduces three runs out of three, and the ascent of 8 in the
+same runs is exact. It is neither a threshold nor a size effect: 7 is exact both
+ways, and so are 9, 10, 11 and 12. The mechanism is **not** identified. The
+lever `R13_CRANS_LENGTH` replays the sweep -- `docs/open-risks.md` line 44.
+
+**What the earlier campaign read, and why it was wrong.** It measured a burst
+exact up to **6** and erratic from **7**: 3, 5, 7, 5, 1 and 4 applied for 7 to
+12 requested. Not one of those readings reproduces. The harness then settled
+50 ms after every detent and nothing before the first, so it lost its first
+detent after any quiet period, and the campaign measured that loss. The same
+defect explains the contradiction this paragraph called open: SUBDIV looked
+exempt because the courses that touched it happened to have slack of their own.
 
 **Defect 2 -- the field cursor moves.** After a burst the selection frame can
 move by exactly one field. Every detent is driven inside the hold, so the stray
 event is not an injection. The rest between bursts is **not** the cause, and
 neither entry nor release margin explains it. **Undetermined.**
 
-**The working rule until a splitter is designed:** keep a burst to **6 detents
-or fewer**. Every recipe validated in P2.6 respects it on LENGTH.
+**The working rule until a splitter is designed:** keep a burst to **7 detents
+or fewer** on LENGTH. `LENGTH_BURST_LIMIT` was raised from 6 to 7 on 2026-09-05
+by a decision of the owner, on the sweep above: 7 is exact in both directions,
+and 8 is the only value that loses detents. Every recipe validated in P2.6
+respects the limit on LENGTH.
 
 The suppression flag (`rotatedWhileShiftHeld`) stays a safety net, never the
 plan — and the counter below is what proves it was not used.
