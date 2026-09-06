@@ -2285,13 +2285,14 @@ int main(int argc, char **argv)
                byteOfInstance(vu, canalA, STEP_BYTES + 2), ecarts, g_twi_bytes - marque);
 
         const int versR10 = (r10Step - 5 + GRID_MODULO) % GRID_MODULO;
-        rotate(avr, versR10 == 0 ? 24 : versR10, 1);
+        const int cransR10 = versR10 == 0 ? GRID_MODULO : versR10;
+        rotate(avr, cransR10, 1);
         marque = g_twi_bytes;
         shiftRotate(avr, 4, 1, harness::STEP_BURST_LIMIT, false);
         readInstances(avr, vu);
         ecarts = instancesDiffCount(vu, expectedBytes, &premier);
         printf("rA_r10             cible %d rotations %d octet6 %02x ecarts %u twi %u\n",
-               r10Step, versR10 == 0 ? 24 : versR10, byteOfInstance(vu, canalA, STEP_BYTES + 2), ecarts,
+               r10Step, cransR10, byteOfInstance(vu, canalA, STEP_BYTES + 2), ecarts,
                g_twi_bytes - marque);
 
         rotate(avr, (9 - r10Step + GRID_MODULO) % GRID_MODULO, 1);
