@@ -12,7 +12,7 @@ import {
   CHANNEL_MODE_COUNT,
   ChannelMode,
   MAX_LENGTH,
-  MAX_SKIP_CHANCE,
+  MAX_SKIP_CHANCE_SETTING,
   MIN_LENGTH,
   type SequencerEngine,
 } from "./SequencerEngine.js";
@@ -442,7 +442,7 @@ export class UiController {
       case UiField.SkipChance: {
         if (channel < 0) break;
         const current = this.engine.getSkipChance(channel);
-        this.engine.setSkipChance(channel, clampIndex(current, delta, MAX_SKIP_CHANCE + 1));
+        this.engine.setSkipChance(channel, clampIndex(current, delta, MAX_SKIP_CHANCE_SETTING + 1));
         break;
       }
       case UiField.BarLength: {

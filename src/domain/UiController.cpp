@@ -410,7 +410,7 @@ void UiController::adjustFieldValue(Field target, int8_t raw) {
         case FIELD_SKIP_CHANCE:
             engine_.setSkipChance(ch, clampIndex(
                 engine_.getSkipChance(ch), delta,
-                static_cast<uint8_t>(MAX_SKIP_CHANCE + 1)));
+                static_cast<uint8_t>(MAX_SKIP_CHANCE_SETTING + 1)));
             break;
         case FIELD_BAR_LENGTH: {
             const int8_t current = engine_.getBarLength(ch);

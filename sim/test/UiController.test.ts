@@ -597,6 +597,21 @@ describe("UiController — le parametre principal, edite depuis la barre avec SH
     expect(ui.mainField).toBe(UiField.None);
   });
 
+  it("the interface caps the skip chance at nine", () => {
+    const { ui, engine } = rig();
+    engine.setChannelMode(0, ChannelMode.RANDOM);
+    for (let i = 0; i < 20; i += 1) ui.handle(UiEvent.ShiftRotate, 1);
+    expect(engine.getSkipChance(0)).toBe(9);
+  });
+
+  it("the engine still accepts a skip chance of ten", () => {
+    const { engine } = rig();
+    expect(engine.setSkipChance(0, 10)).toBe(true);
+    expect(engine.getSkipChance(0)).toBe(10);
+    expect(engine.setSkipChance(0, 11)).toBe(false);
+    expect(engine.getSkipChance(0)).toBe(10);
+  });
+
   it("shift rotate on the bar changes the main parameter", () => {
     {
       const { ui, engine } = rig();

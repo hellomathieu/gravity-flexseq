@@ -808,6 +808,23 @@ void test_the_main_parameter_follows_the_channel_mode() {
     TEST_ASSERT_EQUAL(UiController::FIELD_NONE, r.ui.mainField());
 }
 
+void test_the_interface_caps_the_skip_chance_at_nine() {
+    Rig r;
+    r.engine.setChannelMode(0, flexseq::MODE_RANDOM);
+    for (uint8_t i = 0; i < 20; ++i) {
+        r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+    }
+    TEST_ASSERT_EQUAL_UINT8(9, r.engine.getSkipChance(0));
+}
+
+void test_the_engine_still_accepts_a_skip_chance_of_ten() {
+    Rig r;
+    TEST_ASSERT_TRUE(r.engine.setSkipChance(0, 10));
+    TEST_ASSERT_EQUAL_UINT8(10, r.engine.getSkipChance(0));
+    TEST_ASSERT_FALSE(r.engine.setSkipChance(0, 11));
+    TEST_ASSERT_EQUAL_UINT8(10, r.engine.getSkipChance(0));
+}
+
 void test_shift_rotate_on_the_bar_changes_the_main_parameter() {
     {
         Rig r;  // SEQ : le pattern
@@ -1236,6 +1253,8 @@ int main(int, char**) {
     RUN_TEST(test_shift_press_is_deliberately_free_and_changes_nothing);
 
     RUN_TEST(test_the_main_parameter_follows_the_channel_mode);
+    RUN_TEST(test_the_interface_caps_the_skip_chance_at_nine);
+    RUN_TEST(test_the_engine_still_accepts_a_skip_chance_of_ten);
     RUN_TEST(test_shift_rotate_on_the_bar_changes_the_main_parameter);
     RUN_TEST(test_shift_rotate_on_the_bar_moves_nothing_else);
     RUN_TEST(test_shift_rotate_on_the_settings_tab_changes_nothing);

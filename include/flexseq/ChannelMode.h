@@ -13,6 +13,7 @@ enum ChannelMode : uint8_t {
 
 constexpr uint8_t CHANNEL_MODE_COUNT = 3;
 constexpr uint8_t MAX_SKIP_CHANCE = 10;
+constexpr uint8_t MAX_SKIP_CHANCE_SETTING = 9;
 constexpr ChannelMode DEFAULT_CHANNEL_MODE = MODE_CLOCK;
 
 }  // namespace flexseq

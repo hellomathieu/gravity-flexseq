@@ -99,6 +99,7 @@ export function subOnsetTick(stepTicks: number, triggers: number, k: number): nu
 
 /** Chance de SAUT d'un step en dixiemes : 0 jamais, 10 toujours. */
 export const MAX_SKIP_CHANCE = 10;
+export const MAX_SKIP_CHANCE_SETTING = 9;
 
 interface ChannelState {
   selectedPattern: number; // index 0..15 dans la banque partagee
