@@ -19,6 +19,8 @@ production simule, et verifie leur effet.
   SELFTEST_TRUNCATE=<n>          retire la ligne de VERDICT de la n-ieme
                                  course du SELFTEST, pour exercer le controle
                                  de completude
+  R11_CODES_REFUSES="<liste>"    remplace la liste des codes refuses a x24,
+                                 pour exercer le critere qui les cherche
   SUPPRESSED_SYMBOL=<regex>      vise un autre symbole que suppressedLong
   SUPPRESSED_ADDR_FORCE=<addr>   force l'adresse du compteur
   SUPPRESSED_BIAS=<n>            biaise la lecture d'apres du compteur
@@ -34,7 +36,10 @@ production simule, et verifie leur effet.
   SKIP_B_GESTE=1                 n'injecte pas les salves des recettes B ni de R2
   EXPECT_R2_PAS / EXPECT_R2_LENGTH / EXPECT_R2_CHANNEL
                                  deplacent l'attente de R2
-  R2_ROTATIONS=<n>               nombre de rotations avant le cran de l'etape SUBDIV
+  R2_ROTATIONS=<n>               nombre de rotations avant le cran de l'etape
+                                 SUBDIV. Le defaut est l'index du champ SUBDIV
+                                 dans la page CONFIG : lui donner cette valeur
+                                 n'injecte rien
   EXPECT_R11_NIBBLE_1 / EXPECT_R11_NIBBLE_TRIOLET / EXPECT_R11_CADENCE
   EXPECT_R11_CADENCE_PALIER      deplacent l'attente de R11
   R11_CRANS_SUBDIV=<n>           crans pour atteindre x24 depuis /1 (defaut : lu
@@ -203,7 +208,7 @@ R11_NIBBLE_TRIOLET_ATTENDU="07"
 R11_NIBBLE_ZERO="00"
 R11_CANAL_ATTENDU=3
 R11_OCTET_ATTENDU=7
-R11_CODES_REFUSES="03 04 06"
+R11_CODES_REFUSES="${R11_CODES_REFUSES:-03 04 06}"
 TAB_COUNT_ECRAN=8
 R8_MASK_ATTENDU="0229"
 R9_OCTET_ATTENDU="60"
@@ -704,10 +709,10 @@ MUTANT3
   else
     selfbad "P2.6.4 R2 non-contagion sait rougir" "le critere de non-contagion n a pas rougi"
   fi
-  progress "P2.6.4 : une seule rotation avant le cran de SUBDIV"
-  expect_verdict "P2.6.4 R2 une rotation -> FAIL" FAIL 1 2 "*" R2_ROTATIONS=1
+  progress "P2.6.4 : aucune rotation avant le cran de SUBDIV"
+  expect_verdict "P2.6.4 R2 aucune rotation -> FAIL" FAIL 1 2 "*" R2_ROTATIONS=0
   if grep -q '❌ R2 : LENGTH inchangee sous SUBDIV' "$WORK/class.log"; then
-    ok "P2.6.4 absence d effet sait rougir" "avec une seule rotation le cran touche LENGTH, qui tombe a 15 : le critere n est pas un faux vert"
+    ok "P2.6.4 absence d effet sait rougir" "sans rotation le cran reste sur LENGTH, qui tombe a 15 : le critere n est pas un faux vert"
   else
     selfbad "P2.6.4 absence d effet sait rougir" "le critere « LENGTH inchangee » est reste vert alors que LENGTH a change"
   fi
@@ -723,12 +728,20 @@ MUTANT3
   progress "P2.6.5 : gestes de R11 non injectes"
   expect_verdict "P2.6.5 R11 geste absent -> INVALID" INVALID 5 0 "+" SKIP_B_GESTE=1
   progress "P2.6.5 : rester a /1 au lieu de x24"
-  expect_verdict "P2.6.5 R11 sans x24 -> FAIL" FAIL 1 3 "+" R11_CRANS_SUBDIV=0
-  if grep -q '❌ R11 : les codes refuses n apparaissent jamais' "$WORK/class.log" \
-     && grep -q '⛔ R11 : cadence x24' "$WORK/class.log"; then
-    ok "P2.6.5 le critere des codes refuses sait rougir" "a /1 la marche donne 02 03 04 : le critere nomme les codes ecrits, et la cadence reste non decidable"
+  expect_verdict "P2.6.5 R11 sans x24 -> INVALID" INVALID 5 0 "+" R11_CRANS_SUBDIV=0
+  if grep -q '⛔ R11 : cadence x24' "$WORK/class.log" \
+     && grep -q '⛔ R11 : les codes refuses n apparaissent jamais' "$WORK/class.log" \
+     && ! grep -q '❌ R11 : les codes refuses n apparaissent jamais' "$WORK/class.log"; then
+    ok "P2.6.5 la premisse non etablie ne devient pas un defaut" "sans le passage a x24 la cadence est non decidable, et l aval le reste : aucun defaut impute au firmware"
   else
-    selfbad "P2.6.5 le critere des codes refuses sait rougir" "le critere est reste vert alors qu un code refuse a x24 a ete ecrit"
+    selfbad "P2.6.5 la premisse non etablie ne devient pas un defaut" "la cadence ou l aval n est pas ⛔"
+  fi
+  progress "P2.6.5 : liste des codes refuses deplacee"
+  expect_verdict "P2.6.5 R11 codes refuses -> FAIL" FAIL 1 1 "*" R11_CODES_REFUSES="02 07"
+  if grep -q '❌ R11 : les codes refuses n apparaissent jamais' "$WORK/class.log"; then
+    ok "P2.6.5 le critere des codes refuses sait rougir" "la liste deplacee sur 02 et 07 rougit le critere, qui nomme les etapes fautives"
+  else
+    selfbad "P2.6.5 le critere des codes refuses sait rougir" "le critere est reste vert alors que les nibbles observes sont dans la liste"
   fi
 
   progress "d : classe 1 avec effet aval faux -> INVALID"
@@ -2129,7 +2142,7 @@ else
     done
   done
   if [ "$D_REF_OK" = "1" ]; then
-    ok "R11 : les codes refuses n apparaissent jamais" "aucune etape ne montre 03, 04 ni 06 dans le nibble du step 5"
+    ok "R11 : les codes refuses n apparaissent jamais" "aucune etape ne montre $R11_CODES_REFUSES dans le nibble du step 5"
   else
     bad "R11 : les codes refuses n apparaissent jamais" "un code refuse a x24 a ete ecrit —$D_REF_D"
   fi
