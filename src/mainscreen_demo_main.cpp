@@ -33,7 +33,6 @@ void onOutputTick(uint32_t) {
 
 void freezeModel() {
     frozen = flexseq::mainScreenModelOf(ui, engine);
-    flexseq::detail::measureMainScreen(gravity.display, frozen);
 
     tiles = gravity.display.getBufferTileHeight();
     if (tiles == 0) {

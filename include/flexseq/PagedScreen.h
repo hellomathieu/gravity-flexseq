@@ -78,7 +78,6 @@ public:
         const bool switched = (mode_ != MODE_MAIN);
         mode_ = MODE_MAIN;
         main_ = model;
-        detail::measureMainScreen(display, main_);
         startFrame(display, switched);
     }
 
