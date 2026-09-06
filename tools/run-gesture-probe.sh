@@ -16,6 +16,9 @@ production simule, et verifie leur effet.
   SELFTEST=1     ne lance PAS les gestes : rejoue trois mutations du
                  fractionnement et neuf cas negatifs du 4e temoin, et exige
                  que chacun soit detecte
+  SELFTEST_TRUNCATE=<n>          retire la ligne de VERDICT de la n-ieme
+                                 course du SELFTEST, pour exercer le controle
+                                 de completude
   SUPPRESSED_SYMBOL=<regex>      vise un autre symbole que suppressedLong
   SUPPRESSED_ADDR_FORCE=<addr>   force l'adresse du compteur
   SUPPRESSED_BIAS=<n>            biaise la lecture d'apres du compteur
@@ -387,6 +390,29 @@ if [ -n "${SELFTEST:-}" ]; then
   SRC="$ROOT/tools/simavr-ssd1306/gesture_probe.cpp"
   SELF_FAILED=0
   selfbad() { printf '  %s❌%s %-22s %s%s%s\n' "$C_ERR" "$C_0" "$1" "$C_DIM" "$2" "$C_0"; SELF_FAILED=$((SELF_FAILED + 1)); }
+  SELF_INCOMPLETE=0
+  PROBE_RUNS=0
+  INCOMPLETE_DIR="${TMPDIR:-/tmp}"
+  INCOMPLETE_DIR="${INCOMPLETE_DIR%/}/flexseq-gesture-incomplete-$$"
+  course_complete() { grep -qE 'VERDICT : (PASS|FAIL|INVALID)' "$1"; }
+  run_probe() {
+    local log="$1"
+    shift
+    PROBE_RUNS=$((PROBE_RUNS + 1))
+    env -u SELFTEST "$@" "$0" > "$log" 2>&1
+    PROBE_RC=$?
+    if [ "${SELFTEST_TRUNCATE:-}" = "$PROBE_RUNS" ]; then
+      grep -v 'VERDICT : ' "$log" > "$log.cut" && mv "$log.cut" "$log"
+    fi
+  }
+  course_incomplete() {
+    local label="$1" log="$2" rc="$3"
+    SELF_INCOMPLETE=$((SELF_INCOMPLETE + 1))
+    mkdir -p "$INCOMPLETE_DIR"
+    local kept="$INCOMPLETE_DIR/course-$SELF_INCOMPLETE.log"
+    cp "$log" "$kept" 2>/dev/null
+    selfbad "$label" "COURSE INCOMPLETE, code $rc : aucune ligne de VERDICT. Panne de l outil, jamais un defaut du firmware. Journal garde dans $kept"
+  }
   build_mutant() {
     c++ -O2 -w -std=gnu++11 -I"$PREFIX/include/simavr" -I"$PREFIX/include" \
       -I"$ROOT/tools/simavr-ssd1306" -I"$ROOT/include" "$1" \
@@ -500,7 +526,12 @@ MUTANT3
   expect_run_invalid() {
     local label="$1" line="$2"
     shift 2
-    if env -u SELFTEST "$@" "$0" > "$WORK/run.log" 2>&1; then
+    run_probe "$WORK/run.log" "$@"
+    if ! course_complete "$WORK/run.log"; then
+      course_incomplete "$label" "$WORK/run.log" "$PROBE_RC"
+      return
+    fi
+    if [ "$PROBE_RC" = "0" ]; then
       selfbad "$label" "la sonde rend 0 alors que le temoin est invalide"
       return
     fi
@@ -536,8 +567,8 @@ MUTANT3
   printf '\n%s--- CONTRE-EPREUVE DU VERDICT GLOBAL ---%s\n' "$C_B" "$C_0"
 
   run_variant() {
-    env -u SELFTEST "$@" "$0" > "$WORK/class.log" 2>&1
-    CLASS_RC=$?
+    run_probe "$WORK/class.log" "$@"
+    CLASS_RC="$PROBE_RC"
     CLASS_VERDICT="$(grep -oE 'VERDICT : (PASS|FAIL|INVALID)' "$WORK/class.log" | head -1 | awk '{print $3}')"
     CLASS_VERDICT="${CLASS_VERDICT:-AUCUN}"
     CLASS_INVAL="$(grep -c '⛔' "$WORK/class.log" | tr -d ' ')"
@@ -550,6 +581,10 @@ MUTANT3
     local label="$1" want_verdict="$2" want_rc="$3" want_bad="$4" want_inval="$5"
     shift 5
     run_variant "$@"
+    if ! course_complete "$WORK/class.log"; then
+      course_incomplete "$label" "$WORK/class.log" "$CLASS_RC"
+      return
+    fi
     local why=""
     [ "$CLASS_VERDICT" = "$want_verdict" ] || why="$why verdict=$CLASS_VERDICT(attendu $want_verdict)"
     [ "$CLASS_RC" = "$want_rc" ] || why="$why code=$CLASS_RC(attendu $want_rc)"
@@ -590,10 +625,13 @@ MUTANT3
     || selfbad "c. la precondition est nommee" "le critere d entree dans EDIT n est pas INVALID"
 
   progress "P2.6.0 : image alteree cote machine"
-  if env -u SELFTEST IMAGE_MUTATE=1 "$0" > "$WORK/img.log" 2>&1; then
+  run_probe "$WORK/img.log" IMAGE_MUTATE=1
+  IMG_RC="$PROBE_RC"
+  if ! course_complete "$WORK/img.log"; then
+    course_incomplete "P2.6.0 controle de l image" "$WORK/img.log" "$IMG_RC"
+  elif [ "$IMG_RC" = "0" ]; then
     selfbad "P2.6.0 controle de l image" "la sonde rend 0 alors que l image injectee ne correspond pas a l attendu"
   else
-    IMG_RC=$?
     if [ "$IMG_RC" = "5" ] && grep -q '⛔ instances : templates d usine' "$WORK/img.log"; then
       ok "P2.6.0 controle de l image" "un octet altere cote machine rend le controle du rig INVALID, sortie 5, aucun verdict firmware"
     else
@@ -766,10 +804,15 @@ MUTANT3
   fi
 
   printf '\n'
+  if [ "$SELF_INCOMPLETE" != "0" ]; then
+    printf '  %s⚠  %d course(s) INCOMPLETE(S) : panne de l outil, jamais un defaut du firmware. Journaux dans %s%s\n' \
+      "$C_ERR" "$SELF_INCOMPLETE" "$INCOMPLETE_DIR" "$C_0"
+  fi
   if [ "$SELF_FAILED" = "0" ]; then
     printf '  %s✅ Les trois mutants sont detectes : le fractionnement est un critere, pas un commentaire.%s\n' "$C_OK" "$C_0"
     printf '  %s✅ Les neuf cas negatifs du 4e temoin rendent INVALID, jamais un defaut du firmware.%s\n' "$C_OK" "$C_0"
     printf '  %s✅ Les quatre chemins du verdict global : PASS/0, FAIL/1, INVALID/5 deux fois, tous verifies sur le code ET le mot.%s\n' "$C_OK" "$C_0"
+    printf '  %s✅ Les %d courses ont toutes rendu un VERDICT : aucune ne s est arretee en chemin.%s\n' "$C_OK" "$PROBE_RUNS" "$C_0"
     exit 0
   fi
   printf '  %s❌ SELFTEST : %d cas en echec. Chacun est marque ❌ ci-dessus.%s\n' "$C_ERR" "$SELF_FAILED" "$C_0"
