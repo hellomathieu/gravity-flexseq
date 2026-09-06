@@ -207,11 +207,11 @@ private:
 struct ModulatedPatternState {
     static constexpr uint8_t NOT_MODULATED = 0xFF;
 
-    constexpr ModulatedPatternState()
-        : pattern(), length{},
-          loaded{NOT_MODULATED, NOT_MODULATED, NOT_MODULATED,
-                 NOT_MODULATED, NOT_MODULATED, NOT_MODULATED},
-          cursor(0) {}
+    ModulatedPatternState() : pattern(), length{}, loaded{}, cursor(0) {
+        for (uint8_t c = 0; c < SequencerEngine::CHANNEL_COUNT; ++c) {
+            loaded[c] = NOT_MODULATED;
+        }
+    }
 
     Pattern pattern[SequencerEngine::CHANNEL_COUNT];
     uint8_t length[SequencerEngine::CHANNEL_COUNT];
