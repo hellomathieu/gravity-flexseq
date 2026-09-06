@@ -174,6 +174,35 @@ verified.
 the peak of the firmware. Only the runtime probe does that, and every lot that
 adds call depth must run it **before** it acknowledges its footprint.
 
+## Amendment — 2026-09-06, a fourth function, outside the interface
+
+**`rawFromCalibrated()` also stays out of line**, and the lever of this ADR
+applies unchanged beyond the interface.
+
+**The case.** `cv::configure()` holds thirteen lines and weighed 384 bytes.
+`rawFromCalibrated()` converts a value in millivolts to a raw ADC reading, and
+`configure()` calls it twice, once for the arm threshold and once for the rearm
+threshold. Its body carries a 32-bit division, so each copy is large.
+
+**Measured: 44 bytes of Flash, and RAM does not move.** 28232 to 28188. The
+compiler emits one copy instead of two.
+
+**The criterion of this ADR is met, and it is the same one.** A function with
+several call sites and a body that is not trivial is a candidate. A function
+with one call site is not, because nothing is shared. That is why
+`clampRange` stays inline here, and it is also why the transport gains nothing
+from the same lever: `Clock::Tick()`, `SetTempo()` and `SetSource()` have
+**exactly one call site each**, established on 2026-09-06 during lot S3.
+
+**No behaviour changes.** The eight gates pass, and `run-cv-capture-probe.sh`
+reads 27 pulses of 27 with the OLED rendering active, so the thresholds of the
+gate are unchanged.
+
+⚠️ **The title of this ADR says "three UI helpers", and there are four
+functions now, one of them outside the interface.** The title is kept because
+the file name carries it and renumbering a decision breaks its references. Read
+the title as the origin of the decision, and not as its perimeter.
+
 ## References
 
 - PRD §14 (measured footprint, engine constructor set aside)
