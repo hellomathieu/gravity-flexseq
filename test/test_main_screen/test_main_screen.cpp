@@ -132,7 +132,6 @@ MainScreenModel channelTab(uint8_t tab = 1) {
     m.barLength = 4;
     m.tempo = 120;
     m.clockSource = 0;
-    m.headlineWidth = 0;
     m.mode = static_cast<uint8_t>(flexseq::MODE_SEQ);
     m.offset = 0;
     m.skipChance = 0;

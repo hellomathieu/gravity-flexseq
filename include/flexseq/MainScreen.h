@@ -356,39 +356,6 @@ static_assert(3 + 1 + 5 + 1 <= VALUE_SCRATCH,
               "offset/ticksPerStep : trois chiffres, une barre, cinq chiffres, le zero final");
 
 template <typename Canvas>
-void measureMainScreen(Canvas& canvas, MainScreenModel& model) {
-    if (model.headlineWidth == 0) {
-        char headline[6];
-        headlineOf(model, headline);
-        if (headline[0] != '\0') {
-            model.headlineWidth = static_cast<uint8_t>(canvas.getStrWidth(headline));
-        }
-    }
-    if (!isChannelTab(model)) {
-        return;
-    }
-    char value[VALUE_SCRATCH];
-    mainValueOf(model, value);
-    if (value[0] != '\0') {
-        canvas.setFont(FONT_STK_L);
-        model.mainValueWidth = static_cast<uint8_t>(canvas.getStrWidth(value));
-        canvas.setFont(FONT_VELVETSCREEN);
-    }
-    char scratch[LABEL_SCRATCH];
-    model.mainLabelWidth =
-        static_cast<uint8_t>(canvas.getStrWidth(label(mainLabelOf(model), scratch)));
-    for (uint8_t line = 0; line < 3; ++line) {
-        const char* flashLabel = nullptr;
-        legacyLine(model, line, &flashLabel, value);
-        model.lineLabelWidth[line] =
-            static_cast<uint8_t>(canvas.getStrWidth(label(flashLabel, scratch)));
-        if (model.insideTab && model.fieldOpen && model.cursor == line && value[0] != '\0') {
-            model.lineValueWidth = static_cast<uint8_t>(canvas.getStrWidth(value));
-        }
-    }
-}
-
-template <typename Canvas>
 void drawLabelledField(Canvas& canvas, const Band& band, uint8_t x, uint8_t y,
                        const char* label, const char* value, bool framed, bool inverted) {
     if (!touches(band, y, static_cast<int16_t>(y + mainscreen::ROW_BOX_H - 1))) {
@@ -426,9 +393,7 @@ void drawLegacyChannel(Canvas& canvas, const Band& band, const MainScreenModel& 
         mainValueOf(model, value);
         if (value[0] != '\0') {
             canvas.setFont(FONT_STK_L);
-            const uint8_t w = model.mainValueWidth != 0
-                                  ? model.mainValueWidth
-                                  : static_cast<uint8_t>(canvas.getStrWidth(value));
+            const uint8_t w = static_cast<uint8_t>(canvas.getStrWidth(value));
             canvas.drawStr(static_cast<uint8_t>(ms::MAIN_CENTRE_X - w / 2),
                            ms::MAIN_VALUE_BASELINE_Y, value);
             canvas.setFont(FONT_VELVETSCREEN);
@@ -441,9 +406,7 @@ void drawLegacyChannel(Canvas& canvas, const Band& band, const MainScreenModel& 
         canvas.setFont(FONT_VELVETSCREEN);
         char scratch[14];
         const char* text = label(mainLabelOf(model), scratch);
-        const uint8_t w = model.mainLabelWidth != 0
-                              ? model.mainLabelWidth
-                              : static_cast<uint8_t>(canvas.getStrWidth(text));
+        const uint8_t w = static_cast<uint8_t>(canvas.getStrWidth(text));
         canvas.drawStr(static_cast<uint8_t>(ms::MAIN_CENTRE_X - w / 2),
                        ms::MAIN_LABEL_BASELINE_Y, text);
     }
@@ -463,9 +426,7 @@ void drawLegacyChannel(Canvas& canvas, const Band& band, const MainScreenModel& 
         const char* text = label(flashLabel, scratch);
         const bool onCursor = model.insideTab && model.cursor == line;
 
-        const uint8_t labelW = model.lineLabelWidth[line] != 0
-                                   ? model.lineLabelWidth[line]
-                                   : static_cast<uint8_t>(canvas.getStrWidth(text));
+        const uint8_t labelW = static_cast<uint8_t>(canvas.getStrWidth(text));
         if (onCursor && !model.fieldOpen) {
             canvas.drawBox(static_cast<uint8_t>(ms::LINE_LABEL_X - 1),
                            static_cast<uint8_t>(base - FONT_VELVETSCREEN_HEIGHT - 1),
@@ -480,9 +441,7 @@ void drawLegacyChannel(Canvas& canvas, const Band& band, const MainScreenModel& 
 
         if (value[0] != '\0') {
             if (onCursor && model.fieldOpen) {
-                const uint8_t w = model.lineValueWidth != 0
-                                      ? model.lineValueWidth
-                                      : static_cast<uint8_t>(canvas.getStrWidth(value));
+                const uint8_t w = static_cast<uint8_t>(canvas.getStrWidth(value));
                 canvas.drawFrame(static_cast<uint8_t>(ms::LINE_VALUE_X - 2),
                                  static_cast<uint8_t>(base - FONT_VELVETSCREEN_HEIGHT - 2),
                                  static_cast<uint8_t>(w + 4),
@@ -508,9 +467,7 @@ void drawMainScreen(Canvas& canvas, const MainScreenModel& model,
         char headline[6];
         detail::headlineOf(model, headline);
         if (headline[0] != '\0') {
-            const uint8_t w = model.headlineWidth != 0
-                                  ? model.headlineWidth
-                                  : static_cast<uint8_t>(canvas.getStrWidth(headline));
+            const uint8_t w = static_cast<uint8_t>(canvas.getStrWidth(headline));
             canvas.drawStr(static_cast<uint8_t>((screen::WIDTH - w) / 2),
                            ms::HEADLINE_BASELINE_Y, headline);
         }

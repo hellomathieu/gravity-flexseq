@@ -203,7 +203,6 @@ MainScreenModel mainModelOf() {
     m.barLength = 4;
     m.tempo = 120;
     m.clockSource = 0;
-    m.headlineWidth = 0;
     return m;
 }
 

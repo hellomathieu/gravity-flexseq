@@ -42,12 +42,7 @@ struct MainScreenModel {
     uint16_t tempo;
     uint8_t clockSource;
 
-    uint8_t headlineWidth;
 
-    uint8_t mainValueWidth;
-    uint8_t mainLabelWidth;
-    uint8_t lineLabelWidth[3];
-    uint8_t lineValueWidth;
 };
 
 MainScreenModel mainScreenModelOf(const UiController& ui, const SequencerEngine& engine);

@@ -44,13 +44,6 @@ MainScreenModel mainScreenModelOf(const UiController& ui, const SequencerEngine&
     model.configPage = ui.isOnConfigPage();
     model.tempo = ui.tempo();
     model.clockSource = ui.clockSource();
-    model.headlineWidth = 0;
-    model.mainValueWidth = 0;
-    model.mainLabelWidth = 0;
-    model.lineLabelWidth[0] = 0;
-    model.lineLabelWidth[1] = 0;
-    model.lineLabelWidth[2] = 0;
-    model.lineValueWidth = 0;
 
     return model;
 }
