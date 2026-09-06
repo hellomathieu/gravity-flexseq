@@ -221,6 +221,37 @@ Both, plus the TypeScript model
     ./tools/run-all-tests.sh --libgravity   # characterization only
 
 -------------------------------------------------------------------------------
+The mutation score — how to read it, and where it lives
+-------------------------------------------------------------------------------
+`tools/run-mutation-probe.py` puts a known defect into the production code, runs
+the suite that claims to catch it, and requires a red. A green assertion proves
+nothing until it has been red once.
+
+    ./tools/run-mutation-probe.py --check-anchors   # seconds, run it FIRST
+    ./tools/run-mutation-probe.py                   # the full pass
+
+Last full pass: **352 / 352**, on 2026-09-07, commit `e3ed45b`.
+Zero undetected, zero detected by a timeout, zero missing suite, 18 min 55 s.
+The sources were restored and the tree was clean.
+
+Three rules for reading that figure.
+
+A score is worth nothing without its denominator AND its commit. The list of
+mutants is versioned in the probe for exactly this reason: lot 9 measured 20/20
+in a temporary directory, and nothing can replay it.
+
+352 of 352 says every mutation that EXISTS is detected. It does not say the
+coverage is exhaustive: a probe only finds the holes a mutant aims at.
+
+A mutant detected by a timeout is a mutant detected for the wrong reason. A
+removed loop guard turns a `while` into an infinite loop, and the pass counts
+that as detected. The report gives that count apart, and it must be zero.
+
+Run `--check-anchors` before any full pass. A pass of nineteen minutes stops on
+the first anchor that no longer matches its source, and a refactor moves anchors
+silently. It named two of them on 2026-09-06, before the pass could break.
+
+-------------------------------------------------------------------------------
 History — why this README exists
 -------------------------------------------------------------------------------
 The six characterization tests were introduced by `0574600`, where the `native`
