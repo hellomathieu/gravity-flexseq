@@ -111,7 +111,7 @@ private:
 //
 // Valeurs par defaut de libGravity (low = -566, high = 512, offset = 0) :
 // +1 V (+102) -> 634 et +0,5 V (+51) -> 585.
-inline uint16_t rawFromCalibrated(int16_t value, int16_t low, int16_t high, int16_t offset) {
+__attribute__((noinline)) inline uint16_t rawFromCalibrated(int16_t value, int16_t low, int16_t high, int16_t offset) {
     if (high <= low) {
         return 0;
     }
