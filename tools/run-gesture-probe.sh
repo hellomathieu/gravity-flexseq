@@ -804,15 +804,17 @@ MUTANT3
   fi
 
   printf '\n'
-  if [ "$SELF_INCOMPLETE" != "0" ]; then
-    printf '  %s⚠  %d course(s) INCOMPLETE(S) : panne de l outil, jamais un defaut du firmware. Journaux dans %s%s\n' \
-      "$C_ERR" "$SELF_INCOMPLETE" "$INCOMPLETE_DIR" "$C_0"
+  if [ "$SELF_INCOMPLETE" = "0" ]; then
+    printf '  %s✅ Les %d courses ont toutes rendu un VERDICT : aucune ne s est arretee en chemin.%s\n' \
+      "$C_OK" "$PROBE_RUNS" "$C_0"
+  else
+    printf '  %s⚠  %d course(s) sur %d INCOMPLETE(S) : panne de l outil, jamais un defaut du firmware. Journaux dans %s%s\n' \
+      "$C_ERR" "$SELF_INCOMPLETE" "$PROBE_RUNS" "$INCOMPLETE_DIR" "$C_0"
   fi
   if [ "$SELF_FAILED" = "0" ]; then
     printf '  %s✅ Les trois mutants sont detectes : le fractionnement est un critere, pas un commentaire.%s\n' "$C_OK" "$C_0"
     printf '  %s✅ Les neuf cas negatifs du 4e temoin rendent INVALID, jamais un defaut du firmware.%s\n' "$C_OK" "$C_0"
     printf '  %s✅ Les quatre chemins du verdict global : PASS/0, FAIL/1, INVALID/5 deux fois, tous verifies sur le code ET le mot.%s\n' "$C_OK" "$C_0"
-    printf '  %s✅ Les %d courses ont toutes rendu un VERDICT : aucune ne s est arretee en chemin.%s\n' "$C_OK" "$PROBE_RUNS" "$C_0"
     exit 0
   fi
   printf '  %s❌ SELFTEST : %d cas en echec. Chacun est marque ❌ ci-dessus.%s\n' "$C_ERR" "$SELF_FAILED" "$C_0"
