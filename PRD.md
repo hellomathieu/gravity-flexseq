@@ -114,7 +114,7 @@ The domain is **testable without hardware**: the native tests and the simulator 
 ## 4. Features kept
 6 Multi-Mode Channels · Clock Mode · Random Skip Mode · 2 CV Inputs · External Clock · internal BPM · MIDI through the MIDI Expander · Expansion/Connectivity · Settings · CV Calibration. The project does not modify the MIDI Expander and the Expansion Header.
 ### 4.2 The channel modes — OMISSION CORRECTED on 2026-08-22, RAISED TO FOUR on 2026-08-23
-⚠️ **This section describes three modes. There are four since 2026-08-23: `GATE` comes from `1.2-dev`, and `SWING` becomes a parameter of `SEQ` and not a mode. See §5.0.**
+⚠️ **This section describes three modes, and it is exact.** It counted four from 2026-08-23 to 2026-09-07: `GATE` came from `1.2-dev`, and `SWING` became a parameter of `SEQ` and not a mode. **The amendment of 2026-09-07 in §5.0 sets both aside for the Flash budget, and it reserves their room in the record of a channel.** Read that amendment before you bring either one back.
 ⚠️ **FlexSeq implemented no mode at all.** The owner found it **on the module**: the screen showed only `SEQ`. This was not a layout difference. The three modes did not exist in the domain, and `UiController` assumed in silence that the six channels are sequencers. §4 listed them all the same. **An omission, and not a decision.**
 Constraint set by the owner: **keep every original feature, and extend `SEQ` only.**
 **Facts read in the original firmware** (`GravityFW/src/Gravity/`, source #4):
@@ -200,6 +200,47 @@ A side gain, since the acceleration of the encoder disappeared: **180 detents** 
 - an **occupied** slot can be overwritten, after a confirmation on the screen (**decided on 2026-08-26**). "Empty" is computed: the 36 inactive cells;
 - **A1–A8 refuse** the write, as they do everywhere else;
 - the write holds 24 bytes, so about 82 ms spread by the persistence scheduler.
+**AMENDMENT OF 2026-09-07 — three features are set aside, and their room is reserved.**
+
+**A decision of the owner.** It supersedes point 4 above and one half of point 5. It sets nothing aside for good, and the paragraph on the reserved room says at what price each one comes back.
+
+**What is set aside:** the **mute** per channel · **SWING** · the **GATE** mode.
+
+**Why: the Flash budget.** Measured on 2026-09-07: **2013 bytes** stay before the 98 % guard, against **1990 to 4030 bytes** estimated for the work that remains. At the bottom of that range the margin is 23 bytes. Every saving the firmware could give has been taken, and lot S3 measured that there is nothing more to take without giving something up.
+
+**Why these three, and not others.** They are the only three that do not come from the published original. `main` @ `40d4aac` is the behavioural reference of this project, and it holds none of them: they come from `1.2-dev`, a branch that is older, that was never merged, and that the module most likely never ran. **To set them aside moves FlexSeq towards its reference, and not away from it.**
+
+**The estimated saving is 270 to 630 bytes** — the mute 20 to 80, SWING 150 to 300, GATE 100 to 250. ⚠️ **It is an estimate and not a measurement**, and the three lots delivered so far each cost more than their own estimate, from 2.7 to 12 times. `WORKPLAN.md`, section `RM.16`, holds the table and that measurement.
+
+**What stays true in spite of this amendment:**
+
+- FlexSeq holds **three** modes, `CLOCK`, `RAND` and `SEQ`, as the original does. §4.2 describes three modes, and it is exact again;
+- **`SHIFT` + `PLAY` becomes free, and RECORDING does not move back to it.** The reason of point 5 holds on its own: the handler of a long press runs **on the release**, so a `PLAY` held for 750 ms would arm RECORDING instead of starting the transport. RECORDING stays on `SHIFT` plus a short press;
+- the trigger keeps a **constant width**. GATE was the only mode whose output was not a trigger.
+
+**THE ROOM IS RESERVED, and this half of the amendment costs zero bytes.**
+
+The record of a channel holds nine bytes (§11.1). The ranges of the stored values leave bits free. Read on `src/domain/Persistence.cpp` on 2026-09-07:
+
+```text
+byte 3   separation      0, 2, 3, 4, 6      5 bits free
+byte 4   mode            0 to 2             6 bits free
+byte 6   skip chance     0 to 9             4 bits free
+```
+
+⚠️ **No lot may take these bits for another purpose without amending this paragraph.** They are a shared and finite resource, and nothing else reserves them. A lot that consumes them in passing makes the three features below cost a change of format.
+
+- **The mute takes ONE bit of byte 4.** Its return costs no growth of the record, no change of version, and no return to the defaults. It costs what it costs today;
+- **SWING and GATE do not both fit at full resolution.** SWING asks for a value from 0 to 49 %, so six bits, and GATE asks for a length of gate. The mode value of GATE is free — two bits already hold 0 to 3. ⚠️ **The packing is NOT decided**, and this amendment does not decide it. Two routes exist, and the lot that brings them back chooses: **lower the resolution** so that the values fit the free bits · or **grow the record by one byte per channel**, which takes the image from 588 to 594 bytes and **changes the version**.
+
+⚠️ **A change of version returns the user state to the defaults, as long as no migration exists.** The project has written none: the move from version 2 to version 3 refuses a valid old image and takes the defaults (§11.1). For someone who uses the module, that means the patterns and the settings written inside FlexSeq are lost at the update. To write a migration is possible, and it is a lot of its own.
+
+**To re-read before you bring one of the three back:** this amendment, points 4 and 5 above, §11.1 for the format, and `WORKPLAN.md` section `RM.16` for the budget of the day.
+
+**What this amendment does NOT claim:** it does not claim the cut is enough — it returns 270 to 630 bytes of the 2017 that the worst case lacks · it does not abandon the three features, it states the price of each return · it does not decide the packing of SWING and GATE · and it changes no behaviour of the firmware today, because none of the three was ever written.
+
+---
+
 ### 5.1 Shared pattern bank — SUPERSEDED by §5.0
 > **A validated decision.** A single bank holds **16 shared patterns** (A1–A8, B1–B8). Each channel holds a **selector**, `selectedPattern`, from 0 to 15. ⚠️ **SUPERSEDED on 2026-08-23, see §5.0.** The model becomes **template and instance**: the 16 patterns are **templates stored in the EEPROM**, and each channel works on a **local copy in RAM**. To edit the pattern of a channel therefore affects **no** other channel.
 **This subsection keeps two facts that no other section carries.** Its current content moved to §5.0, and this block stays for its history and for those two facts.
@@ -1205,6 +1246,7 @@ The figures of 2026-08-22 they replace: RAM 1699 (83.0 %), Flash 28228 (91.9 %),
 ---
 ## 16. Decisions — validated against open
 ⚠️ **The review of the reference version of 2026-08-23 (§5.0) supersedes five entries of this list**: the resident shared bank · the 24 steps · the LENGTH as a property of the channel alone · the three modes · `SHIFT` plus `PLAY` reserved for RECORDING. The decisions in force are the decisions of §5.0.
+⚠️ **Three entries of the list below are SET ASIDE since 2026-09-07**, by the amendment of §5.0: the four modes with **GATE** · **SWING** as a parameter of `SEQ` · the **mute** on `SHIFT` plus `PLAY`. They are set aside for the Flash budget, and their room in the record of a channel is reserved. Nothing else in the list moves.
 **Added on 2026-08-23:** `main` @ `40d4aac` is the reference and `1.2-dev` is a catalogue · patterns as a **template in the EEPROM, with an instance per channel** · **36 steps** and **one nibble per ratchet** (ADR 0007) · LENGTH **deduced at the load** and then owned by the channel — ⚠️ a stale wording, because the template STORES it (§5.0 point 3) · **A1–A8 frozen** · four modes with **GATE** · **SWING as a parameter of SEQ**, 0–49 %, capped · **mute** on `SHIFT` plus `PLAY` · **RECORDING** on `SHIFT` plus a short press · a bar of **9 tabs** plus a **fixed** transport indicator · a cogwheel for CONF and a small grid for PATTERNS · tempo **20–200** and a pulse of **5 ms** · a grid of **3 rows of 12** with no footer · a PATTERNS tab that reuses `LEVEL_EDIT` · the **7th channel set aside**
 **Validated:** a bank of 16 shared patterns · LENGTH per channel · `masterPhase` (96 PPQN, `uint32`, a smoothed local phase) · **SUBDIV to ticksPerStep per channel** (the libGravity convention, `/N` and `xN`, with the default `/1`) · **a change of SUBDIV takes effect on the next beat** (§6.1.1, decided on 2026-08-23, ADR 0004) · Transport, the mapping of the 96 PPQN clock to the engine · the trigger generation, verified in simavr · **one step is one unit of time** · **a purely graphical measure separation** (none/2/3/4/6, per channel) · **RATCHETS per step** (2/3/4/6 plus the TRIPLET ▲ that stretches over 2 units) · the geometry and the legend of EDIT PATTERN, from the Wokwi POC · **the complete CV mapping** (§10: the destinations PATTERN / LENGTH / RESET / STEP per channel, an application at the step boundary except for RESET, the Schmitt thresholds +1 V / +0.5 V, and a routing that survives a change of mode) · **the ratchet 5 set aside** · **the edit while the transport plays, kept** · **the EDIT spacing `20 / 38`** · **the OLED render spread over its 8 bands** (ADR 0001) · **the RAM reserve threshold brought from 512 to 256 B** on the strength of a stack measurement (§15) · **the CV sampled under interrupt, with a guarantee of 1 ms** (§10.6) · **the header kept explicit** and **the skip of the unchanged band** (§12) · **a memory drift guard** with a versioned record (§15) · **the EEPROM persistence format v2** (§11.1, implemented on 2026-08-23: 304 B, 9 B per channel, and two CV target bytes reserved for §10.2) · **the offset on ONE byte**, faithful to the `uint8_t offset` of the original, with the limit kept as it is.
 **The six decisions of the conformity audit, settled on 2026-08-23:**
