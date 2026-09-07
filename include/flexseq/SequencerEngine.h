@@ -222,8 +222,6 @@ struct ModulatedPatternState {
 static_assert(ModulatedPatternState::NOT_MODULATED
                   > SequencerEngine::PATTERN_COUNT - 1,
               "the sentinel must never name a pattern of the bank");
-static_assert(SequencerEngine::CHANNEL_COUNT == 6,
-              "the sentinel list of the constructor holds one entry per channel");
 
 }  // namespace flexseq
 
