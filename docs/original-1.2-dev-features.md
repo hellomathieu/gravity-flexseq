@@ -11,7 +11,11 @@ other document describes.
 more. No line here is a requirement, and no line here overrides
 `docs/original-conformity.md` or `docs/original-modes.md`.
 
-⚠️ **GATE stays a CANDIDATE, and the owner confirmed it on 2026-09-04.** Lot 11 of `WORKPLAN.md` rebuilds the channel tab of the original, and it runs **without** `GATE`. Two facts framed that decision. The released original has **three** modes, `byte mode; //0 - CLK, 1 - RND, 2 - SEQ` (`Gravity.ino:63`), and FlexSeq and `PRD.md` both carry three. `GATE` is a mode of the `1.2-dev` branch, so it lives in this catalogue and it carries no requirement. Adding it later is a product decision, and it goes to `PRD.md`, never to this file.
+⚠️ **THREE FEATURES OF THIS CATALOGUE ARE SET ASIDE, and `PRD.md` says so since 2026-09-07**: `GATE`, `SWING` and the **mute** per channel. The amendment lives in `PRD.md` §5.0, it gives the Flash budget as the reason, and it **reserves the room** each one needs in the record of a channel. Read it before you bring any of them back: it states the price of each return, and it forbids another lot to take the reserved bits.
+
+⚠️ **A sentence of this file was FALSE from 2026-08-23 to 2026-09-07, and it is corrected here.** It said that `GATE` stays a candidate because "FlexSeq and `PRD.md` both carry three" modes. **`PRD.md` carried four** over that period: §5.0 point 4 of 2026-08-23 raised the count and named `GATE`. What the owner settled on 2026-09-04 was the **scope of lot 11**, which rebuilds the channel tab without `GATE`. That is a decision about one lot, and this file read it as a decision about the specification.
+
+**The count is three again since 2026-09-07**, and for a different reason: the amendment above, and not the state of 2026-08-22. The released original has **three** modes, `byte mode; //0 - CLK, 1 - RND, 2 - SEQ` (`Gravity.ino:63`). `GATE` is a mode of the `1.2-dev` branch, so it lives in this catalogue and it carries no requirement of its own. To bring it back is a product decision, and it goes to `PRD.md`, never to this file.
 
 Two facts to keep in mind before reading:
 
