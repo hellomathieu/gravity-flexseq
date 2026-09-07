@@ -1,6 +1,6 @@
 # Open risks and watch items
 
-**Last review: 2026-09-07.** Forty-five open lines, fifty-two closed or accepted.
+**Last review: 2026-09-07.** Forty-six open lines, fifty-two closed or accepted.
 The two counts are read from the tables themselves. The header carried forty-eight
 and forty-nine until 2026-09-07.
 
@@ -21,11 +21,12 @@ either closed without anyone noting it, or accepted without anyone saying so.
 
 ## What is still open
 
-Forty-five lines, and each one states **what it is waiting for and from whom**. A line
+Forty-six lines, and each one states **what it is waiting for and from whom**. A line
 that waits for nothing from nobody no longer belongs here: it is in the table
 below.
 
 | # | Subject | Severity | What is left, and from whom |
+| 97 | **The per-lot Flash estimate is unreliable for a screen lot, and the three delivered lots measure the gap.** Read on 2026-09-07 from `tools/memory-baseline`, one figure per acceptance: lot 11 was estimated at 200 to 350 bytes and cost **1178** · lot 12 at −20 to 50 and cost **600** · lot 13 at 70 to 150 and cost **404**. The estimated sum is 250 to 550 and the measured sum is **2182**, so **4.0 to 8.7 times**. ⚠️ **This is NOT a scope overrun**: lots 12 and 13 were reduced on the way, and lot 11 delivered what its criteria asked. ⚠️ **The cause is named in the estimate itself**: no screen lot appeared in the measured history, so three calibrations stood in. Calibration A measured **one displayed field** at +70 bytes, and a whole screen lot is not a sum of fields | **high, because it governs the scope decision.** The remaining work is estimated at **1990 to 4030 bytes** against **2013** available — `WORKPLAN.md`, section `RM.16`. At the bottom of that range the margin is 23 bytes. ⚠️ **The bottom of the range is therefore not a neutral case**: if this ratio holds for the screen lots that remain — 22, 17a, 16, 14 and E — it is already out of reach | **a decision of the owner, and no lot carries it.** ⚠️ **No correction factor is applied, deliberately**: three values, one of them an outlier, do not make a law, and a factor chosen here would become the specification by default. Two routes exist and neither is chosen: **re-estimate** the remaining screen lots on the measured cost of 11, 12 and 13 · or **measure first**, by taking one short screen lot to acceptance before deciding the rest. The second costs a round trip and gives a real figure. This line closes when the owner says which, or accepts the estimate as it stands |
 |---|---|---|---|
 | 95 | **A channel in `CLOCK` or in `RANDOM` carries a `MOD` line that can never do anything, and the quantisation it would need is not written.** PRD §10.2 says the destination follows the mode: `SUBDIVISION` in `CLOCK`, `SKIP CHANCE` in `RANDOM`. Neither exists in `CvDestination`, so the field refuses the rotation there since the CV routing lot of 2026-09-05, by decision of the owner. The screen still names the routing a channel carries from its `SEQ` days, so it does not lie | **medium, and it is an absence, not a defect.** The two codes would be 5 and 6 and fit the byte, so the format would not move and no version would change. What is missing is the **quantisation**: §10.4 is titled for `PATTERN`, `LENGTH` and `STEP`, and its grid of 31 zones is dimensioned from the sixteen patterns. A subdivision is an index into a list of twenty-five and a skip chance runs from 0 to 10, so neither reuses that grid as it stands | **a decision of the owner on the quantisation, then a lot.** Nothing should be implemented before the rule is written, because a grid chosen in code would become the specification by default. The rest is small: two enum codes, two cases at the step boundary, and the field stops refusing |
 | 67 | **The link between the silkscreened jack and the ADC channel is a hardware fact, and no simulator can check it.** `tools/run-trigger-probe.sh` injects millivolts on the ADC7 and ADC6 IRQ of simavr, so it validates the mapping **inside the firmware**. ADC7 reaches `cv::CV1` and then `CV_SOURCE_1`, and ADC6 reaches `cv::CV2` and then `CV_SOURCE_2`. Whether the jack printed "CV1" on the panel is wired to ADC7 on the real board is another question, and only the module answers it. ⚠️ **This line replaces a WIDER claim that a measurement refuted on 2026-08-31.** `CLAUDE.md` said that a swap of CV1 and CV2 stays indiscriminable, because both inputs carry the identical calibration of libGravity. The premise is true: `Preferences::cvCalibration` is persisted and never applied, and `main.cpp:146` and `:148` configure `CvSampler` from `gravity.cv1` and `gravity.cv2`. But the conclusion does not follow. The discrimination does not rest on an asymmetry of calibration: it rests on the routing, which names an **index of source** | **an unverifiable-in-simulation fact, the class of line 2.** The software chain is proven, and this line carries no software doubt | **nothing to do before the first physical flash, and nothing a tool can close.** The proof that the firmware tells the two inputs apart is nominal since 2026-08-31: the probe runs `cvzero`, `cv1length` and `cv2length`, and three counter-proofs redden it. `EXPECTED_OFFSET=9` reddens both length courses. `CV_TARGET=1:2` reddens `cv2length` alone, because it injects on CV2 while it routes source 1. `CV_TARGET=2:2` reddens `cv1length` alone, for the mirror reason. **That asymmetry is what proves the two inputs are told apart**, and no symmetric path could produce it. What stays open is the panel wiring, and it lifts the way line 2 lifts: by looking at the module |
@@ -198,6 +199,17 @@ arithmetic impossibility. The line is closed for that reason, and not because
 anyone decided to live with it.
 
 ## Method rules born from these subjects
+
+**A figure that names no derivation cannot be checked, and it outlives the fact it
+came from.** Written 2026-09-07. The remaining work was carried as "1840 to 3630
+bytes" in three documents, and no document said how it was obtained. The
+recomputation found it: it was the per-lot table **less lot 16**, which is only
+partly delivered and therefore still to pay. The wrong figure had travelled for
+three days and had been used to state a margin of 173 bytes where the margin is
+23. The rule: a derived figure is written with its derivation, or with a pointer
+to the table it comes from. A figure that can only be believed is a figure that
+cannot be corrected.
+
 
 **A lever whose default is read from the domain proves nothing when it is given that
 same value.** Written 2026-09-06, on the gesture probe. `R2_ROTATIONS` defaults to the
