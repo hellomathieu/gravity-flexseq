@@ -42,10 +42,13 @@ Each row below carries the original's line, so the reading can be checked.
 
 | Element | Original | FlexSeq | Verdict |
 |---|---|---|---|
-| Tab count | 7: clock glyph `w` then digits 1 to 6 (`UI.ino:239-260`) | 8: clock, 6 channels, global config | **assumed divergence** — the owner moved the settings page into the bar, 2026-08-23 |
-| Play/Stop indicator | separate glyph at x=121, `t` stopped and `r` playing, **only when the clock is internal** (`UI.ino:262-267`) | absent | **omission** — line 28, lot 16 |
+| Tab count | 7: clock glyph `w` then digits 1 to 6 (`UI.ino:239-260`) | **9**: clock, 6 channels, PATTERNS, global config, in slots of **12 px** as in the original | **assumed divergence** — the owner moved the settings page and the PATTERNS page into the bar, 2026-08-23. ⚠️ **This row said 8 until 2026-09-09**, before step 1 of lot 16E |
+| Play/Stop indicator | separate glyph at x=121, `t` stopped and `r` playing, **only when the clock is internal** (`UI.ino:262-267`) | the same two glyphs of `velvetscreen`, at the same two positions, on the internal clock only | **conform** — closed by step 3 of lot 16E, 2026-09-09. Read on the panel: the triangle `r` at x = 122 over the rows 58 to 62 |
 | Selected tab | inverted, and inverted again while SHIFT is held (`UI.ino:240-244`) | inverted | **divergence to decide** — FlexSeq does not react to SHIFT in the bar |
 | Rule under the bar | `drawHLine(0, 53, 128)` (`UI.ino:234`) | present | conform |
+| Glyph of the clock tab | character `w` of `velvetscreen`, 5 px by 5 px (`UI.ino:238`) | the same character of the same font | **conform** — closed by step 2 of lot 16E, 2026-09-09. The glyph before it was the same drawing with square corners instead of a circle |
+| Glyph of the PATTERNS tab | — the original has no such tab | a grid of steps, two rows of three dots of one pixel, 7 px by 5 px | **FlexSeq addition** — PRD §5.0 point 6 |
+| Glyph of the CONF tab | — the original has no such tab | two sliders, 7 px by 5 px | **FlexSeq addition** — PRD §12.1 decision 4, amended on 2026-09-09. The filled square before it read as a stop indicator |
 | Tab at power-on | **the clock tab**: `byte displayTab = 0` (`Gravity.ino:125`) | **the first channel**: `currentTab_(TAB_FIRST_CHANNEL)` (`UiController.cpp:89`) | **divergence to decide, found 2026-09-04** during step 4 of lot 11. At power-on the original shows the tempo and FlexSeq shows a channel. Nothing decided it, and no document carried it. It is one line to align, in either direction |
 
 ## Screen 0 — the BPM tab
