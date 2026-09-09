@@ -893,6 +893,8 @@ all times**, at the right of the header, which is why this form beats a blind
 gesture — the value is read rather than inferred from the bars. Measured: the
 title is 65 px of 128 and `SEP 3` is 22.
 
+⚠️ **THE TITLE IS FLUSH LEFT SINCE 2026-09-09, at `x = 4`.** It was centred, so it floated between the edge of the screen and `SEP`. It now sits on the column of the rule that underlines it. And **`SEP` carries its colon**, `SEP:`, like every other label of the interface. Measured in `velvetscreen`: `SEP:` is 16 px and `SEP` is 14 px, so the label grows by 2 px. The title keeps its 65 px, and it now ends at `x = 68` against the label at `x = 102`.
+
 — *the previous wording, partly replaced:*
 **Three screens**, exactly those of the original:
 1. **The main screen** — the tab bar and the parameters of the active tab. **No** separate "CONFIG PATTERN" screen exists: the settings of a channel are the content of its tab.
