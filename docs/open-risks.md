@@ -201,6 +201,29 @@ anyone decided to live with it.
 
 ## Method rules born from these subjects
 
+**A test canvas that does not rasterise text cannot hold a glyph drawn from a
+font.** Written 2026-09-09, on step 2 of lot 16E. The clock of the bar became the
+character `w` of the `velvetscreen` font of the original, which the firmware
+already embeds. The native canvas records a text call and no pixel, so the
+assertion that every glyph of the bar shares the rows 58 to 62 turned red on a
+render that is correct. The proof moved rather than disappeared: the pixel mirror
+rasterises the font and holds the two rows, and the panel of
+`tools/run-screen-dump.sh` reads the same rows on the memory of the display. The
+rule: when a drawing moves from a primitive to a font, the pixel proof moves with
+it, and the native test states what it can still hold.
+
+**Two forms of the same code differed by 122 bytes of Flash, and neither changes
+the behaviour.** Written 2026-09-09, on step 2 of lot 16E. The bar draws the
+clock and the six digits through one `drawStr`, and the character comes from a
+buffer of two bytes. Declared **inside** the branch that fills it, the render
+function grows by 70 bytes. Declared **once at the top of the loop**, it returns
+52 bytes. The three forms are semantically identical, and the whole difference
+sits in `PagedScreen::renderFrom`, read on two ELF files. The rule: a rewriting
+that changes nothing for the reader can still cost more than the feature, so a
+step measures the form it ships and not only the feature it adds. And a later
+tidy-up that moves such a declaration back inside its branch is a regression of
+the footprint, not a cleanup.
+
 **A figure that names no derivation cannot be checked, and it outlives the fact it
 came from.** Written 2026-09-07. The remaining work was carried as "1840 to 3630
 bytes" in three documents, and no document said how it was obtained. The
