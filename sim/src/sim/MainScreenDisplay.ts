@@ -19,6 +19,12 @@ export const TAB_GLYPH_TOP_Y = TAB_BASELINE_Y - GLYPH_HEIGHT;
 export const TAB_GLYPH_H = GLYPH_HEIGHT;
 export const TAB_WIDE_GLYPH_W = 7;
 export const VELVETSCREEN_CLOCK = "w";
+export const VELVETSCREEN_PLAY = "r";
+export const VELVETSCREEN_STOP = "t";
+export const CLOCK_SOURCE_INTERNAL = 0;
+export const TRANSPORT_STOP_X = 121;
+export const TRANSPORT_PLAY_X = 122;
+export const TRANSPORT_STOP_W = 5;
 export const TAB_TOP_Y = TAB_BASELINE_Y - (GLYPH_HEIGHT - 1);
 export const TAB_BOX_Y = OLED_H - 8;
 export const TAB_BOX_H = 8;
@@ -200,5 +206,13 @@ export function drawMainScreenOled(ctx: OledCtx, model: MainScreenModel): void {
     if (selected) {
       ctx.fillStyle = INK;
     }
+  }
+  if (model.clockSource === CLOCK_SOURCE_INTERNAL) {
+    blit(
+      ctx,
+      model.running ? VELVETSCREEN_PLAY : VELVETSCREEN_STOP,
+      model.running ? TRANSPORT_PLAY_X : TRANSPORT_STOP_X,
+      TAB_GLYPH_TOP_Y,
+    );
   }
 }

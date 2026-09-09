@@ -11,6 +11,9 @@ M	tab_settings	40	both	TAB_SETTINGS	8
 M	tab_glyph_top_y	41	both	TAB_GLYPH_TOP_Y	58
 M	tab_glyph_height	42	both	TAB_GLYPH_H	5
 M	tab_wide_glyph_width	43	both	TAB_WIDE_GLYPH_W	7
+M	transport_stop_x	44	both	TRANSPORT_STOP_X	121
+M	transport_play_x	45	both	TRANSPORT_PLAY_X	122
+M	transport_stop_width	46	both	TRANSPORT_STOP_W	5
 M	tab_baseline_y	4	both	TAB_BASELINE_Y	63
 M	tab_top_y	5	both	TAB_TOP_Y	59
 M	tab_box_y	6	both	TAB_BOX_Y	56

@@ -44,6 +44,7 @@ MainScreenModel mainScreenModelOf(const UiController& ui, const SequencerEngine&
     model.configPage = ui.isOnConfigPage();
     model.tempo = ui.tempo();
     model.clockSource = ui.clockSource();
+    model.running = engine.isRunning();
 
     return model;
 }

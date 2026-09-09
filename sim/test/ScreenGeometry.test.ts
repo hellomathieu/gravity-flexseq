@@ -114,6 +114,9 @@ function production(family: Family, index: number): number | undefined {
       41: md.TAB_GLYPH_TOP_Y,
       42: md.TAB_GLYPH_H,
       43: md.TAB_WIDE_GLYPH_W,
+      44: md.TRANSPORT_STOP_X,
+      45: md.TRANSPORT_PLAY_X,
+      46: md.TRANSPORT_STOP_W,
     };
     return table[index];
   }

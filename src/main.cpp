@@ -49,6 +49,7 @@ constexpr uint8_t UI_TITLE_NUM = 14;
 uint32_t uiLastDrawMs = 0;
 int8_t uiLastStep = -2;
 uint8_t uiLastRevision = 0xFF;
+bool uiLastRunning = false;
 uint8_t savedRevision = 0;
 
 // L'image en cours. PagedScreen gele le modele et le contenu du pattern, puis
@@ -271,7 +272,9 @@ void loop() {
             ? engine.effectiveStep(static_cast<uint8_t>(channel))
             : -1;
         const uint8_t revision = ui.revision();
-        bool due = (step != uiLastStep || revision != uiLastRevision);
+        const bool running = engine.isRunning();
+        bool due = (step != uiLastStep || revision != uiLastRevision
+                    || running != uiLastRunning);
 #if FLEXSEQ_ENCODER_PROBE
         due = due || flexseq::probe::pageChanged();
 #endif
@@ -281,6 +284,7 @@ void loop() {
                 uiLastDrawMs = now;
                 uiLastStep = step;
                 uiLastRevision = revision;
+                uiLastRunning = running;
                 beginUiFrame();
             }
         }

@@ -41,6 +41,7 @@ struct MainScreenModel {
 
     uint16_t tempo;
     uint8_t clockSource;
+    bool running;
 
 
 };

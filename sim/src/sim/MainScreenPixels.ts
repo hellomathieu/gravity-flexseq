@@ -47,6 +47,11 @@ import {
   TAB_GLYPH_TOP_Y,
   TAB_WIDE_GLYPH_W,
   VELVETSCREEN_CLOCK,
+  VELVETSCREEN_PLAY,
+  VELVETSCREEN_STOP,
+  CLOCK_SOURCE_INTERNAL,
+  TRANSPORT_PLAY_X,
+  TRANSPORT_STOP_X,
   TAB_LAST_CHANNEL,
   TAB_PATTERNS,
   TAB_SETTINGS,
@@ -370,6 +375,15 @@ export function renderMainScreen(model: MainScreenModel): Render {
       ink.drawStr(cx - 2, TAB_BASELINE_Y, label, VELVETSCREEN);
     }
     if (selected) ink.setDrawColor(1);
+  }
+
+  if (model.clockSource === CLOCK_SOURCE_INTERNAL) {
+    ink.drawStr(
+      model.running ? TRANSPORT_PLAY_X : TRANSPORT_STOP_X,
+      TAB_BASELINE_Y,
+      model.running ? VELVETSCREEN_PLAY : VELVETSCREEN_STOP,
+      VELVETSCREEN,
+    );
   }
 
   return { pixels: ink.pixels(), count: ink.count(), rows: ink.rowCounts() };

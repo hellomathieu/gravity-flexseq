@@ -45,6 +45,19 @@ constexpr uint8_t TAB_GLYPH_TOP_Y =
 constexpr uint8_t TAB_GLYPH_H = FONT_VELVETSCREEN_HEIGHT;
 constexpr char VELVETSCREEN_CLOCK = 'w';
 constexpr uint8_t TAB_WIDE_GLYPH_W = 7;
+constexpr char VELVETSCREEN_PLAY = 'r';
+constexpr char VELVETSCREEN_STOP = 't';
+constexpr uint8_t CLOCK_SOURCE_INTERNAL = 0;
+constexpr uint8_t TRANSPORT_STOP_X = 121;
+constexpr uint8_t TRANSPORT_PLAY_X = 122;
+constexpr uint8_t TRANSPORT_STOP_W = 5;
+
+static_assert(TAB_SLOT_W * TAB_COUNT <= TRANSPORT_STOP_X,
+              "the transport indicator must sit outside the nine slots");
+static_assert(TRANSPORT_STOP_X + TRANSPORT_STOP_W <= screen::WIDTH,
+              "the transport indicator must fit the width of the screen");
+static_assert(TRANSPORT_PLAY_X > TRANSPORT_STOP_X,
+              "play is narrower than stop, so it starts one pixel later");
 
 static_assert(TAB_WIDE_GLYPH_W < TAB_SLOT_W,
               "a wide glyph must leave a margin inside its slot");
@@ -555,6 +568,13 @@ void drawMainScreen(Canvas& canvas, const MainScreenModel& model,
             if (selected) {
                 canvas.setDrawColor(1);
             }
+        }
+        if (model.clockSource == ms::CLOCK_SOURCE_INTERNAL) {
+            char indicator[2];
+            indicator[0] = model.running ? ms::VELVETSCREEN_PLAY : ms::VELVETSCREEN_STOP;
+            indicator[1] = '\0';
+            canvas.drawStr(model.running ? ms::TRANSPORT_PLAY_X : ms::TRANSPORT_STOP_X,
+                           ms::TAB_BASELINE_Y, indicator);
         }
     }
 }

@@ -38,6 +38,7 @@ export interface MainScreenModel {
 
   tempo: number;
   clockSource: number;
+  running: boolean;
 }
 
 function parameterOf(field: UiField): MainParameter {
@@ -77,6 +78,7 @@ export function mainScreenModelOf(ui: UiController, engine: SequencerEngine): Ma
     configPage: ui.isOnConfigPage,
     tempo: ui.tempo,
     clockSource: ui.clockSource,
+    running: engine.isRunning,
   };
   if (channel >= 0) {
     model.patternIndex = engine.getSelectedPattern(channel);

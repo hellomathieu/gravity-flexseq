@@ -16,6 +16,11 @@ import {
   TAB_PATTERNS,
   TAB_SETTINGS,
   TAB_WIDE_GLYPH_W,
+  TAB_COUNT,
+  TAB_SLOT_W,
+  TRANSPORT_PLAY_X,
+  TRANSPORT_STOP_X,
+  TRANSPORT_STOP_W,
   tabCentreX,
 } from "../src/sim/MainScreenDisplay.js";
 
@@ -44,6 +49,7 @@ const PANEL_MODEL: MainScreenModel = {
   configPage: false,
   tempo: 120,
   clockSource: 0,
+  running: true,
 };
 
 /**
@@ -57,10 +63,10 @@ const PANEL_ROWS: ReadonlyArray<readonly [number, number]> = [
   [18, 34], [19, 20], [20, 18], [21, 15], [22, 9], [23, 11], [24, 28],
   [25, 31], [26, 23], [27, 29], [28, 16], [29, 16], [30, 19], [36, 23],
   [37, 18], [38, 21], [39, 18], [40, 22], [52, 120], [56, 12], [57, 12],
-  [58, 28], [59, 28], [60, 27], [61, 26], [62, 27], [63, 12],
+  [58, 29], [59, 30], [60, 30], [61, 28], [62, 28], [63, 12],
 ];
 
-const PANEL_INK = 930;
+const PANEL_INK = 939;
 
 describe("l ecran principal, confronte au PANNEAU (risque 89)", () => {
   it("rend exactement l encre que le panneau recoit", () => {
@@ -131,6 +137,51 @@ describe("les glyphes de la barre, en pixels", () => {
     expect(on(px, x, 58)).toBe(false);
     expect(on(px, x, 62)).toBe(false);
     expect(on(px, x + 7, 59)).toBe(false);
+  });
+});
+
+describe("l indicateur de transport, hors de la navigation", () => {
+  const on = (px: Set<string>, x: number, y: number) => px.has(`${x},${y}`);
+  const inkRight = (px: Set<string>) => {
+    let n = 0;
+    for (let x = 118; x < 128; ++x) for (let y = 56; y <= 63; ++y) if (on(px, x, y)) ++n;
+    return n;
+  };
+
+  it("montre Play a x = 122 quand le transport tourne", () => {
+    expect(TRANSPORT_PLAY_X).toBe(122);
+    const px = renderMainScreen({ ...PANEL_MODEL, running: true }).pixels;
+    expect(inkRight(px)).toBe(9);
+    for (const [x, y] of [[122, 58], [122, 59], [123, 59], [122, 60], [123, 60],
+                          [124, 60], [122, 61], [123, 61], [122, 62]]) {
+      expect(on(px, x!, y!), `${x},${y}`).toBe(true);
+    }
+    expect(on(px, 121, 60)).toBe(false);
+  });
+
+  it("montre Stop a x = 121 quand le transport est arrete", () => {
+    expect(TRANSPORT_STOP_X).toBe(121);
+    expect(TRANSPORT_STOP_W).toBe(5);
+    const px = renderMainScreen({ ...PANEL_MODEL, running: false }).pixels;
+    expect(inkRight(px)).toBe(25);
+    for (let x = 121; x < 126; ++x) {
+      for (let y = 58; y <= 62; ++y) expect(on(px, x, y), `${x},${y}`).toBe(true);
+    }
+    expect(on(px, 126, 60)).toBe(false);
+  });
+
+  it("n est pas dessine hors horloge interne", () => {
+    for (const clockSource of [1, 2, 3, 4, 5]) {
+      for (const running of [true, false]) {
+        const px = renderMainScreen({ ...PANEL_MODEL, clockSource, running }).pixels;
+        expect(inkRight(px), `source ${clockSource}`).toBe(0);
+      }
+    }
+  });
+
+  it("reste hors des neuf creneaux de la barre", () => {
+    expect(TAB_SLOT_W * TAB_COUNT).toBe(108);
+    expect(TRANSPORT_STOP_X).toBeGreaterThanOrEqual(108);
   });
 });
 
@@ -209,10 +260,10 @@ const SEQ_PANEL_ROWS: ReadonlyArray<readonly [number, number]> = [
   [18, 22], [19, 11], [20, 10], [21, 9], [22, 9], [23, 9], [24, 39],
   [25, 40], [26, 43], [27, 39], [28, 18], [29, 19], [30, 29], [36, 20],
   [37, 12], [38, 19], [39, 11], [40, 13], [52, 120], [56, 12], [57, 12],
-  [58, 28], [59, 28], [60, 27], [61, 26], [62, 27], [63, 12],
+  [58, 29], [59, 30], [60, 30], [61, 28], [62, 28], [63, 12],
 ];
 
-const SEQ_PANEL_INK = 968;
+const SEQ_PANEL_INK = 977;
 
 describe("l onglet d un canal en SEQ", () => {
   const seq: MainScreenModel = {
@@ -287,10 +338,10 @@ const CONFIG_PANEL_ROWS: ReadonlyArray<readonly [number, number]> = [
   [18, 29], [19, 11], [20, 10], [21, 9], [22, 9], [23, 9], [24, 29],
   [25, 40], [26, 38], [27, 40], [28, 15], [29, 18], [30, 19], [36, 20],
   [37, 12], [38, 19], [39, 11], [40, 13], [52, 120], [56, 12], [57, 12],
-  [58, 28], [59, 28], [60, 27], [61, 26], [62, 27], [63, 12],
+  [58, 29], [59, 30], [60, 30], [61, 28], [62, 28], [63, 12],
 ];
 
-const CONFIG_PANEL_INK = 980;
+const CONFIG_PANEL_INK = 989;
 
 describe("la page CONFIG PATTERN, confrontee au PANNEAU", () => {
   const config: MainScreenModel = {

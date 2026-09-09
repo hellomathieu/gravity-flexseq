@@ -178,6 +178,9 @@ bool production(char family, int index, int& out) {
             case 41: out = ms::TAB_GLYPH_TOP_Y; return true;
             case 42: out = ms::TAB_GLYPH_H; return true;
             case 43: out = ms::TAB_WIDE_GLYPH_W; return true;
+            case 44: out = ms::TRANSPORT_STOP_X; return true;
+            case 45: out = ms::TRANSPORT_PLAY_X; return true;
+            case 46: out = ms::TRANSPORT_STOP_W; return true;
             default: return false;
         }
     }

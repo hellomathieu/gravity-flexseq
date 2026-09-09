@@ -73,6 +73,7 @@ function channelTab(tab = 1): MainScreenModel {
     configPage: false,
     tempo: 120,
     clockSource: 0,
+    running: true,
   };
 }
 

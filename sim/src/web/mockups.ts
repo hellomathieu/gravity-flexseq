@@ -58,6 +58,7 @@ function mainModel(over: Partial<MainScreenModel>): MainScreenModel {
     configPage: false,
     tempo: 120,
     clockSource: 0,
+  running: false,
     ...over,
   };
 }

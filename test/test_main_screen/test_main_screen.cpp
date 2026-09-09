@@ -284,6 +284,53 @@ void test_the_settings_glyph_is_two_sliders_seven_pixels_wide() {
                               "la glissiere ne depasse pas sept pixels");
 }
 
+void test_the_transport_indicator_shows_stop_when_the_transport_is_stopped() {
+    canvas.reset();
+    MainScreenModel m = channelTab();
+    m.running = false;
+    drawMainScreen(canvas, m);
+    const Call* call = canvas.findOnBaseline("t", ms::TAB_BASELINE_Y);
+    TEST_ASSERT_NOT_NULL(call);
+    TEST_ASSERT_EQUAL_UINT8(121, call->x);
+    TEST_ASSERT_NULL(canvas.findOnBaseline("r", ms::TAB_BASELINE_Y));
+}
+
+void test_the_transport_indicator_shows_play_when_the_transport_runs() {
+    canvas.reset();
+    MainScreenModel m = channelTab();
+    m.running = true;
+    drawMainScreen(canvas, m);
+    const Call* call = canvas.findOnBaseline("r", ms::TAB_BASELINE_Y);
+    TEST_ASSERT_NOT_NULL(call);
+    TEST_ASSERT_EQUAL_UINT8(122, call->x);
+    TEST_ASSERT_NULL(canvas.findOnBaseline("t", ms::TAB_BASELINE_Y));
+}
+
+void test_the_transport_indicator_is_drawn_on_the_internal_clock_only() {
+    for (uint8_t source = 1; source <= 5; ++source) {
+        canvas.reset();
+        MainScreenModel m = channelTab();
+        m.clockSource = source;
+        m.running = true;
+        drawMainScreen(canvas, m);
+        TEST_ASSERT_NULL_MESSAGE(canvas.findOnBaseline("r", ms::TAB_BASELINE_Y),
+                                 "aucun indicateur hors horloge interne");
+        m.running = false;
+        canvas.reset();
+        drawMainScreen(canvas, m);
+        TEST_ASSERT_NULL_MESSAGE(canvas.findOnBaseline("t", ms::TAB_BASELINE_Y),
+                                 "aucun indicateur hors horloge interne");
+    }
+}
+
+void test_the_transport_indicator_sits_outside_the_nine_slots() {
+    TEST_ASSERT_EQUAL_UINT8(121, ms::TRANSPORT_STOP_X);
+    TEST_ASSERT_EQUAL_UINT8(122, ms::TRANSPORT_PLAY_X);
+    TEST_ASSERT_EQUAL_UINT8(108, ms::TAB_SLOT_W * ms::TAB_COUNT);
+    TEST_ASSERT_EQUAL_INT('r', ms::VELVETSCREEN_PLAY);
+    TEST_ASSERT_EQUAL_INT('t', ms::VELVETSCREEN_STOP);
+}
+
 void test_the_glyph_band_of_the_bar_is_never_clipped() {
     TEST_ASSERT_EQUAL_UINT8(58, ms::TAB_GLYPH_TOP_Y);
     TEST_ASSERT_EQUAL_UINT8(5, ms::TAB_GLYPH_H);
@@ -837,6 +884,10 @@ int main() {
     RUN_TEST(test_the_clock_tab_draws_the_glyph_of_the_original);
     RUN_TEST(test_the_patterns_glyph_is_two_rows_of_three_single_dots);
     RUN_TEST(test_the_settings_glyph_is_two_sliders_seven_pixels_wide);
+    RUN_TEST(test_the_transport_indicator_shows_stop_when_the_transport_is_stopped);
+    RUN_TEST(test_the_transport_indicator_shows_play_when_the_transport_runs);
+    RUN_TEST(test_the_transport_indicator_is_drawn_on_the_internal_clock_only);
+    RUN_TEST(test_the_transport_indicator_sits_outside_the_nine_slots);
     RUN_TEST(test_the_glyph_band_of_the_bar_is_never_clipped);
     RUN_TEST(test_the_six_channel_digits_sit_at_their_slot_centres);
     RUN_TEST(test_the_selected_tab_is_inverted);
