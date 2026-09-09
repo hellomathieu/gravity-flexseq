@@ -169,7 +169,6 @@ done
 [ -n "$PREFIX" ] || die "libsimavrparts absente. brew install simavr" 127
 
 CRAN_EXPECTED=6
-TAB_SLOTS=8
 TIMING_STEPS="0,3,4,9,15"
 TIMING_SUBDIV="-4"
 TIMING_MASK="8219"
@@ -209,7 +208,21 @@ R11_NIBBLE_ZERO="00"
 R11_CANAL_ATTENDU=3
 R11_OCTET_ATTENDU=7
 R11_CODES_REFUSES="${R11_CODES_REFUSES:-03 04 06}"
-TAB_COUNT_ECRAN=8
+# Le compte de creneaux vient du DOMAINE, jamais d'une copie : c'est la regle
+# de methode de la ligne 68 de docs/open-risks.md, et cette valeur etait en dur
+# jusqu'au 2026-09-09. Un echec ici est NON EVALUABLE, donc un echec.
+GEOM_WORK="$(mktemp -d)"
+GEOM_BIN="$GEOM_WORK/screen-geometry"
+c++ -std=c++17 -I"$ROOT/include" -o "$GEOM_BIN" "$ROOT/tools/screen-geometry.cpp" \
+     > "$GEOM_WORK/geometry.log" 2>&1 \
+  || die "compilation de tools/screen-geometry.cpp en echec — voir $GEOM_WORK/geometry.log" 5
+TAB_COUNT_ECRAN="$("$GEOM_BIN" | sed -n 's/^TAB_COUNT=//p')"
+[ -n "$TAB_COUNT_ECRAN" ] \
+  || die "tools/screen-geometry.cpp n'a pas rendu TAB_COUNT" 5
+# DEUX copies en dur vivaient ici, pas une : TAB_COUNT_ECRAN et TAB_SLOTS.
+# La seconde n'a ete trouvee qu'en rejouant la sonde apres le passage a neuf
+# onglets, le 2026-09-09.
+TAB_SLOTS="$TAB_COUNT_ECRAN"
 R8_MASK_ATTENDU="0229"
 R9_OCTET_ATTENDU="60"
 R12_OCTET_ATTENDU="70"

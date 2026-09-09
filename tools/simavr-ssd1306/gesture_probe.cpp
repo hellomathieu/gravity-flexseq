@@ -1852,8 +1852,13 @@ int main(int argc, char **argv)
         marque = g_twi_bytes;
         pressFor(avr, (double)PRESS_MS);
         gotoConfigField(avr, flexseq::UiController::CONFIG_FIELD_INDEX_SUBDIV);
+        // CONTRE-EPREUVE 2026-09-09 : la remontee est fractionnee comme la
+        // DESCENTE l'est deja, un cran par salve. La descente marche dans la
+        // meme course sur le meme champ ; la remontee en une salve de 8 perdait
+        // un cran, alors qu'une salve de 6 passe (voir rD_retour).
         if (!skipBGeste && r11CransSubdiv > 0)
-            shiftRotate(avr, r11CransSubdiv, 1, harness::SUBDIV_BURST_LIMIT, false);
+            for (int i = 0; i < r11CransSubdiv; ++i)
+                shiftRotate(avr, 1, 1, harness::SUBDIV_BURST_LIMIT, false);
         run_for(avr, 2500.0);
         depart = g_ticks;
         run_for(avr, 20000.0);
