@@ -106,6 +106,13 @@ function production(family: Family, index: number): number | undefined {
       31: md.MAIN_CENTRE_X, 32: md.MAIN_BOX_W,
       33: md.MAIN_VALUE_BASELINE_Y, 34: md.MAIN_LABEL_BASELINE_Y,
       35: md.LINE_SPACING_Y,
+      36: md.TAB_CLOCK,
+      37: md.TAB_FIRST_CHANNEL,
+      38: md.TAB_LAST_CHANNEL,
+      39: md.TAB_PATTERNS,
+      40: md.TAB_SETTINGS,
+      41: md.TAB_GLYPH_TOP_Y,
+      42: md.TAB_GLYPH_H,
     };
     return table[index];
   }
@@ -129,6 +136,7 @@ function production(family: Family, index: number): number | undefined {
     15: ps.TITLE_BASELINE_Y, 16: ps.HEADER_LINE_X, 17: ps.HEADER_LINE_Y,
     18: ps.HEADER_LINE_W, 19: ps.LAST_ROW_CY, 20: ps.GRID_BOTTOM_Y,
     22: ps.SEP_LABEL_X, 23: ps.SEP_VALUE_X, 24: ps.SEP_LABEL_W,
+    25: ps.HEADER_TITLE_X, 26: ps.TITLE_W,
   };
   return table[index];
 }

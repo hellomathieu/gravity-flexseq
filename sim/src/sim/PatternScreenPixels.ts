@@ -16,8 +16,8 @@ export const GRID_STEPS = PER_ROW * GRID_ROWS;
 export const COL_SPACING = 10;
 export const GRID_WIDTH = (PER_ROW - 1) * COL_SPACING;
 export const COL_X0 = Math.floor((OLED_W - GRID_WIDTH + 1) / 2);
-export const ROW_CY_0 = 18;
-export const ROW_SPACING = 18;
+export const ROW_CY_0 = 20;
+export const ROW_SPACING = 17;
 export const GLYPH_HALF = 2;
 export const SELECT_HALF = 4;
 export const SELECT_SIZE = 9;
@@ -30,9 +30,11 @@ export const TITLE_BASELINE_Y = 7;
 export const HEADER_LINE_X = 4;
 export const HEADER_LINE_Y = 10;
 export const HEADER_LINE_W = 120;
+export const HEADER_TITLE_X = HEADER_LINE_X;
+export const TITLE_W = 65;
 export const SEP_LABEL_X = 102;
 export const SEP_VALUE_X = 120;
-export const SEP_LABEL_W = 14;
+export const SEP_LABEL_W = 16;
 export const LAST_ROW_CY = ROW_CY_0 + (GRID_ROWS - 1) * ROW_SPACING;
 export const GRID_BOTTOM_Y = LAST_ROW_CY + DIGIT_DY + DIGIT_H - 1;
 
@@ -195,7 +197,7 @@ export function renderPatternScreen(model: PatternScreenPixelModel): Render {
 
   if (model.title !== null) {
     const w = textWidth(model.title, VELVETSCREEN);
-    ink.drawStr(Math.floor((OLED_W - w) / 2), TITLE_BASELINE_Y, model.title);
+    ink.drawStr(HEADER_TITLE_X, TITLE_BASELINE_Y, model.title);
   }
   ink.drawHLine(HEADER_LINE_X, HEADER_LINE_Y, HEADER_LINE_W);
 
@@ -206,10 +208,10 @@ export function renderPatternScreen(model: PatternScreenPixelModel): Render {
     if (model.sepSelected && !model.sepOpen) {
       ink.drawBox(SEP_LABEL_X - 1, base - h - 1, SEP_LABEL_W + 2, h + 2);
       ink.setDrawColor(0);
-      ink.drawStr(SEP_LABEL_X, base, "SEP");
+      ink.drawStr(SEP_LABEL_X, base, "SEP:");
       ink.setDrawColor(1);
     } else {
-      ink.drawStr(SEP_LABEL_X, base, "SEP");
+      ink.drawStr(SEP_LABEL_X, base, "SEP:");
     }
     if (model.sepSelected && model.sepOpen) {
       ink.drawFrame(SEP_VALUE_X - 1, base - h - 1, textWidth(sep, VELVETSCREEN) + 2, h + 2);

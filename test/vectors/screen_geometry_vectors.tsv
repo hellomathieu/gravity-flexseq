@@ -1,8 +1,15 @@
 family	id	index	owners	cpp	expected
 M	screen_width	0	both	WIDTH	128
 M	screen_height	1	both	HEIGHT	64
-M	tab_count	2	both	TAB_COUNT	8
-M	tab_slot_width	3	both	TAB_SLOT_W	16
+M	tab_count	2	both	TAB_COUNT	9
+M	tab_slot_width	3	both	TAB_SLOT_W	12
+M	tab_clock	36	both	TAB_CLOCK	0
+M	tab_first_channel	37	both	TAB_FIRST_CHANNEL	1
+M	tab_last_channel	38	both	TAB_LAST_CHANNEL	6
+M	tab_patterns	39	both	TAB_PATTERNS	7
+M	tab_settings	40	both	TAB_SETTINGS	8
+M	tab_glyph_top_y	41	both	TAB_GLYPH_TOP_Y	58
+M	tab_glyph_height	42	both	TAB_GLYPH_H	5
 M	tab_baseline_y	4	both	TAB_BASELINE_Y	63
 M	tab_top_y	5	both	TAB_TOP_Y	59
 M	tab_box_y	6	both	TAB_BOX_Y	56
@@ -31,8 +38,8 @@ E	grid_steps	2	both	GRID_STEPS	36
 E	column_spacing	3	both	COL_SPACING	10
 E	grid_width	4	both	GRID_WIDTH	110
 E	first_column_x	5	both	COL_X0	9
-E	first_row_centre_y	6	both	ROW_CY_0	18
-E	row_spacing	7	both	ROW_SPACING	18
+E	first_row_centre_y	6	both	ROW_CY_0	20
+E	row_spacing	7	both	ROW_SPACING	17
 E	step_glyph_half	8	both	GLYPH_HALF	2
 E	select_frame_size	9	both	SELECT_SIZE	9
 E	digit_width	10	both	DIGIT_W	3
@@ -49,7 +56,7 @@ E	grid_bottom_y	20	both	GRID_BOTTOM_Y	63
 E	glyph_ascent	21	cpp	GLYPH_ASCENT	4
 E	sep_label_x	22	both	SEP_LABEL_X	102
 E	sep_value_x	23	both	SEP_VALUE_X	120
-E	sep_label_width	24	both	SEP_LABEL_W	14
+E	sep_label_width	24	both	SEP_LABEL_W	16
 M	line_label_x	26	both	LINE_LABEL_X	62
 M	line_value_x	27	both	LINE_VALUE_X	99
 M	line_0_baseline_y	28	both	LINE_0_BASELINE_Y	8
@@ -68,3 +75,5 @@ F	label_font_max_width	4	both	FONT_VELVETSCREEN_MAX_WIDTH	5
 F	main_font_max_width	5	both	FONT_STK_L_MAX_WIDTH	15
 F	label_font_bytes	6	cpp	FONT_VELVETSCREEN_BYTES	437
 F	main_font_bytes	7	cpp	FONT_STK_L_BYTES	569
+E	header_title_x	25	both	HEADER_TITLE_X	4
+E	title_width	26	both	TITLE_W	65

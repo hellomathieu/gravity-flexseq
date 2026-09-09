@@ -7,9 +7,16 @@ import type { MainScreenModel } from "../domain/MainScreenModel.js";
 import { GLYPH_HEIGHT, textPixels, textWidth } from "./oledFont.js";
 import { INK, OLED_H, OLED_W, PAPER, type OledCtx } from "./OledDisplay.js";
 
-export const TAB_COUNT = 8;
-export const TAB_SLOT_W = OLED_W / TAB_COUNT;
+export const TAB_COUNT = 9;
+export const TAB_SLOT_W = 12;
+export const TAB_CLOCK = 0;
+export const TAB_FIRST_CHANNEL = 1;
+export const TAB_LAST_CHANNEL = 6;
+export const TAB_PATTERNS = 7;
+export const TAB_SETTINGS = 8;
 export const TAB_BASELINE_Y = OLED_H - 1;
+export const TAB_GLYPH_TOP_Y = TAB_BASELINE_Y - GLYPH_HEIGHT;
+export const TAB_GLYPH_H = GLYPH_HEIGHT;
 export const TAB_TOP_Y = TAB_BASELINE_Y - (GLYPH_HEIGHT - 1);
 export const TAB_BOX_Y = OLED_H - 8;
 export const TAB_BOX_H = 8;
@@ -79,8 +86,8 @@ export function sourceLabel(source: number): string {
 }
 
 export function headlineOf(model: MainScreenModel): string {
-  if (model.tab === 0) return String(model.tempo);
-  if (model.tab === TAB_COUNT - 1) return "";
+  if (model.tab === TAB_CLOCK) return String(model.tempo);
+  if (model.tab >= TAB_PATTERNS) return "";
   return patternName(model.patternIndex);
 }
 
@@ -154,7 +161,7 @@ export function drawMainScreenOled(ctx: OledCtx, model: MainScreenModel): void {
   if (model.tab === 0) {
     labelledField(ctx, COL_LEFT_X, ROW_A_BOX_Y, "SRC", sourceLabel(model.clockSource),
                   onField(1), onField(1) && model.fieldOpen);
-  } else if (model.tab !== TAB_COUNT - 1) {
+  } else if (model.tab >= TAB_FIRST_CHANNEL && model.tab <= TAB_LAST_CHANNEL) {
     labelledField(ctx, COL_LEFT_X, ROW_A_BOX_Y, "LEN", String(model.length),
                   onField(1), onField(1) && model.fieldOpen);
     labelledField(ctx, COL_RIGHT_X, ROW_A_BOX_Y, "SUB", subdivLabel(model.subdiv),
@@ -173,13 +180,18 @@ export function drawMainScreenOled(ctx: OledCtx, model: MainScreenModel): void {
       ctx.fillStyle = PAPER;
     }
     const cx = tabCentreX(tab);
-    if (tab === 0) {
-      frame(ctx, cx - 3, TAB_TOP_Y, 7, 7);
-      hline(ctx, cx + 1, TAB_TOP_Y + 2, 2);
-      hline(ctx, cx + 1, TAB_TOP_Y + 3, 2);
-      px(ctx, cx, TAB_TOP_Y + 2);
-    } else if (tab === TAB_COUNT - 1) {
-      ctx.fillRect(cx - 2, TAB_TOP_Y + 1, 5, 5);
+    if (tab === TAB_CLOCK) {
+      frame(ctx, cx - 2, TAB_GLYPH_TOP_Y, 5, TAB_GLYPH_H);
+      hline(ctx, cx, TAB_GLYPH_TOP_Y + 2, 2);
+      px(ctx, cx, TAB_GLYPH_TOP_Y + 1);
+    } else if (tab === TAB_PATTERNS) {
+      for (let row = 0; row < 2; ++row) {
+        for (let col = 0; col < 3; ++col) {
+          ctx.fillRect(cx - 3 + col * 3, TAB_GLYPH_TOP_Y + row * 3, 1, 2);
+        }
+      }
+    } else if (tab === TAB_SETTINGS) {
+      ctx.fillRect(cx - 2, TAB_GLYPH_TOP_Y, 5, TAB_GLYPH_H);
     } else {
       blit(ctx, String(tab), cx - 2, TAB_TOP_Y);
     }

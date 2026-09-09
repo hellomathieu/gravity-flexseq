@@ -53,10 +53,11 @@ export enum UiField {
   Config,
 }
 
-export const TAB_COUNT = 8;
+export const TAB_COUNT = 9;
 export const TAB_CLOCK = 0;
 export const TAB_FIRST_CHANNEL = 1;
-export const TAB_SETTINGS = 7;
+export const TAB_PATTERNS = 7;
+export const TAB_SETTINGS = 8;
 
 export const CLOCK_TAB_FIELDS = 2;
 export const CHANNEL_TAB_FIELDS = 3;

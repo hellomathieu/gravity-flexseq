@@ -174,14 +174,77 @@ MainScreenModel settingsTab() {
  * Barre d'onglets
  */
 
-void test_the_tab_bar_has_eight_evenly_spaced_slots() {
-    TEST_ASSERT_EQUAL_UINT8(8, ms::TAB_COUNT);
-    TEST_ASSERT_EQUAL_UINT8(16, ms::TAB_SLOT_W);
-    TEST_ASSERT_EQUAL_UINT8(8, ms::tabCentreX(0));
-    TEST_ASSERT_EQUAL_UINT8(120, ms::tabCentreX(7));
+void test_the_tab_bar_has_nine_evenly_spaced_slots() {
+    TEST_ASSERT_EQUAL_UINT8(9, ms::TAB_COUNT);
+    TEST_ASSERT_EQUAL_UINT8(12, ms::TAB_SLOT_W);
+    TEST_ASSERT_EQUAL_UINT8(6, ms::tabCentreX(0));
+    TEST_ASSERT_EQUAL_UINT8(102, ms::tabCentreX(8));
     for (uint8_t tab = 1; tab < ms::TAB_COUNT; ++tab) {
-        TEST_ASSERT_EQUAL_UINT8(16, ms::tabCentreX(tab) - ms::tabCentreX(tab - 1));
+        TEST_ASSERT_EQUAL_UINT8(12, ms::tabCentreX(tab) - ms::tabCentreX(tab - 1));
     }
+}
+
+void test_the_bar_no_longer_fills_the_width_of_the_screen() {
+    TEST_ASSERT_EQUAL_UINT8(108, ms::TAB_SLOT_W * ms::TAB_COUNT);
+    TEST_ASSERT_TRUE(ms::TAB_SLOT_W * ms::TAB_COUNT < screen::WIDTH);
+}
+
+void test_the_roles_of_the_nine_tabs_are_named() {
+    TEST_ASSERT_EQUAL_UINT8(0, ms::TAB_CLOCK);
+    TEST_ASSERT_EQUAL_UINT8(1, ms::TAB_FIRST_CHANNEL);
+    TEST_ASSERT_EQUAL_UINT8(6, ms::TAB_LAST_CHANNEL);
+    TEST_ASSERT_EQUAL_UINT8(7, ms::TAB_PATTERNS);
+    TEST_ASSERT_EQUAL_UINT8(8, ms::TAB_SETTINGS);
+}
+
+void test_the_patterns_tab_is_not_a_channel() {
+    MainScreenModel m = channelTab(7);
+    TEST_ASSERT_FALSE(flexseq::detail::isChannelTab(m));
+    m.tab = 8;
+    TEST_ASSERT_FALSE(flexseq::detail::isChannelTab(m));
+    for (uint8_t tab = 1; tab <= 6; ++tab) {
+        m.tab = tab;
+        TEST_ASSERT_TRUE(flexseq::detail::isChannelTab(m));
+    }
+}
+
+// Les trois glyphes de la barre et les six chiffres doivent occuper LA MEME
+// bande. Avant le 2026-09-09 chacun avait son ancrage : l'horloge etait
+// dessinee sur 7 rangees dans une bande qui n'en porte que 5, donc rognee par
+// le bas de l'ecran, et PATTERNS et les reglages flottaient deux pixels plus
+// bas que les chiffres.
+void test_every_glyph_of_the_bar_shares_the_band_of_the_digits() {
+    canvas.reset();
+    drawMainScreen(canvas, channelTab(2));
+    // Le canevas de test ne rastérise pas le texte : les chiffres n'y laissent
+    // aucun pixel. Ce test tient donc les TROIS glyphes, qui sont des
+    // primitives. Que les chiffres partagent la meme bande est tenu par la
+    // derivation de TAB_GLYPH_TOP_Y sur la hauteur de la police, et mesure sur
+    // le panneau par tools/run-screen-dump.sh.
+    const uint8_t glyphTabs[3] = {ms::TAB_CLOCK, ms::TAB_PATTERNS, ms::TAB_SETTINGS};
+    for (uint8_t i = 0; i < 3; ++i) {
+        const uint8_t tab = glyphTabs[i];
+        const uint8_t x0 = ms::tabSlotX(tab);
+        int top = -1, bottom = -1;
+        for (uint8_t y = ms::TAB_BOX_Y; y <= ms::TAB_BASELINE_Y; ++y) {
+            for (uint8_t dx = 0; dx < ms::TAB_SLOT_W; ++dx) {
+                if (canvas.at(static_cast<uint8_t>(x0 + dx), y)) {
+                    if (top < 0) top = y;
+                    bottom = y;
+                }
+            }
+        }
+        TEST_ASSERT_TRUE_MESSAGE(top >= 0, "chaque creneau porte de l encre");
+        TEST_ASSERT_EQUAL_INT_MESSAGE(58, top, "meme rangee du haut pour tous");
+        TEST_ASSERT_EQUAL_INT_MESSAGE(62, bottom, "meme rangee du bas pour tous");
+    }
+}
+
+void test_the_glyph_band_of_the_bar_is_never_clipped() {
+    TEST_ASSERT_EQUAL_UINT8(58, ms::TAB_GLYPH_TOP_Y);
+    TEST_ASSERT_EQUAL_UINT8(5, ms::TAB_GLYPH_H);
+    TEST_ASSERT_EQUAL_UINT8(62, ms::TAB_GLYPH_TOP_Y + ms::TAB_GLYPH_H - 1);
+    TEST_ASSERT_TRUE(ms::TAB_GLYPH_TOP_Y + ms::TAB_GLYPH_H - 1 <= screen::HEIGHT - 1);
 }
 
 void test_the_six_channel_digits_sit_at_their_slot_centres() {
@@ -211,18 +274,24 @@ void test_the_clock_and_settings_tabs_are_glyphs_not_digits() {
     drawMainScreen(canvas, channelTab());
     TEST_ASSERT_NULL(canvas.find("0"));
     TEST_ASSERT_NULL(canvas.find("7"));
-    // Encre presente aux deux extremites : les deux glyphes sont dessines.
+    TEST_ASSERT_NULL(canvas.find("8"));
+    // L'encre est cherchee DANS le creneau de chaque role. La barre ne remplit
+    // plus la largeur de l'ecran, donc son bord droit n'est plus le bord de
+    // l'ecran : chercher la a fait rougir ce test le 2026-09-09.
     TEST_ASSERT_TRUE(canvas.inkInRows(ms::TAB_TOP_Y, ms::TAB_BASELINE_Y) > 0);
-    bool leftInk = false;
-    bool rightInk = false;
-    for (uint8_t y = ms::TAB_TOP_Y; y <= ms::TAB_BASELINE_Y; ++y) {
-        for (uint8_t x = 0; x < ms::TAB_SLOT_W; ++x) {
-            if (canvas.at(x, y)) leftInk = true;
-            if (canvas.at(static_cast<uint8_t>(screen::WIDTH - 1 - x), y)) rightInk = true;
+    const uint8_t roles[3] = {ms::TAB_CLOCK, ms::TAB_PATTERNS, ms::TAB_SETTINGS};
+    const char* names[3] = {"glyphe d'horloge absent", "glyphe de patterns absent",
+                            "glyphe de reglages absent"};
+    for (uint8_t r = 0; r < 3; ++r) {
+        bool ink = false;
+        const uint8_t x0 = ms::tabSlotX(roles[r]);
+        for (uint8_t y = ms::TAB_TOP_Y; y <= ms::TAB_BASELINE_Y; ++y) {
+            for (uint8_t dx = 0; dx < ms::TAB_SLOT_W; ++dx) {
+                if (canvas.at(static_cast<uint8_t>(x0 + dx), y)) ink = true;
+            }
         }
+        TEST_ASSERT_TRUE_MESSAGE(ink, names[r]);
     }
-    TEST_ASSERT_TRUE_MESSAGE(leftInk, "glyphe d'horloge absent");
-    TEST_ASSERT_TRUE_MESSAGE(rightInk, "glyphe de reglages absent");
 }
 
 /*
@@ -719,7 +788,12 @@ int main() {
     RUN_TEST(test_a_seq_tab_takes_the_three_lines_of_the_original);
     RUN_TEST(test_the_cursor_inverts_the_label_of_its_line);
 
-    RUN_TEST(test_the_tab_bar_has_eight_evenly_spaced_slots);
+    RUN_TEST(test_the_tab_bar_has_nine_evenly_spaced_slots);
+    RUN_TEST(test_the_bar_no_longer_fills_the_width_of_the_screen);
+    RUN_TEST(test_the_roles_of_the_nine_tabs_are_named);
+    RUN_TEST(test_the_patterns_tab_is_not_a_channel);
+    RUN_TEST(test_every_glyph_of_the_bar_shares_the_band_of_the_digits);
+    RUN_TEST(test_the_glyph_band_of_the_bar_is_never_clipped);
     RUN_TEST(test_the_six_channel_digits_sit_at_their_slot_centres);
     RUN_TEST(test_the_selected_tab_is_inverted);
     RUN_TEST(test_the_clock_and_settings_tabs_are_glyphs_not_digits);

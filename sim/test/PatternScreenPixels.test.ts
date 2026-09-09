@@ -53,16 +53,16 @@ function panelModel(playhead = 0): PatternScreenPixelModel {
  * `env:wokwi`, remise en coordonnees logiques : `y logique = 63 - y panneau`.
  */
 const PANEL_ROWS: ReadonlyArray<readonly [number, number]> = [
-  [2, 47], [3, 26], [4, 43], [5, 23], [6, 38], [10, 120], [12, 3], [13, 3],
-  [14, 12], [15, 5], [16, 41], [17, 47], [18, 46], [19, 47], [20, 41],
-  [21, 5], [22, 12], [23, 12], [24, 6], [25, 9], [26, 4], [27, 9], [30, 3],
-  [31, 3], [32, 3], [33, 3], [34, 25], [35, 29], [36, 33], [37, 31], [38, 29],
-  [39, 3], [40, 3], [41, 5], [42, 5], [43, 3], [44, 1], [45, 1], [48, 3],
-  [49, 3], [50, 3], [51, 3], [52, 3], [53, 3], [54, 15], [55, 3], [56, 3],
-  [57, 3], [58, 3], [59, 3], [60, 3],
+  [2, 47], [3, 27], [4, 43], [5, 24], [6, 38], [10, 120], [14, 3], [15, 3],
+  [16, 12], [17, 5], [18, 41], [19, 47], [20, 46], [21, 47], [22, 41],
+  [23, 5], [24, 12], [25, 12], [26, 6], [27, 9], [28, 4], [29, 9], [31, 3],
+  [32, 3], [33, 3], [34, 3], [35, 25], [36, 29], [37, 33], [38, 31],
+  [39, 29], [40, 3], [41, 3], [42, 5], [43, 5], [44, 3], [45, 1], [46, 1],
+  [48, 3], [49, 3], [50, 3], [51, 3], [52, 3], [53, 3], [54, 15], [55, 3],
+  [56, 3], [57, 3], [58, 3], [59, 3], [60, 3],
 ];
 
-const PANEL_INK = 830;
+const PANEL_INK = 832;
 
 describe("l ecran EDIT, confronte au PANNEAU (risque 89)", () => {
   it("rend exactement l encre que le panneau recoit", () => {
@@ -91,7 +91,7 @@ describe("l ecran EDIT, confronte au PANNEAU (risque 89)", () => {
 describe("la grille des 36 steps", () => {
   it("les 36 steps sont a leur place, trois rangees de douze", () => {
     const { pixels } = renderPatternScreen(panelModel(-1));
-    const centres = [18, 36, 54];
+    const centres = [20, 37, 54];
     for (let i = 0; i < GRID_STEPS; ++i) {
       expect(rowCY(i), `rangee du step ${i}`).toBe(centres[Math.floor(i / 12)]);
       const cx = colX(i);

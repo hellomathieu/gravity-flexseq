@@ -123,13 +123,19 @@ describe("MainScreenDisplay — labels, mirrored from the C++ renderer", () => {
 });
 
 describe("MainScreenDisplay — geometry", () => {
-  it("has eight evenly spaced tab slots", () => {
-    expect(TAB_SLOT_W).toBe(16);
-    expect(tabCentreX(0)).toBe(8);
-    expect(tabCentreX(7)).toBe(120);
+  it("has nine evenly spaced tab slots", () => {
+    expect(TAB_COUNT).toBe(9);
+    expect(TAB_SLOT_W).toBe(12);
+    expect(tabCentreX(0)).toBe(6);
+    expect(tabCentreX(8)).toBe(102);
     for (let tab = 1; tab < TAB_COUNT; ++tab) {
-      expect(tabCentreX(tab) - tabCentreX(tab - 1)).toBe(16);
+      expect(tabCentreX(tab) - tabCentreX(tab - 1)).toBe(12);
     }
+  });
+
+  it("no longer fills the width of the screen", () => {
+    expect(TAB_SLOT_W * TAB_COUNT).toBe(108);
+    expect(TAB_SLOT_W * TAB_COUNT).toBeLessThan(128);
   });
 
   it("inverts the selected tab and only that one", () => {

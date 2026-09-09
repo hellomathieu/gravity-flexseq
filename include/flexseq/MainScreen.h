@@ -19,14 +19,33 @@ namespace flexseq {
 
 namespace mainscreen {
 
-constexpr uint8_t TAB_COUNT = 8;
-constexpr uint8_t TAB_SLOT_W = screen::WIDTH / TAB_COUNT;
+constexpr uint8_t TAB_COUNT = 9;
+constexpr uint8_t TAB_SLOT_W = 12;
+constexpr uint8_t TAB_CLOCK = 0;
+constexpr uint8_t TAB_FIRST_CHANNEL = 1;
+constexpr uint8_t TAB_LAST_CHANNEL = 6;
+constexpr uint8_t TAB_PATTERNS = 7;
+constexpr uint8_t TAB_SETTINGS = 8;
+
+static_assert(TAB_SLOT_W * TAB_COUNT <= screen::WIDTH,
+              "the nine slots must fit the width of the screen");
+static_assert(TAB_PATTERNS == TAB_LAST_CHANNEL + 1,
+              "PATTERNS follows the last channel");
+static_assert(TAB_SETTINGS == TAB_COUNT - 1,
+              "CONF stays the last tab of the bar");
 constexpr uint8_t TAB_BASELINE_Y = screen::HEIGHT - 1;
 constexpr uint8_t TAB_TOP_Y =
     TAB_BASELINE_Y - (FONT_VELVETSCREEN_HEIGHT - 1);
 constexpr uint8_t TAB_BOX_H_ = 8;
 constexpr uint8_t TAB_BOX_Y = screen::HEIGHT - TAB_BOX_H_;
 constexpr uint8_t TAB_BOX_H = TAB_BOX_H_;
+
+constexpr uint8_t TAB_GLYPH_TOP_Y =
+    static_cast<uint8_t>(TAB_BASELINE_Y - FONT_VELVETSCREEN_HEIGHT);
+constexpr uint8_t TAB_GLYPH_H = FONT_VELVETSCREEN_HEIGHT;
+
+static_assert(TAB_GLYPH_TOP_Y + TAB_GLYPH_H - 1 <= screen::HEIGHT - 1,
+              "aucun glyphe de la barre ne doit etre rogne par le bas");
 constexpr uint8_t RULE_Y = 52;
 constexpr uint8_t RULE_X = 4;
 constexpr uint8_t RULE_W = 120;
@@ -175,9 +194,9 @@ inline const char* sourceLabel(uint8_t source) {
 }
 
 inline void headlineOf(const MainScreenModel& model, char* out) {
-    if (model.tab == 0) {
+    if (model.tab == mainscreen::TAB_CLOCK) {
         writeUnsigned(out, model.tempo);
-    } else if (model.tab == mainscreen::TAB_COUNT - 1) {
+    } else if (model.tab >= mainscreen::TAB_PATTERNS) {
         out[0] = '\0';
     } else {
         patternName(model.patternIndex, out);
@@ -185,18 +204,27 @@ inline void headlineOf(const MainScreenModel& model, char* out) {
 }
 
 template <typename Canvas>
-void drawClockGlyph(Canvas& canvas, uint8_t cx, uint8_t cy) {
-    const uint8_t x = static_cast<uint8_t>(cx - 3);
-    const uint8_t y = static_cast<uint8_t>(cy - 3);
-    canvas.drawFrame(x, y, mainscreen::GLYPH_SIZE, mainscreen::GLYPH_SIZE);
-    canvas.drawHLine(static_cast<uint8_t>(x + 4), static_cast<uint8_t>(y + 2), 2);
-    canvas.drawHLine(static_cast<uint8_t>(x + 4), static_cast<uint8_t>(y + 3), 2);
-    canvas.drawHLine(static_cast<uint8_t>(x + 3), static_cast<uint8_t>(y + 2), 1);
+void drawClockGlyph(Canvas& canvas, uint8_t cx, uint8_t topY) {
+    const uint8_t x = static_cast<uint8_t>(cx - 2);
+    canvas.drawFrame(x, topY, 5, mainscreen::TAB_GLYPH_H);
+    canvas.drawHLine(cx, static_cast<uint8_t>(topY + 2), 2);
+    canvas.drawHLine(cx, static_cast<uint8_t>(topY + 1), 1);
 }
 
 template <typename Canvas>
-void drawSettingsGlyph(Canvas& canvas, uint8_t cx, uint8_t cy) {
-    canvas.drawBox(static_cast<uint8_t>(cx - 2), static_cast<uint8_t>(cy - 2), 5, 5);
+void drawSettingsGlyph(Canvas& canvas, uint8_t cx, uint8_t topY) {
+    canvas.drawBox(static_cast<uint8_t>(cx - 2), topY, 5, mainscreen::TAB_GLYPH_H);
+}
+
+template <typename Canvas>
+void drawPatternsGlyph(Canvas& canvas, uint8_t cx, uint8_t topY) {
+    const uint8_t x = static_cast<uint8_t>(cx - 3);
+    for (uint8_t row = 0; row < 2; ++row) {
+        for (uint8_t col = 0; col < 3; ++col) {
+            canvas.drawBox(static_cast<uint8_t>(x + col * 3),
+                           static_cast<uint8_t>(topY + row * 3), 1, 2);
+        }
+    }
 }
 
 #if defined(__AVR__)
@@ -213,7 +241,8 @@ inline void copyLabel(const char* flash, char* dest) { strcpy(dest, flash); }
 #endif
 
 inline bool isChannelTab(const MainScreenModel& model) {
-    return model.tab != 0 && model.tab != mainscreen::TAB_COUNT - 1;
+    return model.tab >= mainscreen::TAB_FIRST_CHANNEL
+        && model.tab <= mainscreen::TAB_LAST_CHANNEL;
 }
 
 FLEXSEQ_LABEL(LBL_MODE, "MODE:");
@@ -508,11 +537,12 @@ void drawMainScreen(Canvas& canvas, const MainScreenModel& model,
                 canvas.setDrawColor(0);
             }
             const uint8_t cx = ms::tabCentreX(tab);
-            if (tab == 0) {
-                detail::drawClockGlyph(canvas, cx, static_cast<uint8_t>(ms::TAB_TOP_Y + 3));
-            } else if (tab == ms::TAB_COUNT - 1) {
-                detail::drawSettingsGlyph(canvas, cx,
-                                          static_cast<uint8_t>(ms::TAB_TOP_Y + 3));
+            if (tab == ms::TAB_CLOCK) {
+                detail::drawClockGlyph(canvas, cx, ms::TAB_GLYPH_TOP_Y);
+            } else if (tab == ms::TAB_PATTERNS) {
+                detail::drawPatternsGlyph(canvas, cx, ms::TAB_GLYPH_TOP_Y);
+            } else if (tab == ms::TAB_SETTINGS) {
+                detail::drawSettingsGlyph(canvas, cx, ms::TAB_GLYPH_TOP_Y);
             } else {
                 char digit[2];
                 digit[0] = static_cast<char>('0' + tab);

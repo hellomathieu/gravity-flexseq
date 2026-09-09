@@ -40,7 +40,14 @@ import {
   TAB_BASELINE_Y,
   TAB_BOX_H,
   TAB_BOX_Y,
+  TAB_CLOCK,
   TAB_COUNT,
+  TAB_FIRST_CHANNEL,
+  TAB_GLYPH_H,
+  TAB_GLYPH_TOP_Y,
+  TAB_LAST_CHANNEL,
+  TAB_PATTERNS,
+  TAB_SETTINGS,
   TAB_SLOT_W,
   TAB_TOP_Y,
   TEXT_INSET,
@@ -212,17 +219,24 @@ export function legacyLine(model: MainScreenModel, index: number): [string, stri
   return [LBL_MOD, modText(model)];
 }
 
-function drawClockGlyph(ink: Ink, cx: number, cy: number): void {
-  const x = cx - 3;
-  const y = cy - 3;
-  ink.drawFrame(x, y, GLYPH_SIZE, GLYPH_SIZE);
-  ink.drawHLine(x + 4, y + 2, 2);
-  ink.drawHLine(x + 4, y + 3, 2);
-  ink.drawHLine(x + 3, y + 2, 1);
+function drawClockGlyph(ink: Ink, cx: number, topY: number): void {
+  ink.drawFrame(cx - 2, topY, 5, TAB_GLYPH_H);
+  ink.drawHLine(cx, topY + 2, 2);
+  ink.drawHLine(cx, topY + 1, 1);
 }
 
-function drawSettingsGlyph(ink: Ink, cx: number, cy: number): void {
-  ink.drawBox(cx - 2, cy - 2, 5, 5);
+function drawSettingsGlyph(ink: Ink, cx: number, topY: number): void {
+  ink.drawBox(cx - 2, topY, 5, TAB_GLYPH_H);
+}
+
+function drawPatternsGlyph(ink: Ink, cx: number, topY: number): void {
+  const x = cx - 3;
+  const y = topY;
+  for (let row = 0; row < 2; ++row) {
+    for (let col = 0; col < 3; ++col) {
+      ink.drawBox(x + col * 3, y + row * 3, 1, 2);
+    }
+  }
 }
 
 function drawLabelledField(
@@ -299,7 +313,7 @@ export interface Render {
 
 export function renderMainScreen(model: MainScreenModel): Render {
   const ink = new Ink();
-  const legacy = model.tab !== 0 && model.tab !== TAB_COUNT - 1;
+  const legacy = model.tab >= TAB_FIRST_CHANNEL && model.tab <= TAB_LAST_CHANNEL;
   const cursorOnHeadline = model.insideTab && model.cursor === 0;
 
   if (!legacy) {
@@ -349,8 +363,9 @@ export function renderMainScreen(model: MainScreenModel): Render {
       ink.setDrawColor(0);
     }
     const cx = tabCentreX(tab);
-    if (tab === 0) drawClockGlyph(ink, cx, TAB_TOP_Y + 3);
-    else if (tab === TAB_COUNT - 1) drawSettingsGlyph(ink, cx, TAB_TOP_Y + 3);
+    if (tab === TAB_CLOCK) drawClockGlyph(ink, cx, TAB_GLYPH_TOP_Y);
+    else if (tab === TAB_PATTERNS) drawPatternsGlyph(ink, cx, TAB_GLYPH_TOP_Y);
+    else if (tab === TAB_SETTINGS) drawSettingsGlyph(ink, cx, TAB_GLYPH_TOP_Y);
     else ink.drawStr(cx - 2, TAB_BASELINE_Y, String(tab), VELVETSCREEN);
     if (selected) ink.setDrawColor(1);
   }

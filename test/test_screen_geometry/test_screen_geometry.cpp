@@ -170,6 +170,13 @@ bool production(char family, int index, int& out) {
             case 33: out = ms::MAIN_VALUE_BASELINE_Y; return true;
             case 34: out = ms::MAIN_LABEL_BASELINE_Y; return true;
             case 35: out = ms::LINE_SPACING_Y; return true;
+            case 36: out = ms::TAB_CLOCK; return true;
+            case 37: out = ms::TAB_FIRST_CHANNEL; return true;
+            case 38: out = ms::TAB_LAST_CHANNEL; return true;
+            case 39: out = ms::TAB_PATTERNS; return true;
+            case 40: out = ms::TAB_SETTINGS; return true;
+            case 41: out = ms::TAB_GLYPH_TOP_Y; return true;
+            case 42: out = ms::TAB_GLYPH_H; return true;
             default: return false;
         }
     }
@@ -213,6 +220,8 @@ bool production(char family, int index, int& out) {
             case 22: out = screen::SEP_LABEL_X; return true;
             case 23: out = screen::SEP_VALUE_X; return true;
             case 24: out = screen::SEP_LABEL_W; return true;
+            case 25: out = screen::HEADER_TITLE_X; return true;
+            case 26: out = screen::TITLE_W; return true;
             default: return false;
         }
     }

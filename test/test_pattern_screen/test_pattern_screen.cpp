@@ -166,14 +166,23 @@ void test_the_grid_holds_three_rows_of_twelve() {
     TEST_ASSERT_EQUAL_UINT8(36, screen::GRID_STEPS);
 }
 
-void test_the_three_row_centres_are_18_36_and_54() {
-    TEST_ASSERT_EQUAL_UINT8(18, screen::rowCY(0));
-    TEST_ASSERT_EQUAL_UINT8(36, screen::rowCY(12));
+void test_the_three_row_centres_are_20_37_and_54() {
+    TEST_ASSERT_EQUAL_UINT8(20, screen::rowCY(0));
+    TEST_ASSERT_EQUAL_UINT8(37, screen::rowCY(12));
     TEST_ASSERT_EQUAL_UINT8(54, screen::rowCY(24));
     // un index quelconque de chaque rangee, pas seulement son premier
-    TEST_ASSERT_EQUAL_UINT8(18, screen::rowCY(11));
-    TEST_ASSERT_EQUAL_UINT8(36, screen::rowCY(23));
+    TEST_ASSERT_EQUAL_UINT8(20, screen::rowCY(11));
+    TEST_ASSERT_EQUAL_UINT8(37, screen::rowCY(23));
     TEST_ASSERT_EQUAL_UINT8(54, screen::rowCY(35));
+}
+
+// La regle de l'en-tete doit garder de l'air sous elle : trois lignes vides
+// depuis le 2026-09-09, une seule auparavant.
+void test_the_header_rule_keeps_three_empty_rows_under_it() {
+    TEST_ASSERT_EQUAL_UINT8(10, screen::HEADER_LINE_Y);
+    TEST_ASSERT_EQUAL_UINT8(14, screen::ROW_CY_0 - screen::BAR_HALF_H);
+    // et le bas de la grille tient toujours sur la derniere ligne de l'ecran
+    TEST_ASSERT_EQUAL_UINT8(63, screen::GRID_BOTTOM_Y);
 }
 
 void test_the_grid_ends_on_the_last_pixel_row() {
@@ -443,7 +452,7 @@ void test_playhead_beyond_length_draws_nothing_extra() {
  * En-tete
  */
 
-void test_title_is_centred_on_its_baseline() {
+void test_title_is_flush_left_on_its_baseline() {
     PatternScreenModel m = model();
     m.title = "EDIT PATTERN A1";
     drawPatternScreen(canvas, m);
@@ -452,8 +461,12 @@ void test_title_is_centred_on_its_baseline() {
     const Str* t = canvas.findStr("EDIT PATTERN A1");
     TEST_ASSERT_NOT_NULL_MESSAGE(t, "le titre est dessine");
     TEST_ASSERT_EQUAL_UINT8(screen::TITLE_BASELINE_Y, t->y);
-    const uint8_t w = canvas.getStrWidth("EDIT PATTERN A1");
-    TEST_ASSERT_EQUAL_UINT8((screen::WIDTH - w) / 2, t->x);
+    // Ferre a GAUCHE depuis le 2026-09-09, aligne sur le filet qui le souligne.
+    TEST_ASSERT_EQUAL_UINT8(4, t->x);
+    TEST_ASSERT_EQUAL_UINT8(t->x, screen::HEADER_LINE_X);
+    // La largeur declaree, TITLE_W = 65, est celle de la VRAIE police : elle est
+    // gardee par test/vectors/screen_geometry_vectors.tsv. Le canevas de ce
+    // test mesure autrement, donc on ne la verifie pas ici.
     // le filet est trace
     TEST_ASSERT_TRUE(canvas.at(screen::HEADER_LINE_X, screen::HEADER_LINE_Y));
 }
@@ -545,7 +558,8 @@ int main() {
     UNITY_BEGIN();
     RUN_TEST(test_the_column_grid_is_centred_and_regular);
     RUN_TEST(test_the_grid_holds_three_rows_of_twelve);
-    RUN_TEST(test_the_three_row_centres_are_18_36_and_54);
+    RUN_TEST(test_the_three_row_centres_are_20_37_and_54);
+    RUN_TEST(test_the_header_rule_keeps_three_empty_rows_under_it);
     RUN_TEST(test_the_grid_ends_on_the_last_pixel_row);
     RUN_TEST(test_the_third_row_draws_its_twelve_centres);
 
@@ -573,7 +587,7 @@ int main() {
     RUN_TEST(test_playhead_inks_the_centre_of_an_inactive_step);
     RUN_TEST(test_playhead_beyond_length_draws_nothing_extra);
 
-    RUN_TEST(test_title_is_centred_on_its_baseline);
+    RUN_TEST(test_title_is_flush_left_on_its_baseline);
 
     RUN_TEST(test_eight_bands_reunited_equal_the_whole_image);
     RUN_TEST(test_a_band_draws_only_the_row_it_contains);

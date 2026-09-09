@@ -45,10 +45,11 @@ public:
         FIELD_CONFIG,
     };
 
-    static constexpr uint8_t TAB_COUNT = 8;
+    static constexpr uint8_t TAB_COUNT = 9;
     static constexpr uint8_t TAB_CLOCK = 0;
     static constexpr uint8_t TAB_FIRST_CHANNEL = 1;
-    static constexpr uint8_t TAB_SETTINGS = 7;
+    static constexpr uint8_t TAB_PATTERNS = 7;
+    static constexpr uint8_t TAB_SETTINGS = 8;
 
     static constexpr uint8_t CLOCK_TAB_FIELDS = 2;
     static constexpr uint8_t CHANNEL_TAB_FIELDS = 3;

@@ -37,8 +37,8 @@ constexpr uint8_t COL_X0 = (WIDTH - GRID_WIDTH + 1) / 2;         // 9
 // ratchets, dont le chiffre se loge sous le step. L'ecart de 18 px est celui des
 // deux rangees d'origine ; la troisieme rangee tient parce que le pied a quitte
 // l'ecran EDIT, sans toucher ni au titre ni a DIGIT_DY.
-constexpr uint8_t ROW_CY_0 = 18;
-constexpr uint8_t ROW_SPACING = 18;
+constexpr uint8_t ROW_CY_0 = 20;
+constexpr uint8_t ROW_SPACING = 17;
 
 constexpr uint8_t GLYPH_HALF = 2;   // glyphe 5x5
 constexpr uint8_t SELECT_HALF = 4;  // cadre 9x9
@@ -65,12 +65,15 @@ constexpr uint8_t HEADER_LINE_X = 4;
 constexpr uint8_t HEADER_LINE_Y = 10;
 constexpr uint8_t HEADER_LINE_W = 120;
 
+constexpr uint8_t HEADER_TITLE_X = HEADER_LINE_X;
+constexpr uint8_t TITLE_W = 65;
+
 constexpr uint8_t SEP_LABEL_X = 102;
 constexpr uint8_t SEP_VALUE_X = 120;
-constexpr uint8_t SEP_LABEL_W = 14;
+constexpr uint8_t SEP_LABEL_W = 16;
 
-static_assert(SEP_LABEL_X > WIDTH / 2 + 32,
-              "le champ SEP doit degager le titre centre, large de 65 px");
+static_assert(HEADER_TITLE_X + TITLE_W < SEP_LABEL_X,
+              "le titre ferre a gauche doit degager l etiquette SEP");
 static_assert(SEP_LABEL_X + SEP_LABEL_W < SEP_VALUE_X,
               "l etiquette vient avant la valeur, sans la toucher");
 static_assert(SEP_VALUE_X + 6 <= WIDTH,
@@ -256,8 +259,8 @@ void drawPatternScreen(Canvas& canvas, const PatternScreenModel& model,
         const uint8_t w = model.titleWidth != 0
                               ? model.titleWidth
                               : static_cast<uint8_t>(canvas.getStrWidth(model.title));
-        canvas.drawStr(static_cast<uint8_t>((screen::WIDTH - w) / 2),
-                       screen::TITLE_BASELINE_Y, model.title);
+        (void)w;
+        canvas.drawStr(screen::HEADER_TITLE_X, screen::TITLE_BASELINE_Y, model.title);
     }
     if (touches(band, screen::HEADER_LINE_Y, screen::HEADER_LINE_Y)) {
         canvas.drawHLine(screen::HEADER_LINE_X, screen::HEADER_LINE_Y, screen::HEADER_LINE_W);
@@ -274,10 +277,10 @@ void drawPatternScreen(Canvas& canvas, const PatternScreenModel& model,
                            static_cast<uint8_t>(screen::SEP_LABEL_W + 2),
                            static_cast<uint8_t>(h + 2));
             canvas.setDrawColor(0);
-            canvas.drawStr(screen::SEP_LABEL_X, base, "SEP");
+            canvas.drawStr(screen::SEP_LABEL_X, base, "SEP:");
             canvas.setDrawColor(1);
         } else {
-            canvas.drawStr(screen::SEP_LABEL_X, base, "SEP");
+            canvas.drawStr(screen::SEP_LABEL_X, base, "SEP:");
         }
         if (model.sepSelected && model.sepOpen) {
             canvas.drawFrame(static_cast<uint8_t>(screen::SEP_VALUE_X - 1),
