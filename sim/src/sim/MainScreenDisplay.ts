@@ -17,6 +17,8 @@ export const TAB_SETTINGS = 8;
 export const TAB_BASELINE_Y = OLED_H - 1;
 export const TAB_GLYPH_TOP_Y = TAB_BASELINE_Y - GLYPH_HEIGHT;
 export const TAB_GLYPH_H = GLYPH_HEIGHT;
+export const TAB_WIDE_GLYPH_W = 7;
+export const VELVETSCREEN_CLOCK = "w";
 export const TAB_TOP_Y = TAB_BASELINE_Y - (GLYPH_HEIGHT - 1);
 export const TAB_BOX_Y = OLED_H - 8;
 export const TAB_BOX_H = 8;
@@ -180,20 +182,20 @@ export function drawMainScreenOled(ctx: OledCtx, model: MainScreenModel): void {
       ctx.fillStyle = PAPER;
     }
     const cx = tabCentreX(tab);
-    if (tab === TAB_CLOCK) {
-      frame(ctx, cx - 2, TAB_GLYPH_TOP_Y, 5, TAB_GLYPH_H);
-      hline(ctx, cx, TAB_GLYPH_TOP_Y + 2, 2);
-      px(ctx, cx, TAB_GLYPH_TOP_Y + 1);
-    } else if (tab === TAB_PATTERNS) {
+    const wideX = cx - Math.floor(TAB_WIDE_GLYPH_W / 2);
+    if (tab === TAB_PATTERNS) {
       for (let row = 0; row < 2; ++row) {
-        for (let col = 0; col < 3; ++col) {
-          ctx.fillRect(cx - 3 + col * 3, TAB_GLYPH_TOP_Y + row * 3, 1, 2);
-        }
+        const y = TAB_GLYPH_TOP_Y + row * (TAB_GLYPH_H - 1);
+        for (let col = 0; col < 3; ++col) px(ctx, wideX + col * 3, y);
       }
     } else if (tab === TAB_SETTINGS) {
-      ctx.fillRect(cx - 2, TAB_GLYPH_TOP_Y, 5, TAB_GLYPH_H);
+      hline(ctx, wideX, TAB_GLYPH_TOP_Y + 1, TAB_WIDE_GLYPH_W);
+      hline(ctx, wideX, TAB_GLYPH_TOP_Y + 3, TAB_WIDE_GLYPH_W);
+      px(ctx, cx, TAB_GLYPH_TOP_Y);
+      px(ctx, wideX + 1, TAB_GLYPH_TOP_Y + TAB_GLYPH_H - 1);
     } else {
-      blit(ctx, String(tab), cx - 2, TAB_TOP_Y);
+      const label = tab === TAB_CLOCK ? VELVETSCREEN_CLOCK : String(tab);
+      blit(ctx, label, cx - 2, TAB_GLYPH_TOP_Y);
     }
     if (selected) {
       ctx.fillStyle = INK;

@@ -113,6 +113,7 @@ function production(family: Family, index: number): number | undefined {
       40: md.TAB_SETTINGS,
       41: md.TAB_GLYPH_TOP_Y,
       42: md.TAB_GLYPH_H,
+      43: md.TAB_WIDE_GLYPH_W,
     };
     return table[index];
   }

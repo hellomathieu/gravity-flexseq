@@ -213,16 +213,11 @@ void test_the_patterns_tab_is_not_a_channel() {
 // dessinee sur 7 rangees dans une bande qui n'en porte que 5, donc rognee par
 // le bas de l'ecran, et PATTERNS et les reglages flottaient deux pixels plus
 // bas que les chiffres.
-void test_every_glyph_of_the_bar_shares_the_band_of_the_digits() {
+void test_the_drawn_glyphs_of_the_bar_share_the_band_of_the_digits() {
     canvas.reset();
     drawMainScreen(canvas, channelTab(2));
-    // Le canevas de test ne rastérise pas le texte : les chiffres n'y laissent
-    // aucun pixel. Ce test tient donc les TROIS glyphes, qui sont des
-    // primitives. Que les chiffres partagent la meme bande est tenu par la
-    // derivation de TAB_GLYPH_TOP_Y sur la hauteur de la police, et mesure sur
-    // le panneau par tools/run-screen-dump.sh.
-    const uint8_t glyphTabs[3] = {ms::TAB_CLOCK, ms::TAB_PATTERNS, ms::TAB_SETTINGS};
-    for (uint8_t i = 0; i < 3; ++i) {
+    const uint8_t glyphTabs[2] = {ms::TAB_PATTERNS, ms::TAB_SETTINGS};
+    for (uint8_t i = 0; i < 2; ++i) {
         const uint8_t tab = glyphTabs[i];
         const uint8_t x0 = ms::tabSlotX(tab);
         int top = -1, bottom = -1;
@@ -238,6 +233,55 @@ void test_every_glyph_of_the_bar_shares_the_band_of_the_digits() {
         TEST_ASSERT_EQUAL_INT_MESSAGE(58, top, "meme rangee du haut pour tous");
         TEST_ASSERT_EQUAL_INT_MESSAGE(62, bottom, "meme rangee du bas pour tous");
     }
+}
+
+void test_the_clock_tab_draws_the_glyph_of_the_original() {
+    TEST_ASSERT_EQUAL_INT('w', ms::VELVETSCREEN_CLOCK);
+    canvas.reset();
+    drawMainScreen(canvas, channelTab());
+    const Call* call = canvas.findOnBaseline("w", ms::TAB_BASELINE_Y);
+    TEST_ASSERT_NOT_NULL(call);
+    TEST_ASSERT_EQUAL_UINT8(ms::tabCentreX(ms::TAB_CLOCK) - 2, call->x);
+}
+
+void test_the_patterns_glyph_is_two_rows_of_three_single_dots() {
+    canvas.reset();
+    drawMainScreen(canvas, channelTab());
+    const uint8_t cx = ms::tabCentreX(ms::TAB_PATTERNS);
+    const uint8_t dots[3] = {static_cast<uint8_t>(cx - 3), cx,
+                             static_cast<uint8_t>(cx + 3)};
+    for (uint8_t i = 0; i < 3; ++i) {
+        TEST_ASSERT_TRUE_MESSAGE(canvas.at(dots[i], 58), "rangee du haut");
+        TEST_ASSERT_TRUE_MESSAGE(canvas.at(dots[i], 62), "rangee du bas");
+        TEST_ASSERT_FALSE_MESSAGE(canvas.at(dots[i], 59), "un point tient une rangee");
+        TEST_ASSERT_FALSE_MESSAGE(canvas.at(dots[i], 60), "rien entre les rangees");
+        TEST_ASSERT_FALSE_MESSAGE(canvas.at(dots[i], 61), "un point tient une rangee");
+    }
+    TEST_ASSERT_FALSE_MESSAGE(canvas.at(static_cast<uint8_t>(cx - 2), 58),
+                              "les points sont espaces de trois pixels");
+    TEST_ASSERT_FALSE_MESSAGE(canvas.at(static_cast<uint8_t>(cx - 1), 58),
+                              "les points sont espaces de trois pixels");
+}
+
+void test_the_settings_glyph_is_two_sliders_seven_pixels_wide() {
+    TEST_ASSERT_EQUAL_UINT8(7, ms::TAB_WIDE_GLYPH_W);
+    canvas.reset();
+    drawMainScreen(canvas, channelTab());
+    const uint8_t cx = ms::tabCentreX(ms::TAB_SETTINGS);
+    const uint8_t x = static_cast<uint8_t>(cx - 3);
+    for (uint8_t dx = 0; dx < 7; ++dx) {
+        const uint8_t px = static_cast<uint8_t>(x + dx);
+        TEST_ASSERT_TRUE_MESSAGE(canvas.at(px, 59), "premiere glissiere");
+        TEST_ASSERT_TRUE_MESSAGE(canvas.at(px, 61), "seconde glissiere");
+        TEST_ASSERT_FALSE_MESSAGE(canvas.at(px, 60), "rien entre les glissieres");
+    }
+    TEST_ASSERT_TRUE_MESSAGE(canvas.at(cx, 58), "molette de la premiere");
+    TEST_ASSERT_TRUE_MESSAGE(canvas.at(static_cast<uint8_t>(x + 1), 62),
+                             "molette de la seconde");
+    TEST_ASSERT_FALSE_MESSAGE(canvas.at(x, 58), "une seule molette par glissiere");
+    TEST_ASSERT_FALSE_MESSAGE(canvas.at(x, 62), "une seule molette par glissiere");
+    TEST_ASSERT_FALSE_MESSAGE(canvas.at(static_cast<uint8_t>(x + 7), 59),
+                              "la glissiere ne depasse pas sept pixels");
 }
 
 void test_the_glyph_band_of_the_bar_is_never_clipped() {
@@ -275,14 +319,11 @@ void test_the_clock_and_settings_tabs_are_glyphs_not_digits() {
     TEST_ASSERT_NULL(canvas.find("0"));
     TEST_ASSERT_NULL(canvas.find("7"));
     TEST_ASSERT_NULL(canvas.find("8"));
-    // L'encre est cherchee DANS le creneau de chaque role. La barre ne remplit
-    // plus la largeur de l'ecran, donc son bord droit n'est plus le bord de
-    // l'ecran : chercher la a fait rougir ce test le 2026-09-09.
     TEST_ASSERT_TRUE(canvas.inkInRows(ms::TAB_TOP_Y, ms::TAB_BASELINE_Y) > 0);
-    const uint8_t roles[3] = {ms::TAB_CLOCK, ms::TAB_PATTERNS, ms::TAB_SETTINGS};
-    const char* names[3] = {"glyphe d'horloge absent", "glyphe de patterns absent",
+    const uint8_t roles[2] = {ms::TAB_PATTERNS, ms::TAB_SETTINGS};
+    const char* names[2] = {"glyphe de patterns absent",
                             "glyphe de reglages absent"};
-    for (uint8_t r = 0; r < 3; ++r) {
+    for (uint8_t r = 0; r < 2; ++r) {
         bool ink = false;
         const uint8_t x0 = ms::tabSlotX(roles[r]);
         for (uint8_t y = ms::TAB_TOP_Y; y <= ms::TAB_BASELINE_Y; ++y) {
@@ -792,7 +833,10 @@ int main() {
     RUN_TEST(test_the_bar_no_longer_fills_the_width_of_the_screen);
     RUN_TEST(test_the_roles_of_the_nine_tabs_are_named);
     RUN_TEST(test_the_patterns_tab_is_not_a_channel);
-    RUN_TEST(test_every_glyph_of_the_bar_shares_the_band_of_the_digits);
+    RUN_TEST(test_the_drawn_glyphs_of_the_bar_share_the_band_of_the_digits);
+    RUN_TEST(test_the_clock_tab_draws_the_glyph_of_the_original);
+    RUN_TEST(test_the_patterns_glyph_is_two_rows_of_three_single_dots);
+    RUN_TEST(test_the_settings_glyph_is_two_sliders_seven_pixels_wide);
     RUN_TEST(test_the_glyph_band_of_the_bar_is_never_clipped);
     RUN_TEST(test_the_six_channel_digits_sit_at_their_slot_centres);
     RUN_TEST(test_the_selected_tab_is_inverted);

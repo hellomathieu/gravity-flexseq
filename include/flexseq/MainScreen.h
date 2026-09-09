@@ -43,6 +43,11 @@ constexpr uint8_t TAB_BOX_H = TAB_BOX_H_;
 constexpr uint8_t TAB_GLYPH_TOP_Y =
     static_cast<uint8_t>(TAB_BASELINE_Y - FONT_VELVETSCREEN_HEIGHT);
 constexpr uint8_t TAB_GLYPH_H = FONT_VELVETSCREEN_HEIGHT;
+constexpr char VELVETSCREEN_CLOCK = 'w';
+constexpr uint8_t TAB_WIDE_GLYPH_W = 7;
+
+static_assert(TAB_WIDE_GLYPH_W < TAB_SLOT_W,
+              "a wide glyph must leave a margin inside its slot");
 
 static_assert(TAB_GLYPH_TOP_Y + TAB_GLYPH_H - 1 <= screen::HEIGHT - 1,
               "aucun glyphe de la barre ne doit etre rogne par le bas");
@@ -204,25 +209,23 @@ inline void headlineOf(const MainScreenModel& model, char* out) {
 }
 
 template <typename Canvas>
-void drawClockGlyph(Canvas& canvas, uint8_t cx, uint8_t topY) {
-    const uint8_t x = static_cast<uint8_t>(cx - 2);
-    canvas.drawFrame(x, topY, 5, mainscreen::TAB_GLYPH_H);
-    canvas.drawHLine(cx, static_cast<uint8_t>(topY + 2), 2);
-    canvas.drawHLine(cx, static_cast<uint8_t>(topY + 1), 1);
-}
-
-template <typename Canvas>
 void drawSettingsGlyph(Canvas& canvas, uint8_t cx, uint8_t topY) {
-    canvas.drawBox(static_cast<uint8_t>(cx - 2), topY, 5, mainscreen::TAB_GLYPH_H);
+    const uint8_t x = static_cast<uint8_t>(cx - mainscreen::TAB_WIDE_GLYPH_W / 2);
+    canvas.drawHLine(x, static_cast<uint8_t>(topY + 1), mainscreen::TAB_WIDE_GLYPH_W);
+    canvas.drawHLine(x, static_cast<uint8_t>(topY + 3), mainscreen::TAB_WIDE_GLYPH_W);
+    canvas.drawHLine(cx, topY, 1);
+    canvas.drawHLine(static_cast<uint8_t>(x + 1),
+                     static_cast<uint8_t>(topY + mainscreen::TAB_GLYPH_H - 1), 1);
 }
 
 template <typename Canvas>
 void drawPatternsGlyph(Canvas& canvas, uint8_t cx, uint8_t topY) {
-    const uint8_t x = static_cast<uint8_t>(cx - 3);
+    const uint8_t x = static_cast<uint8_t>(cx - mainscreen::TAB_WIDE_GLYPH_W / 2);
     for (uint8_t row = 0; row < 2; ++row) {
+        const uint8_t y =
+            static_cast<uint8_t>(topY + row * (mainscreen::TAB_GLYPH_H - 1));
         for (uint8_t col = 0; col < 3; ++col) {
-            canvas.drawBox(static_cast<uint8_t>(x + col * 3),
-                           static_cast<uint8_t>(topY + row * 3), 1, 2);
+            canvas.drawHLine(static_cast<uint8_t>(x + col * 3), y, 1);
         }
     }
 }
@@ -537,17 +540,17 @@ void drawMainScreen(Canvas& canvas, const MainScreenModel& model,
                 canvas.setDrawColor(0);
             }
             const uint8_t cx = ms::tabCentreX(tab);
-            if (tab == ms::TAB_CLOCK) {
-                detail::drawClockGlyph(canvas, cx, ms::TAB_GLYPH_TOP_Y);
-            } else if (tab == ms::TAB_PATTERNS) {
+            char label[2];
+            label[1] = '\0';
+            if (tab == ms::TAB_PATTERNS) {
                 detail::drawPatternsGlyph(canvas, cx, ms::TAB_GLYPH_TOP_Y);
             } else if (tab == ms::TAB_SETTINGS) {
                 detail::drawSettingsGlyph(canvas, cx, ms::TAB_GLYPH_TOP_Y);
             } else {
-                char digit[2];
-                digit[0] = static_cast<char>('0' + tab);
-                digit[1] = '\0';
-                canvas.drawStr(static_cast<uint8_t>(cx - 2), ms::TAB_BASELINE_Y, digit);
+                label[0] = tab == ms::TAB_CLOCK
+                               ? ms::VELVETSCREEN_CLOCK
+                               : static_cast<char>('0' + tab);
+                canvas.drawStr(static_cast<uint8_t>(cx - 2), ms::TAB_BASELINE_Y, label);
             }
             if (selected) {
                 canvas.setDrawColor(1);

@@ -12,6 +12,11 @@ import {
   MAIN_LABEL_BASELINE_Y,
   MAIN_VALUE_BASELINE_Y,
   RULE_Y,
+  TAB_CLOCK,
+  TAB_PATTERNS,
+  TAB_SETTINGS,
+  TAB_WIDE_GLYPH_W,
+  tabCentreX,
 } from "../src/sim/MainScreenDisplay.js";
 
 /**
@@ -52,10 +57,10 @@ const PANEL_ROWS: ReadonlyArray<readonly [number, number]> = [
   [18, 34], [19, 20], [20, 18], [21, 15], [22, 9], [23, 11], [24, 28],
   [25, 31], [26, 23], [27, 29], [28, 16], [29, 16], [30, 19], [36, 23],
   [37, 18], [38, 21], [39, 18], [40, 22], [52, 120], [56, 12], [57, 12],
-  [58, 34], [59, 29], [60, 32], [61, 27], [62, 33], [63, 12],
+  [58, 28], [59, 28], [60, 27], [61, 26], [62, 27], [63, 12],
 ];
 
-const PANEL_INK = 949;
+const PANEL_INK = 930;
 
 describe("l ecran principal, confronte au PANNEAU (risque 89)", () => {
   it("rend exactement l encre que le panneau recoit", () => {
@@ -72,6 +77,60 @@ describe("l ecran principal, confronte au PANNEAU (risque 89)", () => {
 
   it("le total des rangees attendues vaut bien l encre attendue", () => {
     expect(PANEL_ROWS.reduce((s, [, n]) => s + n, 0)).toBe(PANEL_INK);
+  });
+});
+
+describe("les glyphes de la barre, en pixels", () => {
+  const on = (px: Set<string>, x: number, y: number) => px.has(`${x},${y}`);
+
+  it("les trois glyphes partagent la bande des chiffres, 58 a 62", () => {
+    const px = renderMainScreen(PANEL_MODEL).pixels;
+    for (const tab of [TAB_CLOCK, TAB_PATTERNS, TAB_SETTINGS]) {
+      const x0 = tabCentreX(tab) - 6;
+      let top = -1;
+      let bottom = -1;
+      for (let y = 56; y <= 63; ++y) {
+        for (let dx = 0; dx < 12; ++dx) {
+          if (on(px, x0 + dx, y)) {
+            if (top < 0) top = y;
+            bottom = y;
+          }
+        }
+      }
+      expect(top, `haut du creneau ${tab}`).toBe(58);
+      expect(bottom, `bas du creneau ${tab}`).toBe(62);
+    }
+  });
+
+  it("le glyphe de PATTERNS est deux rangees de trois points d un pixel", () => {
+    const px = renderMainScreen(PANEL_MODEL).pixels;
+    const cx = tabCentreX(TAB_PATTERNS);
+    for (const x of [cx - 3, cx, cx + 3]) {
+      expect(on(px, x, 58)).toBe(true);
+      expect(on(px, x, 62)).toBe(true);
+      expect(on(px, x, 59)).toBe(false);
+      expect(on(px, x, 60)).toBe(false);
+      expect(on(px, x, 61)).toBe(false);
+    }
+    expect(on(px, cx - 2, 58)).toBe(false);
+    expect(on(px, cx - 1, 58)).toBe(false);
+  });
+
+  it("le glyphe des reglages est deux curseurs de sept pixels", () => {
+    expect(TAB_WIDE_GLYPH_W).toBe(7);
+    const px = renderMainScreen(PANEL_MODEL).pixels;
+    const cx = tabCentreX(TAB_SETTINGS);
+    const x = cx - 3;
+    for (let dx = 0; dx < 7; ++dx) {
+      expect(on(px, x + dx, 59), `glissiere 1 en ${x + dx}`).toBe(true);
+      expect(on(px, x + dx, 61), `glissiere 2 en ${x + dx}`).toBe(true);
+      expect(on(px, x + dx, 60), `vide en ${x + dx}`).toBe(false);
+    }
+    expect(on(px, cx, 58)).toBe(true);
+    expect(on(px, x + 1, 62)).toBe(true);
+    expect(on(px, x, 58)).toBe(false);
+    expect(on(px, x, 62)).toBe(false);
+    expect(on(px, x + 7, 59)).toBe(false);
   });
 });
 
@@ -150,10 +209,10 @@ const SEQ_PANEL_ROWS: ReadonlyArray<readonly [number, number]> = [
   [18, 22], [19, 11], [20, 10], [21, 9], [22, 9], [23, 9], [24, 39],
   [25, 40], [26, 43], [27, 39], [28, 18], [29, 19], [30, 29], [36, 20],
   [37, 12], [38, 19], [39, 11], [40, 13], [52, 120], [56, 12], [57, 12],
-  [58, 34], [59, 29], [60, 32], [61, 27], [62, 33], [63, 12],
+  [58, 28], [59, 28], [60, 27], [61, 26], [62, 27], [63, 12],
 ];
 
-const SEQ_PANEL_INK = 987;
+const SEQ_PANEL_INK = 968;
 
 describe("l onglet d un canal en SEQ", () => {
   const seq: MainScreenModel = {
@@ -228,10 +287,10 @@ const CONFIG_PANEL_ROWS: ReadonlyArray<readonly [number, number]> = [
   [18, 29], [19, 11], [20, 10], [21, 9], [22, 9], [23, 9], [24, 29],
   [25, 40], [26, 38], [27, 40], [28, 15], [29, 18], [30, 19], [36, 20],
   [37, 12], [38, 19], [39, 11], [40, 13], [52, 120], [56, 12], [57, 12],
-  [58, 34], [59, 29], [60, 32], [61, 27], [62, 33], [63, 12],
+  [58, 28], [59, 28], [60, 27], [61, 26], [62, 27], [63, 12],
 ];
 
-const CONFIG_PANEL_INK = 999;
+const CONFIG_PANEL_INK = 980;
 
 describe("la page CONFIG PATTERN, confrontee au PANNEAU", () => {
   const config: MainScreenModel = {
