@@ -190,14 +190,25 @@ private:
                     static_cast<uint8_t>(screen::HEIGHT - 1 - d0)};
     }
 
-    // Empreinte du titre. Somme multiplicative et non simple addition : « A2 » et
-    // « B1 » ont la meme somme de caracteres, et ce sont precisement deux titres
-    // voisins.
+    // Empreinte de la bande de l en-tete. Somme multiplicative et non simple
+    // addition : « A2 » et « B1 » ont la meme somme de caracteres, et ce sont
+    // precisement deux titres voisins.
+    //
+    // ⚠️ ELLE LIT TOUT CE QUE LA BANDE DESSINE, et rien de moins. La regle a ete
+    // enfreinte deux fois, et les deux fois le defaut a atteint le module : la
+    // valeur de SEP en 2026-09-04, la longueur de l editeur de templates en
+    // 2026-09-13. Un champ ajoute a cette bande s ajoute ICI le meme jour.
+    //
+    // La longueur et le drapeau de l editeur y sont SANS condition. La bande
+    // porte SEP sur un canal et LEN sur un template : une empreinte qui
+    // choisirait selon le drapeau saurait mentir sur la bascule elle-meme.
     static uint16_t headerHashOf(const PatternScreenModel& model) {
         uint16_t h = hashOf(model.title);
         h = static_cast<uint16_t>(h * 31u + model.barLength);
         h = static_cast<uint16_t>(h * 31u + (model.sepSelected ? 1u : 0u));
         h = static_cast<uint16_t>(h * 31u + (model.sepOpen ? 1u : 0u));
+        h = static_cast<uint16_t>(h * 31u + model.length);
+        h = static_cast<uint16_t>(h * 31u + (model.templateEditor ? 1u : 0u));
         return h;
     }
 
