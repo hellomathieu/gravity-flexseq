@@ -63,7 +63,7 @@ export const TAB_SETTINGS = 8;
 export const FIRST_WRITABLE_TEMPLATE = 8;
 
 export const CLOCK_TAB_FIELDS = 2;
-export const PATTERNS_TAB_FIELDS = 2;
+export const PATTERNS_TAB_FIELDS = 1;
 export const CHANNEL_TAB_FIELDS = 3;
 export const CONFIG_PAGE_FIELDS = 3;
 
@@ -75,8 +75,7 @@ export const CONFIG_FIELD_INDEX_LENGTH = 0;
 export const CONFIG_FIELD_INDEX_SUBDIV = 1;
 export const CONFIG_FIELD_INDEX_MOD = 2;
 
-export const PATTERNS_FIELD_INDEX_SLOT = 0;
-export const PATTERNS_FIELD_INDEX_EDIT_ENTRY = 1;
+export const PATTERNS_FIELD_INDEX_EDIT_ENTRY = 0;
 
 export const CLOCK_SOURCE_COUNT = 6;
 export const CLOCK_SOURCE_INTERNAL = 0;
@@ -177,7 +176,9 @@ export class UiController {
       return index === 0 ? UiField.Tempo : UiField.ClockSource;
     }
     if (this.tab === TAB_PATTERNS) {
-      return index === PATTERNS_FIELD_INDEX_SLOT ? UiField.Slot : UiField.EditEntry;
+      // Une seule ligne : l emplacement se change par SHIFT plus rotation
+      // depuis la barre, comme le pattern d un canal.
+      return UiField.EditEntry;
     }
     if (this.configPage) {
       switch (index) {

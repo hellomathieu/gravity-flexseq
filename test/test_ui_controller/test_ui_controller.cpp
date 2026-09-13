@@ -1178,14 +1178,17 @@ void test_the_mod_field_is_navigable_and_does_nothing_yet() {
  * PATTERNS tab — lot 16E step 4a
  */
 
-void test_the_patterns_tab_holds_two_fields() {
+// L onglet ne porte QU UNE ligne selectionnable : l etat de l emplacement vit
+// sous la grande valeur, et l emplacement se change par SHIFT plus rotation
+// depuis la barre, comme le pattern d un canal.
+void test_the_patterns_tab_holds_one_selectable_field() {
     Rig r;
     r.gotoTab(UiController::TAB_PATTERNS);
     r.enterTab();
     TEST_ASSERT_EQUAL(UiController::LEVEL_TAB, r.ui.level());
-    TEST_ASSERT_EQUAL_UINT8(2, r.ui.fieldCount());
-    TEST_ASSERT_EQUAL(UiController::FIELD_SLOT, r.ui.fieldAt(0));
-    TEST_ASSERT_EQUAL(UiController::FIELD_EDIT_ENTRY, r.ui.fieldAt(1));
+    TEST_ASSERT_EQUAL_UINT8(1, r.ui.fieldCount());
+    TEST_ASSERT_EQUAL(UiController::FIELD_EDIT_ENTRY, r.ui.fieldAt(0));
+    TEST_ASSERT_EQUAL(UiController::FIELD_SLOT, r.ui.mainField());
 }
 
 void test_the_slot_cursor_starts_on_the_first_writable_template() {
@@ -1356,7 +1359,7 @@ int main(int, char**) {
     RUN_TEST(test_shift_rotate_on_the_bar_moves_nothing_else);
     RUN_TEST(test_shift_rotate_on_the_settings_tab_changes_nothing);
     RUN_TEST(test_shift_play_is_reserved_and_does_not_toggle_the_transport);
-    RUN_TEST(test_the_patterns_tab_holds_two_fields);
+    RUN_TEST(test_the_patterns_tab_holds_one_selectable_field);
     RUN_TEST(test_the_slot_cursor_starts_on_the_first_writable_template);
     RUN_TEST(test_the_slot_cursor_never_reaches_a_factory_template);
     RUN_TEST(test_the_slot_cursor_stops_on_the_last_template);

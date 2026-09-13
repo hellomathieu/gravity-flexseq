@@ -102,6 +102,7 @@ function production(family: Family, index: number): number | undefined {
       19: md.COL_LEFT_X, 20: md.COL_RIGHT_X, 21: md.COL_W, 22: md.TEXT_INSET,
       23: md.GLYPH_SIZE, 24: md.ROW_A_BASELINE_Y, 25: md.ROW_B_BASELINE_Y,
       26: md.LINE_LABEL_X, 27: md.LINE_VALUE_X,
+      51: md.MAIN_LABEL_GLYPH_W, 52: md.MAIN_LABEL_GLYPH_GAP,
       28: md.LINE_0_BASELINE_Y, 29: md.LINE_1_BASELINE_Y, 30: md.LINE_2_BASELINE_Y,
       31: md.MAIN_CENTRE_X, 32: md.MAIN_BOX_W,
       33: md.MAIN_VALUE_BASELINE_Y, 34: md.MAIN_LABEL_BASELINE_Y,

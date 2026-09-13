@@ -100,6 +100,15 @@ constexpr uint8_t MAIN_BOX_W = 55;
 constexpr uint8_t MAIN_VALUE_BASELINE_Y = 28;
 constexpr uint8_t MAIN_LABEL_BASELINE_Y = 41;
 
+// L etat d un emplacement, sur l onglet PATTERNS : un carre a gauche de
+// l etiquette, PLEIN quand l emplacement porte quelque chose et CREUX quand il
+// est libre. C est le sens que la grille de l editeur donne deja a ces formes.
+constexpr uint8_t MAIN_LABEL_GLYPH_W = FONT_VELVETSCREEN_HEIGHT;
+constexpr uint8_t MAIN_LABEL_GLYPH_GAP = 3;
+
+static_assert(MAIN_LABEL_GLYPH_W + MAIN_LABEL_GLYPH_GAP < MAIN_CENTRE_X,
+              "le glyphe d etat tient a gauche du centre de l etiquette");
+
 static_assert(LINE_1_BASELINE_Y == LINE_0_BASELINE_Y + LINE_SPACING_Y,
               "the three lines of the original are evenly spaced");
 static_assert(LINE_2_BASELINE_Y == LINE_0_BASELINE_Y + 2 * LINE_SPACING_Y,
@@ -214,9 +223,7 @@ inline const char* sourceLabel(uint8_t source) {
 inline void headlineOf(const MainScreenModel& model, char* out) {
     if (model.tab == mainscreen::TAB_CLOCK) {
         writeUnsigned(out, model.tempo);
-    } else if (model.tab == mainscreen::TAB_PATTERNS) {
-        patternName(static_cast<int8_t>(model.slotIndex), out);
-    } else if (model.tab == mainscreen::TAB_SETTINGS) {
+    } else if (model.tab >= mainscreen::TAB_PATTERNS) {
         out[0] = '\0';
     } else {
         patternName(model.patternIndex, out);
@@ -263,12 +270,17 @@ inline bool isChannelTab(const MainScreenModel& model) {
         && model.tab <= mainscreen::TAB_LAST_CHANNEL;
 }
 
+// Les onglets qui prennent les trois lignes de l original : les six canaux, et
+// l onglet PATTERNS depuis le 2026-09-17, par decision du proprietaire.
+inline bool usesLegacyLayout(const MainScreenModel& model) {
+    return isChannelTab(model) || model.tab == mainscreen::TAB_PATTERNS;
+}
+
 FLEXSEQ_LABEL(LBL_MODE, "MODE:");
 FLEXSEQ_LABEL(LBL_OFFSET, "OFFSET:");
 FLEXSEQ_LABEL(LBL_SUBDIV_FIELD, "SUBDIV:");
 FLEXSEQ_LABEL(LBL_MOD, "MOD:");
-FLEXSEQ_LABEL(LBL_FREE, "FREE");
-FLEXSEQ_LABEL(LBL_USED, "USED");
+FLEXSEQ_LABEL(LBL_EMPTY, "");
 FLEXSEQ_LABEL(LBL_EDIT, "EDIT");
 FLEXSEQ_LABEL(LBL_CONFIG, "CONFIG");
 FLEXSEQ_LABEL(LBL_OFF, "OFF");
@@ -360,6 +372,13 @@ inline void configLine(const MainScreenModel& model, uint8_t index,
 
 inline void legacyLine(const MainScreenModel& model, uint8_t index,
                        const char** out, char* value) {
+    // L onglet PATTERNS prend la mise en page d un canal en SEQ : le nom de
+    // l emplacement en grand, puis son etat et l entree dans l editeur.
+    if (model.tab == mainscreen::TAB_PATTERNS) {
+        value[0] = '\0';
+        *out = index == 0 ? LBL_EDIT : LBL_EMPTY;
+        return;
+    }
     if (model.configPage) {
         configLine(model, index, out, value);
         return;
@@ -400,9 +419,6 @@ static_assert(sizeof(LBL_SKIP_CHANCE) <= LABEL_SCRATCH,
 static_assert(sizeof(LBL_OFFSET) <= LABEL_SCRATCH, "idem");
 static_assert(sizeof(LBL_SUBDIV_FIELD) <= LABEL_SCRATCH, "idem");
 static_assert(sizeof(LBL_EDIT) <= LABEL_SCRATCH, "idem");
-static_assert(sizeof(LBL_FREE) <= VALUE_SCRATCH,
-              "l etat d un emplacement tient dans le tampon de valeur");
-static_assert(sizeof(LBL_USED) <= VALUE_SCRATCH, "idem");
 static_assert(sizeof(LBL_CLOCK) <= VALUE_SCRATCH,
               "le tampon de valeur doit contenir le nom d'un mode");
 static_assert(3 + 1 + 5 + 1 <= VALUE_SCRATCH,
@@ -460,8 +476,25 @@ void drawLegacyChannel(Canvas& canvas, const Band& band, const MainScreenModel& 
         char scratch[14];
         const char* text = label(mainLabelOf(model), scratch);
         const uint8_t w = static_cast<uint8_t>(canvas.getStrWidth(text));
-        canvas.drawStr(static_cast<uint8_t>(ms::MAIN_CENTRE_X - w / 2),
-                       ms::MAIN_LABEL_BASELINE_Y, text);
+        const bool withGlyph = (model.tab == ms::TAB_PATTERNS);
+        const uint8_t lead = withGlyph
+            ? static_cast<uint8_t>(ms::MAIN_LABEL_GLYPH_W + ms::MAIN_LABEL_GLYPH_GAP)
+            : 0;
+        const uint8_t textX =
+            static_cast<uint8_t>(ms::MAIN_CENTRE_X - (w + lead) / 2 + lead);
+        if (withGlyph) {
+            const uint8_t gx = static_cast<uint8_t>(textX - lead);
+            // Les glyphes de velvetscreen occupent base-5 a base-1 : le carre
+            // s aligne dessus, et non sur la ligne de base elle-meme.
+            const uint8_t gy = static_cast<uint8_t>(
+                ms::MAIN_LABEL_BASELINE_Y - ms::MAIN_LABEL_GLYPH_W);
+            if (model.slotEmpty) {
+                canvas.drawFrame(gx, gy, ms::MAIN_LABEL_GLYPH_W, ms::MAIN_LABEL_GLYPH_W);
+            } else {
+                canvas.drawBox(gx, gy, ms::MAIN_LABEL_GLYPH_W, ms::MAIN_LABEL_GLYPH_W);
+            }
+        }
+        canvas.drawStr(textX, ms::MAIN_LABEL_BASELINE_Y, text);
     }
 
     for (uint8_t line = 0; line < 3; ++line) {
@@ -512,7 +545,7 @@ void drawMainScreen(Canvas& canvas, const MainScreenModel& model,
                     Band band = Band{0, screen::HEIGHT - 1}) {
     namespace ms = mainscreen;
 
-    const bool legacy = detail::isChannelTab(model);
+    const bool legacy = detail::usesLegacyLayout(model);
 
     const bool cursorOnHeadline = model.insideTab && model.cursor == 0;
     if (!legacy
@@ -546,20 +579,6 @@ void drawMainScreen(Canvas& canvas, const MainScreenModel& model,
                                   model.insideTab && model.cursor == 1 && model.fieldOpen);
     } else if (legacy) {
         detail::drawLegacyChannel(canvas, band, model);
-    } else if (model.tab == ms::TAB_PATTERNS) {
-        char slotLabel[14];
-        char slotValue[10];
-        // L etat se lit seul : la grande valeur porte deja le nom de
-        // l emplacement, et une etiquette SLOT le repeterait.
-        detail::drawLabelledField(
-            canvas, band, ms::COL_LEFT_X, ms::ROW_A_BOX_Y,
-            detail::label(model.slotEmpty ? detail::LBL_FREE : detail::LBL_USED,
-                          slotValue),
-            nullptr, false, false);
-        detail::drawLabelledField(
-            canvas, band, ms::COL_LEFT_X, ms::ROW_B_BOX_Y,
-            detail::label(detail::LBL_EDIT, slotLabel), nullptr,
-            model.insideTab && model.cursor == 1, false);
     }
 
     if (touches(band, ms::RULE_Y, ms::RULE_Y)) {

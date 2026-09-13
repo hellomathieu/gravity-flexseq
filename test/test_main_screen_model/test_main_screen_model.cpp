@@ -188,15 +188,23 @@ void test_the_patterns_tab_publishes_the_browsed_slot() {
     r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
     r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
     const MainScreenModel m = r.model();
-    TEST_ASSERT_EQUAL_UINT8(10, m.slotIndex);
+    // Sur cet onglet, le pattern que l ecran NOMME est l emplacement parcouru,
+    // et il est le parametre principal : la mise en page d un canal en SEQ.
+    TEST_ASSERT_EQUAL_INT8(10, m.patternIndex);
+    TEST_ASSERT_EQUAL(flexseq::MAIN_PATTERN, m.mainParameter);
 }
 
 // Hors de l'onglet PATTERNS le modele porte quand meme un emplacement valide :
 // le rendu ne doit jamais lire un index hors des seize.
-void test_the_slot_index_stays_valid_outside_the_patterns_tab() {
+// Sur un onglet de canal, le pattern nomme est celui du CANAL, et non
+// l emplacement parcouru dans l onglet PATTERNS. Les deux vivent dans le meme
+// champ, et ce test est ce qui les empeche de se confondre : le curseur
+// d emplacement part a 8, le pattern du canal a 0.
+void test_a_channel_tab_names_the_pattern_of_the_channel_not_the_slot() {
     Rig r;
+    TEST_ASSERT_EQUAL_UINT8(8, r.ui.slotCursor());
     const MainScreenModel m = r.model();
-    TEST_ASSERT_EQUAL_UINT8(8, m.slotIndex);
+    TEST_ASSERT_EQUAL_INT8(0, m.patternIndex);
 }
 
 int main() {
@@ -211,6 +219,6 @@ int main() {
     RUN_TEST(test_the_clock_tab_makes_the_tempo_the_main_parameter);
     RUN_TEST(test_the_mode_defaults_to_clock_outside_a_channel);
     RUN_TEST(test_the_patterns_tab_publishes_the_browsed_slot);
-    RUN_TEST(test_the_slot_index_stays_valid_outside_the_patterns_tab);
+    RUN_TEST(test_a_channel_tab_names_the_pattern_of_the_channel_not_the_slot);
     return UNITY_END();
 }

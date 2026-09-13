@@ -64,6 +64,11 @@ export const MAIN_BOX_W = 55;
 export const MAIN_VALUE_BASELINE_Y = 28;
 export const MAIN_LABEL_BASELINE_Y = 41;
 
+// L etat d un emplacement sur l onglet PATTERNS : un carre a gauche de
+// l etiquette, PLEIN quand il porte quelque chose, CREUX quand il est libre.
+export const MAIN_LABEL_GLYPH_W = 5;
+export const MAIN_LABEL_GLYPH_GAP = 3;
+
 export const CLOCK_SOURCE_LABELS = ["INT", "EXT24", "EXT4", "EXT2", "EXT1", "MIDI"] as const;
 
 
@@ -95,8 +100,7 @@ export function sourceLabel(source: number): string {
 
 export function headlineOf(model: MainScreenModel): string {
   if (model.tab === TAB_CLOCK) return String(model.tempo);
-  if (model.tab === TAB_PATTERNS) return patternName(model.slotIndex);
-  if (model.tab === TAB_SETTINGS) return "";
+  if (model.tab >= TAB_PATTERNS) return "";
   return patternName(model.patternIndex);
 }
 

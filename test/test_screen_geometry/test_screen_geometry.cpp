@@ -162,6 +162,8 @@ bool production(char family, int index, int& out) {
             case 25: out = ms::ROW_B_BASELINE_Y; return true;
             case 26: out = ms::LINE_LABEL_X; return true;
             case 27: out = ms::LINE_VALUE_X; return true;
+            case 51: out = ms::MAIN_LABEL_GLYPH_W; return true;
+            case 52: out = ms::MAIN_LABEL_GLYPH_GAP; return true;
             case 28: out = ms::LINE_0_BASELINE_Y; return true;
             case 29: out = ms::LINE_1_BASELINE_Y; return true;
             case 30: out = ms::LINE_2_BASELINE_Y; return true;

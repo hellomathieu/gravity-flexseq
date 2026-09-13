@@ -55,7 +55,7 @@ public:
     static constexpr uint8_t FIRST_WRITABLE_TEMPLATE = 8;
 
     static constexpr uint8_t CLOCK_TAB_FIELDS = 2;
-    static constexpr uint8_t PATTERNS_TAB_FIELDS = 2;
+    static constexpr uint8_t PATTERNS_TAB_FIELDS = 1;
     static constexpr uint8_t CHANNEL_TAB_FIELDS = 3;
     static constexpr uint8_t CONFIG_PAGE_FIELDS = 3;
 
@@ -67,8 +67,7 @@ public:
     static constexpr uint8_t CONFIG_FIELD_INDEX_SUBDIV = 1;
     static constexpr uint8_t CONFIG_FIELD_INDEX_MOD = 2;
 
-    static constexpr uint8_t PATTERNS_FIELD_INDEX_SLOT = 0;
-    static constexpr uint8_t PATTERNS_FIELD_INDEX_EDIT_ENTRY = 1;
+    static constexpr uint8_t PATTERNS_FIELD_INDEX_EDIT_ENTRY = 0;
 
 
     static constexpr uint8_t CLOCK_SOURCE_COUNT = 6;

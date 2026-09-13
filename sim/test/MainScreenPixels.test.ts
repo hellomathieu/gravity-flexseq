@@ -38,7 +38,6 @@ const PANEL_MODEL: MainScreenModel = {
   fieldOpen: false,
   fieldCount: 3,
   patternIndex: 9,
-  slotIndex: 8,
   slotEmpty: false,
   length: 20,
   subdiv: -4,
@@ -381,26 +380,29 @@ describe("la page CONFIG PATTERN, confrontee au PANNEAU", () => {
  * sur la memoire du panneau, jamais calcules ici.
  */
 const PATTERNS_PANEL_ROWS: ReadonlyArray<readonly [number, number]> = [
-  [3, 6], [4, 3], [5, 5], [6, 3], [7, 6], [16, 15], [17, 5], [18, 14],
-  [19, 5], [20, 11], [22, 60], [23, 2], [24, 13], [25, 7], [26, 10],
-  [27, 7], [28, 11], [29, 60], [52, 120], [56, 12], [57, 12], [58, 29],
-  [59, 32], [60, 34], [61, 30], [62, 30], [63, 12]
-]
+  [2, 17], [3, 6], [4, 12], [5, 25], [6, 31], [7, 29], [8, 32], [9, 12],
+  [10, 12], [11, 9], [12, 10], [13, 11], [14, 15], [15, 15], [16, 17],
+  [17, 13], [18, 11], [19, 9], [20, 9], [21, 9], [22, 9], [23, 12],
+  [24, 15], [25, 22], [26, 20], [27, 17], [36, 25], [37, 14], [38, 21],
+  [39, 13], [40, 18], [52, 120], [56, 12], [57, 12], [58, 29], [59, 32],
+  [60, 34], [61, 30], [62, 30], [63, 12]
+];
 
-const PATTERNS_PANEL_INK = 554;
+const PATTERNS_PANEL_INK = 801;
 
 describe("l onglet PATTERNS — lot 16E etape 4b", () => {
   const patternsTab = (slotEmpty: boolean): MainScreenModel => ({
     ...PANEL_MODEL,
     tab: TAB_PATTERNS,
     insideTab: true,
-    cursor: 1,
-    fieldCount: 2,
-    slotIndex: 10,
+    // Une seule ligne selectionnable, EDIT, et le curseur y est.
+    cursor: 0,
+    fieldCount: 1,
     slotEmpty,
-    // mainScreenModelOf rend MAIN_NONE sur cet onglet : son champ principal est
-    // l emplacement, que le gros chiffre ne sait pas dessiner.
-    mainParameter: MainParameter.None,
+    // Ce que mainScreenModelOf produit sur cet onglet : le pattern que l ecran
+    // NOMME est l emplacement parcouru, et il est le parametre principal.
+    patternIndex: 10,
+    mainParameter: MainParameter.Pattern,
   });
 
   const inkInRows = (rows: number[], y0: number, y1: number): number => {
@@ -409,10 +411,30 @@ describe("l onglet PATTERNS — lot 16E etape 4b", () => {
     return n;
   };
 
-  it("encre les deux rangees de champs, que rien ne remplissait", () => {
+  // La mise en page est celle d un canal en SEQ : une grande valeur a gauche,
+  // son etiquette dessous, et deux lignes a droite. La troisieme reste vide.
+  it("encre la grande valeur et les deux premieres lignes", () => {
     const rows = renderMainScreen(patternsTab(true)).rows;
-    expect(inkInRows(rows, ROW_A_BOX_Y, ROW_A_BOX_Y + 7)).toBeGreaterThan(0);
-    expect(inkInRows(rows, ROW_B_BOX_Y, ROW_B_BOX_Y + 7)).toBeGreaterThan(0);
+    expect(inkInRows(rows, MAIN_VALUE_BASELINE_Y - 10, MAIN_VALUE_BASELINE_Y))
+      .toBeGreaterThan(0);
+    expect(inkInRows(rows, MAIN_LABEL_BASELINE_Y - 4, MAIN_LABEL_BASELINE_Y))
+      .toBeGreaterThan(0);
+    expect(inkInRows(rows, LINE_0_BASELINE_Y - 4, LINE_0_BASELINE_Y))
+      .toBeGreaterThan(0);
+    // ⚠️ La troisieme ligne se mesure COLONNE par colonne : la grande valeur
+    // occupe les memes RANGEES a gauche, donc un compte par rangee y verrait
+    // toujours de l encre et ne prouverait rien.
+    const { pixels } = renderMainScreen(patternsTab(true));
+    let onLine2 = 0;
+    for (const key of pixels) {
+      const parts = key.split(",");
+      const x = Number(parts[0]);
+      const y = Number(parts[1]);
+      if (x >= LINE_LABEL_X && y > LINE_2_BASELINE_Y - 6 && y <= LINE_2_BASELINE_Y) {
+        onLine2 += 1;
+      }
+    }
+    expect(onLine2, "la troisieme ligne reste vide").toBe(0);
   });
 
   it("rend exactement ce que le panneau a recu, rangee par rangee", () => {

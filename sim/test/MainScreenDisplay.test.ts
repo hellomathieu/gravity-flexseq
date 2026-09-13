@@ -60,7 +60,6 @@ function channelTab(tab = 1): MainScreenModel {
     fieldOpen: false,
     fieldCount: CHANNEL_TAB_FIELDS,
     patternIndex: 0,
-    slotIndex: 8,
     slotEmpty: false,
     length: 16,
     subdiv: 1,
@@ -124,9 +123,10 @@ describe("MainScreenDisplay — labels, mirrored from the C++ renderer", () => {
     expect(headlineOf(channelTab(TAB_COUNT - 1))).toBe("");
   });
 
-  it("nomme l emplacement parcouru sur l onglet PATTERNS", () => {
-    expect(headlineOf({ ...channelTab(7), slotIndex: 10 })).toBe("B3");
-    expect(headlineOf({ ...channelTab(7), slotIndex: 8 })).toBe("B1");
+  // L onglet PATTERNS prend la mise en page d un canal : le nom de
+  // l emplacement vit dans la GRANDE valeur, donc il n y a pas de titre centre.
+  it("ne porte pas de titre sur l onglet PATTERNS", () => {
+    expect(headlineOf({ ...channelTab(7), patternIndex: 10 })).toBe("");
   });
 });
 

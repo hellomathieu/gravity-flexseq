@@ -139,7 +139,10 @@ UiController::Field UiController::fieldAt(uint8_t index) const {
         return index == 0 ? FIELD_TEMPO : FIELD_CLOCK_SOURCE;
     }
     if (currentTab_ == TAB_PATTERNS) {
-        return index == PATTERNS_FIELD_INDEX_SLOT ? FIELD_SLOT : FIELD_EDIT_ENTRY;
+        // Une seule ligne : l etat de l emplacement vit sous la grande valeur,
+        // et l emplacement se change par SHIFT plus rotation depuis la barre,
+        // comme le pattern d un canal.
+        return FIELD_EDIT_ENTRY;
     }
     if (onConfigPage_) {
         switch (index) {

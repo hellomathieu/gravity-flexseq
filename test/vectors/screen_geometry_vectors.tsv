@@ -66,6 +66,8 @@ E	len_label_x	47	both	LEN_LABEL_X	94
 E	len_value_x	48	both	LEN_VALUE_X	112
 E	len_label_width	49	both	LEN_LABEL_W	16
 E	len_value_width	50	both	LEN_VALUE_W	10
+M	main_label_glyph_width	51	both	MAIN_LABEL_GLYPH_W	5
+M	main_label_glyph_gap	52	both	MAIN_LABEL_GLYPH_GAP	3
 M	line_label_x	26	both	LINE_LABEL_X	62
 M	line_value_x	27	both	LINE_VALUE_X	99
 M	line_0_baseline_y	28	both	LINE_0_BASELINE_Y	8

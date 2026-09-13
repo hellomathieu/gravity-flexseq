@@ -933,14 +933,14 @@ describe("le champ MOD, PRD 10.2", () => {
 });
 
 describe("l onglet PATTERNS — lot 16E etape 4a", () => {
-  it("porte deux champs, l emplacement puis l entree dans l editeur", () => {
+  it("ne porte qu une ligne selectionnable, l entree dans l editeur", () => {
     const r = rig();
     r.gotoTab(TAB_PATTERNS);
     r.enterTab();
     expect(r.ui.level).toBe(UiLevel.Tab);
-    expect(r.ui.fieldCount).toBe(2);
-    expect(r.ui.fieldAt(0)).toBe(UiField.Slot);
-    expect(r.ui.fieldAt(1)).toBe(UiField.EditEntry);
+    expect(r.ui.fieldCount).toBe(1);
+    expect(r.ui.fieldAt(0)).toBe(UiField.EditEntry);
+    expect(r.ui.mainField).toBe(UiField.Slot);
   });
 
   it("part du premier emplacement modifiable", () => {

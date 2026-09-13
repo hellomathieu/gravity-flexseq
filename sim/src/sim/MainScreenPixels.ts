@@ -66,6 +66,8 @@ import {
   patternName,
   sourceLabel,
   subdivLabel,
+  MAIN_LABEL_GLYPH_W,
+  MAIN_LABEL_GLYPH_GAP,
 } from "./MainScreenDisplay.js";
 import { MainParameter, type MainScreenModel } from "../domain/MainScreenModel.js";
 import { ChannelMode } from "../domain/SequencerEngine.js";
@@ -212,6 +214,10 @@ export function modText(model: MainScreenModel): string {
 }
 
 export function legacyLine(model: MainScreenModel, index: number): [string, string] {
+  // L onglet PATTERNS prend la mise en page d un canal en SEQ.
+  if (model.tab === TAB_PATTERNS) {
+    return [index === 0 ? LBL_EDIT : "", ""];
+  }
   if (model.configPage) return configLine(model, index);
   if (index === 0) return [LBL_MODE, modeText(model.mode)];
   if (model.mode === ChannelMode.SEQ) {
@@ -275,7 +281,17 @@ function drawLegacyChannel(ink: Ink, model: MainScreenModel): void {
 
   const mainLabel = mainLabelOf(model);
   const lw = textWidth(mainLabel, VELVETSCREEN);
-  ink.drawStr(MAIN_CENTRE_X - Math.floor(lw / 2), MAIN_LABEL_BASELINE_Y, mainLabel, VELVETSCREEN);
+  const lead = model.tab === TAB_PATTERNS ? MAIN_LABEL_GLYPH_W + MAIN_LABEL_GLYPH_GAP : 0;
+  const labelX = MAIN_CENTRE_X - Math.floor((lw + lead) / 2) + lead;
+  if (lead > 0) {
+    const gy = MAIN_LABEL_BASELINE_Y - MAIN_LABEL_GLYPH_W;
+    if (model.slotEmpty) {
+      ink.drawFrame(labelX - lead, gy, MAIN_LABEL_GLYPH_W, MAIN_LABEL_GLYPH_W);
+    } else {
+      ink.drawBox(labelX - lead, gy, MAIN_LABEL_GLYPH_W, MAIN_LABEL_GLYPH_W);
+    }
+  }
+  ink.drawStr(labelX, MAIN_LABEL_BASELINE_Y, mainLabel, VELVETSCREEN);
 
   for (let line = 0; line < 3; ++line) {
     const base = LINE_0_BASELINE_Y + line * LINE_SPACING_Y;
@@ -318,7 +334,8 @@ export interface Render {
 
 export function renderMainScreen(model: MainScreenModel): Render {
   const ink = new Ink();
-  const legacy = model.tab >= TAB_FIRST_CHANNEL && model.tab <= TAB_LAST_CHANNEL;
+  const legacy = (model.tab >= TAB_FIRST_CHANNEL && model.tab <= TAB_LAST_CHANNEL)
+    || model.tab === TAB_PATTERNS;
   const cursorOnHeadline = model.insideTab && model.cursor === 0;
 
   if (!legacy) {
@@ -357,25 +374,6 @@ export function renderMainScreen(model: MainScreenModel): Render {
     );
   } else if (legacy) {
     drawLegacyChannel(ink, model);
-  } else if (model.tab === TAB_PATTERNS) {
-    drawLabelledField(
-      ink,
-      COL_LEFT_X,
-      ROW_A_BOX_Y,
-      model.slotEmpty ? "FREE" : "USED",
-      null,
-      false,
-      false,
-    );
-    drawLabelledField(
-      ink,
-      COL_LEFT_X,
-      ROW_B_BOX_Y,
-      "EDIT",
-      null,
-      model.insideTab && model.cursor === 1,
-      false,
-    );
   }
 
   ink.drawHLine(RULE_X, RULE_Y, RULE_W);

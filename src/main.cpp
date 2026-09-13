@@ -128,8 +128,10 @@ void beginTemplateEditFrame() {
 
 void beginMainFrame() {
     flexseq::MainScreenModel model = flexseq::mainScreenModelOf(ui, engine);
-    if (model.tab == flexseq::mainscreen::TAB_PATTERNS) {
-        model.slotEmpty = persistentImage.isTemplateEmpty(eeprom, model.slotIndex);
+    if (model.tab == flexseq::mainscreen::TAB_PATTERNS && model.patternIndex >= 0) {
+        // Le pattern que l ecran nomme EST l emplacement parcouru sur cet onglet.
+        model.slotEmpty = persistentImage.isTemplateEmpty(
+            eeprom, static_cast<uint8_t>(model.patternIndex));
     }
     uiScreen.begin(gravity.display, model);
 }
