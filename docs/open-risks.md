@@ -202,6 +202,25 @@ anyone decided to live with it.
 
 ## Method rules born from these subjects
 
+**A test of a cache exercises what the cache guards, not what the cache is named
+after.** Written 2026-09-13, after the first physical flash. The render skips the
+band of the header when a hash says it did not change, and that hash held the
+title string alone. Lot 12 then moved the `SEP` field into the same band. The
+test of the skip changed the **title**, so it kept passing, and the skip kept
+hiding every change of `SEP` on the module. Three native tests now change the bar
+length and the two states of `SEP` with the title held still, and two mutants hold
+them. The rule: when an optimization reads a summary of a region, the test varies
+**each** thing that region draws, and the summary is re-read at every layout
+change. See ADR 0001, the amendment of 2026-09-13.
+
+**The first run on the hardware found what twenty days of simulation did not.**
+Written 2026-09-13. Three checks passed over the defect above, and each for its
+own reason: the native screen tests call the drawing function with the whole
+screen, so the spreading never runs · the panel renders a firmware that never
+drives the field · the gesture probe reads the stored bytes and not the pixels, so
+the domain was right the whole time. The rule: a proof that reads the state is not
+a proof that reads the screen, and a first physical run stays a step of its own.
+
 **A probe result recorded without checking the host for a leftover process is not
 a measurement of the firmware.** Written 2026-09-09. The gesture probe reported
 FAIL on two criteria of its R11 course, and the report named a change of the
