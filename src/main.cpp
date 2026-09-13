@@ -9,6 +9,7 @@
 #endif
 #include <flexseq/InputAdapter.h>
 #include <flexseq/Persistence.h>
+#include <flexseq/UiFrame.h>
 #include <flexseq/PagedScreen.h>
 #include <flexseq/PatternScreen.h>
 #include <flexseq/SequencerEngine.h>
@@ -55,6 +56,7 @@ uint32_t uiLastDrawMs = 0;
 int8_t uiLastStep = -2;
 uint8_t uiLastRevision = 0xFF;
 bool uiLastRunning = false;
+uint8_t uiLastFrameKind = 0xFF;
 uint8_t savedRevision = 0;
 
 // L'image en cours. PagedScreen gele le modele et le contenu du pattern, puis
@@ -134,14 +136,10 @@ void beginMainFrame() {
 
 // Ouvre une image sur l'ecran que l'etat d'interface designe : EDIT PATTERN quand
 // on y est, l'ecran principal partout ailleurs.
-void beginUiFrame() {
-    const int8_t channel = ui.selectedChannel();
-    if (ui.level() == flexseq::UiController::LEVEL_EDIT && channel >= 0) {
-        beginEditFrame(static_cast<uint8_t>(channel));
-    } else if (modulatedPatterns.editorTemplate
-               != flexseq::ModulatedPatternState::NO_EDITOR) {
-        // L editeur de templates n a pas de canal : c est le service qui dit
-        // qu il est ouvert, et un enregistrement refuse ne l ouvre jamais.
+void beginUiFrame(const flexseq::UiFrameChoice& choice) {
+    if (choice.kind == flexseq::UI_FRAME_CHANNEL_EDIT) {
+        beginEditFrame(static_cast<uint8_t>(choice.channel));
+    } else if (choice.kind == flexseq::UI_FRAME_TEMPLATE_EDIT) {
         beginTemplateEditFrame();
     } else {
         beginMainFrame();
@@ -214,6 +212,21 @@ void setup() {
     // de rendu y mesurerait quelques echantillons et les presenterait comme les
     // autres. Le drapeau met le firmware dans l'etat qu'on veut observer, et
     // l'etat observable inclut le mouvement.
+    ui.handle(flexseq::UiController::EVENT_PLAY_PRESS);
+#endif
+
+#if FLEXSEQ_START_IN_TEMPLATE_EDIT
+    // Meme besoin que ci-dessus, pour l EDITEUR DE TEMPLATES : une boucle qui
+    // REND en continu, donc un playhead qui avance. On y entre par les gestes
+    // publics, sans rien exposer de plus dans le domaine.
+    while (ui.currentTab() != flexseq::UiController::TAB_PATTERNS) {
+        ui.handle(flexseq::UiController::EVENT_ROTATE, 1);
+    }
+    ui.handle(flexseq::UiController::EVENT_PRESS);
+    while (ui.field() != flexseq::UiController::FIELD_EDIT_ENTRY) {
+        ui.handle(flexseq::UiController::EVENT_ROTATE, 1);
+    }
+    ui.handle(flexseq::UiController::EVENT_PRESS);
     ui.handle(flexseq::UiController::EVENT_PLAY_PRESS);
 #endif
 
@@ -305,16 +318,17 @@ void loop() {
         // porte aucun element qui varie dans le temps. Le redessiner a chaque
         // step y coutait huit bandes sans rien changer a l'image, et privait la
         // persistance de ses passages sans tick.
-        const int8_t channel = ui.selectedChannel();
-        const bool editing =
-            (ui.level() == flexseq::UiController::LEVEL_EDIT) && channel >= 0;
-        const int8_t step = editing
-            ? engine.effectiveStep(static_cast<uint8_t>(channel))
+        // Le declencheur et le selecteur lisent LA MEME decision : deux
+        // lectures separees ont laisse l ecran fige (UiFrame.h).
+        const flexseq::UiFrameChoice choice =
+            flexseq::uiFrameChoiceOf(ui, modulatedPatterns);
+        const int8_t step = choice.channel >= 0
+            ? engine.effectiveStep(static_cast<uint8_t>(choice.channel))
             : -1;
         const uint8_t revision = ui.revision();
         const bool running = engine.isRunning();
         bool due = (step != uiLastStep || revision != uiLastRevision
-                    || running != uiLastRunning);
+                    || running != uiLastRunning || choice.kind != uiLastFrameKind);
 #if FLEXSEQ_ENCODER_PROBE
         due = due || flexseq::probe::pageChanged();
 #endif
@@ -325,7 +339,8 @@ void loop() {
                 uiLastStep = step;
                 uiLastRevision = revision;
                 uiLastRunning = running;
-                beginUiFrame();
+                uiLastFrameKind = choice.kind;
+                beginUiFrame(choice);
             }
         }
     }

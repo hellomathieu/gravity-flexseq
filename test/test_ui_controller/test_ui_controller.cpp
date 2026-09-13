@@ -8,6 +8,7 @@
 #include <flexseq/CvDestination.h>
 #include <flexseq/UiController.h>
 #include <flexseq/Persistence.h>
+#include <flexseq/UiFrame.h>
 
 using flexseq::Pattern;
 using flexseq::SequencerEngine;
@@ -1219,6 +1220,55 @@ void test_the_controller_and_the_format_agree_on_the_frozen_count() {
     TEST_ASSERT_EQUAL_UINT8(8, UiController::FIRST_WRITABLE_TEMPLATE);
 }
 
+/*
+ * Le choix de l image — lot 16E etape 4, correction du 2026-09-13
+ *
+ * Le declencheur de redessin et le selecteur d ecran lisaient des etats
+ * DIFFERENTS, et l ecran restait fige. Ils lisent desormais cette decision-ci.
+ */
+
+void test_the_frame_choice_names_the_main_screen_by_default() {
+    Rig r;
+    flexseq::ModulatedPatternState state;
+    const flexseq::UiFrameChoice choice = flexseq::uiFrameChoiceOf(r.ui, state);
+    TEST_ASSERT_EQUAL(flexseq::UI_FRAME_MAIN, choice.kind);
+    TEST_ASSERT_EQUAL_INT8(-1, choice.channel);
+}
+
+void test_the_frame_choice_names_the_channel_editor_and_its_channel() {
+    Rig r;
+    flexseq::ModulatedPatternState state;
+    r.enterEdit();
+    const flexseq::UiFrameChoice choice = flexseq::uiFrameChoiceOf(r.ui, state);
+    TEST_ASSERT_EQUAL(flexseq::UI_FRAME_CHANNEL_EDIT, choice.kind);
+    TEST_ASSERT_EQUAL_INT8(0, choice.channel);
+}
+
+// Le playhead de l editeur de templates est celui du canal d audition. Sans ce
+// canal, rien ne varie dans le temps et l image ne se redessine jamais.
+void test_the_frame_choice_gives_the_template_editor_its_audition_channel() {
+    Rig r;
+    flexseq::ModulatedPatternState state;
+    state.editorTemplate = 11;
+    const flexseq::UiFrameChoice choice = flexseq::uiFrameChoiceOf(r.ui, state);
+    TEST_ASSERT_EQUAL(flexseq::UI_FRAME_TEMPLATE_EDIT, choice.kind);
+    TEST_ASSERT_EQUAL_INT8(flexseq::ModulatedPatternState::EDITOR_CHANNEL,
+                           choice.channel);
+}
+
+// La fermeture arrive en DIFFERE, apres l ecriture des 24 octets. Le choix doit
+// changer sans qu aucun geste ne survienne, sinon l ecran reste sur l editeur.
+void test_closing_the_template_editor_changes_the_frame_choice_with_no_gesture() {
+    Rig r;
+    flexseq::ModulatedPatternState state;
+    state.editorTemplate = 11;
+    const flexseq::UiFrameChoice ouvert = flexseq::uiFrameChoiceOf(r.ui, state);
+    state.editorTemplate = flexseq::ModulatedPatternState::NO_EDITOR;
+    const flexseq::UiFrameChoice ferme = flexseq::uiFrameChoiceOf(r.ui, state);
+    TEST_ASSERT_NOT_EQUAL(ouvert.kind, ferme.kind);
+    TEST_ASSERT_EQUAL(flexseq::UI_FRAME_MAIN, ferme.kind);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_a_clock_tab_holds_the_three_lines_of_the_original);
@@ -1311,6 +1361,10 @@ int main(int, char**) {
     RUN_TEST(test_the_slot_cursor_never_reaches_a_factory_template);
     RUN_TEST(test_the_slot_cursor_stops_on_the_last_template);
     RUN_TEST(test_the_controller_and_the_format_agree_on_the_frozen_count);
+    RUN_TEST(test_the_frame_choice_names_the_main_screen_by_default);
+    RUN_TEST(test_the_frame_choice_names_the_channel_editor_and_its_channel);
+    RUN_TEST(test_the_frame_choice_gives_the_template_editor_its_audition_channel);
+    RUN_TEST(test_closing_the_template_editor_changes_the_frame_choice_with_no_gesture);
 
     return UNITY_END();
 }
