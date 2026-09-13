@@ -2706,6 +2706,42 @@ void test_the_editor_sets_a_ratchet_on_the_template() {
     TEST_ASSERT_EQUAL_UINT8(1, r.state.editorDirty);
 }
 
+// L audition : le canal 1 doit EMETTRE ce que l editeur montre. Ce test couvre
+// tout sauf le cablage de main.cpp, que nul test natif ne compile.
+void test_the_audition_emits_the_template_on_channel_one() {
+    EditorRig r;
+    // Un template VIDE : le seul pas actif sera celui que l edition allume, et
+    // le compte d onsets devient alors imputable a ce pas-la.
+    uint8_t content[persist::v3::CONTENT_BYTES];
+    memset(content, 0, sizeof(content));
+    writeTemplateRecord(r.ee, 11, content, 16);
+    r.selectSlot(11);
+    r.openEditor();
+    r.serve();
+    r.ui.handle(UiController::EVENT_PRESS);   // allume le pas 0
+    bool active = false;
+    TEST_ASSERT_TRUE(r.state.pattern[0].readStep(0, active));
+    TEST_ASSERT_TRUE(active);
+
+    flexseq::TriggerSequencer triggers(r.engine);
+    r.transport.start();
+    uint16_t onsets = 0;
+    const uint16_t ticks = r.engine.getTicksPerStep(0);
+    for (uint16_t t = 0; t < ticks * 4; ++t) {
+        r.transport.tick(1);
+        triggers.update();
+        while (triggers.takeTrigger(0)) {
+            ++onsets;
+        }
+    }
+    // ⚠️ « au moins un onset » ne prouve RIEN : un canal en CLOCK emet a CHAQUE
+    // pas, et passerait ce critere. Le compte exact est ce qui distingue les
+    // deux. Le transport arme les canaux, donc le premier tick emet l onset du
+    // pas 0, qui est le seul actif : UN onset sur quatre pas.
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(
+        1, onsets, "le canal 1 suit le contenu, il n emet pas a chaque pas");
+}
+
 void test_the_written_length_is_the_length_shown_in_the_header() {
     EditorRig r;
     r.selectSlot(11);
@@ -2898,6 +2934,7 @@ int main() {
     RUN_TEST(test_the_header_field_edits_the_template_length);
     RUN_TEST(test_opening_the_editor_invalidates_the_timing_cache);
     RUN_TEST(test_the_editor_sets_a_ratchet_on_the_template);
+    RUN_TEST(test_the_audition_emits_the_template_on_channel_one);
     RUN_TEST(test_the_written_length_is_the_length_shown_in_the_header);
 
     return UNITY_END();
