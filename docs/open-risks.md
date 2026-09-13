@@ -202,6 +202,15 @@ anyone decided to live with it.
 
 ## Method rules born from these subjects
 
+**A check that guards a destructive action runs in its own step, and the action
+follows only if the check passes.** Written 2026-09-13. A branch was deleted with
+the check and the deletion chained in one command, so the check could not stop
+anything. The check also asked a stale question: the branch had been made before
+two more commits, so a difference was expected, and an expected difference is not
+a safety signal. Nothing was lost, and that was established after the fact. The
+rule: put the check first, read it, and then act. A check that cannot refuse is a
+comment.
+
 **A test of a cache exercises what the cache guards, not what the cache is named
 after.** Written 2026-09-13, after the first physical flash. The render skips the
 band of the header when a hash says it did not change, and that hash held the
