@@ -557,7 +557,7 @@ void test_a_band_draws_only_the_row_it_contains(void) {
 // La valeur OUVERTE s affiche en INVERSE, et non dans un cadre fin. Le cadre
 // laissait 2 pixels autour d un chiffre de 5, dans une bande qui en fait 8 : le
 // proprietaire l a lu illisible sur le module, le 2026-09-13 pour SEP puis le
-// 2026-09-17 pour LEN. Les deux en-tetes suivent la meme regle.
+// 2026-09-13 pour LEN. Les deux en-tetes suivent la meme regle.
 void test_the_open_value_is_inverted_and_not_framed() {
     TEST_ASSERT_EQUAL_UINT8(2, screen::SEP_FRAME_PAD);
     canvas.reset();

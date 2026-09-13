@@ -271,7 +271,7 @@ inline bool isChannelTab(const MainScreenModel& model) {
 }
 
 // Les onglets qui prennent les trois lignes de l original : les six canaux, et
-// l onglet PATTERNS depuis le 2026-09-17, par decision du proprietaire.
+// l onglet PATTERNS depuis le 2026-09-13, par decision du proprietaire.
 inline bool usesLegacyLayout(const MainScreenModel& model) {
     return isChannelTab(model) || model.tab == mainscreen::TAB_PATTERNS;
 }

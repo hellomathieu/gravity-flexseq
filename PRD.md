@@ -268,15 +268,21 @@ byte 6   skip chance     0 to 9             4 bits free
 
 **What this amendment does NOT decide:** the gesture that loads a template into a channel · the destination selector, the confirmation window and the `SAVE` button of §12.9, which stay with step 5 · and the change flag of §12.9 point 5, which serves that button and not the editor.
 
-**AMENDMENT OF 2026-09-17 — the shape of the two screens, after the owner read them on the module.** It supersedes points 6 and 3 of the amendment above, and it leaves the rest exact.
+**AMENDMENT OF 2026-09-13 — the shape of the two screens, after the owner read them on the module.** It supersedes points 6 and 3 of the amendment above, and it leaves the rest exact.
 
 **6bis. The `PATTERNS` tab takes the three lines of the original, as a channel in `SEQ` does.** The name of the slot is the **big value**, its label is `PATTERN`, and `EDIT` is the single line on the right. ⚠️ **`EDIT` is the only selectable line**, so the slot changes through `SHIFT` plus a rotation from the tab bar — the gesture that already changes the pattern of a channel. The two framed fields of the first shape are gone.
 
 **6ter. The state of a slot is a square of 5 px beside `PATTERN`, and its meaning follows the grid.** It is **hollow** when the slot is free and **filled** when it holds something, which is what those two shapes already mean on every step of the editor (point 3 above). ⚠️ **The owner first proposed the opposite mapping and changed it** when the contradiction with the grid was named. The words `FREE` and `USED` are gone: the square sits under the big value, where no cursor stops, so the state stopped being a line one can select.
 
-**3bis. The value of an open header field renders inverted, white on black.** It held a thin frame, which left 2 px around a glyph of 5 in a band of 8. The owner read it illegible on the module, on `SEP` on 2026-09-13 and on `LEN` on 2026-09-17. ⚠️ **The two headers follow the same rule, by a decision of the owner**: a length holds two digits where a measure separation holds one, so the frame was tighter on `LEN`, and the owner chose homogeneity over two rules.
+**3bis. The value of an open header field renders inverted, white on black.** It held a thin frame, which left 2 px around a glyph of 5 in a band of 8. The owner read it illegible on the module, on `SEP` first and then on `LEN`, both on 2026-09-13. ⚠️ **The two headers follow the same rule, by a decision of the owner**: a length holds two digits where a measure separation holds one, so the frame was tighter on `LEN`, and the owner chose homogeneity over two rules.
 
-**What this amendment does NOT decide:** whether the template editor silences the five other channels. A channel in `CLOCK` emits on every step, so they all fire while the transport runs. The owner asked the question on 2026-09-17 and it is open — `docs/open-risks.md` line 106.
+**AMENDMENT OF 2026-09-13 (second one of the day) — the gesture that loads a template, and the silence of the editor.** It adds to point 1 and it adds point 11. It supersedes nothing.
+
+**1bis. `SHIFT` plus a rotation on a channel tab LOADS the template it names.** The gesture is the one of the original, and FlexSeq already holds half of it: it moves the number from `A1` to `B8` today and it loads nothing, so the screen can name a pattern the channel does not play. The gesture now loads the named template into the copy the channel plays.
+
+**A load that would destroy an edited copy asks first.** Every channel carries a change flag, one bit per channel. A clean copy loads with no question. A changed copy raises the confirmation window of §12.9 point 3. A successful load clears the flag, the copy being the template again. ⚠️ **A refusal puts the number back to what it was**: to keep the new number without loading it would reproduce the very defect this point closes. ⚠️ **The change flag of §12.9 point 5 gains a SECOND role.** It served the `SAVE` button, and it now also guards the load. The amendment above says it serves that button and not the editor, and that stays exact: the template editor carries its own flag, for the template it writes.
+
+**11. The template editor silences the five other channels.** A channel in `CLOCK` emits on every step, so the six of them fire while the transport runs and the audition cannot be heard. While the editor is open, the five other channels send no trigger to their output. ⚠️ **Their mode is NOT forced and no state is saved.** A power cut during an edit therefore changes nothing for them, which forcing the mode would not give. Their pending trigger is consumed and dropped, so nothing fires at once when the editor closes. ⚠️ **This point answers the question the amendment above left open**, and that question is therefore closed.
 
 **Architecture:** ADR 0013 records where the template under edit lives.
 
