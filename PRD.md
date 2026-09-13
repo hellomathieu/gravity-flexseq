@@ -198,8 +198,8 @@ A side gain, since the acceleration of the encoder disappeared: **180 detents** 
 **8. A grid of 36 steps on the screen — IMPLEMENTED on 2026-08-30, lot F.** 3 rows of 12, all full, so 36 slots and no dead one. The column pitch and **the size of the glyphs do not change**, because legibility comes first. **The footer disappears from the EDIT screen**, as it does in the original. Row centres: **18, 36 and 54**, a spacing of 18 px unchanged, and the last pixel of the grid at **63**.
 ⚠️ **THE ROW CENTRES ARE 20, 37 AND 54 SINCE 2026-09-09, and the spacing is 17 px.** The first row goes down by 2 px. The gap under the rule of the header then goes from one empty line to three. The 2 px come back from the spacing, 18 px to 17 px. **The reason is measured**: the bottom of the grid sat exactly on the last row of the screen. A block move of the three rows would push the ratchet digit of the third row off the screen. The last centre does not move, so the last pixel of the grid stays at 63.
 ⚠️ **Two vertical levers had been identified to free the space**: to raise the title line, and to reduce the space between the glyph and its ratchet digit. **The chosen geometry needed neither of them**: the removal of the footer is enough. The title keeps its baseline at 7, so it keeps its single band, and `DIGIT_DY` stays at 5. The two levers stay available for a future need, and they do not describe the implementation.
-**9. The PATTERNS tab.** The edit of the templates lives in its own tab, with an audition through **CHAN 1**. It **reuses `LEVEL_EDIT`**, so there is no fourth interface level, with another pattern source and another title.
-**10. The copy goes both ways.** From the PATTERNS tab, an **occupied** slot **loads** into a channel, and an **empty** slot receives the pattern of a channel. It is the same screen and the same selection, so there is **no new gesture**. The budget of nine gestures is full.
+**9. The PATTERNS tab.** The edit of the templates lives in its own tab, with an audition through **CHAN 1**. It **reuses `LEVEL_EDIT`**, so there is no fourth interface level, with another pattern source and another title. ⚠️ **AMENDED on 2026-09-13, see the amendment below.**
+**10. The copy goes both ways.** From the PATTERNS tab, an **occupied** slot **loads** into a channel, and an **empty** slot receives the pattern of a channel. It is the same screen and the same selection, so there is **no new gesture**. The budget of nine gestures is full. ⚠️ **AMENDED on 2026-09-13, see the amendment below.**
 - an **occupied** slot can be overwritten, after a confirmation on the screen (**decided on 2026-08-26**). "Empty" is computed: the 36 inactive cells;
 - **A1–A8 refuse** the write, as they do everywhere else;
 - the write holds 24 bytes, so about 82 ms spread by the persistence scheduler.
@@ -243,6 +243,32 @@ byte 6   skip chance     0 to 9             4 bits free
 **To re-read before you build the mute, or bring SWING or GATE back:** this amendment, points 4 and 5 above, §11.1 for the format, and `WORKPLAN.md` section `RM.16` for the budget of the day.
 
 **What this amendment does NOT claim:** it does not claim the cut is enough — it returns 250 to 550 bytes of the 2017 that the worst case lacked, and 1467 are still missing · it does not abandon SWING and GATE, it states the price of each return · it does not defer the mute for ever, and it removes nothing from point 5 · it does not decide the packing of SWING and GATE · and it changes no behaviour of the firmware today, because none of the three was ever written.
+
+**AMENDMENT OF 2026-09-13 — the PATTERNS tab edits the eight writable slots, and the load of a template into a channel moves to the channel tab.**
+
+**Decisions of the owner, taken during lot 16E step 4.** They supersede points 9 and 10 above on three lines, and they leave the rest of both points exact.
+
+**1. The PATTERNS tab shows `B1` to `B8`, and those eight only.** It is the workshop of the writable templates. `A1` to `A8` never appear there, so the tab never has to explain a slot that refuses every edit.
+
+**2. A channel in `SEQ` selects among the sixteen, `A1` to `A8` and `B1` to `B8`, and the load of a template into a channel happens there.** The load asks for a **deliberate action**: a rotation alone never loads. ⚠️ **The exact gesture is NOT decided, and it belongs to step 5 of the lot.** Two constraints bear on it: the budget of nine gestures is full, and `SHIFT` plus a short press is reserved for RECORDING by point 5 above.
+
+⚠️ **Without that move the eight factory patterns would become unreachable, and three facts of the code establish it.** The `PATTERN` field of a channel changes the displayed number and loads nothing (`src/domain/UiController.cpp:354`). The only load the specification gave started from the `PATTERNS` tab. And a valid image is restored at boot, the sixteen templates being seeded only when the format is unknown (§11.1). A tab that showed the writable slots alone would therefore write `A2` to `A8` into the EEPROM once, and leave them out of reach for ever.
+
+⚠️ **And a load destroys what the channel had edited**, which point 1 above already states: to load a template again overwrites the local copy. The deliberate action is what keeps that destruction out of reach of one detent.
+
+**3. The editor is the `EDIT` screen, with two changes in its header.** The title reads `TEMPLATE B3`. The header field is **`LENGTH`** instead of `SEP`: the measure separation belongs to the channel and no template record carries it, while the template record **stores a length** on its 24th byte and nothing else in the module can set it. ⚠️ **`LENGTH` takes its own position in the header, and the position of `SEP` does not move.** A `SEP` value holds one digit and a `LENGTH` value holds two, so the geometry of `SEP`, which a `static_assert` bounds against the right edge of the screen, cannot carry it.
+
+**4. The audition takes channel 1 into `SEQ`, and gives it back what it had.** Entering the editor saves the mode and the base length of channel 1, then sets `SEQ` and the length of the template. Leaving restores both. A channel in `CLOCK` or in `RANDOM` reads no pattern, so without this the audition would produce nothing that resembles the template, and the factory default of a channel is `CLOCK`. ⚠️ **Accepted consequence: a power cut during an edit leaves channel 1 in `SEQ`**, the periodic scan of the persistence writing the mode. The repair is one gesture. `docs/open-risks.md` tracks it.
+
+**5. Leaving the editor writes the template, and only when something changed.** The editor holds one bit that says so. It spares the EEPROM the 24 bytes of a record that nobody touched.
+
+**6. The tab holds two fields**: the slot, which carries `FREE` or `USED`, and the entry into the editor. The shape is the one the `CLOCK` tab already has, so the screen gains no new layout.
+
+**What stays exact in points 9 and 10:** the editor **reuses `LEVEL_EDIT`**, so there is no fourth interface level · the audition goes through **channel 1** · "empty" is **computed**, the 36 inactive cells, the ratchets ignored · **`A1` to `A8` refuse the write** · the write holds **24 bytes**, about 82 ms spread by the persistence scheduler · and **no new gesture** is invented for the tab itself.
+
+**What this amendment does NOT decide:** the gesture that loads a template into a channel · the destination selector, the confirmation window and the `SAVE` button of §12.9, which stay with step 5 · and the change flag of §12.9 point 5, which serves that button and not the editor.
+
+**Architecture:** ADR 0013 records where the template under edit lives.
 
 ---
 
