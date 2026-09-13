@@ -49,7 +49,12 @@ void onOutputTick(uint32_t) {
 // a advance() ; drawPatternScreen() doit rester pure.
 void beginFrame() {
     flexseq::PatternScreenModel model{};
+#if defined(FLEXSEQ_DEMO_TEMPLATE_EDITOR)
+    model.title = "TEMPLATE B3";
+    model.templateEditor = true;
+#else
     model.title = "EDIT PATTERN A1";
+#endif
     model.titleWidth = 0;  // PagedScreen la mesure une fois par image
     model.pattern = engine.instanceForChannel(CH);
     model.length = engine.getEffectiveLength(CH);

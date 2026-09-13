@@ -46,6 +46,11 @@ char uiTitle[16] = "EDIT PATTERN A1";
 constexpr uint8_t UI_TITLE_BANK = 13;
 constexpr uint8_t UI_TITLE_NUM = 14;
 
+// Les deux titres partagent CE tampon, et chacun le reecrit entierement depuis
+// la Flash. Un second tampon aurait coute 12 octets de RAM, et le garde de
+// derive l a refuse : la RAM libre sous le plafond ne vaut que 136 octets.
+constexpr uint8_t UI_TEMPLATE_TITLE_NUM = 10;
+
 uint32_t uiLastDrawMs = 0;
 int8_t uiLastStep = -2;
 uint8_t uiLastRevision = 0xFF;
@@ -71,6 +76,7 @@ void beginEditFrame(uint8_t channel) {
     if (selected < 0) {
         return;
     }
+    strcpy_P(uiTitle, PSTR("EDIT PATTERN A1"));
     uiTitle[UI_TITLE_BANK] = (selected < 8) ? 'A' : 'B';
     uiTitle[UI_TITLE_NUM] = static_cast<char>('1' + (selected % 8));
 
@@ -94,8 +100,35 @@ void beginEditFrame(uint8_t channel) {
     uiScreen.begin(gravity.display, model);
 }
 
+void beginTemplateEditFrame() {
+    constexpr uint8_t CH = flexseq::ModulatedPatternState::EDITOR_CHANNEL;
+    strcpy_P(uiTitle, PSTR("TEMPLATE B1"));
+    uiTitle[UI_TEMPLATE_TITLE_NUM] = static_cast<char>(
+        '1' + (modulatedPatterns.editorTemplate
+               - flexseq::UiController::FIRST_WRITABLE_TEMPLATE));
+
+    flexseq::PatternScreenModel model{};
+    model.title = uiTitle;
+    model.titleWidth = 0;
+    model.pattern = engine.patternForChannel(CH);
+    model.length = modulatedPatterns.length[CH];
+    model.templateEditor = true;
+    model.sepSelected = ui.isOnHeader();
+    model.sepOpen = model.sepSelected && ui.fieldOpen();
+    model.cursor = model.sepSelected
+        ? static_cast<int8_t>(-1)
+        : static_cast<int8_t>(ui.stepCursor());
+    model.playhead = engine.effectiveStep(CH);
+    model.barLength = 0;
+
+    uiScreen.begin(gravity.display, model);
+}
+
 void beginMainFrame() {
     flexseq::MainScreenModel model = flexseq::mainScreenModelOf(ui, engine);
+    if (model.tab == flexseq::mainscreen::TAB_PATTERNS) {
+        model.slotEmpty = persistentImage.isTemplateEmpty(eeprom, model.slotIndex);
+    }
     uiScreen.begin(gravity.display, model);
 }
 
@@ -105,6 +138,11 @@ void beginUiFrame() {
     const int8_t channel = ui.selectedChannel();
     if (ui.level() == flexseq::UiController::LEVEL_EDIT && channel >= 0) {
         beginEditFrame(static_cast<uint8_t>(channel));
+    } else if (modulatedPatterns.editorTemplate
+               != flexseq::ModulatedPatternState::NO_EDITOR) {
+        // L editeur de templates n a pas de canal : c est le service qui dit
+        // qu il est ouvert, et un enregistrement refuse ne l ouvre jamais.
+        beginTemplateEditFrame();
     } else {
         beginMainFrame();
     }
@@ -230,6 +268,8 @@ void loop() {
     }
     engine.applyCvResetEvents(resetMask);
 
+    flexseq::serviceTemplateEditor(eeprom, engine, ui, modulatedPatterns,
+                                   persistence, persistentImage);
     flexseq::serviceOneModulationTemplateLoad(eeprom, engine, modulatedPatterns);
 
     if (ticks > 0) {

@@ -24,6 +24,8 @@ struct MainScreenModel {
     uint8_t fieldCount;
 
     int8_t patternIndex;
+    uint8_t slotIndex;   // l emplacement parcouru dans l onglet PATTERNS, 8 a 15
+    bool slotEmpty;      // rempli hors du domaine : le lire demande l EEPROM
     uint8_t length;
     int16_t subdiv;
     uint8_t barLength;

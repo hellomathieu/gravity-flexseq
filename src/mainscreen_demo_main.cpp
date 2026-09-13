@@ -15,8 +15,13 @@ flexseq::SequencerEngine engine;
 flexseq::Transport transport(engine);
 flexseq::UiController ui(engine, transport);
 
+#if defined(FLEXSEQ_DEMO_TAB_PATTERNS)
+constexpr uint8_t DEMO_TAB = flexseq::UiController::TAB_PATTERNS;
+constexpr uint8_t DEMO_CURSOR = flexseq::UiController::PATTERNS_FIELD_INDEX_EDIT_ENTRY;
+#else
 constexpr uint8_t DEMO_TAB = 2;
 constexpr uint8_t DEMO_CURSOR = 2;
+#endif
 
 flexseq::MainScreenModel frozen;
 uint8_t row = 0;
@@ -33,6 +38,11 @@ void onOutputTick(uint32_t) {
 
 void freezeModel() {
     frozen = flexseq::mainScreenModelOf(ui, engine);
+#if defined(FLEXSEQ_DEMO_TAB_PATTERNS)
+    // Le panneau n a pas d EEPROM : l etat de l emplacement est pose ici, comme
+    // main.cpp le pose depuis l image.
+    frozen.slotEmpty = true;
+#endif
 
     tiles = gravity.display.getBufferTileHeight();
     if (tiles == 0) {
@@ -71,10 +81,12 @@ void setup() {
 #if defined(FLEXSEQ_DEMO_MODE_SEQ)
     engine.setChannelMode(DEMO_TAB - 1, flexseq::MODE_SEQ);
 #endif
+#if !defined(FLEXSEQ_DEMO_TAB_PATTERNS)
     engine.setSelectedPattern(DEMO_TAB - 1, 9);
     engine.setBaseLength(DEMO_TAB - 1, 20);
     engine.setSubdiv(DEMO_TAB - 1, -4);
     engine.setBarLength(DEMO_TAB - 1, 3);
+#endif
 
 #if defined(FLEXSEQ_DEMO_MOD)
     engine.setChannelMode(DEMO_TAB - 1, flexseq::MODE_SEQ);
@@ -84,6 +96,13 @@ void setup() {
     while (ui.currentTab() != DEMO_TAB) {
         ui.handle(flexseq::UiController::EVENT_ROTATE, 1);
     }
+#if defined(FLEXSEQ_DEMO_TAB_PATTERNS)
+    // Sur la barre, SHIFT plus rotation change le parametre principal, qui est
+    // l emplacement sur cet onglet. B1 plus deux crans donne B3.
+    for (uint8_t i = 0; i < 2; ++i) {
+        ui.handle(flexseq::UiController::EVENT_SHIFT_ROTATE, 1);
+    }
+#endif
     ui.handle(flexseq::UiController::EVENT_PRESS);
     if (ui.level() == flexseq::UiController::LEVEL_TAB) {
         for (uint8_t i = 0; i < DEMO_CURSOR; ++i) {

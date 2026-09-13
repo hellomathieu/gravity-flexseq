@@ -227,6 +227,10 @@ bool production(char family, int index, int& out) {
             case 24: out = screen::SEP_LABEL_W; return true;
             case 25: out = screen::HEADER_TITLE_X; return true;
             case 26: out = screen::TITLE_W; return true;
+            case 47: out = screen::LEN_LABEL_X; return true;
+            case 48: out = screen::LEN_VALUE_X; return true;
+            case 49: out = screen::LEN_LABEL_W; return true;
+            case 50: out = screen::LEN_VALUE_W; return true;
             default: return false;
         }
     }

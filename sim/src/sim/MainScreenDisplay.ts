@@ -95,7 +95,8 @@ export function sourceLabel(source: number): string {
 
 export function headlineOf(model: MainScreenModel): string {
   if (model.tab === TAB_CLOCK) return String(model.tempo);
-  if (model.tab >= TAB_PATTERNS) return "";
+  if (model.tab === TAB_PATTERNS) return patternName(model.slotIndex);
+  if (model.tab === TAB_SETTINGS) return "";
   return patternName(model.patternIndex);
 }
 

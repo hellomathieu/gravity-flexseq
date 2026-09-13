@@ -857,6 +857,53 @@ void test_the_cursor_inverts_the_label_of_its_line() {
         "le curseur doit ajouter de l encre : sans cela il serait invisible");
 }
 
+/*
+ * PATTERNS tab — lot 16E step 4b
+ */
+
+void test_the_patterns_tab_draws_the_slot_its_state_and_the_editor_entry() {
+    canvas.reset();
+    flexseq::MainScreenModel m{};
+    m.tab = ms::TAB_PATTERNS;
+    m.slotIndex = 10;
+    m.slotEmpty = true;
+    drawMainScreen(canvas, m);
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("B3"), "le nom de l emplacement");
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("SLOT"), "l etiquette de l etat");
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("FREE"), "un emplacement vide");
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("EDIT"), "l entree dans l editeur");
+    TEST_ASSERT_NULL_MESSAGE(canvas.find("USED"), "et pas les deux a la fois");
+}
+
+void test_an_occupied_slot_reads_used() {
+    canvas.reset();
+    flexseq::MainScreenModel m{};
+    m.tab = ms::TAB_PATTERNS;
+    m.slotIndex = 15;
+    m.slotEmpty = false;
+    drawMainScreen(canvas, m);
+    TEST_ASSERT_NOT_NULL(canvas.find("B8"));
+    TEST_ASSERT_NOT_NULL(canvas.find("USED"));
+    TEST_ASSERT_NULL(canvas.find("FREE"));
+}
+
+void test_the_patterns_tab_headline_names_the_slot() {
+    flexseq::MainScreenModel m{};
+    m.tab = flexseq::mainscreen::TAB_PATTERNS;
+    m.slotIndex = 10;
+    char out[6];
+    flexseq::detail::headlineOf(m, out);
+    TEST_ASSERT_EQUAL_STRING("B3", out);
+}
+
+void test_the_settings_tab_headline_stays_empty() {
+    flexseq::MainScreenModel m{};
+    m.tab = flexseq::mainscreen::TAB_SETTINGS;
+    char out[6];
+    flexseq::detail::headlineOf(m, out);
+    TEST_ASSERT_EQUAL_STRING("", out);
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_a_clock_tab_draws_the_three_lines_at_the_geometry_of_the_original);
@@ -912,6 +959,10 @@ int main() {
     RUN_TEST(test_eight_bands_reunited_equal_the_whole_image);
     RUN_TEST(test_the_tab_bar_is_drawn_in_exactly_one_band);
     RUN_TEST(test_the_rule_band_carries_the_rule_and_no_text);
+    RUN_TEST(test_the_patterns_tab_draws_the_slot_its_state_and_the_editor_entry);
+    RUN_TEST(test_an_occupied_slot_reads_used);
+    RUN_TEST(test_the_patterns_tab_headline_names_the_slot);
+    RUN_TEST(test_the_settings_tab_headline_stays_empty);
 
     return UNITY_END();
 }

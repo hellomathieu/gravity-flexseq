@@ -89,6 +89,7 @@ UiController::UiController(SequencerEngine& engine, Transport& transport)
       currentTab_(TAB_FIRST_CHANNEL),
       cursor_(0),
       stepCursor_(0),
+      slotCursor_(FIRST_WRITABLE_TEMPLATE),
       onHeader_(false),
       onConfigPage_(false),
       fieldOpen_(false),
@@ -124,6 +125,9 @@ uint8_t UiController::fieldCount() const {
     if (isChannelTab()) {
         return onConfigPage_ ? CONFIG_PAGE_FIELDS : CHANNEL_TAB_FIELDS;
     }
+    if (currentTab_ == TAB_PATTERNS) {
+        return PATTERNS_TAB_FIELDS;
+    }
     return 0;
 }
 
@@ -133,6 +137,9 @@ UiController::Field UiController::fieldAt(uint8_t index) const {
     }
     if (currentTab_ == TAB_CLOCK) {
         return index == 0 ? FIELD_TEMPO : FIELD_CLOCK_SOURCE;
+    }
+    if (currentTab_ == TAB_PATTERNS) {
+        return index == PATTERNS_FIELD_INDEX_SLOT ? FIELD_SLOT : FIELD_EDIT_ENTRY;
     }
     if (onConfigPage_) {
         switch (index) {
@@ -158,6 +165,13 @@ UiController::Field UiController::fieldAt(uint8_t index) const {
 }
 
 Pattern* UiController::currentPattern() const {
+    // ADR 0013 : dans l editeur de templates, l edition tombe dans le tampon du
+    // canal d audition. Hors de l editeur cet onglet n edite rien.
+    if (currentTab_ == TAB_PATTERNS) {
+        return level_ == LEVEL_EDIT
+            ? engine_.patternForChannel(ModulatedPatternState::EDITOR_CHANNEL)
+            : nullptr;
+    }
     const int8_t channel = selectedChannel();
     if (channel < 0) {
         return nullptr;
@@ -250,7 +264,11 @@ void UiController::handleEdit(Event event, int8_t delta) {
         case EVENT_ROTATE:
             if (onHeader_) {
                 if (fieldOpen_) {
-                    adjustFieldValue(FIELD_BAR_LENGTH, delta);
+                    if (currentTab_ == TAB_PATTERNS) {
+                        adjustTemplateLength(delta);
+                    } else {
+                        adjustFieldValue(FIELD_BAR_LENGTH, delta);
+                    }
                 } else if (step > 0) {
                     onHeader_ = false;
                     stepCursor_ = 0;
@@ -317,6 +335,9 @@ UiController::Field UiController::mainField() const {
     if (currentTab_ == TAB_CLOCK) {
         return FIELD_TEMPO;
     }
+    if (currentTab_ == TAB_PATTERNS) {
+        return FIELD_SLOT;
+    }
     const int8_t channel = selectedChannel();
     if (channel < 0) {
         return FIELD_NONE;
@@ -341,6 +362,14 @@ void UiController::adjustFieldValue(Field target, int8_t raw) {
     }
     if (target == FIELD_CLOCK_SOURCE) {
         clockSource_ = clampIndex(clockSource_, delta, CLOCK_SOURCE_COUNT);
+        return;
+    }
+    if (target == FIELD_SLOT) {
+        slotCursor_ = static_cast<uint8_t>(clampRange(
+            static_cast<int16_t>(static_cast<int16_t>(slotCursor_) + delta),
+            static_cast<int16_t>(FIRST_WRITABLE_TEMPLATE),
+            static_cast<int16_t>(SequencerEngine::PATTERN_COUNT - 1)
+        ));
         return;
     }
 
@@ -441,7 +470,12 @@ void UiController::adjustRatchet(int8_t delta) {
     if (!pattern->readStep(stepCursor_, active) || !active) {
         return;
     }
-    const int8_t channel = selectedChannel();
+    // Un ratchet doit tenir dans le pas : il faut une cadence, donc un canal.
+    // L onglet PATTERNS n en selectionne aucun, et c est le canal d audition qui
+    // la donne — le meme qui joue le template (ADR 0013).
+    const int8_t channel = currentTab_ == TAB_PATTERNS
+        ? static_cast<int8_t>(ModulatedPatternState::EDITOR_CHANNEL)
+        : selectedChannel();
     if (channel < 0) {
         return;
     }
@@ -494,6 +528,7 @@ void UiController::toggleStep() {
         return;
     }
     pattern->writeStep(stepCursor_, !active);
+    markTemplateEdited();
 }
 
 void UiController::clearPattern() {
@@ -503,6 +538,34 @@ void UiController::clearPattern() {
     }
     pattern->clear();
     engine_.refreshTiming();
+    markTemplateEdited();
+}
+
+// ADR 0013 : l editeur de templates ecrit son enregistrement en sortant, et
+// seulement s il a change. Le drapeau vit avec le tampon.
+void UiController::markTemplateEdited() {
+    if (currentTab_ != TAB_PATTERNS || level_ != LEVEL_EDIT) {
+        return;
+    }
+    ModulatedPatternState* modulated = engine_.modulatedPatterns();
+    if (modulated != nullptr) {
+        modulated->editorDirty = 1;
+    }
+}
+
+void UiController::adjustTemplateLength(int8_t delta) {
+    ModulatedPatternState* modulated = engine_.modulatedPatterns();
+    if (modulated == nullptr) {
+        return;
+    }
+    const uint8_t ch = ModulatedPatternState::EDITOR_CHANNEL;
+    const uint8_t next = static_cast<uint8_t>(clampRange(
+        static_cast<int16_t>(modulated->length[ch] + oneStep(delta)),
+        static_cast<int16_t>(SequencerEngine::MIN_LENGTH),
+        static_cast<int16_t>(SequencerEngine::MAX_LENGTH)));
+    modulated->length[ch] = next;
+    (void)engine_.setBaseLength(ch, next);
+    markTemplateEdited();
 }
 
 }  // namespace flexseq

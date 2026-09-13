@@ -8,6 +8,9 @@ import {
   rowCY,
   renderPatternScreen,
   SEP_FRAME_PAD,
+  SEP_LABEL_X,
+  LEN_LABEL_X,
+  TITLE_BASELINE_Y,
   SEP_VALUE_X,
   type PatternScreenPixelModel,
 } from "../src/sim/PatternScreenPixels.js";
@@ -171,5 +174,80 @@ describe("le cadre de SEP en edition, avec la vraie police", () => {
       expect(on(px, x, 0), `debordement vers le haut en x=${x}`).toBe(false);
       expect(on(px, x, 8), `debordement en bande 1 en x=${x}`).toBe(false);
     }
+  });
+});
+
+/**
+ * L encre que le PANNEAU recoit pour l EDITEUR DE TEMPLATES, relevee le
+ * 2026-09-13 par `PLATFORMIO_BUILD_FLAGS="-DFLEXSEQ_DEMO_TEMPLATE_EDITOR=1"
+ * ASCII=1 ./tools/run-screen-dump.sh`, remise en coordonnees logiques. Meme
+ * contenu que l image de reference, titre et en-tete changes.
+ */
+const TEMPLATE_PANEL_ROWS: ReadonlyArray<readonly [number, number]> = [
+  [2, 40], [3, 25], [4, 38], [5, 22], [6, 41], [10, 120], [14, 3], [15, 3],
+  [16, 12], [17, 5], [18, 41], [19, 47], [20, 46], [21, 47], [22, 41],
+  [23, 5], [24, 12], [25, 12], [26, 6], [27, 9], [28, 4], [29, 9], [31, 3],
+  [32, 3], [33, 3], [34, 3], [35, 25], [36, 29], [37, 33], [38, 31],
+  [39, 29], [40, 3], [41, 3], [42, 5], [43, 5], [44, 3], [45, 1], [46, 1],
+  [48, 3], [49, 3], [50, 3], [51, 3], [52, 3], [53, 3], [54, 15], [55, 3],
+  [56, 3], [57, 3], [58, 3], [59, 3], [60, 3]
+];
+
+const TEMPLATE_PANEL_INK = 819;
+
+describe("l en-tete de l editeur de templates — lot 16E etape 4d", () => {
+  // Le titre est retire : l en-tete ne porte alors que l etiquette et sa valeur,
+  // donc le premier pixel encre de la bande DIT ou l etiquette commence.
+  const headerModel = (templateEditor: boolean): PatternScreenPixelModel => ({
+    ...panelModel(-1),
+    title: null,
+    cursor: -1,
+    length: 16,
+    templateEditor,
+  });
+
+  const firstInkX = (model: PatternScreenPixelModel): number => {
+    const { pixels } = renderPatternScreen(model);
+    let min = 128;
+    for (const key of pixels) {
+      const parts = key.split(",");
+      const x = Number(parts[0]);
+      const y = Number(parts[1]);
+      if (y <= TITLE_BASELINE_Y && x < min) min = x;
+    }
+    return min;
+  };
+
+  it("place l etiquette LEN a sa propre position, plus a gauche que SEP", () => {
+    expect(firstInkX(headerModel(true))).toBe(LEN_LABEL_X);
+    expect(firstInkX(headerModel(false))).toBe(SEP_LABEL_X);
+    expect(LEN_LABEL_X).toBeLessThan(SEP_LABEL_X);
+  });
+
+  it("rend exactement ce que le panneau a recu, rangee par rangee", () => {
+    const model: PatternScreenPixelModel = {
+      // playhead 0 comme le releve de reference : la capture du panneau a lieu
+      // avec le playhead sur un pas ACTIF, ou son marqueur est absorbe.
+      ...panelModel(0),
+      title: "TEMPLATE B3",
+      templateEditor: true,
+    };
+    const rows = renderPatternScreen(model).rows;
+    const expected = new Map<number, number>(
+      TEMPLATE_PANEL_ROWS.map(([y, n]) => [y, n]),
+    );
+    const divergent: string[] = [];
+    for (let y = 0; y < 64; y += 1) {
+      const mine = rows[y] ?? 0;
+      const theirs = expected.get(y) ?? 0;
+      if (mine !== theirs) divergent.push(`y=${y} miroir=${mine} panneau=${theirs}`);
+    }
+    expect(divergent.join(" | ")).toBe("");
+    expect(renderPatternScreen(model).count).toBe(TEMPLATE_PANEL_INK);
+  });
+
+  it("ne rend pas la meme chose qu un en-tete de canal", () => {
+    expect(renderPatternScreen(headerModel(true)).count)
+      .not.toBe(renderPatternScreen(headerModel(false)).count);
   });
 });

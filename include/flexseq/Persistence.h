@@ -281,6 +281,14 @@ public:
 
     uint8_t templateByteAt(uint8_t channel, uint8_t index, uint8_t offset) const {
         (void)index;
+        // ADR 0013 : pendant l edition d un template, la source est le tampon.
+        // Le chemin SAVE d un canal (PRD 12.9) publie l INSTANCE, jamais un
+        // tampon : les deux ne doivent pas se confondre.
+        const ModulatedPatternState* modulated = engine_.modulatedPatterns();
+        if (modulated != nullptr && modulated->heldByEditor(channel)) {
+            return persist::v3::templateByte(modulated->pattern[channel],
+                                             modulated->length[channel], offset);
+        }
         const Pattern* instance = engine_.instanceForChannel(channel);
         if (instance == nullptr) {
             return 0;
@@ -502,6 +510,11 @@ template <typename Storage>
 int8_t serviceOneModulationTemplateLoad(Storage& storage, SequencerEngine& engine,
                                         ModulatedPatternState& state) {
     for (uint8_t channel = 0; channel < SequencerEngine::CHANNEL_COUNT; ++channel) {
+        // ADR 0013 : l editeur de templates tient ce tampon. Sans cette garde la
+        // boucle l effacerait au passage suivant, le canal n etant pas route.
+        if (state.heldByEditor(channel)) {
+            continue;
+        }
         if (!isEligibleForPatternModulation(engine, channel)) {
             state.loaded[channel] = ModulatedPatternState::NOT_MODULATED;
         }
@@ -512,7 +525,9 @@ int8_t serviceOneModulationTemplateLoad(Storage& storage, SequencerEngine& engin
     for (uint8_t step = 0; step < SequencerEngine::CHANNEL_COUNT; ++step) {
         const uint8_t channel = static_cast<uint8_t>(
             (state.cursor + step) % SequencerEngine::CHANNEL_COUNT);
-        if (!isEligibleForPatternModulation(engine, channel)) {
+        // ADR 0013 : un canal route ET en SEQ reste eligible pendant l edition.
+        // Sans cette garde le CV rechargerait son template sur le tampon edite.
+        if (state.heldByEditor(channel) || !isEligibleForPatternModulation(engine, channel)) {
             continue;
         }
         const uint8_t wanted = static_cast<uint8_t>(engine.patternCvIndex(channel));
@@ -529,6 +544,57 @@ int8_t serviceOneModulationTemplateLoad(Storage& storage, SequencerEngine& engin
         return static_cast<int8_t>(channel);
     }
     return -1;
+}
+
+inline bool isTemplateEditorOpen(const UiController& ui) {
+    return ui.level() == UiController::LEVEL_EDIT
+        && ui.currentTab() == UiController::TAB_PATTERNS;
+}
+
+// L editeur de templates, ADR 0013. Il vit ici et non dans main.cpp parce que
+// le domaine ne connait pas Storage (ADR 0002) et que main.cpp n est compile
+// par aucun test natif.
+template <typename Storage, typename Scheduler, typename Image>
+void serviceTemplateEditor(Storage& storage, SequencerEngine& engine,
+                           const UiController& ui, ModulatedPatternState& state,
+                           Scheduler& scheduler, const Image& image) {
+    constexpr uint8_t CH = ModulatedPatternState::EDITOR_CHANNEL;
+    const bool open = isTemplateEditorOpen(ui);
+
+    if (open && state.editorTemplate == ModulatedPatternState::NO_EDITOR) {
+        const uint8_t index = ui.slotCursor();
+        if (!loadTemplateIntoModulationBuffer(storage, state, CH, index)) {
+            return;
+        }
+        state.editorSavedMode = static_cast<uint8_t>(engine.getChannelMode(CH));
+        state.editorSavedLength = engine.getBaseLength(CH);
+        engine.setChannelMode(CH, MODE_SEQ);
+        engine.setBaseLength(CH, state.length[CH]);
+        state.editorTemplate = index;
+        state.loaded[CH] = index;
+        state.editorDirty = 0;
+        engine.refreshTiming(CH);   // ADR 0011
+        return;
+    }
+
+    if (!open && state.editorTemplate != ModulatedPatternState::NO_EDITOR) {
+        // L ecriture differee va rechercher chaque octet au moment ou elle
+        // l ecrit : le tampon reste tenu jusqu a son terme.
+        if (state.editorDirty != 0) {
+            if (scheduler.requestTemplateWrite(image, CH, state.editorTemplate)) {
+                state.editorDirty = 0;
+            }
+            return;
+        }
+        if (scheduler.isWritingTemplate()) {
+            return;
+        }
+        engine.setChannelMode(CH, static_cast<ChannelMode>(state.editorSavedMode));
+        engine.setBaseLength(CH, state.editorSavedLength);
+        state.editorTemplate = ModulatedPatternState::NO_EDITOR;
+        state.loaded[CH] = ModulatedPatternState::NOT_MODULATED;
+        engine.refreshTiming(CH);   // ADR 0011
+    }
 }
 
 template <typename Storage>

@@ -7,6 +7,7 @@
 #include <flexseq/Transport.h>
 #include <flexseq/CvDestination.h>
 #include <flexseq/UiController.h>
+#include <flexseq/Persistence.h>
 
 using flexseq::Pattern;
 using flexseq::SequencerEngine;
@@ -1172,6 +1173,52 @@ void test_the_mod_field_is_navigable_and_does_nothing_yet() {
         "ni la source 2");
 }
 
+/*
+ * PATTERNS tab — lot 16E step 4a
+ */
+
+void test_the_patterns_tab_holds_two_fields() {
+    Rig r;
+    r.gotoTab(UiController::TAB_PATTERNS);
+    r.enterTab();
+    TEST_ASSERT_EQUAL(UiController::LEVEL_TAB, r.ui.level());
+    TEST_ASSERT_EQUAL_UINT8(2, r.ui.fieldCount());
+    TEST_ASSERT_EQUAL(UiController::FIELD_SLOT, r.ui.fieldAt(0));
+    TEST_ASSERT_EQUAL(UiController::FIELD_EDIT_ENTRY, r.ui.fieldAt(1));
+}
+
+void test_the_slot_cursor_starts_on_the_first_writable_template() {
+    Rig r;
+    TEST_ASSERT_EQUAL_UINT8(8, r.ui.slotCursor());
+}
+
+void test_the_slot_cursor_never_reaches_a_factory_template() {
+    Rig r;
+    r.gotoTab(UiController::TAB_PATTERNS);
+    for (uint8_t i = 0; i < 20; ++i) {
+        r.ui.handle(UiController::EVENT_SHIFT_ROTATE, -1);
+    }
+    TEST_ASSERT_EQUAL_UINT8(8, r.ui.slotCursor());
+}
+
+void test_the_slot_cursor_stops_on_the_last_template() {
+    Rig r;
+    r.gotoTab(UiController::TAB_PATTERNS);
+    for (uint8_t i = 0; i < 20; ++i) {
+        r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+    }
+    TEST_ASSERT_EQUAL_UINT8(15, r.ui.slotCursor());
+}
+
+// Le controleur porte sa propre copie du compte d'emplacements figes, comme
+// TAB_COUNT vit en trois exemplaires independants. Ce test est le seul endroit
+// qui inclut les deux en-tetes, donc le seul qui puisse voir une divergence.
+void test_the_controller_and_the_format_agree_on_the_frozen_count() {
+    TEST_ASSERT_EQUAL_UINT8(flexseq::persist::v3::FROZEN_TEMPLATE_COUNT,
+                            UiController::FIRST_WRITABLE_TEMPLATE);
+    TEST_ASSERT_EQUAL_UINT8(8, UiController::FIRST_WRITABLE_TEMPLATE);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_a_clock_tab_holds_the_three_lines_of_the_original);
@@ -1259,6 +1306,11 @@ int main(int, char**) {
     RUN_TEST(test_shift_rotate_on_the_bar_moves_nothing_else);
     RUN_TEST(test_shift_rotate_on_the_settings_tab_changes_nothing);
     RUN_TEST(test_shift_play_is_reserved_and_does_not_toggle_the_transport);
+    RUN_TEST(test_the_patterns_tab_holds_two_fields);
+    RUN_TEST(test_the_slot_cursor_starts_on_the_first_writable_template);
+    RUN_TEST(test_the_slot_cursor_never_reaches_a_factory_template);
+    RUN_TEST(test_the_slot_cursor_stops_on_the_last_template);
+    RUN_TEST(test_the_controller_and_the_format_agree_on_the_frozen_count);
 
     return UNITY_END();
 }

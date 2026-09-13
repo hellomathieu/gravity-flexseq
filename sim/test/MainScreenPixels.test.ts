@@ -14,6 +14,8 @@ import {
   RULE_Y,
   TAB_CLOCK,
   TAB_PATTERNS,
+  ROW_A_BOX_Y,
+  ROW_B_BOX_Y,
   TAB_SETTINGS,
   TAB_WIDE_GLYPH_W,
   TAB_COUNT,
@@ -36,6 +38,8 @@ const PANEL_MODEL: MainScreenModel = {
   fieldOpen: false,
   fieldCount: 3,
   patternIndex: 9,
+  slotIndex: 8,
+  slotEmpty: false,
   length: 20,
   subdiv: -4,
   barLength: 3,
@@ -367,5 +371,69 @@ describe("la page CONFIG PATTERN, confrontee au PANNEAU", () => {
 
   it("le total des rangees attendues vaut bien l encre attendue", () => {
     expect(CONFIG_PANEL_ROWS.reduce((s, [, n]) => s + n, 0)).toBe(CONFIG_PANEL_INK);
+  });
+});
+
+/**
+ * L encre que le PANNEAU recoit pour l onglet PATTERNS, relevee le 2026-09-13 par
+ * `PLATFORMIO_BUILD_FLAGS="-DFLEXSEQ_DEMO_TAB_PATTERNS=1" ASCII=1 ENVNAME=mainscreen
+ * ./tools/run-screen-dump.sh`, remise en coordonnees logiques. Ces nombres sont LUS
+ * sur la memoire du panneau, jamais calcules ici.
+ */
+const PATTERNS_PANEL_ROWS: ReadonlyArray<readonly [number, number]> = [
+  [3, 6], [4, 3], [5, 5], [6, 3], [7, 6], [16, 24], [17, 10], [18, 20],
+  [19, 10], [20, 21], [22, 60], [23, 2], [24, 13], [25, 7], [26, 10],
+  [27, 7], [28, 11], [29, 60], [52, 120], [56, 12], [57, 12], [58, 29],
+  [59, 32], [60, 34], [61, 30], [62, 30], [63, 12]
+];
+
+const PATTERNS_PANEL_INK = 589;
+
+describe("l onglet PATTERNS — lot 16E etape 4b", () => {
+  const patternsTab = (slotEmpty: boolean): MainScreenModel => ({
+    ...PANEL_MODEL,
+    tab: TAB_PATTERNS,
+    insideTab: true,
+    cursor: 1,
+    fieldCount: 2,
+    slotIndex: 10,
+    slotEmpty,
+    // mainScreenModelOf rend MAIN_NONE sur cet onglet : son champ principal est
+    // l emplacement, que le gros chiffre ne sait pas dessiner.
+    mainParameter: MainParameter.None,
+  });
+
+  const inkInRows = (rows: number[], y0: number, y1: number): number => {
+    let n = 0;
+    for (let y = y0; y <= y1; y += 1) n += rows[y] ?? 0;
+    return n;
+  };
+
+  it("encre les deux rangees de champs, que rien ne remplissait", () => {
+    const rows = renderMainScreen(patternsTab(true)).rows;
+    expect(inkInRows(rows, ROW_A_BOX_Y, ROW_A_BOX_Y + 7)).toBeGreaterThan(0);
+    expect(inkInRows(rows, ROW_B_BOX_Y, ROW_B_BOX_Y + 7)).toBeGreaterThan(0);
+  });
+
+  it("rend exactement ce que le panneau a recu, rangee par rangee", () => {
+    const model = patternsTab(true);
+    const rows = renderMainScreen(model).rows;
+    const expected = new Map<number, number>(
+      PATTERNS_PANEL_ROWS.map(([y, n]) => [y, n]),
+    );
+    const divergent: string[] = [];
+    for (let y = 0; y < 64; y += 1) {
+      const mine = rows[y] ?? 0;
+      const theirs = expected.get(y) ?? 0;
+      if (mine !== theirs) divergent.push(`y=${y} miroir=${mine} panneau=${theirs}`);
+    }
+    expect(divergent.join(" | ")).toBe("");
+    expect(renderMainScreen(model).count).toBe(PATTERNS_PANEL_INK);
+  });
+
+  it("distingue un emplacement vide d un emplacement occupe", () => {
+    const free = renderMainScreen(patternsTab(true)).count;
+    const used = renderMainScreen(patternsTab(false)).count;
+    expect(free).not.toBe(used);
   });
 });

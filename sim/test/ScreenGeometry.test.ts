@@ -141,6 +141,10 @@ function production(family: Family, index: number): number | undefined {
     18: ps.HEADER_LINE_W, 19: ps.LAST_ROW_CY, 20: ps.GRID_BOTTOM_Y,
     22: ps.SEP_LABEL_X, 23: ps.SEP_VALUE_X, 24: ps.SEP_LABEL_W,
     27: ps.SEP_FRAME_PAD,
+    47: ps.LEN_LABEL_X,
+    48: ps.LEN_VALUE_X,
+    49: ps.LEN_LABEL_W,
+    50: ps.LEN_VALUE_W,
     25: ps.HEADER_TITLE_X, 26: ps.TITLE_W,
   };
   return table[index];

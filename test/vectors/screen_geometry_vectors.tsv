@@ -62,6 +62,10 @@ E	sep_label_x	22	both	SEP_LABEL_X	102
 E	sep_value_x	23	both	SEP_VALUE_X	120
 E	sep_label_width	24	both	SEP_LABEL_W	16
 E	sep_frame_pad	27	both	SEP_FRAME_PAD	2
+E	len_label_x	47	both	LEN_LABEL_X	94
+E	len_value_x	48	both	LEN_VALUE_X	112
+E	len_label_width	49	both	LEN_LABEL_W	16
+E	len_value_width	50	both	LEN_VALUE_W	10
 M	line_label_x	26	both	LINE_LABEL_X	62
 M	line_value_x	27	both	LINE_VALUE_X	99
 M	line_0_baseline_y	28	both	LINE_0_BASELINE_Y	8

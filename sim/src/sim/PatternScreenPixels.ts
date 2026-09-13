@@ -32,6 +32,13 @@ export const HEADER_LINE_Y = 10;
 export const HEADER_LINE_W = 120;
 export const HEADER_TITLE_X = HEADER_LINE_X;
 export const TITLE_W = 65;
+// L en-tete de l editeur de TEMPLATES porte la longueur et non la separation de
+// mesure. Elle a SA position : deux chiffres ne tiennent pas la ou un seul tient.
+export const LEN_LABEL_X = 94;
+export const LEN_VALUE_X = 112;
+export const LEN_LABEL_W = 16;
+export const LEN_VALUE_W = 2 * 5;
+
 export const SEP_LABEL_X = 102;
 export const SEP_VALUE_X = 120;
 export const SEP_FRAME_PAD = 2;
@@ -75,6 +82,7 @@ export interface PatternScreenPixelModel {
   barLength: number;
   sepSelected: boolean;
   sepOpen: boolean;
+  templateEditor?: boolean;
 }
 
 class Ink {
@@ -203,26 +211,33 @@ export function renderPatternScreen(model: PatternScreenPixelModel): Render {
   ink.drawHLine(HEADER_LINE_X, HEADER_LINE_Y, HEADER_LINE_W);
 
   {
-    const sep = model.barLength === 0 ? "-" : String(model.barLength);
+    const editor = model.templateEditor === true;
+    const value = editor
+      ? String(model.length)
+      : (model.barLength === 0 ? "-" : String(model.barLength));
+    const labelText = editor ? "LEN:" : "SEP:";
+    const labelX = editor ? LEN_LABEL_X : SEP_LABEL_X;
+    const labelW = editor ? LEN_LABEL_W : SEP_LABEL_W;
+    const valueX = editor ? LEN_VALUE_X : SEP_VALUE_X;
     const base = TITLE_BASELINE_Y;
     const h = 5;
     if (model.sepSelected && !model.sepOpen) {
-      ink.drawBox(SEP_LABEL_X - 1, base - h - 1, SEP_LABEL_W + 2, h + 2);
+      ink.drawBox(labelX - 1, base - h - 1, labelW + 2, h + 2);
       ink.setDrawColor(0);
-      ink.drawStr(SEP_LABEL_X, base, "SEP:");
+      ink.drawStr(labelX, base, labelText);
       ink.setDrawColor(1);
     } else {
-      ink.drawStr(SEP_LABEL_X, base, "SEP:");
+      ink.drawStr(labelX, base, labelText);
     }
     if (model.sepSelected && model.sepOpen) {
       ink.drawFrame(
-        SEP_VALUE_X - SEP_FRAME_PAD,
+        valueX - SEP_FRAME_PAD,
         base - h - 1,
-        textWidth(sep, VELVETSCREEN) + 2 * SEP_FRAME_PAD,
+        textWidth(value, VELVETSCREEN) + 2 * SEP_FRAME_PAD,
         h + 2,
       );
     }
-    ink.drawStr(SEP_VALUE_X, base, sep);
+    ink.drawStr(valueX, base, value);
   }
 
   if (model.barLength > 0) {

@@ -43,6 +43,7 @@ public:
         FIELD_OFFSET,
         FIELD_MOD,
         FIELD_CONFIG,
+        FIELD_SLOT,
     };
 
     static constexpr uint8_t TAB_COUNT = 9;
@@ -51,7 +52,10 @@ public:
     static constexpr uint8_t TAB_PATTERNS = 7;
     static constexpr uint8_t TAB_SETTINGS = 8;
 
+    static constexpr uint8_t FIRST_WRITABLE_TEMPLATE = 8;
+
     static constexpr uint8_t CLOCK_TAB_FIELDS = 2;
+    static constexpr uint8_t PATTERNS_TAB_FIELDS = 2;
     static constexpr uint8_t CHANNEL_TAB_FIELDS = 3;
     static constexpr uint8_t CONFIG_PAGE_FIELDS = 3;
 
@@ -62,6 +66,9 @@ public:
     static constexpr uint8_t CONFIG_FIELD_INDEX_LENGTH = 0;
     static constexpr uint8_t CONFIG_FIELD_INDEX_SUBDIV = 1;
     static constexpr uint8_t CONFIG_FIELD_INDEX_MOD = 2;
+
+    static constexpr uint8_t PATTERNS_FIELD_INDEX_SLOT = 0;
+    static constexpr uint8_t PATTERNS_FIELD_INDEX_EDIT_ENTRY = 1;
 
 
     static constexpr uint8_t CLOCK_SOURCE_COUNT = 6;
@@ -93,6 +100,7 @@ public:
     bool fieldOpen() const { return fieldOpen_; }
 
     uint8_t stepCursor() const { return stepCursor_; }
+    uint8_t slotCursor() const { return slotCursor_; }
     bool isOnHeader() const { return onHeader_; }
     bool isOnConfigPage() const { return onConfigPage_; }
 
@@ -118,6 +126,8 @@ private:
     void togglePlay();
     void toggleStep();
     void clearPattern();
+    void markTemplateEdited();
+    void adjustTemplateLength(int8_t delta);
 
     Pattern* currentPattern() const;
 
@@ -128,6 +138,7 @@ private:
     uint8_t currentTab_;
     uint8_t cursor_;
     uint8_t stepCursor_;
+    uint8_t slotCursor_;
     bool onHeader_;
     bool onConfigPage_;
     bool fieldOpen_;

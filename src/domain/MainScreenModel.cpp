@@ -17,6 +17,8 @@ MainScreenModel mainScreenModelOf(const UiController& ui, const SequencerEngine&
     model.fieldOpen = ui.fieldOpen();
     model.fieldCount = ui.fieldCount();
     model.patternIndex = onChannel ? engine.getSelectedPattern(ch) : -1;
+    model.slotIndex = ui.slotCursor();
+    model.slotEmpty = false;
     model.length = onChannel ? engine.getBaseLength(ch) : 0;
     model.subdiv = onChannel ? engine.getSubdiv(ch) : 0;
     model.barLength = onChannel

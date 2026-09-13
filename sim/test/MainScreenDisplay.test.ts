@@ -60,6 +60,8 @@ function channelTab(tab = 1): MainScreenModel {
     fieldOpen: false,
     fieldCount: CHANNEL_TAB_FIELDS,
     patternIndex: 0,
+    slotIndex: 8,
+    slotEmpty: false,
     length: 16,
     subdiv: 1,
     barLength: 4,
@@ -120,6 +122,11 @@ describe("MainScreenDisplay — labels, mirrored from the C++ renderer", () => {
     expect(headlineOf(channelTab(1))).toBe("A1");
     expect(headlineOf({ ...channelTab(0), tempo: 240 })).toBe("240");
     expect(headlineOf(channelTab(TAB_COUNT - 1))).toBe("");
+  });
+
+  it("nomme l emplacement parcouru sur l onglet PATTERNS", () => {
+    expect(headlineOf({ ...channelTab(7), slotIndex: 10 })).toBe("B3");
+    expect(headlineOf({ ...channelTab(7), slotIndex: 8 })).toBe("B1");
   });
 });
 

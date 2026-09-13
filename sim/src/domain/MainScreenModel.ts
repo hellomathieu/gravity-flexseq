@@ -22,6 +22,8 @@ export interface MainScreenModel {
   fieldCount: number;
 
   patternIndex: number;
+  slotIndex: number;
+  slotEmpty: boolean;
   length: number;
   subdiv: number;
   barLength: number;
@@ -65,6 +67,8 @@ export function mainScreenModelOf(ui: UiController, engine: SequencerEngine): Ma
     fieldOpen: ui.fieldOpen,
     fieldCount: ui.fieldCount,
     patternIndex: -1,
+    slotIndex: ui.slotCursor,
+    slotEmpty: false,
     length: 0,
     subdiv: 0,
     barLength: 0,

@@ -357,6 +357,25 @@ export function renderMainScreen(model: MainScreenModel): Render {
     );
   } else if (legacy) {
     drawLegacyChannel(ink, model);
+  } else if (model.tab === TAB_PATTERNS) {
+    drawLabelledField(
+      ink,
+      COL_LEFT_X,
+      ROW_A_BOX_Y,
+      "SLOT",
+      model.slotEmpty ? "FREE" : "USED",
+      false,
+      false,
+    );
+    drawLabelledField(
+      ink,
+      COL_LEFT_X,
+      ROW_B_BOX_Y,
+      "EDIT",
+      null,
+      model.insideTab && model.cursor === 1,
+      false,
+    );
   }
 
   ink.drawHLine(RULE_X, RULE_Y, RULE_W);

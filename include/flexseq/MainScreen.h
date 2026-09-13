@@ -214,7 +214,9 @@ inline const char* sourceLabel(uint8_t source) {
 inline void headlineOf(const MainScreenModel& model, char* out) {
     if (model.tab == mainscreen::TAB_CLOCK) {
         writeUnsigned(out, model.tempo);
-    } else if (model.tab >= mainscreen::TAB_PATTERNS) {
+    } else if (model.tab == mainscreen::TAB_PATTERNS) {
+        patternName(static_cast<int8_t>(model.slotIndex), out);
+    } else if (model.tab == mainscreen::TAB_SETTINGS) {
         out[0] = '\0';
     } else {
         patternName(model.patternIndex, out);
@@ -265,6 +267,9 @@ FLEXSEQ_LABEL(LBL_MODE, "MODE:");
 FLEXSEQ_LABEL(LBL_OFFSET, "OFFSET:");
 FLEXSEQ_LABEL(LBL_SUBDIV_FIELD, "SUBDIV:");
 FLEXSEQ_LABEL(LBL_MOD, "MOD:");
+FLEXSEQ_LABEL(LBL_SLOT, "SLOT");
+FLEXSEQ_LABEL(LBL_FREE, "FREE");
+FLEXSEQ_LABEL(LBL_USED, "USED");
 FLEXSEQ_LABEL(LBL_EDIT, "EDIT");
 FLEXSEQ_LABEL(LBL_CONFIG, "CONFIG");
 FLEXSEQ_LABEL(LBL_OFF, "OFF");
@@ -395,6 +400,11 @@ static_assert(sizeof(LBL_SKIP_CHANCE) <= LABEL_SCRATCH,
               "le tampon d'etiquette doit contenir la plus longue");
 static_assert(sizeof(LBL_OFFSET) <= LABEL_SCRATCH, "idem");
 static_assert(sizeof(LBL_SUBDIV_FIELD) <= LABEL_SCRATCH, "idem");
+static_assert(sizeof(LBL_SLOT) <= LABEL_SCRATCH, "idem");
+static_assert(sizeof(LBL_EDIT) <= LABEL_SCRATCH, "idem");
+static_assert(sizeof(LBL_FREE) <= VALUE_SCRATCH,
+              "l etat d un emplacement tient dans le tampon de valeur");
+static_assert(sizeof(LBL_USED) <= VALUE_SCRATCH, "idem");
 static_assert(sizeof(LBL_CLOCK) <= VALUE_SCRATCH,
               "le tampon de valeur doit contenir le nom d'un mode");
 static_assert(3 + 1 + 5 + 1 <= VALUE_SCRATCH,
@@ -538,6 +548,19 @@ void drawMainScreen(Canvas& canvas, const MainScreenModel& model,
                                   model.insideTab && model.cursor == 1 && model.fieldOpen);
     } else if (legacy) {
         detail::drawLegacyChannel(canvas, band, model);
+    } else if (model.tab == ms::TAB_PATTERNS) {
+        char slotLabel[14];
+        char slotValue[10];
+        detail::drawLabelledField(
+            canvas, band, ms::COL_LEFT_X, ms::ROW_A_BOX_Y,
+            detail::label(detail::LBL_SLOT, slotLabel),
+            detail::label(model.slotEmpty ? detail::LBL_FREE : detail::LBL_USED,
+                          slotValue),
+            false, false);
+        detail::drawLabelledField(
+            canvas, band, ms::COL_LEFT_X, ms::ROW_B_BOX_Y,
+            detail::label(detail::LBL_EDIT, slotLabel), nullptr,
+            model.insideTab && model.cursor == 1, false);
     }
 
     if (touches(band, ms::RULE_Y, ms::RULE_Y)) {
