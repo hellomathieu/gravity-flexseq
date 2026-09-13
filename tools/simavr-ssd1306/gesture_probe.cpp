@@ -2544,5 +2544,62 @@ int main(int argc, char **argv)
     printf("shift_plafond      %d %d %d\n",
            SHIFT_BURST_DETENTS, SHIFT_HOLD_MS(SHIFT_BURST_DETENTS), SHIFT_LONG_PRESS_MS);
 
+    /* ---- PAT : l onglet PATTERNS et son editeur — lot 16E etape 4 ----
+     *
+     * Cette course est la DERNIERE, et ce n est pas un rangement : elle ECRIT
+     * dans la zone des templates, que tous les criteres precedents exigent
+     * intacte. La placer avant les rougirait tous.
+     *
+     * Les adresses viennent du DOMAINE, jamais d une copie locale : c est la
+     * ligne 68 de docs/open-risks.md, et la faute s y est produite quatre fois.
+     */
+    {
+        namespace v3 = flexseq::persist::v3;
+        constexpr uint8_t SLOT = flexseq::UiController::FIRST_WRITABLE_TEMPLATE;
+
+        /* ⚠️ On ne lit PAS g_image_bytes : il vaut zero sans image prechargee,
+         * et la course nominale n en a pas. La taille vient du format. */
+        constexpr uint32_t ZONE = (uint32_t)v3::TOTAL_SIZE;
+        static uint8_t templatesAvant[ZONE];
+        static uint8_t templatesApres[ZONE];
+        const int luAvant = readSimulatedEeprom(avr, templatesAvant, ZONE);
+
+        backToBar(avr);
+        alignTab(avr, (int)flexseq::UiController::TAB_PATTERNS);
+        pressFor(avr, (double)PRESS_MS);            /* entre dans l onglet */
+        rotate(avr, (int)flexseq::UiController::PATTERNS_FIELD_INDEX_EDIT_ENTRY, 1);
+
+        const uint32_t twiAvant = g_twi_bytes;
+        pressFor(avr, (double)PRESS_MS);            /* ouvre l editeur */
+        run_for(avr, FRAME_SETTLE_MS);              /* le service charge le tampon */
+        printf("pat_ouverture_twi  %u\n", g_twi_bytes - twiAvant);
+
+        pressFor(avr, (double)PRESS_MS);            /* allume le step 0 */
+        pressFor(avr, (double)LONG_PRESS_MS);       /* sort : l ecriture part */
+        /* 24 octets a un par passage, environ 3,4 ms chacun sur la puce. */
+        run_for(avr, 2000.0);
+
+        const int luApres = readSimulatedEeprom(avr, templatesApres, ZONE);
+        printf("pat_lecture        avant %d apres %d\n", luAvant, luApres);
+
+        if (luAvant && luApres) {
+            const uint32_t pasAt =
+                (uint32_t)v3::templateAddress(SLOT, v3::RECORD_STEPS_AT)
+                - (uint32_t)g_image_base;
+            const uint32_t lenAt =
+                (uint32_t)v3::templateAddress(SLOT, v3::RECORD_LENGTH_AT)
+                - (uint32_t)g_image_base;
+            uint32_t changes = 0;
+            for (uint32_t at = (uint32_t)v3::TEMPLATES_OFFSET;
+                 at < (uint32_t)(v3::TEMPLATES_OFFSET + v3::TEMPLATES_SIZE); ++at) {
+                if (templatesApres[at] != templatesAvant[at]) ++changes;
+            }
+            printf("pat_octet_pas      %02x\n", templatesApres[pasAt]);
+            printf("pat_longueur       %u\n", (unsigned)templatesApres[lenAt]);
+            printf("pat_octets_changes %u\n", (unsigned)changes);
+            printf("pat_emplacement    %u\n", (unsigned)SLOT);
+        }
+    }
+
     return 0;
 }
