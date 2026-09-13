@@ -223,6 +223,7 @@ bool production(char family, int index, int& out) {
             case 21: out = screen::GLYPH_ASCENT; return true;
             case 22: out = screen::SEP_LABEL_X; return true;
             case 23: out = screen::SEP_VALUE_X; return true;
+            case 27: out = screen::SEP_FRAME_PAD; return true;
             case 24: out = screen::SEP_LABEL_W; return true;
             case 25: out = screen::HEADER_TITLE_X; return true;
             case 26: out = screen::TITLE_W; return true;

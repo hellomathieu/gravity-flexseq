@@ -71,13 +71,16 @@ constexpr uint8_t TITLE_W = 65;
 constexpr uint8_t SEP_LABEL_X = 102;
 constexpr uint8_t SEP_VALUE_X = 120;
 constexpr uint8_t SEP_LABEL_W = 16;
+constexpr uint8_t SEP_FRAME_PAD = 2;
 
 static_assert(HEADER_TITLE_X + TITLE_W < SEP_LABEL_X,
               "le titre ferre a gauche doit degager l etiquette SEP");
 static_assert(SEP_LABEL_X + SEP_LABEL_W < SEP_VALUE_X,
               "l etiquette vient avant la valeur, sans la toucher");
-static_assert(SEP_VALUE_X + 6 <= WIDTH,
+static_assert(SEP_VALUE_X + FONT_VELVETSCREEN_MAX_WIDTH + SEP_FRAME_PAD <= WIDTH,
               "le cadre de la valeur ouverte tient dans l ecran");
+static_assert(SEP_LABEL_X + SEP_LABEL_W <= SEP_VALUE_X - SEP_FRAME_PAD,
+              "le cadre de la valeur ouverte degage l etiquette");
 static_assert(TITLE_BASELINE_Y + 1 <= 8,
               "le titre ET le champ SEP tiennent dans la bande 0 : leur pave fait"
               " hauteur + 2 depuis base - hauteur - 1, donc il ne deborde pas");
@@ -283,10 +286,11 @@ void drawPatternScreen(Canvas& canvas, const PatternScreenModel& model,
             canvas.drawStr(screen::SEP_LABEL_X, base, "SEP:");
         }
         if (model.sepSelected && model.sepOpen) {
-            canvas.drawFrame(static_cast<uint8_t>(screen::SEP_VALUE_X - 1),
-                             static_cast<uint8_t>(base - h - 1),
-                             static_cast<uint8_t>(canvas.getStrWidth(sep) + 2),
-                             static_cast<uint8_t>(h + 2));
+            canvas.drawFrame(
+                static_cast<uint8_t>(screen::SEP_VALUE_X - screen::SEP_FRAME_PAD),
+                static_cast<uint8_t>(base - h - 1),
+                static_cast<uint8_t>(canvas.getStrWidth(sep) + 2 * screen::SEP_FRAME_PAD),
+                static_cast<uint8_t>(h + 2));
         }
         canvas.drawStr(screen::SEP_VALUE_X, base, sep);
     }

@@ -554,8 +554,38 @@ void test_a_band_draws_only_the_row_it_contains(void) {
     }
 }
 
+void test_the_open_sep_frame_clears_the_value_on_both_sides() {
+    TEST_ASSERT_EQUAL_UINT8(2, screen::SEP_FRAME_PAD);
+    canvas.reset();
+    PatternScreenModel m = model(24, -1, -1, 3);
+    m.sepSelected = true;
+    m.sepOpen = true;
+    drawPatternScreen(canvas, m);
+
+    TEST_ASSERT_TRUE_MESSAGE(canvas.at(118, 1), "colonne gauche du cadre");
+    TEST_ASSERT_TRUE_MESSAGE(canvas.at(118, 7), "le cadre ferme en bas a gauche");
+    TEST_ASSERT_FALSE_MESSAGE(canvas.at(117, 4), "le cadre ne deborde pas a gauche");
+    for (uint8_t y = 2; y <= 6; ++y) {
+        TEST_ASSERT_FALSE_MESSAGE(canvas.at(119, y), "colonne de degagement gauche");
+    }
+}
+
+void test_the_sep_frame_stays_inside_band_zero() {
+    canvas.reset();
+    PatternScreenModel m = model(24, -1, -1, 3);
+    m.sepSelected = true;
+    m.sepOpen = true;
+    drawPatternScreen(canvas, m);
+    for (uint8_t x = 118; x < screen::WIDTH; ++x) {
+        TEST_ASSERT_FALSE_MESSAGE(canvas.at(x, 8), "le cadre deborde dans la bande 1");
+        TEST_ASSERT_FALSE_MESSAGE(canvas.at(x, 0), "le cadre deborde vers le haut");
+    }
+}
+
 int main() {
     UNITY_BEGIN();
+    RUN_TEST(test_the_open_sep_frame_clears_the_value_on_both_sides);
+    RUN_TEST(test_the_sep_frame_stays_inside_band_zero);
     RUN_TEST(test_the_column_grid_is_centred_and_regular);
     RUN_TEST(test_the_grid_holds_three_rows_of_twelve);
     RUN_TEST(test_the_three_row_centres_are_20_37_and_54);

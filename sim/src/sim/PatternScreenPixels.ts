@@ -34,6 +34,7 @@ export const HEADER_TITLE_X = HEADER_LINE_X;
 export const TITLE_W = 65;
 export const SEP_LABEL_X = 102;
 export const SEP_VALUE_X = 120;
+export const SEP_FRAME_PAD = 2;
 export const SEP_LABEL_W = 16;
 export const LAST_ROW_CY = ROW_CY_0 + (GRID_ROWS - 1) * ROW_SPACING;
 export const GRID_BOTTOM_Y = LAST_ROW_CY + DIGIT_DY + DIGIT_H - 1;
@@ -214,7 +215,12 @@ export function renderPatternScreen(model: PatternScreenPixelModel): Render {
       ink.drawStr(SEP_LABEL_X, base, "SEP:");
     }
     if (model.sepSelected && model.sepOpen) {
-      ink.drawFrame(SEP_VALUE_X - 1, base - h - 1, textWidth(sep, VELVETSCREEN) + 2, h + 2);
+      ink.drawFrame(
+        SEP_VALUE_X - SEP_FRAME_PAD,
+        base - h - 1,
+        textWidth(sep, VELVETSCREEN) + 2 * SEP_FRAME_PAD,
+        h + 2,
+      );
     }
     ink.drawStr(SEP_VALUE_X, base, sep);
   }

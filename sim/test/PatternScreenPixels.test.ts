@@ -7,6 +7,8 @@ import {
   colX,
   rowCY,
   renderPatternScreen,
+  SEP_FRAME_PAD,
+  SEP_VALUE_X,
   type PatternScreenPixelModel,
 } from "../src/sim/PatternScreenPixels.js";
 import {
@@ -124,5 +126,50 @@ describe("la grille des 36 steps", () => {
 
   it("le filet de l en-tete est complet", () => {
     expect(renderPatternScreen(panelModel(-1)).rows[HEADER_LINE_Y]).toBe(HEADER_LINE_W);
+  });
+});
+
+describe("le cadre de SEP en edition, avec la vraie police", () => {
+  const on = (px: Set<string>, x: number, y: number) => px.has(`${x},${y}`);
+
+  function opened(barLength: number): Set<string> {
+    return renderPatternScreen({
+      ...panelModel(),
+      barLength,
+      sepSelected: true,
+      sepOpen: true,
+    }).pixels;
+  }
+
+  it("degage la valeur d un pixel de chaque cote", () => {
+    expect(SEP_FRAME_PAD).toBe(2);
+    expect(SEP_VALUE_X).toBe(120);
+    const px = opened(3);
+    expect(on(px, 118, 1), "colonne gauche du cadre").toBe(true);
+    expect(on(px, 125, 1), "colonne droite du cadre").toBe(true);
+    expect(on(px, 118, 7), "le cadre ferme en bas a gauche").toBe(true);
+    expect(on(px, 125, 7), "le cadre ferme en bas a droite").toBe(true);
+    for (let y = 2; y <= 6; ++y) {
+      expect(on(px, 119, y), `degagement gauche en y=${y}`).toBe(false);
+      expect(on(px, 124, y), `degagement droite en y=${y}`).toBe(false);
+    }
+  });
+
+  it("degage les trois valeurs que SEP peut prendre", () => {
+    for (const bar of [2, 3, 4, 6]) {
+      const px = opened(bar);
+      for (let y = 2; y <= 6; ++y) {
+        expect(on(px, 119, y), `SEP ${bar}, degagement gauche en y=${y}`).toBe(false);
+        expect(on(px, 124, y), `SEP ${bar}, degagement droite en y=${y}`).toBe(false);
+      }
+    }
+  });
+
+  it("ne sort ni de la bande 0 ni de l ecran", () => {
+    const px = opened(3);
+    for (let x = 118; x < 128; ++x) {
+      expect(on(px, x, 0), `debordement vers le haut en x=${x}`).toBe(false);
+      expect(on(px, x, 8), `debordement en bande 1 en x=${x}`).toBe(false);
+    }
   });
 });
