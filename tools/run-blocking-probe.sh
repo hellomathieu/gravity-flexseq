@@ -76,6 +76,8 @@
 set -u
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+. "$ROOT/tools/no-stale-simavr.sh"
+refuse_stale_simavr
 PASS_BUDGET_MS="${PASS_BUDGET_MS:-12}"
 GESTURE_PASS_BUDGET_MS="${GESTURE_PASS_BUDGET_MS:-16}"
 REDRAW="${REDRAW:-continuous}"

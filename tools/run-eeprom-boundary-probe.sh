@@ -30,6 +30,8 @@
 set -u
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+. "$ROOT/tools/no-stale-simavr.sh"
+refuse_stale_simavr
 DURATION="${DURATION:-10}"
 
 if [ -t 1 ]; then

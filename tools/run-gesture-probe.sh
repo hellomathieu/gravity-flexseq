@@ -5,6 +5,8 @@ set -u
 unset -f grep awk sed 2>/dev/null || true
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+. "$ROOT/tools/no-stale-simavr.sh"
+refuse_stale_simavr
 BOOT_MS="${BOOT_MS:-1200}"
 
 if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then

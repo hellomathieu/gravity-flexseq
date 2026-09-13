@@ -59,6 +59,8 @@
 set -u
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+. "$ROOT/tools/no-stale-simavr.sh"
+refuse_stale_simavr
 RAM_RESERVE="${RAM_RESERVE:-384}"
 DURATION="${DURATION:-8}"
 

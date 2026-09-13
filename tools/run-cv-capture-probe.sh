@@ -37,6 +37,8 @@
 set -u
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+. "$ROOT/tools/no-stale-simavr.sh"
+refuse_stale_simavr
 CV_PULSE_US="${CV_PULSE_US:-1000}"
 PERIOD_US="${PERIOD_US:-400000}"
 DURATION="${DURATION:-12}"

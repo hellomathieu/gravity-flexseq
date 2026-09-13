@@ -38,6 +38,8 @@
 set -u
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+. "$ROOT/tools/no-stale-simavr.sh"
+refuse_stale_simavr
 ENVNAME="${ENVNAME:-wokwi}"
 DURATION="${DURATION:-3}"
 # La LENGTH du contenu AFFICHE conditionne le controle : au-dela, un step n'est

@@ -75,6 +75,8 @@
 set -u
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+. "$ROOT/tools/no-stale-simavr.sh"
+refuse_stale_simavr
 DURATION="${DURATION:-20}"
 JITTER_BUDGET_PCT="${JITTER_BUDGET_PCT:-2}"
 # TEMPO change le tempo par defaut du firmware ET l'attente du harnais, de sorte

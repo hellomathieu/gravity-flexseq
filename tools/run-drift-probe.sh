@@ -5,6 +5,8 @@ set -u
 unset -f grep awk sed 2>/dev/null || true
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+. "$ROOT/tools/no-stale-simavr.sh"
+refuse_stale_simavr
 DURATION="${DURATION:-60}"
 TEMPO="${TEMPO:-120}"
 STEPS="${STEPS:-0,3,4,9,15}"
