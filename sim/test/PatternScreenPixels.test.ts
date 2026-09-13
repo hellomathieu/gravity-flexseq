@@ -132,7 +132,7 @@ describe("la grille des 36 steps", () => {
   });
 });
 
-describe("le cadre de SEP en edition, avec la vraie police", () => {
+describe("la valeur de SEP en edition, avec la vraie police", () => {
   const on = (px: Set<string>, x: number, y: number) => px.has(`${x},${y}`);
 
   function opened(barLength: number): Set<string> {
@@ -144,26 +144,28 @@ describe("le cadre de SEP en edition, avec la vraie police", () => {
     }).pixels;
   }
 
-  it("degage la valeur d un pixel de chaque cote", () => {
+  // La valeur ouverte est un PAVE PLEIN, et non un cadre : le cadre laissait
+  // 2 pixels autour d un chiffre de 5, et le proprietaire l a lu illisible.
+  it("remplit le pave sur toute sa hauteur", () => {
     expect(SEP_FRAME_PAD).toBe(2);
     expect(SEP_VALUE_X).toBe(120);
     const px = opened(3);
-    expect(on(px, 118, 1), "colonne gauche du cadre").toBe(true);
-    expect(on(px, 125, 1), "colonne droite du cadre").toBe(true);
-    expect(on(px, 118, 7), "le cadre ferme en bas a gauche").toBe(true);
-    expect(on(px, 125, 7), "le cadre ferme en bas a droite").toBe(true);
+    expect(on(px, 118, 1), "bord gauche du pave").toBe(true);
+    expect(on(px, 125, 1), "bord droit du pave").toBe(true);
+    expect(on(px, 118, 7), "le pave descend jusqu en bas a gauche").toBe(true);
+    expect(on(px, 125, 7), "le pave descend jusqu en bas a droite").toBe(true);
     for (let y = 2; y <= 6; ++y) {
-      expect(on(px, 119, y), `degagement gauche en y=${y}`).toBe(false);
-      expect(on(px, 124, y), `degagement droite en y=${y}`).toBe(false);
+      expect(on(px, 119, y), `pave plein a gauche en y=${y}`).toBe(true);
+      expect(on(px, 124, y), `pave plein a droite en y=${y}`).toBe(true);
     }
   });
 
-  it("degage les trois valeurs que SEP peut prendre", () => {
+  it("remplit le pave pour les quatre valeurs que SEP peut prendre", () => {
     for (const bar of [2, 3, 4, 6]) {
       const px = opened(bar);
       for (let y = 2; y <= 6; ++y) {
-        expect(on(px, 119, y), `SEP ${bar}, degagement gauche en y=${y}`).toBe(false);
-        expect(on(px, 124, y), `SEP ${bar}, degagement droite en y=${y}`).toBe(false);
+        expect(on(px, 119, y), `SEP ${bar}, pave plein a gauche en y=${y}`).toBe(true);
+        expect(on(px, 124, y), `SEP ${bar}, pave plein a droite en y=${y}`).toBe(true);
       }
     }
   });

@@ -230,14 +230,18 @@ export function renderPatternScreen(model: PatternScreenPixelModel): Render {
       ink.drawStr(labelX, base, labelText);
     }
     if (model.sepSelected && model.sepOpen) {
-      ink.drawFrame(
+      ink.drawBox(
         valueX - SEP_FRAME_PAD,
         base - h - 1,
         textWidth(value, VELVETSCREEN) + 2 * SEP_FRAME_PAD,
         h + 2,
       );
+      ink.setDrawColor(0);
+      ink.drawStr(valueX, base, value);
+      ink.setDrawColor(1);
+    } else {
+      ink.drawStr(valueX, base, value);
     }
-    ink.drawStr(valueX, base, value);
   }
 
   if (model.barLength > 0) {

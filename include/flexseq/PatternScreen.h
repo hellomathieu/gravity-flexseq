@@ -334,14 +334,21 @@ void drawPatternScreen(Canvas& canvas, const PatternScreenModel& model,
         } else {
             canvas.drawStr(labelX, base, labelText);
         }
+        // La valeur ouverte s affiche en INVERSE. Un cadre fin laissait 2 pixels
+        // autour d un chiffre de 5, dans une bande qui en fait 8 : illisible sur
+        // le module, lu par le proprietaire sur SEP puis sur LEN.
         if (model.sepSelected && model.sepOpen) {
-            canvas.drawFrame(
+            canvas.drawBox(
                 static_cast<uint8_t>(valueX - screen::SEP_FRAME_PAD),
                 static_cast<uint8_t>(base - h - 1),
                 static_cast<uint8_t>(canvas.getStrWidth(value) + 2 * screen::SEP_FRAME_PAD),
                 static_cast<uint8_t>(h + 2));
+            canvas.setDrawColor(0);
+            canvas.drawStr(valueX, base, value);
+            canvas.setDrawColor(1);
+        } else {
+            canvas.drawStr(valueX, base, value);
         }
-        canvas.drawStr(valueX, base, value);
     }
 
     // Separations de mesure : verticale dans la gouttiere, jamais en bord de ligne.
