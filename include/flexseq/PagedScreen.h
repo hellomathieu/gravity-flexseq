@@ -58,7 +58,7 @@ public:
 
     PagedScreen()
         : busy_(false), row_(0), tiles_(1), full_(true), sinceFull_(FULL_REFRESH_EVERY),
-          titleHash_(0), drawnTitleHash_(0), titleEverDrawn_(false),
+          headerHash_(0), drawnHeaderHash_(0), headerEverDrawn_(false),
           mode_(MODE_PATTERN) {}
 
     // Vrai tant qu'une image reste a terminer.
@@ -94,7 +94,7 @@ public:
         if (model_.title != nullptr && model_.titleWidth == 0) {
             model_.titleWidth = static_cast<uint8_t>(display.getStrWidth(model_.title));
         }
-        titleHash_ = hashOf(model_.title);
+        headerHash_ = headerHashOf(model_);
         startFrame(display, switched);
     }
 
@@ -149,17 +149,14 @@ private:
             return;
         }
         drawPatternScreen(display, model_, band);
-        if (titleBand(band)) {
-            drawnTitleHash_ = titleHash_;
-            titleEverDrawn_ = true;
+        if (headerBand(band)) {
+            drawnHeaderHash_ = headerHash_;
+            headerEverDrawn_ = true;
         }
         display.sendBuffer();
     }
 
-    // Une bande entierement au-dessus du filet d'en-tete ne peut contenir que le
-    // titre : tout le reste — filet, barres, steps, chiffres, curseur — est en
-    // dessous. Condition GEOMETRIQUE, donc solidaire de la mise en page.
-    static bool titleBand(const Band& band) {
+    static bool headerBand(const Band& band) {
         return band.y1 < screen::HEADER_LINE_Y;
     }
 
@@ -168,11 +165,11 @@ private:
             return false;
         }
         const Band band = bandOf(row);
-        if (!titleBand(band)) {
+        if (!headerBand(band)) {
             return false;
         }
-        return model_.title != nullptr && titleEverDrawn_
-            && titleHash_ == drawnTitleHash_;
+        return model_.title != nullptr && headerEverDrawn_
+            && headerHash_ == drawnHeaderHash_;
     }
 
     // La bande que l'affichage s'apprete a transferer, RAMENEE EN COORDONNEES
@@ -196,6 +193,14 @@ private:
     // Empreinte du titre. Somme multiplicative et non simple addition : « A2 » et
     // « B1 » ont la meme somme de caracteres, et ce sont precisement deux titres
     // voisins.
+    static uint16_t headerHashOf(const PatternScreenModel& model) {
+        uint16_t h = hashOf(model.title);
+        h = static_cast<uint16_t>(h * 31u + model.barLength);
+        h = static_cast<uint16_t>(h * 31u + (model.sepSelected ? 1u : 0u));
+        h = static_cast<uint16_t>(h * 31u + (model.sepOpen ? 1u : 0u));
+        return h;
+    }
+
     static uint16_t hashOf(const char* s) {
         uint16_t h = 1;
         if (s != nullptr) {
@@ -213,9 +218,9 @@ private:
     uint8_t tiles_;
     bool full_;
     uint8_t sinceFull_;
-    uint16_t titleHash_;
-    uint16_t drawnTitleHash_;
-    bool titleEverDrawn_;
+    uint16_t headerHash_;
+    uint16_t drawnHeaderHash_;
+    bool headerEverDrawn_;
     MainScreenModel main_;
     Mode mode_;
 };

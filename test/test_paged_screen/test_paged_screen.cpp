@@ -338,6 +338,66 @@ void test_only_the_title_band_is_ever_skipped(void) {
         "seule la bande du titre doit etre sautee");
 }
 
+// La bande de l'en-tete ne porte PAS que le titre : depuis le lot 12 elle porte
+// aussi l'etiquette SEP, sa valeur, son surlignage et son cadre d'edition. Le
+// saut doit donc suivre tout ce que la bande dessine, et non le seul titre.
+void test_a_changed_bar_length_redraws_the_header_band(void) {
+    reset();
+    PatternScreenModel m = modelOf(source);
+
+    paged.begin(display, m);
+    finishFrame();
+
+    memset(display.sent, 0, sizeof(display.sent));
+    m.barLength = 3;
+    paged.begin(display, m);
+    finishFrame();
+
+    TEST_ASSERT_TRUE_MESSAGE(display.sent[FakeDisplay::PAGES - 1],
+        "la valeur de SEP a change et sa bande n a pas ete refaite");
+}
+
+void test_the_cursor_arriving_on_sep_redraws_the_header_band(void) {
+    reset();
+    PatternScreenModel m = modelOf(source);
+    m.sepSelected = false;
+
+    paged.begin(display, m);
+    finishFrame();
+
+    memset(display.sent, 0, sizeof(display.sent));
+    m.sepSelected = true;
+    paged.begin(display, m);
+    finishFrame();
+
+    TEST_ASSERT_TRUE_MESSAGE(display.sent[FakeDisplay::PAGES - 1],
+        "le curseur est monte sur SEP et son surlignage n a pas ete dessine");
+}
+
+void test_opening_and_closing_sep_redraws_the_header_band(void) {
+    reset();
+    PatternScreenModel m = modelOf(source);
+    m.sepSelected = true;
+    m.sepOpen = false;
+
+    paged.begin(display, m);
+    finishFrame();
+
+    memset(display.sent, 0, sizeof(display.sent));
+    m.sepOpen = true;
+    paged.begin(display, m);
+    finishFrame();
+    TEST_ASSERT_TRUE_MESSAGE(display.sent[FakeDisplay::PAGES - 1],
+        "SEP est ouvert et son cadre n a pas ete dessine");
+
+    memset(display.sent, 0, sizeof(display.sent));
+    m.sepOpen = false;
+    paged.begin(display, m);
+    finishFrame();
+    TEST_ASSERT_TRUE_MESSAGE(display.sent[FakeDisplay::PAGES - 1],
+        "SEP est referme et son cadre n a pas ete efface");
+}
+
 // Titre change : sa bande revient.
 void test_a_changed_title_redraws_its_band(void) {
     reset();
@@ -580,6 +640,9 @@ int main(int, char**) {
     RUN_TEST(test_a_whole_frame_leaves_ink);
     RUN_TEST(test_an_unchanged_title_skips_its_band);
     RUN_TEST(test_a_changed_title_redraws_its_band);
+    RUN_TEST(test_a_changed_bar_length_redraws_the_header_band);
+    RUN_TEST(test_the_cursor_arriving_on_sep_redraws_the_header_band);
+    RUN_TEST(test_opening_and_closing_sep_redraws_the_header_band);
     RUN_TEST(test_only_the_title_band_is_ever_skipped);
     RUN_TEST(test_two_titles_with_the_same_character_sum_are_distinguished);
     RUN_TEST(test_the_safety_net_forces_a_full_frame_periodically);
