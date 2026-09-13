@@ -869,10 +869,11 @@ void test_the_patterns_tab_draws_the_slot_its_state_and_the_editor_entry() {
     m.slotEmpty = true;
     drawMainScreen(canvas, m);
     TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("B3"), "le nom de l emplacement");
-    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("SLOT"), "l etiquette de l etat");
     TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("FREE"), "un emplacement vide");
     TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("EDIT"), "l entree dans l editeur");
     TEST_ASSERT_NULL_MESSAGE(canvas.find("USED"), "et pas les deux a la fois");
+    // L etiquette SLOT repetait le nom que la grande valeur porte deja.
+    TEST_ASSERT_NULL_MESSAGE(canvas.find("SLOT"), "l etat se lit seul");
 }
 
 void test_an_occupied_slot_reads_used() {

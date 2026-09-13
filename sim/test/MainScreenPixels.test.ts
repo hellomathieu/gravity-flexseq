@@ -381,13 +381,13 @@ describe("la page CONFIG PATTERN, confrontee au PANNEAU", () => {
  * sur la memoire du panneau, jamais calcules ici.
  */
 const PATTERNS_PANEL_ROWS: ReadonlyArray<readonly [number, number]> = [
-  [3, 6], [4, 3], [5, 5], [6, 3], [7, 6], [16, 24], [17, 10], [18, 20],
-  [19, 10], [20, 21], [22, 60], [23, 2], [24, 13], [25, 7], [26, 10],
+  [3, 6], [4, 3], [5, 5], [6, 3], [7, 6], [16, 15], [17, 5], [18, 14],
+  [19, 5], [20, 11], [22, 60], [23, 2], [24, 13], [25, 7], [26, 10],
   [27, 7], [28, 11], [29, 60], [52, 120], [56, 12], [57, 12], [58, 29],
   [59, 32], [60, 34], [61, 30], [62, 30], [63, 12]
-];
+]
 
-const PATTERNS_PANEL_INK = 589;
+const PATTERNS_PANEL_INK = 554;
 
 describe("l onglet PATTERNS — lot 16E etape 4b", () => {
   const patternsTab = (slotEmpty: boolean): MainScreenModel => ({

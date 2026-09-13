@@ -362,8 +362,8 @@ export function renderMainScreen(model: MainScreenModel): Render {
       ink,
       COL_LEFT_X,
       ROW_A_BOX_Y,
-      "SLOT",
       model.slotEmpty ? "FREE" : "USED",
+      null,
       false,
       false,
     );

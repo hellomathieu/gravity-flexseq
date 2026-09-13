@@ -267,7 +267,6 @@ FLEXSEQ_LABEL(LBL_MODE, "MODE:");
 FLEXSEQ_LABEL(LBL_OFFSET, "OFFSET:");
 FLEXSEQ_LABEL(LBL_SUBDIV_FIELD, "SUBDIV:");
 FLEXSEQ_LABEL(LBL_MOD, "MOD:");
-FLEXSEQ_LABEL(LBL_SLOT, "SLOT");
 FLEXSEQ_LABEL(LBL_FREE, "FREE");
 FLEXSEQ_LABEL(LBL_USED, "USED");
 FLEXSEQ_LABEL(LBL_EDIT, "EDIT");
@@ -400,7 +399,6 @@ static_assert(sizeof(LBL_SKIP_CHANCE) <= LABEL_SCRATCH,
               "le tampon d'etiquette doit contenir la plus longue");
 static_assert(sizeof(LBL_OFFSET) <= LABEL_SCRATCH, "idem");
 static_assert(sizeof(LBL_SUBDIV_FIELD) <= LABEL_SCRATCH, "idem");
-static_assert(sizeof(LBL_SLOT) <= LABEL_SCRATCH, "idem");
 static_assert(sizeof(LBL_EDIT) <= LABEL_SCRATCH, "idem");
 static_assert(sizeof(LBL_FREE) <= VALUE_SCRATCH,
               "l etat d un emplacement tient dans le tampon de valeur");
@@ -551,12 +549,13 @@ void drawMainScreen(Canvas& canvas, const MainScreenModel& model,
     } else if (model.tab == ms::TAB_PATTERNS) {
         char slotLabel[14];
         char slotValue[10];
+        // L etat se lit seul : la grande valeur porte deja le nom de
+        // l emplacement, et une etiquette SLOT le repeterait.
         detail::drawLabelledField(
             canvas, band, ms::COL_LEFT_X, ms::ROW_A_BOX_Y,
-            detail::label(detail::LBL_SLOT, slotLabel),
             detail::label(model.slotEmpty ? detail::LBL_FREE : detail::LBL_USED,
                           slotValue),
-            false, false);
+            nullptr, false, false);
         detail::drawLabelledField(
             canvas, band, ms::COL_LEFT_X, ms::ROW_B_BOX_Y,
             detail::label(detail::LBL_EDIT, slotLabel), nullptr,
