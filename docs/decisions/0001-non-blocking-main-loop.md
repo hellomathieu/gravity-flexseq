@@ -303,6 +303,41 @@ reversible and visible · renaming `UI_MIN_INTERVAL_MS` in the source makes the
 derived criterion read NOT EVALUABLE · and the default regime keeps the editor at
 12 ms.
 
+### The skip follows what the band draws — amended 2026-09-13
+
+⚠️ **THE GEOMETRIC ARGUMENT ABOVE IS FALSIFIED, and the predicted failure did not
+happen.** This section says that a band above the header rule "can contain only
+the title". It also predicts that a change of the layout would make the condition
+"simply stop applying". Lot 12 moved the `SEP` field into the header on
+2026-09-04. The band then carried four more things: the `SEP` label, its value,
+its highlight box and its edit frame. **The condition did not stop applying. It
+kept applying, and the screen kept stale pixels.**
+
+**What the user saw on the module.** The cursor moved onto `SEP` and the label
+did not highlight. The encoder turned, the measure separators followed, and the
+value did not. A long press closed the field, and the frame stayed on the screen.
+The separators follow because they live in the grid bands, which are never
+skipped.
+
+**Why no check caught it.** The native tests of the screen call
+`drawPatternScreen` with the whole screen, so the skip never runs. The test of
+the skip changes the **title**, so it tests the case that works. The panel of
+`tools/run-screen-dump.sh` renders `env:wokwi`, which never drives `SEP`. The
+gesture probe reads the stored bytes, not the pixels, so the domain was always
+right.
+
+**The decision.** The skip is governed by a hash of **everything the band draws**,
+and no longer by the title string. `headerHashOf()` folds the title, the bar
+length, and the two states of `SEP`. The names follow: `headerHash_`,
+`drawnHeaderHash_`, `headerEverDrawn_` and `headerBand()`.
+
+**Measured: RAM +0 bytes, Flash +64 bytes.** The optimization stays: a routine
+frame still sends 7 bands of the 8 when nothing in the header changes.
+
+**The rule this produces.** A skip decision names the band by its geometry, and it
+reads the band by its content. A layout change moves content into a band. It does
+not announce itself to a predicate that looks somewhere else.
+
 ## Alternatives set aside
 
 - **A second U8g2 object in `_F_` mode** (1024-byte buffer, a single pass):
