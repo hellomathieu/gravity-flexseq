@@ -15,6 +15,10 @@ enum PatternAction : uint8_t {
     PATTERN_ACTION_LOAD = 0,
     PATTERN_ACTION_SAVE = 1,
     PATTERN_ACTION_COUNT = 2,
+    // La question posee avant une action destructrice — PRD 5.0 amendement
+    // 1bis. Elle vit DANS l octet de l action, et non dans un drapeau a part :
+    // la RAM est la ressource critique de ce circuit.
+    PATTERN_ACTION_ASK = 2,
     // Aucune action demandee. Le controleur POSE une demande, et le service qui
     // connait l EEPROM la consomme : ADR 0002 interdit au domaine de lire le
     // materiel.

@@ -173,6 +173,11 @@ export class UiController {
     return this.action;
   }
 
+  // Ce que l ECRAN doit nommer : l action, ou la question qui la precede.
+  get patternLabelCode(): PatternAction {
+    return this.action;
+  }
+
   // SAVE n apparait que si la copie du canal differe du template qu il a charge
   // — PRD 12.9 point 5. Un moteur non cable n a pas de drapeau : il ne propose
   // alors que LOAD.
@@ -189,15 +194,26 @@ export class UiController {
     return taken;
   }
 
-  // ⚠️ ETAPE INTERMEDIAIRE, lot 16E 5d : seul LOAD sur une copie PROPRE pose une
-  // demande. La confirmation d une copie modifiee arrive au 5f. D ici la, rien
-  // n est detruit.
-  private requestPatternAction(): void {
-    if (this.action !== PatternAction.Load || this.channelCopyHasChanged()) return;
+  // Un appui court dans le champ de la grande valeur. Rend true quand le champ
+  // doit RESTER ouvert, ce qui n arrive que lorsque la question vient de s armer.
+  //
+  // PRD 5.0 amendement 1bis : une copie propre charge sans question ; une copie
+  // modifiee voit son etiquette devenir SURE?, et c est le second appui court
+  // qui execute. ⚠️ L ecriture appartient au lot 5e, hors perimetre.
+  private pressInPatternField(): boolean {
+    if (this.action === PatternAction.Ask) {
+      this.action = PatternAction.Load;
+    } else if (this.action !== PatternAction.Load) {
+      return false;
+    } else if (this.channelCopyHasChanged()) {
+      this.action = PatternAction.Ask;
+      return true;
+    }
     const channel = this.selectedChannel;
-    if (channel < 0) return;
+    if (channel < 0) return false;
     this.pending = PatternAction.Load;
     this.pendingChannel = channel;
+    return false;
   }
 
   private channelCopyHasChanged(): boolean {
@@ -349,6 +365,7 @@ export class UiController {
         if (this.open && this.field === UiField.Pattern) {
           // Le champ ouvert choisit une ACTION. Le NUMERO du template se nomme
           // par SHIFT plus rotation, et ce geste ne change pas.
+          if (this.action === PatternAction.Ask) this.action = PatternAction.Load;
           this.action = clampIndex(this.action, oneStep(delta), this.patternActionCount);
         } else if (this.open) {
           this.adjustField(delta);
@@ -361,7 +378,7 @@ export class UiController {
         break;
       case UiEvent.Press:
         if (this.open) {
-          if (this.field === UiField.Pattern) this.requestPatternAction();
+          if (this.field === UiField.Pattern && this.pressInPatternField()) break;
           this.open = false;
         } else if (this.field === UiField.EditEntry) {
           this.currentLevel = UiLevel.Edit;
@@ -377,6 +394,7 @@ export class UiController {
         break;
       case UiEvent.LongPress:
         if (this.open) {
+          if (this.action === PatternAction.Ask) this.action = PatternAction.Load;
           this.open = false;
         } else if (this.configPage) {
           this.configPage = false;

@@ -1538,9 +1538,14 @@ void test_no_gesture_posts_no_demand() {
         "entrer dans un onglet ne demande rien");
 }
 
-// ⚠️ ETAPE INTERMEDIAIRE : la confirmation arrive au 5f. D ici la, une copie
-// modifiee ne charge PAS, et rien n est detruit.
-void test_a_changed_copy_posts_no_demand_yet() {
+/*
+ * Lot 16E etape 5f — la confirmation, qui n est PAS une fenetre. PRD 5.0
+ * amendement 1bis : un appui court sur une action destructrice remplace
+ * l etiquette par SURE?, un second appui court execute, une rotation ou un appui
+ * long annule.
+ */
+
+void test_a_changed_copy_asks_before_it_loads() {
     Rig r;
     flexseq::ModulatedPatternState state;
     r.engine.setModulatedPatterns(&state);
@@ -1552,7 +1557,102 @@ void test_a_changed_copy_posts_no_demand_yet() {
     uint8_t action = 0;
     uint8_t channel = 0;
     TEST_ASSERT_FALSE_MESSAGE(r.ui.takePatternAction(action, channel),
-        "sans confirmation, une copie modifiee ne se charge pas");
+        "le premier appui court ne charge rien");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(flexseq::PATTERN_ACTION_ASK,
+        r.ui.patternLabelCode(), "l etiquette demande confirmation");
+    TEST_ASSERT_TRUE_MESSAGE(r.ui.fieldOpen(), "et le champ reste ouvert");
+}
+
+void test_a_second_press_confirms_and_loads() {
+    Rig r;
+    flexseq::ModulatedPatternState state;
+    r.engine.setModulatedPatterns(&state);
+    state.markDirty(0);
+
+    openPatternField(r);
+    r.ui.handle(UiController::EVENT_PRESS);
+    r.ui.handle(UiController::EVENT_PRESS);
+
+    uint8_t action = 0;
+    uint8_t channel = 0;
+    TEST_ASSERT_TRUE_MESSAGE(r.ui.takePatternAction(action, channel),
+        "le second appui court execute");
+    TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_LOAD, action);
+    TEST_ASSERT_FALSE_MESSAGE(r.ui.fieldOpen(), "et le champ se ferme");
+}
+
+void test_a_rotation_cancels_the_question() {
+    Rig r;
+    flexseq::ModulatedPatternState state;
+    r.engine.setModulatedPatterns(&state);
+    state.markDirty(0);
+
+    openPatternField(r);
+    r.ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_ASK, r.ui.patternLabelCode());
+
+    // ⚠️ LA ROTATION EST EN ARRIERE, ET C EST CE QUI DISCRIMINE. Vers l avant,
+    // l ecretage ramene la question sur SAVE qu elle soit annulee ou non : le
+    // test ne prouverait rien. En arriere, une question annulee part de LOAD et
+    // y reste, tandis qu une question laissee en place atterrit sur SAVE.
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(flexseq::PATTERN_ACTION_LOAD,
+        r.ui.patternLabelCode(), "une rotation annule la question");
+
+    uint8_t action = 0;
+    uint8_t channel = 0;
+    r.ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_FALSE_MESSAGE(r.ui.takePatternAction(action, channel),
+        "et l appui qui suit ne charge pas : la question est repartie de zero");
+}
+
+void test_a_long_press_cancels_the_question() {
+    Rig r;
+    flexseq::ModulatedPatternState state;
+    r.engine.setModulatedPatterns(&state);
+    state.markDirty(0);
+
+    openPatternField(r);
+    r.ui.handle(UiController::EVENT_PRESS);
+    r.ui.handle(UiController::EVENT_LONG_PRESS);
+
+    uint8_t action = 0;
+    uint8_t channel = 0;
+    TEST_ASSERT_FALSE_MESSAGE(r.ui.takePatternAction(action, channel),
+        "un appui long annule sans charger");
+    TEST_ASSERT_FALSE(r.ui.fieldOpen());
+    TEST_ASSERT_NOT_EQUAL(flexseq::PATTERN_ACTION_ASK, r.ui.patternLabelCode());
+}
+
+// Une copie PROPRE ne pose aucune question : PRD 5.0 amendement 1bis.
+void test_a_clean_copy_is_never_asked() {
+    Rig r;
+    flexseq::ModulatedPatternState state;
+    r.engine.setModulatedPatterns(&state);
+
+    openPatternField(r);
+    r.ui.handle(UiController::EVENT_PRESS);
+
+    uint8_t action = 0;
+    uint8_t channel = 0;
+    TEST_ASSERT_TRUE_MESSAGE(r.ui.takePatternAction(action, channel),
+        "une copie propre charge sans question");
+    TEST_ASSERT_NOT_EQUAL(flexseq::PATTERN_ACTION_ASK, r.ui.patternLabelCode());
+}
+
+// Rouvrir le champ repart de LOAD, jamais d une question restee armee.
+void test_reopening_the_field_clears_the_question() {
+    Rig r;
+    flexseq::ModulatedPatternState state;
+    r.engine.setModulatedPatterns(&state);
+    state.markDirty(0);
+
+    openPatternField(r);
+    r.ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_ASK, r.ui.patternLabelCode());
+    r.ui.handle(UiController::EVENT_LONG_PRESS);
+    r.ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_LOAD, r.ui.patternLabelCode());
 }
 
 // Un appui court sur SAVE ne demande rien : l ecriture arrive au 5e.
@@ -1577,7 +1677,12 @@ int main(int, char**) {
     RUN_TEST(test_validating_load_posts_a_request);
     RUN_TEST(test_a_demand_is_served_once);
     RUN_TEST(test_no_gesture_posts_no_demand);
-    RUN_TEST(test_a_changed_copy_posts_no_demand_yet);
+    RUN_TEST(test_a_changed_copy_asks_before_it_loads);
+    RUN_TEST(test_a_second_press_confirms_and_loads);
+    RUN_TEST(test_a_rotation_cancels_the_question);
+    RUN_TEST(test_a_long_press_cancels_the_question);
+    RUN_TEST(test_a_clean_copy_is_never_asked);
+    RUN_TEST(test_reopening_the_field_clears_the_question);
     RUN_TEST(test_validating_save_posts_no_demand_yet);
     RUN_TEST(test_a_clean_copy_offers_load_alone);
     RUN_TEST(test_a_changed_copy_offers_save_as_well);

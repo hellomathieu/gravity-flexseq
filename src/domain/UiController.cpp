@@ -147,19 +147,29 @@ bool UiController::takePatternAction(uint8_t& action, uint8_t& channel) {
     return true;
 }
 
-// ⚠️ ETAPE INTERMEDIAIRE, lot 16E 5d : seul LOAD sur une copie PROPRE pose une
-// demande. La confirmation d une copie modifiee arrive au 5f, et l ecriture au
-// 5e. D ici la, rien n est detruit et rien n est ecrit.
-void UiController::requestPatternAction() {
-    if (patternAction_ != PATTERN_ACTION_LOAD || channelCopyHasChanged()) {
-        return;
+// Un appui court dans le champ de la grande valeur. Rend true quand le champ
+// doit RESTER ouvert, ce qui n arrive que lorsque la question vient de s armer.
+//
+// PRD 5.0 amendement 1bis : une copie propre charge sans question ; une copie
+// modifiee voit son etiquette devenir SURE?, et c est le second appui court qui
+// execute. ⚠️ L ecriture appartient au lot 5e, hors perimetre : SAVE ne pose
+// aucune demande.
+bool UiController::pressInPatternField() {
+    if (patternAction_ == PATTERN_ACTION_ASK) {
+        patternAction_ = PATTERN_ACTION_LOAD;
+    } else if (patternAction_ != PATTERN_ACTION_LOAD) {
+        return false;
+    } else if (channelCopyHasChanged()) {
+        patternAction_ = PATTERN_ACTION_ASK;
+        return true;
     }
     const int8_t channel = selectedChannel();
     if (channel < 0) {
-        return;
+        return false;
     }
     pendingAction_ = PATTERN_ACTION_LOAD;
     pendingChannel_ = static_cast<uint8_t>(channel);
+    return false;
 }
 
 uint8_t UiController::fieldCount() const {
@@ -276,6 +286,9 @@ void UiController::handleTab(Event event, int8_t delta) {
             if (fieldOpen_ && field() == FIELD_PATTERN) {
                 // Le champ ouvert choisit une ACTION. Le NUMERO du template se
                 // nomme par SHIFT plus rotation, et ce geste ne change pas.
+                if (patternAction_ == PATTERN_ACTION_ASK) {
+                    patternAction_ = PATTERN_ACTION_LOAD;
+                }
                 patternAction_ = clampIndex(patternAction_, oneStep(delta),
                                             patternActionCount());
             } else if (fieldOpen_) {
@@ -289,8 +302,8 @@ void UiController::handleTab(Event event, int8_t delta) {
             break;
         case EVENT_PRESS:
             if (fieldOpen_) {
-                if (field() == FIELD_PATTERN) {
-                    requestPatternAction();
+                if (field() == FIELD_PATTERN && pressInPatternField()) {
+                    break;
                 }
                 fieldOpen_ = false;
             } else if (field() == FIELD_EDIT_ENTRY) {
@@ -307,6 +320,9 @@ void UiController::handleTab(Event event, int8_t delta) {
             break;
         case EVENT_LONG_PRESS:
             if (fieldOpen_) {
+                if (patternAction_ == PATTERN_ACTION_ASK) {
+                    patternAction_ = PATTERN_ACTION_LOAD;
+                }
                 fieldOpen_ = false;
             } else if (onConfigPage_) {
                 onConfigPage_ = false;

@@ -105,6 +105,9 @@ public:
     bool fieldOpen() const { return fieldOpen_; }
 
     uint8_t patternAction() const { return patternAction_; }
+
+    // Ce que l ECRAN doit nommer : l action, ou la question qui la precede.
+    uint8_t patternLabelCode() const { return patternAction_; }
     uint8_t patternActionCount() const;
 
     // Le controleur POSE une demande, il ne l execute pas : ADR 0002 lui
@@ -140,7 +143,7 @@ private:
     void clearPattern();
     void markTemplateEdited();
     bool channelCopyHasChanged() const;
-    void requestPatternAction();
+    bool pressInPatternField();
     void adjustTemplateLength(int8_t delta);
 
     Pattern* currentPattern() const;

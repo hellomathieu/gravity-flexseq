@@ -593,6 +593,12 @@ describe("le champ ouvert nomme l action — lot 16E etape 5c", () => {
       .toBe("PATTERN");
   });
 
+  // Lot 16E etape 5f : la question porte son propre mot, et elle n est PAS en
+  // inverse — l inverse dit deja que le champ est ouvert.
+  it("la question remplace l action par son propre mot", () => {
+    expect(mainLabelOf(seq(true, PatternAction.Ask))).toBe("SURE");
+  });
+
   it("un canal hors SEQ ne porte pas d action", () => {
     expect(mainLabelOf(seq(true, PatternAction.Save, { mode: ChannelMode.CLOCK })))
       .not.toBe("SAVE");

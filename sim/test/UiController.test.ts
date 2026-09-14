@@ -1129,11 +1129,62 @@ describe("UiController — la demande d action", () => {
     expect(ui.takePatternAction()).toBeNull();
   });
 
-  // ⚠️ ETAPE INTERMEDIAIRE : la confirmation arrive au 5f.
-  it("une copie modifiee ne pose pas encore de demande", () => {
+  /*
+   * Lot 16E etape 5f — la confirmation, qui n est PAS une fenetre.
+   */
+  it("une copie modifiee demande avant de charger", () => {
     const { ui } = rigWith(true);
     ui.handle(UiEvent.Press);
     expect(ui.takePatternAction()).toBeNull();
+    expect(ui.patternLabelCode).toBe(PatternAction.Ask);
+    expect(ui.fieldOpen).toBe(true);
+  });
+
+  it("un second appui court confirme et charge", () => {
+    const { ui } = rigWith(true);
+    ui.handle(UiEvent.Press);
+    ui.handle(UiEvent.Press);
+    const demand = ui.takePatternAction();
+    expect(demand).not.toBeNull();
+    expect(demand!.action).toBe(PatternAction.Load);
+    expect(ui.fieldOpen).toBe(false);
+  });
+
+  it("une rotation annule la question", () => {
+    const { ui } = rigWith(true);
+    ui.handle(UiEvent.Press);
+    expect(ui.patternLabelCode).toBe(PatternAction.Ask);
+    // ⚠️ LA ROTATION EST EN ARRIERE, ET C EST CE QUI DISCRIMINE. Vers l avant,
+    // l ecretage ramene la question sur SAVE qu elle soit annulee ou non.
+    ui.handle(UiEvent.Rotate, -1);
+    expect(ui.patternLabelCode).toBe(PatternAction.Load);
+    ui.handle(UiEvent.Press);
+    expect(ui.takePatternAction()).toBeNull();
+  });
+
+  it("un appui long annule la question", () => {
+    const { ui } = rigWith(true);
+    ui.handle(UiEvent.Press);
+    ui.handle(UiEvent.LongPress);
+    expect(ui.takePatternAction()).toBeNull();
+    expect(ui.fieldOpen).toBe(false);
+    expect(ui.patternLabelCode).not.toBe(PatternAction.Ask);
+  });
+
+  it("une copie propre n est jamais interrogee", () => {
+    const { ui } = rigWith(false);
+    ui.handle(UiEvent.Press);
+    expect(ui.takePatternAction()).not.toBeNull();
+    expect(ui.patternLabelCode).not.toBe(PatternAction.Ask);
+  });
+
+  it("rouvrir le champ efface la question", () => {
+    const { ui } = rigWith(true);
+    ui.handle(UiEvent.Press);
+    expect(ui.patternLabelCode).toBe(PatternAction.Ask);
+    ui.handle(UiEvent.LongPress);
+    ui.handle(UiEvent.Press);
+    expect(ui.patternLabelCode).toBe(PatternAction.Load);
   });
 
   it("valider SAVE ne pose aucune demande", () => {

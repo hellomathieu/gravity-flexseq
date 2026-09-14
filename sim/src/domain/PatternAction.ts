@@ -11,6 +11,10 @@
 export enum PatternAction {
   Load = 0,
   Save = 1,
+  // La question posee avant une action destructrice — PRD 5.0 amendement 1bis.
+  // Elle vit DANS l octet de l action, et non dans un drapeau a part : la RAM
+  // est la ressource critique du circuit que ce modele reflete.
+  Ask = 2,
   // Aucune action demandee. Le controleur POSE une demande, et le service qui
   // connait l EEPROM la consomme.
   None = 0xff,

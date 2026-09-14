@@ -1842,6 +1842,9 @@ MUTANTS = [
     ("cpp: the open field keeps naming the parameter",
      "include/flexseq/MainScreen.h",
      "        if (patternActionIsOpen(model)) {\n"
+     "            if (model.patternAction == PATTERN_ACTION_ASK) {\n"
+     "                return LBL_SURE;\n"
+     "            }\n"
      "            return model.patternAction == PATTERN_ACTION_SAVE\n"
      "                ? LBL_SAVE : LBL_LOAD;\n"
      "        }\n",
@@ -1850,21 +1853,34 @@ MUTANTS = [
     ("ts: the open field keeps naming the parameter",
      "sim/src/sim/MainScreenPixels.ts",
      "    if (patternActionIsOpen(model)) {\n"
+     "      if (model.patternAction === PatternAction.Ask) return LBL_SURE;\n"
      "      return model.patternAction === PatternAction.Save ? LBL_SAVE : LBL_LOAD;\n"
      "    }\n",
+     "",
+     "ts-main-screen"),
+    ("cpp: the screen never names the question",
+     "include/flexseq/MainScreen.h",
+     "            if (model.patternAction == PATTERN_ACTION_ASK) {\n"
+     "                return LBL_SURE;\n"
+     "            }\n",
+     "",
+     "cpp-main-screen"),
+    ("ts: the screen never names the question",
+     "sim/src/sim/MainScreenPixels.ts",
+     "      if (model.patternAction === PatternAction.Ask) return LBL_SURE;\n",
      "",
      "ts-main-screen"),
     # Lot 16E etape 5d : LOAD charge, par une demande qu un service consomme.
     ("cpp: validating the action posts no demand",
      "src/domain/UiController.cpp",
-     "                if (field() == FIELD_PATTERN) {\n"
-     "                    requestPatternAction();\n"
+     "                if (field() == FIELD_PATTERN && pressInPatternField()) {\n"
+     "                    break;\n"
      "                }\n",
      "",
      "cpp-ui"),
     ("ts: validating the action posts no demand",
      "sim/src/domain/UiController.ts",
-     "          if (this.field === UiField.Pattern) this.requestPatternAction();\n",
+     "          if (this.field === UiField.Pattern && this.pressInPatternField()) break;\n",
      "",
      "ts-ui"),
     ("cpp: the demand is never consumed",
@@ -1879,13 +1895,64 @@ MUTANTS = [
      "ts-ui"),
     ("cpp: a changed copy loads without asking",
      "src/domain/UiController.cpp",
-     "    if (patternAction_ != PATTERN_ACTION_LOAD || channelCopyHasChanged()) {",
-     "    if (patternAction_ != PATTERN_ACTION_LOAD) {",
+     "    } else if (channelCopyHasChanged()) {\n"
+     "        patternAction_ = PATTERN_ACTION_ASK;\n"
+     "        return true;\n",
+     "",
      "cpp-ui"),
     ("ts: a changed copy loads without asking",
      "sim/src/domain/UiController.ts",
-     "    if (this.action !== PatternAction.Load || this.channelCopyHasChanged()) return;",
-     "    if (this.action !== PatternAction.Load) return;",
+     "    } else if (this.channelCopyHasChanged()) {\n"
+     "      this.action = PatternAction.Ask;\n"
+     "      return true;\n",
+     "",
+     "ts-ui"),
+    # Lot 16E etape 5f : la confirmation, et les deux gestes qui l annulent.
+    ("cpp: the second press never runs the action",
+     "src/domain/UiController.cpp",
+     "    if (patternAction_ == PATTERN_ACTION_ASK) {\n"
+     "        patternAction_ = PATTERN_ACTION_LOAD;\n"
+     "    } else if (patternAction_ != PATTERN_ACTION_LOAD) {",
+     "    if (patternAction_ == PATTERN_ACTION_ASK) {\n"
+     "        return true;\n"
+     "    } else if (patternAction_ != PATTERN_ACTION_LOAD) {",
+     "cpp-ui"),
+    ("ts: the second press never runs the action",
+     "sim/src/domain/UiController.ts",
+     "    if (this.action === PatternAction.Ask) {\n"
+     "      this.action = PatternAction.Load;\n"
+     "    } else if (this.action !== PatternAction.Load) {",
+     "    if (this.action === PatternAction.Ask) {\n"
+     "      return true;\n"
+     "    } else if (this.action !== PatternAction.Load) {",
+     "ts-ui"),
+    ("cpp: a rotation does not cancel the question",
+     "src/domain/UiController.cpp",
+     "                if (patternAction_ == PATTERN_ACTION_ASK) {\n"
+     "                    patternAction_ = PATTERN_ACTION_LOAD;\n"
+     "                }\n"
+     "                patternAction_ = clampIndex(",
+     "                patternAction_ = clampIndex(",
+     "cpp-ui"),
+    ("ts: a rotation does not cancel the question",
+     "sim/src/domain/UiController.ts",
+     "          if (this.action === PatternAction.Ask) this.action = PatternAction.Load;\n"
+     "          this.action = clampIndex(",
+     "          this.action = clampIndex(",
+     "ts-ui"),
+    ("cpp: a long press does not cancel the question",
+     "src/domain/UiController.cpp",
+     "                if (patternAction_ == PATTERN_ACTION_ASK) {\n"
+     "                    patternAction_ = PATTERN_ACTION_LOAD;\n"
+     "                }\n"
+     "                fieldOpen_ = false;",
+     "                fieldOpen_ = false;",
+     "cpp-ui"),
+    ("ts: a long press does not cancel the question",
+     "sim/src/domain/UiController.ts",
+     "          if (this.action === PatternAction.Ask) this.action = PatternAction.Load;\n"
+     "          this.open = false;",
+     "          this.open = false;",
      "ts-ui"),
     ("cpp: a busy storage loses the demand",
      "include/flexseq/Persistence.h",

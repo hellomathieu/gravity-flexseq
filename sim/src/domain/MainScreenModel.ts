@@ -77,7 +77,7 @@ export function mainScreenModelOf(ui: UiController, engine: SequencerEngine): Ma
     skipChance: 0,
     stepTicks: 0,
     mainParameter: parameterOf(ui.mainField),
-    patternAction: ui.patternAction,
+    patternAction: ui.patternLabelCode,
     cv1Target: CvDestination.NONE,
     cv2Target: CvDestination.NONE,
     configPage: ui.isOnConfigPage,

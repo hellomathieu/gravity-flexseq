@@ -88,6 +88,7 @@ export const LBL_LENGTH = "LENGTH:";
 export const LBL_PATTERN = "PATTERN";
 const LBL_LOAD = "LOAD";
 const LBL_SAVE = "SAVE";
+const LBL_SURE = "SURE";
 
 const VELVETSCREEN_HEIGHT = 5;
 const STK_L_HEIGHT = 23;
@@ -190,6 +191,7 @@ export function patternActionIsOpen(model: MainScreenModel): boolean {
 export function mainLabelOf(model: MainScreenModel): string {
   if (model.configPage || model.mainParameter === MainParameter.Pattern) {
     if (patternActionIsOpen(model)) {
+      if (model.patternAction === PatternAction.Ask) return LBL_SURE;
       return model.patternAction === PatternAction.Save ? LBL_SAVE : LBL_LOAD;
     }
     return LBL_PATTERN;

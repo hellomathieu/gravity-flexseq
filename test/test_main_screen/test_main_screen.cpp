@@ -1099,6 +1099,23 @@ void test_the_open_big_value_field_names_the_action() {
     TEST_ASSERT_NULL(canvas.find("LOAD"));
 }
 
+// Lot 16E etape 5f : la question qui precede une action destructrice porte son
+// propre mot. PRD 5.0 amendement 1bis : elle n est PAS une fenetre, et elle
+// n est PAS en inverse — l inverse dit deja que le champ est ouvert.
+void test_the_question_replaces_the_action_by_its_own_word() {
+    namespace ms = flexseq::mainscreen;
+    canvas.reset();
+    flexseq::MainScreenModel m = channelTab();
+    m.insideTab = true;
+    m.cursor = 0;
+    m.fieldOpen = true;
+    m.patternAction = flexseq::PATTERN_ACTION_ASK;
+    drawMainScreen(canvas, m);
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("SURE"), "la question porte son mot");
+    TEST_ASSERT_NULL(canvas.find("LOAD"));
+    TEST_ASSERT_NULL(canvas.find("PATTERN"));
+}
+
 // L action ne s affiche QUE sur la grande valeur d un canal en SEQ : la page
 // CONFIG et l onglet PATTERNS portent la meme etiquette et un autre champ.
 void test_the_action_never_replaces_the_label_elsewhere() {
@@ -1256,6 +1273,7 @@ int main() {
     RUN_TEST(test_the_cursor_on_the_big_value_inverts_its_label);
     RUN_TEST(test_the_open_big_value_field_names_the_action);
     RUN_TEST(test_the_action_never_replaces_the_label_elsewhere);
+    RUN_TEST(test_the_question_replaces_the_action_by_its_own_word);
     RUN_TEST(test_the_settings_tab_headline_stays_empty);
 
     return UNITY_END();

@@ -310,6 +310,7 @@ FLEXSEQ_LABEL(LBL_LENGTH, "LENGTH:");
 FLEXSEQ_LABEL(LBL_PATTERN, "PATTERN");
 FLEXSEQ_LABEL(LBL_LOAD, "LOAD");
 FLEXSEQ_LABEL(LBL_SAVE, "SAVE");
+FLEXSEQ_LABEL(LBL_SURE, "SURE");
 
 inline const char* modeText(uint8_t mode) {
     switch (static_cast<ChannelMode>(mode)) {
@@ -353,6 +354,9 @@ inline bool patternActionIsOpen(const MainScreenModel& model) {
 inline const char* mainLabelOf(const MainScreenModel& model) {
     if (model.configPage || model.mainParameter == MAIN_PATTERN) {
         if (patternActionIsOpen(model)) {
+            if (model.patternAction == PATTERN_ACTION_ASK) {
+                return LBL_SURE;
+            }
             return model.patternAction == PATTERN_ACTION_SAVE
                 ? LBL_SAVE : LBL_LOAD;
         }

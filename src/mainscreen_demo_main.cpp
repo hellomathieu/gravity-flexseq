@@ -129,15 +129,19 @@ void setup() {
     // choisissent l action. Aucun etat d interface n est pose a la main : le
     // panneau montre ce qu une suite de gestes produit.
     //
-    // La valeur du drapeau est l index de l action : 1 donne LOAD, 2 donne SAVE.
-    // Le canal est marque comme change, sans quoi SAVE n existerait pas.
+    // La valeur du drapeau est le CODE D ETIQUETTE a montrer, celui de
+    // PatternAction.h : 0 donne LOAD, 1 donne SAVE, 2 donne la question SURE?.
+    // Le canal est marque comme change, sans quoi ni SAVE ni la question
+    // n existeraient.
     modulated.markDirty(DEMO_TAB - 1);
     while (ui.cursor() != flexseq::UiController::SEQ_FIELD_INDEX_PATTERN) {
         ui.handle(flexseq::UiController::EVENT_ROTATE, 1);
     }
     ui.handle(flexseq::UiController::EVENT_PRESS);
-    for (uint8_t i = 1; i < FLEXSEQ_DEMO_PATTERN_ACTION; ++i) {
+    if (FLEXSEQ_DEMO_PATTERN_ACTION == flexseq::PATTERN_ACTION_SAVE) {
         ui.handle(flexseq::UiController::EVENT_ROTATE, 1);
+    } else if (FLEXSEQ_DEMO_PATTERN_ACTION == flexseq::PATTERN_ACTION_ASK) {
+        ui.handle(flexseq::UiController::EVENT_PRESS);
     }
 #endif
     gravity.clock.AttachIntHandler(onOutputTick);
