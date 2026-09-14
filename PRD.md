@@ -356,6 +356,22 @@ The gesture that names a template does not change: `SHIFT` plus a rotation moves
 
 **`SAVE` has no interface, and that is unchanged.** §12.9 places its design in lot E.
 
+**AMENDMENT OF 2026-09-14 (third one of the day) — the `PATTERNS` tab and its template editor are REMOVED, and the remaining scope is named.** It supersedes the amendments of 2026-09-13 that created the tab and its editor, and it leaves `1quater` exact.
+
+⚠️ **THE REASON IS THE FLASH BUDGET, AND IT IS MEASURED.** A counter-build of 2026-09-14 removed the tab, its glyph, its fields, its cursor and every editor path of the controller: **896 bytes of Flash**, RAM unchanged. The image goes from 30336 to 29440, so **1280 bytes** become available before the physical limit.
+
+**What the removal buys, and it is the whole point.** The owner keeps four lots: **22** the render of a step (136 bytes MEASURED), **K** the tempo from 20 to 200, **17a** the first half of the `BPM` tab, and **14** the settings page. Their estimate is **586 to 906 bytes**, so **374 to 694 bytes** of margin stay. ⚠️ **Three of the four are lots of displayed FIELDS**, the category that overran its estimate by 2.7 to 12 times: the bottom of that range is the optimistic case, never the neutral one.
+
+**What leaves the scope with this amendment:** lot **R**, the RECORDING function, and lot **H**, the gesture that would arm it — a gesture that triggers nothing has no purpose. Lot **17b**, the second half of the `BPM` tab. And the **mute** per channel, which the amendment of 2026-09-07 had deferred: the owner set it aside on 2026-09-14. ⚠️ **`SWING` and `GATE` were already out of the specification** since 2026-09-07, so this amendment adds nothing there.
+
+⚠️ **THE ACCEPTED CONSEQUENCE, AND IT IS NAMED: the sixteen slots become READ ONLY.** The editor was the only production writer of a template — `Persistence.h`, the deferred write of `serviceTemplateEditor`. After the removal, `A1` to `B8` keep the factory content that `bootstrap()` seeds, for ever. **A channel's copy stays editable and stays persisted**, so the user authors **six** patterns instead of sixteen. ⚠️ **The original authors sixteen**, its patterns being shared: on this point FlexSeq moves AWAY from its reference, and that is the price of the four lots.
+
+**`SAVE` is NOT wired, and its price is measured.** A counter-build gave `saveTemplate` a production caller and the whole thing cost **158 bytes**, so the net gain would have been 738 instead of 896. The owner refused it on 2026-09-14. ⚠️ **The estimate of 200 to 250 bytes that this file carried was pessimistic**: calibration C measured three primitives at once, and `loadTemplate` already has a caller.
+
+**What STAYS, and none of it moves:** ADR 0006 and the template / instance model · `loadTemplate` and the gesture of `1quater` · the question `SURE: NO` / `SURE: YES` · the `EDIT` screen of a channel · the `PATTERN` modulation by CV and its buffer · the format of §11.1, its version and its 588 bytes. **The tab bar returns to eight slots**, which is the count of the original.
+
+⚠️ **AN OPEN QUESTION, DELIBERATELY SEPARATED FROM THIS AMENDMENT.** The owner proposes on 2026-09-14 to return to the **shared** patterns of the original, so that to edit a pattern edits it for every channel that plays it, and to make `A1` to `A8` editable again. **That reverses ADR 0006 and ADR 0013**, it rewrites the model of §5.0, and it changes the EEPROM format of §11.1 — the image would carry no instance, so the version would move. Its RAM arithmetic is an **estimate with three terms**: a resident bank of sixteen costs 368 bytes, the six instances return 138, the modulation buffer returns 138, so **+92 bytes against 140 of allowed growth**. ⚠️ **Nothing of that is measured**, and a fifty-byte error kills the work after everything has been undone. **It is not decided, it is not this amendment, and it needs its own measurement.**
+
 ---
 
 ### 5.1 Shared pattern bank — SUPERSEDED by §5.0
