@@ -1,12 +1,25 @@
 import { describe, expect, it } from "vitest";
 import { legacyLine, modText, renderMainScreen } from "../src/sim/MainScreenPixels.js";
-import { MainParameter, type MainScreenModel } from "../src/domain/MainScreenModel.js";
+import { MainParameter, mainScreenModelOf, type MainScreenModel } from "../src/domain/MainScreenModel.js";
+import { SequencerEngine } from "../src/domain/SequencerEngine.js";
+import { Transport } from "../src/domain/Transport.js";
+import {
+  SEQ_CHANNEL_TAB_FIELDS,
+  SEQ_FIELD_INDEX_CONFIG,
+  SEQ_FIELD_INDEX_EDIT_ENTRY,
+  SEQ_FIELD_INDEX_MODE,
+  SEQ_FIELD_INDEX_PATTERN,
+  UiController,
+  UiEvent,
+  UiField,
+} from "../src/domain/UiController.js";
 import { ChannelMode } from "../src/domain/SequencerEngine.js";
 import { CvDestination } from "../src/domain/CvDestination.js";
-import { STK_L, VELVETSCREEN, textAdvance, textWidth } from "../src/sim/oledFont.js";
+import { GLYPH_HEIGHT, STK_L, VELVETSCREEN, textAdvance, textWidth } from "../src/sim/oledFont.js";
 import {
   LINE_0_BASELINE_Y,
   LINE_2_BASELINE_Y,
+  LINE_SPACING_Y,
   LINE_LABEL_X,
   MAIN_CENTRE_X,
   MAIN_LABEL_BASELINE_Y,
@@ -257,17 +270,22 @@ describe("la convention verticale de u8g2 (ADR 0012)", () => {
  * Le meme releve, pour un onglet de canal en SEQ. Lu sur `env:mainscreen`
  * compile avec `-DFLEXSEQ_DEMO_MODE_SEQ=1`, meme methode et meme modele : seuls
  * le mode et le parametre principal changent.
+ *
+ * ⚠️ RELEVE A NOUVEAU le 2026-09-14, et il est passe de 977 a 931 pixels. Le
+ * curseur du panneau est en position 2, qui nomme EDIT depuis le lot 16E etape
+ * 5a ; la surbrillance tombait sur CONFIG, un rang trop bas. Elle tombe
+ * maintenant sur EDIT, qui est un mot plus court, donc le pave encre moins.
  */
 const SEQ_PANEL_ROWS: ReadonlyArray<readonly [number, number]> = [
   [3, 20], [4, 14], [5, 35], [6, 32], [7, 41], [8, 15], [9, 12], [10, 12],
-  [11, 9], [12, 9], [13, 10], [14, 26], [15, 22], [16, 27], [17, 20],
-  [18, 22], [19, 11], [20, 10], [21, 9], [22, 9], [23, 9], [24, 39],
-  [25, 40], [26, 43], [27, 39], [28, 18], [29, 19], [30, 29], [36, 20],
-  [37, 12], [38, 19], [39, 11], [40, 13], [52, 120], [56, 12], [57, 12],
-  [58, 29], [59, 30], [60, 30], [61, 28], [62, 28], [63, 12],
+  [11, 9], [12, 9], [13, 27], [14, 21], [15, 29], [16, 28], [17, 27], [18, 21],
+  [19, 28], [20, 10], [21, 9], [22, 9], [23, 9], [24, 10], [25, 37], [26, 34],
+  [27, 36], [28, 11], [29, 10], [36, 20], [37, 12], [38, 19], [39, 11], [40, 13],
+  [52, 120], [56, 12], [57, 12], [58, 29], [59, 30], [60, 30], [61, 28], [62, 28],
+  [63, 12],
 ];
 
-const SEQ_PANEL_INK = 977;
+const SEQ_PANEL_INK = 931;
 
 describe("l onglet d un canal en SEQ", () => {
   const seq: MainScreenModel = {
@@ -420,6 +438,116 @@ describe("le curseur sur la grande valeur — lot 16E etape 5a", () => {
 
   it("encre davantage quand le curseur y est pose", () => {
     expect(inkAround(true)).toBeGreaterThan(inkAround(false));
+  });
+});
+
+// Lot 16E etape 5a-bis : la ligne en surbrillance porte l etiquette du champ que
+// le domaine nomme. La grande valeur ayant pris la position 0, une comparaison
+// du curseur au NUMERO DE LIGNE decale les trois lignes d un rang.
+describe("la surbrillance suit le champ, pas le numero de ligne", () => {
+  // La rangee du HAUT de la boite : les glyphes de velvetscreen occupent base-5
+  // a base-1, donc seule l inversion encre base-6.
+  const topRowInk = (rows: Map<string, true> | Set<string>, baseline: number,
+                     x0: number, x1: number): number => {
+    const y = baseline - GLYPH_HEIGHT - 1;
+    let n = 0;
+    for (const key of rows as Set<string>) {
+      const parts = key.split(",");
+      const x = Number(parts[0]);
+      if (Number(parts[1]) === y && x >= x0 && x < x1) n += 1;
+    }
+    return n;
+  };
+
+  const lineInk = (pixels: Set<string>, line: number): number =>
+    topRowInk(pixels, LINE_0_BASELINE_Y + line * LINE_SPACING_Y,
+              LINE_LABEL_X - 1, LINE_LABEL_X + 40);
+
+  const bigInk = (pixels: Set<string>): number =>
+    topRowInk(pixels, MAIN_LABEL_BASELINE_Y, 0, LINE_LABEL_X - 2);
+
+  const seqTab = (cursor: number): MainScreenModel => ({
+    ...PANEL_MODEL,
+    tab: TAB_FIRST_CHANNEL,
+    mode: ChannelMode.SEQ,
+    insideTab: true,
+    cursor,
+    fieldCount: SEQ_CHANNEL_TAB_FIELDS,
+    mainParameter: MainParameter.Pattern,
+  });
+
+  it("le curseur sur MODE marque la premiere ligne, et elle seule", () => {
+    const { pixels } = renderMainScreen(seqTab(SEQ_FIELD_INDEX_MODE));
+    expect(lineInk(pixels, 0)).toBeGreaterThan(0);
+    expect(lineInk(pixels, 1)).toBe(0);
+    expect(lineInk(pixels, 2)).toBe(0);
+    expect(bigInk(pixels)).toBe(0);
+  });
+
+  it("le curseur sur EDIT marque la deuxieme ligne", () => {
+    const { pixels } = renderMainScreen(seqTab(SEQ_FIELD_INDEX_EDIT_ENTRY));
+    expect(lineInk(pixels, 1)).toBeGreaterThan(0);
+    expect(lineInk(pixels, 0)).toBe(0);
+    expect(lineInk(pixels, 2)).toBe(0);
+  });
+
+  it("le curseur sur CONFIG marque la troisieme ligne", () => {
+    const { pixels } = renderMainScreen(seqTab(SEQ_FIELD_INDEX_CONFIG));
+    expect(lineInk(pixels, 2)).toBeGreaterThan(0);
+    expect(lineInk(pixels, 0)).toBe(0);
+    expect(lineInk(pixels, 1)).toBe(0);
+  });
+
+  it("le curseur sur la grande valeur ne marque aucune ligne", () => {
+    const { pixels } = renderMainScreen(seqTab(SEQ_FIELD_INDEX_PATTERN));
+    expect(bigInk(pixels)).toBeGreaterThan(0);
+    expect(lineInk(pixels, 0)).toBe(0);
+    expect(lineInk(pixels, 1)).toBe(0);
+    expect(lineInk(pixels, 2)).toBe(0);
+  });
+
+  // L ORACLE : le domaine nomme le champ, l ecran marque sa ligne. Un VRAI
+  // controleur les confronte a chaque position, ce qu un modele ecrit a la main
+  // ne peut pas faire.
+  it("le domaine nomme le champ et l ecran marque sa ligne", () => {
+    const engine = new SequencerEngine();
+    engine.setChannelMode(0, ChannelMode.SEQ);
+    const ui = new UiController(engine, new Transport(engine));
+    for (let guard = 0; guard < 2 * TAB_COUNT; guard += 1) {
+      if (ui.currentTab === TAB_FIRST_CHANNEL) break;
+      ui.handle(UiEvent.Rotate, 1);
+    }
+    expect(ui.currentTab).toBe(TAB_FIRST_CHANNEL);
+    ui.handle(UiEvent.Press);
+    expect(ui.fieldCount).toBe(SEQ_CHANNEL_TAB_FIELDS);
+
+    const expected: Record<number, number> = {
+      [UiField.Mode]: 0,
+      [UiField.EditEntry]: 1,
+      [UiField.Config]: 2,
+    };
+
+    for (let position = 0; position < SEQ_CHANNEL_TAB_FIELDS; position += 1) {
+      for (let guard = 0; guard < 2 * SEQ_CHANNEL_TAB_FIELDS; guard += 1) {
+        if (ui.cursor === position) break;
+        ui.handle(UiEvent.Rotate, 1);
+      }
+      expect(ui.cursor).toBe(position);
+
+      const { pixels } = renderMainScreen(mainScreenModelOf(ui, engine));
+      const marked: number[] = [];
+      for (let line = 0; line < 3; line += 1) {
+        if (lineInk(pixels, line) > 0) marked.push(line);
+      }
+      const onBigValue = bigInk(pixels) > 0;
+      expect(marked.length + (onBigValue ? 1 : 0)).toBe(1);
+
+      if (ui.field === UiField.Pattern) {
+        expect(onBigValue).toBe(true);
+      } else {
+        expect(marked[0]).toBe(expected[ui.field]);
+      }
+    }
   });
 });
 

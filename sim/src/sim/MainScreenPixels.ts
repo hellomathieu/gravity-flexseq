@@ -213,6 +213,22 @@ export function modText(model: MainScreenModel): string {
   return `${modLetter(model.cv1Target)}/${modLetter(model.cv2Target)}`;
 }
 
+// La grande valeur prend la PREMIERE position du curseur sur un canal en SEQ —
+// PRD 5.0 amendement 1bis. Les trois lignes de l original suivent donc d un
+// rang, et le numero d une ligne N EST PLUS l index du curseur.
+//
+// Les deux sites qui marquent le curseur lisent CETTE fonction : deux lectures
+// separees du meme etat finissent par diverger, et l ecran montre alors autre
+// chose que ce que le curseur designe.
+export function bigValueTakesCursor(model: MainScreenModel): boolean {
+  return model.tab >= TAB_FIRST_CHANNEL && model.tab <= TAB_LAST_CHANNEL
+    && !model.configPage && model.mode === ChannelMode.SEQ;
+}
+
+export function cursorOfLine(model: MainScreenModel, line: number): number {
+  return line + (bigValueTakesCursor(model) ? 1 : 0);
+}
+
 export function legacyLine(model: MainScreenModel, index: number): [string, string] {
   // L onglet PATTERNS prend la mise en page d un canal en SEQ.
   if (model.tab === TAB_PATTERNS) {
@@ -293,10 +309,7 @@ function drawLegacyChannel(ink: Ink, model: MainScreenModel): void {
   }
   // Le curseur sur la grande valeur : l etiquette s inverse, comme la valeur
   // ouverte d un en-tete — lot 16E etape 5a.
-  const legacyTab = model.tab >= TAB_FIRST_CHANNEL && model.tab <= TAB_LAST_CHANNEL;
-  // ⚠️ PAS sur la page CONFIG : la position 0 y designe LENGTH.
-  if (legacyTab && model.insideTab && !model.configPage
-      && model.cursor === 0 && model.mode === ChannelMode.SEQ) {
+  if (bigValueTakesCursor(model) && model.insideTab && model.cursor === 0) {
     // Les glyphes occupent base-5 a base-1 : la boite part de base-6.
     ink.drawBox(labelX - 1, MAIN_LABEL_BASELINE_Y - VELVETSCREEN_HEIGHT - 1,
                 lw + 2, VELVETSCREEN_HEIGHT + 2);
@@ -310,7 +323,7 @@ function drawLegacyChannel(ink: Ink, model: MainScreenModel): void {
   for (let line = 0; line < 3; ++line) {
     const base = LINE_0_BASELINE_Y + line * LINE_SPACING_Y;
     const [text, lineValue] = legacyLine(model, line);
-    const onCursor = model.insideTab && model.cursor === line;
+    const onCursor = model.insideTab && model.cursor === cursorOfLine(model, line);
     const labelW = textWidth(text, VELVETSCREEN);
     if (onCursor && !model.fieldOpen) {
       ink.drawBox(

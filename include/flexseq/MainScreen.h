@@ -276,6 +276,23 @@ inline bool usesLegacyLayout(const MainScreenModel& model) {
     return isChannelTab(model) || model.tab == mainscreen::TAB_PATTERNS;
 }
 
+// La grande valeur prend la PREMIERE position du curseur sur un canal en SEQ —
+// PRD 5.0 amendement 1bis. Les trois lignes de l original suivent donc d un
+// rang, et le numero d une ligne N EST PLUS l index du curseur.
+//
+// Les deux sites qui marquent le curseur lisent CETTE fonction, pour la raison
+// qui a fait naitre uiFrameChoiceOf() : deux lectures separees du meme etat
+// finissent par diverger, et l ecran montre alors autre chose que ce que le
+// curseur designe.
+inline bool bigValueTakesCursor(const MainScreenModel& model) {
+    return isChannelTab(model) && !model.configPage
+        && model.mode == static_cast<uint8_t>(MODE_SEQ);
+}
+
+inline uint8_t cursorOfLine(const MainScreenModel& model, uint8_t line) {
+    return static_cast<uint8_t>(line + (bigValueTakesCursor(model) ? 1 : 0));
+}
+
 FLEXSEQ_LABEL(LBL_MODE, "MODE:");
 FLEXSEQ_LABEL(LBL_OFFSET, "OFFSET:");
 FLEXSEQ_LABEL(LBL_SUBDIV_FIELD, "SUBDIV:");
@@ -500,8 +517,7 @@ void drawLegacyChannel(Canvas& canvas, const Band& band, const MainScreenModel& 
         // ⚠️ PAS sur la page CONFIG : la position 0 y designe LENGTH, et la
         // grande valeur s inversait alors a tort. Le temoin du curseur de la
         // sonde de gestes a trouve ce defaut en lisant DEUX surbrillances.
-        if (isChannelTab(model) && model.insideTab && !model.configPage
-            && model.cursor == 0 && model.mode == static_cast<uint8_t>(MODE_SEQ)) {
+        if (bigValueTakesCursor(model) && model.insideTab && model.cursor == 0) {
             // ⚠️ Les glyphes de velvetscreen occupent base-5 a base-1. La boite
             // part donc de base-6, une rangee AU-DESSUS du texte, comme celle
             // d une ligne : sinon elle ne degage rien en haut et en degage deux
@@ -532,7 +548,8 @@ void drawLegacyChannel(Canvas& canvas, const Band& band, const MainScreenModel& 
         legacyLine(model, line, &flashLabel, value);
         char scratch[10];
         const char* text = label(flashLabel, scratch);
-        const bool onCursor = model.insideTab && model.cursor == line;
+        const bool onCursor =
+            model.insideTab && model.cursor == cursorOfLine(model, line);
 
         const uint8_t labelW = static_cast<uint8_t>(canvas.getStrWidth(text));
         if (onCursor && !model.fieldOpen) {

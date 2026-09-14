@@ -1774,14 +1774,38 @@ MUTANTS = [
      "ts-ui"),
     ("cpp: the cursor on the big value is invisible",
      "include/flexseq/MainScreen.h",
-     "        if (isChannelTab(model) && model.insideTab && !model.configPage\n"
-     "            && model.cursor == 0 && model.mode == static_cast<uint8_t>(MODE_SEQ)) {",
+     "        if (bigValueTakesCursor(model) && model.insideTab && model.cursor == 0) {",
      "        if (false) {",
      "cpp-main-screen"),
     ("ts: the cursor on the big value is invisible",
      "sim/src/sim/MainScreenPixels.ts",
-     "  if (legacyTab && model.insideTab && !model.configPage\n      && model.cursor === 0 && model.mode === ChannelMode.SEQ) {",
+     "  if (bigValueTakesCursor(model) && model.insideTab && model.cursor === 0) {",
      "  if (false) {",
+     "ts-main-screen"),
+    # Lot 16E etape 5a-bis : la surbrillance suit le CHAMP, pas le numero de
+    # ligne. Le premier mutant reproduit le defaut trouve le 2026-09-14 : les
+    # trois lignes decalees d un rang, et deux surbrillances a la fois.
+    ("cpp: the three lines do not follow the big value",
+     "include/flexseq/MainScreen.h",
+     "    return static_cast<uint8_t>(line + (bigValueTakesCursor(model) ? 1 : 0));",
+     "    return line;",
+     "cpp-main-screen"),
+    ("ts: the three lines do not follow the big value",
+     "sim/src/sim/MainScreenPixels.ts",
+     "  return line + (bigValueTakesCursor(model) ? 1 : 0);",
+     "  return line;",
+     "ts-main-screen"),
+    ("cpp: a channel outside SEQ shifts its lines too",
+     "include/flexseq/MainScreen.h",
+     "    return isChannelTab(model) && !model.configPage\n"
+     "        && model.mode == static_cast<uint8_t>(MODE_SEQ);",
+     "    return true;",
+     "cpp-main-screen"),
+    ("ts: a channel outside SEQ shifts its lines too",
+     "sim/src/sim/MainScreenPixels.ts",
+     "  return model.tab >= TAB_FIRST_CHANNEL && model.tab <= TAB_LAST_CHANNEL\n"
+     "    && !model.configPage && model.mode === ChannelMode.SEQ;",
+     "  return true;",
      "ts-main-screen"),
     # Lot 16E etape 5b : le drapeau par canal.
     ("cpp: the length gesture does not raise the change flag",

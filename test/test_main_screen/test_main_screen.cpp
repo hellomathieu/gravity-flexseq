@@ -4,6 +4,10 @@
 #include <unity.h>
 
 #include <flexseq/MainScreen.h>
+#include <flexseq/MainScreenModel.h>
+#include <flexseq/SequencerEngine.h>
+#include <flexseq/Transport.h>
+#include <flexseq/UiController.h>
 
 using flexseq::Band;
 using flexseq::MainScreenModel;
@@ -125,7 +129,7 @@ MainScreenModel channelTab(uint8_t tab = 1) {
     m.insideTab = false;
     m.cursor = 0;
     m.fieldOpen = false;
-    m.fieldCount = 3;
+    m.fieldCount = 4;
     m.patternIndex = 0;
     m.length = 16;
     m.subdiv = 1;
@@ -536,20 +540,119 @@ static uint16_t inkInBoxOf(const RecordingCanvas& c, uint8_t x0, uint8_t w,
     return ink;
 }
 
+// La rangee du HAUT de la boite de surbrillance : les glyphes de velvetscreen
+// occupent base-5 a base-1, donc seule l inversion encre base-6. C est le meme
+// temoin que celui de la sonde de gestes, et il ne confond pas un pave avec du
+// texte.
+uint16_t cursorTopRowInk(const RecordingCanvas& c, uint8_t x0, uint8_t w,
+                         uint8_t baseline) {
+    const uint8_t y = static_cast<uint8_t>(baseline - flexseq::FONT_VELVETSCREEN_HEIGHT - 1);
+    uint16_t ink = 0;
+    for (uint8_t x = x0; x < x0 + w; ++x) {
+        if (c.at(x, y)) ++ink;
+    }
+    return ink;
+}
+
+uint16_t lineTopRowInk(const RecordingCanvas& c, uint8_t line) {
+    return cursorTopRowInk(c, ms::LINE_LABEL_X - 1, 40,
+                           static_cast<uint8_t>(ms::LINE_0_BASELINE_Y
+                                                + line * ms::LINE_SPACING_Y));
+}
+
+uint16_t bigLabelTopRowInk(const RecordingCanvas& c) {
+    return cursorTopRowInk(c, 0, ms::LINE_LABEL_X - 2, ms::MAIN_LABEL_BASELINE_Y);
+}
+
 void test_the_cursor_marks_the_line_it_is_on_and_no_other() {
     canvas.reset();
     MainScreenModel m = channelTab();
     m.insideTab = true;
+    // En SEQ la position 1 nomme MODE, qui est la PREMIERE ligne : la grande
+    // valeur a pris la position 0 au lot 16E etape 5a.
     m.cursor = 1;
     drawMainScreen(canvas, m);
-    const uint16_t line0 = inkInBoxOf(canvas, ms::LINE_LABEL_X - 1, 40,
-                                      ms::LINE_0_BASELINE_Y);
-    const uint16_t line1 = inkInBoxOf(canvas, ms::LINE_LABEL_X - 1, 40,
-                                      ms::LINE_1_BASELINE_Y);
-    const uint16_t line2 = inkInBoxOf(canvas, ms::LINE_LABEL_X - 1, 40,
-                                      ms::LINE_2_BASELINE_Y);
-    TEST_ASSERT_TRUE_MESSAGE(line1 > line0, "la ligne du curseur porte le pave");
-    TEST_ASSERT_TRUE_MESSAGE(line1 > line2, "et elle seule");
+    TEST_ASSERT_TRUE_MESSAGE(lineTopRowInk(canvas, 0) > 0,
+        "la ligne du champ nomme porte le pave");
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(0, lineTopRowInk(canvas, 1), "et elle seule");
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(0, lineTopRowInk(canvas, 2), "et elle seule");
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(0, bigLabelTopRowInk(canvas),
+        "la grande valeur ne porte rien : le curseur n y est pas");
+}
+
+// Le curseur pose sur la grande valeur ne doit PAS marquer une ligne en meme
+// temps. Un ecran qui porte deux surbrillances ne dit plus ou est le curseur.
+void test_the_cursor_on_the_big_value_marks_no_line() {
+    canvas.reset();
+    MainScreenModel m = channelTab();
+    m.insideTab = true;
+    m.cursor = 0;
+    drawMainScreen(canvas, m);
+    TEST_ASSERT_TRUE_MESSAGE(bigLabelTopRowInk(canvas) > 0,
+        "la grande valeur porte le pave");
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(0, lineTopRowInk(canvas, 0),
+        "et aucune ligne ne le porte avec elle");
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(0, lineTopRowInk(canvas, 1), "idem");
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(0, lineTopRowInk(canvas, 2), "idem");
+}
+
+// L ORACLE : le domaine nomme le champ, l ecran marque sa ligne. Le rendu
+// derive la position de la grande valeur, donc rien ne garantit tout seul qu il
+// suive le controleur. Ce test pilote un VRAI controleur et confronte les deux a
+// chaque position, ce qu un modele ecrit a la main ne peut pas faire.
+void test_the_highlight_marks_the_line_of_the_field_the_domain_names() {
+    using flexseq::UiController;
+    flexseq::SequencerEngine engine;
+    flexseq::Transport transport(engine);
+    UiController ui(engine, transport);
+
+    engine.setChannelMode(0, flexseq::MODE_SEQ);
+    for (uint8_t guard = 0; guard < 2 * UiController::TAB_COUNT; ++guard) {
+        if (ui.currentTab() == UiController::TAB_FIRST_CHANNEL) break;
+        ui.handle(UiController::EVENT_ROTATE, 1);
+    }
+    TEST_ASSERT_EQUAL_UINT8(UiController::TAB_FIRST_CHANNEL, ui.currentTab());
+    ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(UiController::SEQ_CHANNEL_TAB_FIELDS,
+        ui.fieldCount(), "un canal en SEQ porte quatre positions");
+
+    for (uint8_t position = 0; position < UiController::SEQ_CHANNEL_TAB_FIELDS;
+         ++position) {
+        for (uint8_t guard = 0; guard < 2 * UiController::SEQ_CHANNEL_TAB_FIELDS;
+             ++guard) {
+            if (ui.cursor() == position) break;
+            ui.handle(UiController::EVENT_ROTATE, 1);
+        }
+        TEST_ASSERT_EQUAL_UINT8(position, ui.cursor());
+
+        canvas.reset();
+        drawMainScreen(canvas, flexseq::mainScreenModelOf(ui, engine));
+
+        uint8_t marked = 0;
+        int8_t line = -1;
+        for (uint8_t n = 0; n < 3; ++n) {
+            if (lineTopRowInk(canvas, n) > 0) { line = static_cast<int8_t>(n); ++marked; }
+        }
+        const bool bigValue = bigLabelTopRowInk(canvas) > 0;
+        if (bigValue) ++marked;
+        TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, marked,
+            "une seule surbrillance, le curseur etant un index unique");
+
+        switch (ui.field()) {
+            case UiController::FIELD_PATTERN:
+                TEST_ASSERT_TRUE_MESSAGE(bigValue, "PATTERN : la grande valeur");
+                break;
+            case UiController::FIELD_MODE:
+                TEST_ASSERT_EQUAL_INT8_MESSAGE(0, line, "MODE : la premiere ligne");
+                break;
+            case UiController::FIELD_EDIT_ENTRY:
+                TEST_ASSERT_EQUAL_INT8_MESSAGE(1, line, "EDIT : la deuxieme ligne");
+                break;
+            default:
+                TEST_ASSERT_EQUAL_INT8_MESSAGE(2, line, "CONFIG : la troisieme ligne");
+                break;
+        }
+    }
 }
 
 void test_opening_a_field_moves_the_mark_from_the_label_to_the_value() {
@@ -1077,6 +1180,8 @@ int main() {
     RUN_TEST(test_the_settings_tab_is_empty_while_it_is_deferred);
 
     RUN_TEST(test_the_cursor_marks_the_line_it_is_on_and_no_other);
+    RUN_TEST(test_the_cursor_on_the_big_value_marks_no_line);
+    RUN_TEST(test_the_highlight_marks_the_line_of_the_field_the_domain_names);
     RUN_TEST(test_opening_a_field_moves_the_mark_from_the_label_to_the_value);
     RUN_TEST(test_no_cursor_is_drawn_while_on_the_tab_bar);
 
