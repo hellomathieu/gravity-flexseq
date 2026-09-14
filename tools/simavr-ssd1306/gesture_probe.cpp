@@ -255,6 +255,17 @@ static const struct { char port; uint8_t bit; const char *name; } OUTS[OUT_COUNT
 typedef struct { uint32_t tick[MAX_ONSETS]; uint32_t n; int last; } outline_t;
 static outline_t g_out[OUT_COUNT];
 
+// Les fronts d une sortie dans une fenetre. Sert au silence de l editeur :
+// PRD 5.0 point 11.
+static uint32_t risesInWindow(const outline_t *o, uint32_t from, uint32_t to)
+{
+    uint32_t n = 0;
+    for (uint32_t i = 0; i < o->n; ++i) {
+        if (o->tick[i] >= from && o->tick[i] < to) ++n;
+    }
+    return n;
+}
+
 // Injection de CV, portee depuis trigger_probe.c : la sonde repond en
 // millivolts a chaque conversion. Sans elle la course MOD ne pourrait pas
 // montrer sur les broches l'effet du routage qu'un geste vient de poser.
@@ -2565,6 +2576,23 @@ int main(int argc, char **argv)
         const int luAvant = readSimulatedEeprom(avr, templatesAvant, ZONE);
 
         backToBar(avr);
+
+        /* ---- Le silence de l editeur, PRD 5.0 point 11 ----
+         *
+         * DEUX fenetres, et la premiere n est pas un ornement : un transport a
+         * l arret rendrait six silences, et le critere passerait pour la
+         * mauvaise raison. Les six canaux sont en CLOCK par defaut, donc ils
+         * emettent a CHAQUE pas tant que l editeur est ferme.
+         */
+        playPress(avr);                             /* le transport demarre */
+        const uint32_t silAvantA = g_ticks;
+        run_for(avr, 1500.0);
+        const uint32_t silAvantB = g_ticks;
+        for (int o = 0; o < OUT_COUNT; ++o) {
+            printf("pat_sil_avant_OUT%d %u\n", o + 1,
+                   (unsigned)risesInWindow(&g_out[o], silAvantA, silAvantB));
+        }
+
         alignTab(avr, (int)flexseq::UiController::TAB_PATTERNS);
         pressFor(avr, (double)PRESS_MS);            /* entre dans l onglet */
         rotate(avr, (int)flexseq::UiController::PATTERNS_FIELD_INDEX_EDIT_ENTRY, 1);
@@ -2575,6 +2603,19 @@ int main(int argc, char **argv)
         printf("pat_ouverture_twi  %u\n", g_twi_bytes - twiAvant);
 
         pressFor(avr, (double)PRESS_MS);            /* allume le step 0 */
+
+        /* ⚠️ La fenetre couvre un CYCLE ENTIER du canal 1. Le template porte un
+         * seul pas actif sur une longueur de 16, donc OUT1 n emet qu une fois
+         * par tour : une fenetre courte rendrait zero et rougirait a tort.
+         */
+        const uint32_t silPendantA = g_ticks;
+        run_for(avr, 9000.0);
+        const uint32_t silPendantB = g_ticks;
+        for (int o = 0; o < OUT_COUNT; ++o) {
+            printf("pat_sil_pendant_OUT%d %u\n", o + 1,
+                   (unsigned)risesInWindow(&g_out[o], silPendantA, silPendantB));
+        }
+
         pressFor(avr, (double)LONG_PRESS_MS);       /* sort : l ecriture part */
         /* 24 octets a un par passage, environ 3,4 ms chacun sur la puce. */
         run_for(avr, 2000.0);

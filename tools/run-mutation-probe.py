@@ -1751,6 +1751,10 @@ MUTANTS = [
      "include/flexseq/SequencerEngine.h",
      "        return editorTemplate == NO_EDITOR || channel == EDITOR_CHANNEL;",
      "        return true;", "cpp"),
+    ("cpp: main forgets the silence guard (pins)",
+     "src/main.cpp",
+     "        if (!modulatedPatterns.channelIsAudible(ch)) {",
+     "        if (false) {", "probe-mod"),
 ]
 
 SUITES = {
