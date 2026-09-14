@@ -17,6 +17,7 @@ import {
   type SequencerEngine,
 } from "./SequencerEngine.js";
 import { PATTERN_COUNT } from "./PatternBank.js";
+import { PatternAction, PATTERN_ACTION_COUNT } from "./PatternAction.js";
 import { DEFAULT_SUBDIV, SUBDIVS } from "./subdiv.js";
 import type { Transport } from "./Transport.js";
 
@@ -124,6 +125,7 @@ export class UiController {
   private currentTempo = DEFAULT_TEMPO;
   private source = 0;
   private rev = 0;
+  private action: PatternAction = PatternAction.Load;
 
   constructor(
     private readonly engine: SequencerEngine,
@@ -163,6 +165,22 @@ export class UiController {
     if (channel < 0) return false;
     const mode = this.engine.getChannelMode(channel);
     return mode === ChannelMode.CLOCK || mode === ChannelMode.RANDOM;
+  }
+
+  get patternAction(): PatternAction {
+    return this.action;
+  }
+
+  // SAVE n apparait que si la copie du canal differe du template qu il a charge
+  // — PRD 12.9 point 5. Un moteur non cable n a pas de drapeau : il ne propose
+  // alors que LOAD.
+  get patternActionCount(): number {
+    const state = this.engine.modulatedPatterns();
+    const channel = this.selectedChannel;
+    if (state === null || channel < 0) {
+      return 1;
+    }
+    return state.isDirty(channel) ? PATTERN_ACTION_COUNT : 1;
   }
 
   get fieldCount(): number {
@@ -304,7 +322,11 @@ export class UiController {
   private handleTab(event: UiEvent, delta: number): void {
     switch (event) {
       case UiEvent.Rotate:
-        if (this.open) {
+        if (this.open && this.field === UiField.Pattern) {
+          // Le champ ouvert choisit une ACTION. Le NUMERO du template se nomme
+          // par SHIFT plus rotation, et ce geste ne change pas.
+          this.action = clampIndex(this.action, oneStep(delta), this.patternActionCount);
+        } else if (this.open) {
           this.adjustField(delta);
         } else {
           this.fieldCursor = wrapIndex(this.fieldCursor, oneStep(delta), this.fieldCount);
@@ -325,6 +347,7 @@ export class UiController {
           this.fieldCursor = CONFIG_FIELD_INDEX_LENGTH;
         } else if (this.field !== UiField.None) {
           this.open = true;
+          this.action = PatternAction.Load;
         }
         break;
       case UiEvent.LongPress:

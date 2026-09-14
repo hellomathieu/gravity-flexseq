@@ -1354,8 +1354,153 @@ void test_closing_the_template_editor_changes_the_frame_choice_with_no_gesture()
     TEST_ASSERT_EQUAL(flexseq::UI_FRAME_MAIN, ferme.kind);
 }
 
+/*
+ * Lot 16E etape 5c — le champ de la grande valeur s ouvre et nomme l action.
+ * PRD 5.0 amendement 1bis : un appui court ouvre, une rotation deplace entre
+ * LOAD et SAVE, et SAVE n existe que si la copie du canal a change.
+ */
+
+namespace {
+
+// Ouvre le champ de la grande valeur sur le canal 0, en SEQ.
+void openPatternField(Rig& r) {
+    r.enterTab();
+    r.gotoField(UiController::FIELD_PATTERN);
+    r.ui.handle(UiController::EVENT_PRESS);
+}
+
+}  // namespace
+
+void test_a_clean_copy_offers_load_alone() {
+    Rig r;
+    flexseq::ModulatedPatternState state;
+    r.engine.setModulatedPatterns(&state);
+
+    openPatternField(r);
+    TEST_ASSERT_TRUE_MESSAGE(r.ui.fieldOpen(), "le champ s ouvre");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, r.ui.patternActionCount(),
+        "une copie propre n a rien a publier");
+    TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_LOAD, r.ui.patternAction());
+
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(flexseq::PATTERN_ACTION_LOAD,
+        r.ui.patternAction(), "la rotation ne trouve pas de seconde valeur");
+}
+
+void test_a_changed_copy_offers_save_as_well() {
+    Rig r;
+    flexseq::ModulatedPatternState state;
+    r.engine.setModulatedPatterns(&state);
+    state.markDirty(0);
+
+    openPatternField(r);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(2, r.ui.patternActionCount(),
+        "une copie changee peut etre publiee");
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_SAVE, r.ui.patternAction());
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_LOAD, r.ui.patternAction());
+}
+
+void test_the_action_clamps_at_both_ends() {
+    Rig r;
+    flexseq::ModulatedPatternState state;
+    r.engine.setModulatedPatterns(&state);
+    state.markDirty(0);
+
+    openPatternField(r);
+    for (uint8_t i = 0; i < 5; ++i) {
+        r.ui.handle(UiController::EVENT_ROTATE, 1);
+    }
+    TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_SAVE, r.ui.patternAction());
+    for (uint8_t i = 0; i < 5; ++i) {
+        r.ui.handle(UiController::EVENT_ROTATE, -1);
+    }
+    TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_LOAD, r.ui.patternAction());
+}
+
+// ⚠️ La rotation dans le champ ouvert nommait le template avant cette etape.
+// Elle choisit desormais une ACTION, et le numero ne bouge plus.
+void test_the_open_field_no_longer_names_the_template() {
+    Rig r;
+    flexseq::ModulatedPatternState state;
+    r.engine.setModulatedPatterns(&state);
+    state.markDirty(0);
+
+    openPatternField(r);
+    const int8_t before = r.engine.getSelectedPattern(0);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_INT8_MESSAGE(before, r.engine.getSelectedPattern(0),
+        "une rotation dans le champ ouvert ne change pas le numero");
+}
+
+// Le geste qui nomme le template ne change pas : SHIFT plus rotation.
+void test_shift_rotate_still_names_the_template_while_the_field_is_open() {
+    Rig r;
+    flexseq::ModulatedPatternState state;
+    r.engine.setModulatedPatterns(&state);
+
+    openPatternField(r);
+    const int8_t before = r.engine.getSelectedPattern(0);
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_INT8(before + 1, r.engine.getSelectedPattern(0));
+}
+
+// Fermer le champ n execute rien : ni chargement, ni ecriture. Le drapeau du
+// canal reste leve, et le contenu reste celui qu il etait.
+void test_closing_the_field_runs_nothing() {
+    Rig r;
+    flexseq::ModulatedPatternState state;
+    r.engine.setModulatedPatterns(&state);
+    state.markDirty(0);
+    r.engine.instanceForChannel(0)->writeStep(5, true);
+
+    openPatternField(r);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_SAVE, r.ui.patternAction());
+    r.ui.handle(UiController::EVENT_PRESS);
+
+    TEST_ASSERT_FALSE_MESSAGE(r.ui.fieldOpen(), "le champ se ferme");
+    TEST_ASSERT_TRUE_MESSAGE(state.isDirty(0), "le drapeau du canal est intact");
+    bool active = false;
+    r.engine.instanceForChannel(0)->readStep(5, active);
+    TEST_ASSERT_TRUE_MESSAGE(active, "le contenu de la copie est intact");
+}
+
+void test_opening_the_field_again_starts_on_load() {
+    Rig r;
+    flexseq::ModulatedPatternState state;
+    r.engine.setModulatedPatterns(&state);
+    state.markDirty(0);
+
+    openPatternField(r);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_SAVE, r.ui.patternAction());
+    r.ui.handle(UiController::EVENT_PRESS);
+    r.ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(flexseq::PATTERN_ACTION_LOAD,
+        r.ui.patternAction(), "le champ s ouvre toujours sur LOAD");
+}
+
+// Un moteur non cable n a pas de drapeau : le champ ne propose alors que LOAD,
+// et il ne lit jamais un pointeur nul.
+void test_an_engine_without_the_buffer_offers_load_alone() {
+    Rig r;
+    openPatternField(r);
+    TEST_ASSERT_EQUAL_UINT8(1, r.ui.patternActionCount());
+    TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_LOAD, r.ui.patternAction());
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
+    RUN_TEST(test_a_clean_copy_offers_load_alone);
+    RUN_TEST(test_a_changed_copy_offers_save_as_well);
+    RUN_TEST(test_the_action_clamps_at_both_ends);
+    RUN_TEST(test_the_open_field_no_longer_names_the_template);
+    RUN_TEST(test_shift_rotate_still_names_the_template_while_the_field_is_open);
+    RUN_TEST(test_closing_the_field_runs_nothing);
+    RUN_TEST(test_opening_the_field_again_starts_on_load);
+    RUN_TEST(test_an_engine_without_the_buffer_offers_load_alone);
     RUN_TEST(test_a_clock_tab_holds_the_three_lines_of_the_original);
     RUN_TEST(test_a_random_tab_puts_the_subdivision_on_the_second_line);
     RUN_TEST(test_a_seq_tab_takes_the_three_lines_of_the_original);

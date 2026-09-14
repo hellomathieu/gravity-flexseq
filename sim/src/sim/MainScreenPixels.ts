@@ -71,6 +71,7 @@ import {
 } from "./MainScreenDisplay.js";
 import { MainParameter, type MainScreenModel } from "../domain/MainScreenModel.js";
 import { ChannelMode } from "../domain/SequencerEngine.js";
+import { PatternAction } from "../domain/PatternAction.js";
 import { CvDestination } from "../domain/CvDestination.js";
 import { STK_L, VELVETSCREEN, glyphFor, textWidth, type Font } from "./oledFont.js";
 
@@ -85,6 +86,8 @@ export const LBL_SUBDIVISION = "SUBDIVISION";
 export const LBL_SKIP_CHANCE = "SKIP CHANCE";
 export const LBL_LENGTH = "LENGTH:";
 export const LBL_PATTERN = "PATTERN";
+const LBL_LOAD = "LOAD";
+const LBL_SAVE = "SAVE";
 
 const VELVETSCREEN_HEIGHT = 5;
 const STK_L_HEIGHT = 23;
@@ -176,8 +179,21 @@ export function mainValueOf(model: MainScreenModel): string {
   return subdivLabel(model.subdiv);
 }
 
+// PRD 5.0 amendement 1bis : ouvert, le champ de la grande valeur nomme l ACTION.
+// C est le seul signal qui separe « le curseur est ici » de « le champ est
+// ouvert », l inversion disant deja le premier.
+export function patternActionIsOpen(model: MainScreenModel): boolean {
+  return bigValueTakesCursor(model) && model.insideTab && model.fieldOpen
+    && model.cursor === 0;
+}
+
 export function mainLabelOf(model: MainScreenModel): string {
-  if (model.configPage || model.mainParameter === MainParameter.Pattern) return LBL_PATTERN;
+  if (model.configPage || model.mainParameter === MainParameter.Pattern) {
+    if (patternActionIsOpen(model)) {
+      return model.patternAction === PatternAction.Save ? LBL_SAVE : LBL_LOAD;
+    }
+    return LBL_PATTERN;
+  }
   return model.mainParameter === MainParameter.SkipChance ? LBL_SKIP_CHANCE : LBL_SUBDIVISION;
 }
 

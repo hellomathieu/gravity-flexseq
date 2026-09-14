@@ -308,6 +308,8 @@ FLEXSEQ_LABEL(LBL_SUBDIVISION, "SUBDIVISION");
 FLEXSEQ_LABEL(LBL_SKIP_CHANCE, "SKIP CHANCE");
 FLEXSEQ_LABEL(LBL_LENGTH, "LENGTH:");
 FLEXSEQ_LABEL(LBL_PATTERN, "PATTERN");
+FLEXSEQ_LABEL(LBL_LOAD, "LOAD");
+FLEXSEQ_LABEL(LBL_SAVE, "SAVE");
 
 inline const char* modeText(uint8_t mode) {
     switch (static_cast<ChannelMode>(mode)) {
@@ -340,8 +342,20 @@ inline void mainValueOf(const MainScreenModel& model, char* out) {
     subdivLabel(model.subdiv, out);
 }
 
+// PRD 5.0 amendement 1bis : ouvert, le champ de la grande valeur nomme l ACTION.
+// C est le seul signal qui separe « le curseur est ici » de « le champ est
+// ouvert », l inversion disant deja le premier.
+inline bool patternActionIsOpen(const MainScreenModel& model) {
+    return bigValueTakesCursor(model) && model.insideTab && model.fieldOpen
+        && model.cursor == 0;
+}
+
 inline const char* mainLabelOf(const MainScreenModel& model) {
     if (model.configPage || model.mainParameter == MAIN_PATTERN) {
+        if (patternActionIsOpen(model)) {
+            return model.patternAction == PATTERN_ACTION_SAVE
+                ? LBL_SAVE : LBL_LOAD;
+        }
         return LBL_PATTERN;
     }
     return model.mainParameter == MAIN_SKIP_CHANCE ? LBL_SKIP_CHANCE : LBL_SUBDIVISION;

@@ -1,3 +1,5 @@
+import { ModulatedPatternState } from "../src/domain/ModulatedPatternState.js";
+import { PatternAction } from "../src/domain/PatternAction.js";
 import { describe, expect, it } from "vitest";
 import {
   CHANNEL_TAB_FIELDS,
@@ -8,6 +10,7 @@ import {
   MIN_TEMPO,
   CONFIG_FIELD_INDEX_LENGTH,
   CONFIG_FIELD_INDEX_SUBDIV,
+  SEQ_CHANNEL_TAB_FIELDS,
   SEQ_FIELD_INDEX_CONFIG,
   SEQ_FIELD_INDEX_EDIT_ENTRY,
   SEQ_FIELD_INDEX_MODE,
@@ -973,5 +976,107 @@ describe("l onglet PATTERNS — lot 16E etape 4a", () => {
   it("porte le meme compte d emplacements figes que le format", () => {
     expect(FIRST_WRITABLE_TEMPLATE).toBe(v3.FROZEN_TEMPLATE_COUNT);
     expect(FIRST_WRITABLE_TEMPLATE).toBe(8);
+  });
+});
+
+/*
+ * Lot 16E etape 5c — le champ de la grande valeur s ouvre et nomme l action.
+ * PRD 5.0 amendement 1bis : un appui court ouvre, une rotation deplace entre
+ * LOAD et SAVE, et SAVE n existe que si la copie du canal a change.
+ */
+describe("UiController — l action de la grande valeur", () => {
+  const openPatternField = (dirty: boolean) => {
+    const engine = new SequencerEngine();
+    for (let ch = 0; ch < engine.channelCount(); ++ch) {
+      engine.setChannelMode(ch, ChannelMode.SEQ);
+    }
+    const state = new ModulatedPatternState();
+    if (dirty) state.markDirty(0);
+    engine.setModulatedPatterns(state);
+    const ui = new UiController(engine, new Transport(engine));
+    ui.handle(UiEvent.Press);
+    for (let guard = 0; guard < SEQ_CHANNEL_TAB_FIELDS; guard += 1) {
+      if (ui.field === UiField.Pattern) break;
+      ui.handle(UiEvent.Rotate, 1);
+    }
+    expect(ui.field).toBe(UiField.Pattern);
+    ui.handle(UiEvent.Press);
+    return { engine, state, ui };
+  };
+
+  it("une copie propre ne propose que LOAD", () => {
+    const { ui } = openPatternField(false);
+    expect(ui.fieldOpen).toBe(true);
+    expect(ui.patternActionCount).toBe(1);
+    expect(ui.patternAction).toBe(PatternAction.Load);
+    ui.handle(UiEvent.Rotate, 1);
+    expect(ui.patternAction).toBe(PatternAction.Load);
+  });
+
+  it("une copie changee propose aussi SAVE", () => {
+    const { ui } = openPatternField(true);
+    expect(ui.patternActionCount).toBe(2);
+    ui.handle(UiEvent.Rotate, 1);
+    expect(ui.patternAction).toBe(PatternAction.Save);
+    ui.handle(UiEvent.Rotate, -1);
+    expect(ui.patternAction).toBe(PatternAction.Load);
+  });
+
+  it("l action s ecrete aux deux bouts", () => {
+    const { ui } = openPatternField(true);
+    for (let i = 0; i < 5; ++i) ui.handle(UiEvent.Rotate, 1);
+    expect(ui.patternAction).toBe(PatternAction.Save);
+    for (let i = 0; i < 5; ++i) ui.handle(UiEvent.Rotate, -1);
+    expect(ui.patternAction).toBe(PatternAction.Load);
+  });
+
+  // ⚠️ La rotation dans le champ ouvert nommait le template avant cette etape.
+  it("le champ ouvert ne nomme plus le template", () => {
+    const { engine, ui } = openPatternField(true);
+    const before = engine.getSelectedPattern(0);
+    ui.handle(UiEvent.Rotate, 1);
+    expect(engine.getSelectedPattern(0)).toBe(before);
+  });
+
+  it("SHIFT plus rotation nomme toujours le template, champ ouvert", () => {
+    const { engine, ui } = openPatternField(false);
+    const before = engine.getSelectedPattern(0);
+    ui.handle(UiEvent.ShiftRotate, 1);
+    expect(engine.getSelectedPattern(0)).toBe(before + 1);
+  });
+
+  it("fermer le champ n execute rien", () => {
+    const { engine, state, ui } = openPatternField(true);
+    engine.instanceForChannel(0)!.writeStep(5, true);
+    ui.handle(UiEvent.Rotate, 1);
+    expect(ui.patternAction).toBe(PatternAction.Save);
+    ui.handle(UiEvent.Press);
+    expect(ui.fieldOpen).toBe(false);
+    expect(state.isDirty(0)).toBe(true);
+    expect(engine.instanceForChannel(0)!.readStep(5)).toBe(true);
+  });
+
+  it("le champ s ouvre toujours sur LOAD", () => {
+    const { ui } = openPatternField(true);
+    ui.handle(UiEvent.Rotate, 1);
+    expect(ui.patternAction).toBe(PatternAction.Save);
+    ui.handle(UiEvent.Press);
+    ui.handle(UiEvent.Press);
+    expect(ui.patternAction).toBe(PatternAction.Load);
+  });
+
+  // Un moteur non cable n a pas de drapeau : le champ ne propose que LOAD, et
+  // il ne lit jamais un pointeur nul.
+  it("un moteur sans tampon ne propose que LOAD", () => {
+    const engine = new SequencerEngine();
+    for (let ch = 0; ch < engine.channelCount(); ++ch) {
+      engine.setChannelMode(ch, ChannelMode.SEQ);
+    }
+    const ui = new UiController(engine, new Transport(engine));
+    ui.handle(UiEvent.Press);
+    expect(ui.field).toBe(UiField.Pattern);
+    ui.handle(UiEvent.Press);
+    expect(ui.patternActionCount).toBe(1);
+    expect(ui.patternAction).toBe(PatternAction.Load);
   });
 });

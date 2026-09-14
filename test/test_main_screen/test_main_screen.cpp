@@ -1068,6 +1068,65 @@ void test_the_patterns_tab_takes_the_three_lines_of_the_original() {
     TEST_ASSERT_EQUAL_STRING("", flashLabel);
 }
 
+// Lot 16E etape 5c : le champ de la grande valeur, une fois OUVERT, nomme
+// l action au lieu de nommer le parametre. C est le seul signal qui separe
+// « le curseur est ici » de « le champ est ouvert » : l inversion dit deja le
+// premier, PRD 5.0 amendement 1bis.
+void test_the_open_big_value_field_names_the_action() {
+    namespace ms = flexseq::mainscreen;
+    auto draw = [](bool open, uint8_t action) {
+        canvas.reset();
+        flexseq::MainScreenModel m = channelTab();
+        m.insideTab = true;
+        m.cursor = 0;
+        m.fieldOpen = open;
+        m.patternAction = action;
+        drawMainScreen(canvas, m);
+    };
+
+    draw(false, flexseq::PATTERN_ACTION_LOAD);
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("PATTERN"),
+        "ferme, le champ nomme le parametre");
+    TEST_ASSERT_NULL(canvas.find("LOAD"));
+
+    draw(true, flexseq::PATTERN_ACTION_LOAD);
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("LOAD"), "ouvert, il nomme l action");
+    TEST_ASSERT_NULL_MESSAGE(canvas.find("PATTERN"),
+        "et il ne nomme plus le parametre");
+
+    draw(true, flexseq::PATTERN_ACTION_SAVE);
+    TEST_ASSERT_NOT_NULL(canvas.find("SAVE"));
+    TEST_ASSERT_NULL(canvas.find("LOAD"));
+}
+
+// L action ne s affiche QUE sur la grande valeur d un canal en SEQ : la page
+// CONFIG et l onglet PATTERNS portent la meme etiquette et un autre champ.
+void test_the_action_never_replaces_the_label_elsewhere() {
+    namespace ms = flexseq::mainscreen;
+    canvas.reset();
+    flexseq::MainScreenModel m = channelTab();
+    m.insideTab = true;
+    m.cursor = 0;
+    m.fieldOpen = true;
+    m.configPage = true;
+    m.patternAction = flexseq::PATTERN_ACTION_SAVE;
+    drawMainScreen(canvas, m);
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("PATTERN"),
+        "la page CONFIG garde son etiquette");
+    TEST_ASSERT_NULL(canvas.find("SAVE"));
+
+    canvas.reset();
+    m = channelTab(ms::TAB_PATTERNS);
+    m.insideTab = true;
+    m.cursor = 0;
+    m.fieldOpen = true;
+    m.patternAction = flexseq::PATTERN_ACTION_SAVE;
+    drawMainScreen(canvas, m);
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("PATTERN"),
+        "l onglet PATTERNS garde son etiquette");
+    TEST_ASSERT_NULL(canvas.find("SAVE"));
+}
+
 // Lot 16E etape 5a : le curseur peut se poser sur la grande valeur, et il faut
 // le VOIR. L etiquette PATTERN s inverse, comme la valeur ouverte d un en-tete.
 void test_the_cursor_on_the_big_value_inverts_its_label() {
@@ -1195,6 +1254,8 @@ int main() {
     RUN_TEST(test_the_slot_state_is_a_square_beside_the_label);
     RUN_TEST(test_the_patterns_tab_takes_the_three_lines_of_the_original);
     RUN_TEST(test_the_cursor_on_the_big_value_inverts_its_label);
+    RUN_TEST(test_the_open_big_value_field_names_the_action);
+    RUN_TEST(test_the_action_never_replaces_the_label_elsewhere);
     RUN_TEST(test_the_settings_tab_headline_stays_empty);
 
     return UNITY_END();

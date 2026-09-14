@@ -35,6 +35,7 @@ import {
   DEFAULT_CV_DESTINATION,
 } from "./CvDestination.js";
 import { zoneWithHysteresis, patternIndexFor, readStepFor } from "./LengthCv.js";
+import type { ModulatedPatternState } from "./ModulatedPatternState.js";
 
 import {
   Pattern,
@@ -133,6 +134,9 @@ export class SequencerEngine {
   private readonly onsets: number[];
   private readonly channels: ChannelState[];
   private readonly instances: Pattern[];
+  // Le C++ tient cet etat HORS du moteur et n en garde qu un pointeur, nul par
+  // defaut : un moteur non cable se comporte exactement comme avant.
+  private modulated: ModulatedPatternState | null = null;
 
   constructor(channelCount: number = CHANNEL_COUNT) {
     this.instances = Array.from({ length: channelCount }, () => new Pattern());
@@ -367,6 +371,14 @@ export class SequencerEngine {
 
   channelCount(): number {
     return this.channels.length;
+  }
+
+  setModulatedPatterns(state: ModulatedPatternState | null): void {
+    this.modulated = state;
+  }
+
+  modulatedPatterns(): ModulatedPatternState | null {
+    return this.modulated;
   }
 
   private channel(index: number): ChannelState | undefined {

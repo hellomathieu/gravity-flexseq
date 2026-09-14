@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include <flexseq/Pattern.h>
+#include <flexseq/PatternAction.h>
 #include <flexseq/SequencerEngine.h>
 #include <flexseq/Transport.h>
 
@@ -103,6 +104,9 @@ public:
     uint8_t cursor() const { return cursor_; }
     bool fieldOpen() const { return fieldOpen_; }
 
+    uint8_t patternAction() const { return patternAction_; }
+    uint8_t patternActionCount() const;
+
     uint8_t stepCursor() const { return stepCursor_; }
     uint8_t slotCursor() const { return slotCursor_; }
     bool isOnHeader() const { return onHeader_; }
@@ -146,6 +150,7 @@ private:
     bool onHeader_;
     bool onConfigPage_;
     bool fieldOpen_;
+    uint8_t patternAction_;
     uint16_t tempo_;
     uint8_t clockSource_;
     uint8_t revision_;

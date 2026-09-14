@@ -93,6 +93,7 @@ UiController::UiController(SequencerEngine& engine, Transport& transport)
       onHeader_(false),
       onConfigPage_(false),
       fieldOpen_(false),
+      patternAction_(PATTERN_ACTION_LOAD),
       tempo_(DEFAULT_TEMPO),
       clockSource_(0),
       revision_(0) {}
@@ -116,6 +117,19 @@ bool UiController::isLegacyModeTab() const {
     }
     const ChannelMode mode = engine_.getChannelMode(static_cast<uint8_t>(channel));
     return mode == MODE_CLOCK || mode == MODE_RANDOM;
+}
+
+// SAVE n apparait que si la copie du canal differe du template qu il a charge —
+// PRD 12.9 point 5. Un moteur non cable n a pas de drapeau : il ne propose donc
+// que LOAD, et il ne lit jamais un pointeur nul.
+uint8_t UiController::patternActionCount() const {
+    const ModulatedPatternState* modulated = engine_.modulatedPatterns();
+    const int8_t channel = selectedChannel();
+    if (modulated == nullptr || channel < 0) {
+        return 1;
+    }
+    return modulated->isDirty(static_cast<uint8_t>(channel))
+        ? PATTERN_ACTION_COUNT : 1;
 }
 
 uint8_t UiController::fieldCount() const {
@@ -229,7 +243,12 @@ void UiController::handleTabBar(Event event, int8_t delta) {
 void UiController::handleTab(Event event, int8_t delta) {
     switch (event) {
         case EVENT_ROTATE:
-            if (fieldOpen_) {
+            if (fieldOpen_ && field() == FIELD_PATTERN) {
+                // Le champ ouvert choisit une ACTION. Le NUMERO du template se
+                // nomme par SHIFT plus rotation, et ce geste ne change pas.
+                patternAction_ = clampIndex(patternAction_, oneStep(delta),
+                                            patternActionCount());
+            } else if (fieldOpen_) {
                 adjustField(delta);
             } else {
                 cursor_ = wrapIndex(cursor_, oneStep(delta), fieldCount());
@@ -250,6 +269,7 @@ void UiController::handleTab(Event event, int8_t delta) {
                 cursor_ = CONFIG_FIELD_INDEX_LENGTH;
             } else if (field() != FIELD_NONE) {
                 fieldOpen_ = true;
+                patternAction_ = PATTERN_ACTION_LOAD;
             }
             break;
         case EVENT_LONG_PRESS:

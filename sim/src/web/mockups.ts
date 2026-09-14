@@ -10,6 +10,7 @@
  * Deux vignettes portent une reference MESUREE sur le panneau. Les autres n en
  * portent pas, et la page le dit plutot que de laisser croire le contraire.
  */
+import { PatternAction } from "../domain/PatternAction.js";
 import { renderMainScreen } from "../sim/MainScreenPixels.js";
 import {
   GRID_STEPS,
@@ -54,6 +55,7 @@ function mainModel(over: Partial<MainScreenModel>): MainScreenModel {
     skipChance: 3,
     stepTicks: 24,
     mainParameter: MainParameter.Subdiv,
+    patternAction: PatternAction.Load,
     cv1Target: 0,
     cv2Target: 0,
     configPage: false,

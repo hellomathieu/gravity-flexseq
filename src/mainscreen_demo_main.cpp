@@ -14,6 +14,9 @@ namespace {
 flexseq::SequencerEngine engine;
 flexseq::Transport transport(engine);
 flexseq::UiController ui(engine, transport);
+#if defined(FLEXSEQ_DEMO_PATTERN_ACTION)
+flexseq::ModulatedPatternState modulated;
+#endif
 
 #if defined(FLEXSEQ_DEMO_TAB_PATTERNS)
 constexpr uint8_t DEMO_TAB = flexseq::UiController::TAB_PATTERNS;
@@ -76,6 +79,9 @@ void renderBand() {
 
 void setup() {
     gravity.Init();
+#if defined(FLEXSEQ_DEMO_PATTERN_ACTION)
+    engine.setModulatedPatterns(&modulated);
+#endif
     gravity.display.setFont(flexseq::FONT_VELVETSCREEN);
 
 #if defined(FLEXSEQ_DEMO_MODE_SEQ)
@@ -113,6 +119,24 @@ void setup() {
 #if defined(FLEXSEQ_DEMO_MOD)
     ui.handle(flexseq::UiController::EVENT_PRESS);
     for (uint8_t i = 0; i < flexseq::UiController::CONFIG_FIELD_INDEX_MOD; ++i) {
+        ui.handle(flexseq::UiController::EVENT_ROTATE, 1);
+    }
+#endif
+
+#if defined(FLEXSEQ_DEMO_PATTERN_ACTION)
+    // Lot 16E etape 5c : la grande valeur, champ OUVERT. Le curseur revient sur
+    // elle par des crans, puis un appui court ouvre le champ, et des crans
+    // choisissent l action. Aucun etat d interface n est pose a la main : le
+    // panneau montre ce qu une suite de gestes produit.
+    //
+    // La valeur du drapeau est l index de l action : 1 donne LOAD, 2 donne SAVE.
+    // Le canal est marque comme change, sans quoi SAVE n existerait pas.
+    modulated.markDirty(DEMO_TAB - 1);
+    while (ui.cursor() != flexseq::UiController::SEQ_FIELD_INDEX_PATTERN) {
+        ui.handle(flexseq::UiController::EVENT_ROTATE, 1);
+    }
+    ui.handle(flexseq::UiController::EVENT_PRESS);
+    for (uint8_t i = 1; i < FLEXSEQ_DEMO_PATTERN_ACTION; ++i) {
         ui.handle(flexseq::UiController::EVENT_ROTATE, 1);
     }
 #endif

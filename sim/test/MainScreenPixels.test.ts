@@ -1,5 +1,6 @@
+import { PatternAction } from "../src/domain/PatternAction.js";
 import { describe, expect, it } from "vitest";
-import { legacyLine, modText, renderMainScreen } from "../src/sim/MainScreenPixels.js";
+import { legacyLine, mainLabelOf, modText, renderMainScreen } from "../src/sim/MainScreenPixels.js";
 import { MainParameter, mainScreenModelOf, type MainScreenModel } from "../src/domain/MainScreenModel.js";
 import { SequencerEngine } from "../src/domain/SequencerEngine.js";
 import { Transport } from "../src/domain/Transport.js";
@@ -61,6 +62,7 @@ const PANEL_MODEL: MainScreenModel = {
   skipChance: 0,
   stepTicks: 24,
   mainParameter: MainParameter.Subdiv,
+  patternAction: PatternAction.Load,
   cv1Target: 0,
   cv2Target: 0,
   configPage: false,
@@ -548,6 +550,60 @@ describe("la surbrillance suit le champ, pas le numero de ligne", () => {
         expect(marked[0]).toBe(expected[ui.field]);
       }
     }
+  });
+});
+
+// Lot 16E etape 5c : le champ de la grande valeur, une fois OUVERT, nomme
+// l action au lieu de nommer le parametre. C est le seul signal qui separe
+// « le curseur est ici » de « le champ est ouvert ».
+describe("le champ ouvert nomme l action — lot 16E etape 5c", () => {
+  const seq = (open: boolean, action: PatternAction,
+               extra: Partial<MainScreenModel> = {}): MainScreenModel => ({
+    ...PANEL_MODEL,
+    tab: TAB_FIRST_CHANNEL,
+    mode: ChannelMode.SEQ,
+    insideTab: true,
+    cursor: 0,
+    fieldCount: SEQ_CHANNEL_TAB_FIELDS,
+    mainParameter: MainParameter.Pattern,
+    fieldOpen: open,
+    patternAction: action,
+    ...extra,
+  });
+
+  it("ferme, il nomme le parametre", () => {
+    expect(mainLabelOf(seq(false, PatternAction.Load))).toBe("PATTERN");
+  });
+
+  it("ouvert sur LOAD, il nomme LOAD", () => {
+    expect(mainLabelOf(seq(true, PatternAction.Load))).toBe("LOAD");
+  });
+
+  it("ouvert sur SAVE, il nomme SAVE", () => {
+    expect(mainLabelOf(seq(true, PatternAction.Save))).toBe("SAVE");
+  });
+
+  it("la page CONFIG garde son etiquette", () => {
+    expect(mainLabelOf(seq(true, PatternAction.Save, { configPage: true })))
+      .toBe("PATTERN");
+  });
+
+  it("l onglet PATTERNS garde son etiquette", () => {
+    expect(mainLabelOf(seq(true, PatternAction.Save, { tab: TAB_PATTERNS })))
+      .toBe("PATTERN");
+  });
+
+  it("un canal hors SEQ ne porte pas d action", () => {
+    expect(mainLabelOf(seq(true, PatternAction.Save, { mode: ChannelMode.CLOCK })))
+      .not.toBe("SAVE");
+  });
+
+  // Le rendu suit l etiquette : le pave de surbrillance epouse le mot, donc
+  // l encre change avec lui.
+  it("le rendu dessine le mot de l action", () => {
+    const closed = renderMainScreen(seq(false, PatternAction.Load)).count;
+    const open = renderMainScreen(seq(true, PatternAction.Load)).count;
+    expect(open).not.toBe(closed);
   });
 });
 
