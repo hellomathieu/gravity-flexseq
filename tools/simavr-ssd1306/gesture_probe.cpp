@@ -478,14 +478,38 @@ static int inkLineCursorTopRow(uint8_t line)
     return inkInBox(x0, y0, w, 1);
 }
 
-#define CURSEUR_SUR_LA_BARRE   (-1)
-#define CURSEUR_INDETERMINE    (-2)
+// La GRANDE VALEUR est une position du curseur depuis le lot 16E etape 5a, et
+// son etiquette s inverse comme celle d une ligne. Meme principe : la rangee du
+// HAUT de la boite porte de l encre et rien d autre n en met la.
+//
+// ⚠️ LES GLYPHES DE VELVETSCREEN OCCUPENT base-5 A base-1, donc la rangee du
+// haut est a base-6 et NON a base-5. Lire base-5 tombait sur la premiere rangee
+// du TEXTE : le temoin rendait INDETERMINE en permanence, et il a fallu
+// imprimer la rangee colonne par colonne pour le voir.
+//
+// ⚠️ SANS CE TEMOIN un curseur pose sur la grande valeur se lisait
+// « sur la barre », et un defaut de navigation n etait pas attribuable.
+static int inkBigValueCursorTopRow(void)
+{
+    const uint8_t y0 =
+        (uint8_t)(ms::MAIN_LABEL_BASELINE_Y - flexseq::FONT_VELVETSCREEN_HEIGHT - 1);
+    return inkInBox(0, y0, ms::MAIN_BOX_W, 1);
+}
+
+#define CURSEUR_SUR_LA_BARRE         (-1)
+#define CURSEUR_INDETERMINE          (-2)
+#define CURSEUR_SUR_LA_GRANDE_VALEUR (-3)
 
 static int highlightedLine(void)
 {
     int found = CURSEUR_SUR_LA_BARRE, count = 0;
     for (uint8_t line = 0; line < 3; ++line) {
         if (inkLineCursorTopRow(line) > 0) { found = (int)line; ++count; }
+    }
+    // Le curseur est un index unique : deux surbrillances a la fois se lisent
+    // INDETERMINE, jamais l une des deux au hasard.
+    if (inkBigValueCursorTopRow() > 0) {
+        return count == 0 ? CURSEUR_SUR_LA_GRANDE_VALEUR : CURSEUR_INDETERMINE;
     }
     if (count == 0) return CURSEUR_SUR_LA_BARRE;
     return count == 1 ? found : CURSEUR_INDETERMINE;
@@ -2024,6 +2048,11 @@ int main(int argc, char **argv)
                    k, surBarre, dedans, g_twi_bytes - marque);
 
             gotoConfigField(avr, flexseq::UiController::CONFIG_FIELD_INDEX_SUBDIV);
+            // ⚠️ Lire APRES stabilisation : l ecran s etale sur plusieurs
+            // passages (ADR 0001), donc pendant un rafraichissement l ANCIENNE
+            // surbrillance et la nouvelle coexistent.
+            run_for(avr, FRAME_SETTLE_MS);
+            printf("rB_r1_champ        k %d curseur %d\n", k, highlightedLine());
 
             for (int etape = 0; etape < 2; ++etape) {
                 marque = g_twi_bytes;

@@ -210,6 +210,20 @@ anyone decided to live with it.
 
 ## Method rules born from these subjects
 
+**A witness row is MEASURED, never deduced — and a harness that cannot say where
+the cursor is cannot attribute a defect.** Written 2026-09-14, after a diagnosis
+that cost several probe runs. The gesture probe reported one channel out of six
+failing to change its SUBDIV. The cause was not in the domain, and the harness
+could not show it: `highlightedLine()` knew the three lines only, so a cursor
+resting on the big value read as "on the tab bar". The witness was extended, and
+it then read INDETERMINATE forever — its row was deduced from the baseline and
+the font height, and it landed on the FIRST ROW OF THE TEXT. The glyphs of
+velvetscreen occupy base-5 to base-1, which a comment in the same file already
+said. Printing the row column by column settled it in one run, where three runs
+of reasoning had not. **Two rules come out of it**: a witness row is proven empty
+by measuring it, not by arithmetic on constants · and a harness must be able to
+name what the cursor designates, or every navigation defect stays unattributable.
+
 **A band-skip hash reads everything its band draws, and a field added to a band
 is added to the hash the same day.** Written 2026-09-13, after the rule was
 broken a second time. The header band of the editor carries a value, and the
