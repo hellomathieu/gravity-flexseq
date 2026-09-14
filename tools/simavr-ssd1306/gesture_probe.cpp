@@ -1101,6 +1101,7 @@ int main(int argc, char **argv)
     const int policycheck = strcmp(phase, "policycheck") == 0;
     const int parcoursInstances = strcmp(phase, "instances") == 0;
     const int parcoursBootstrap = strcmp(phase, "bootstrap") == 0;
+    const int parcoursChargement = strcmp(phase, "chargement") == 0;
     {
         const char *e = getenv("DE_ENTRY_MS");
         const char *r = getenv("DE_RELEASE_MS");
@@ -2197,6 +2198,117 @@ int main(int argc, char **argv)
         }
         printf("boot_version       vue %d valeur %u attendu %u attente_ms %.0f plafond_ms %.0f\n",
                versionVue, versionLue, EE_EXPECTED_VERSION, attendu, BOOTSTRAP_CEILING_MS);
+        return 0;
+    }
+
+// Lot 16E etape 5h : LOAD sur les BROCHES, et la question qui le precede.
+//
+// L oracle n est pas un compte d octets : c est le MASQUE du canal, qui doit
+// devenir celui du template que le canal a selectionne. Le harnais le derive de
+// `flexseq::factoryStepMask()`, la table du domaine, et jamais d une copie.
+//
+// Leviers de contre-epreuve : CHG_EXPECT_MASK fausse le masque attendu ;
+// CHG_CONFIRM_PRESSES abaisse a 1 le nombre d appuis apres la question.
+    if (parcoursChargement) {
+        static uint8_t avant[OBSERVED_INSTANCE_BYTES];
+        static uint8_t propre[OBSERVED_INSTANCE_BYTES];
+        static uint8_t edite[OBSERVED_INSTANCE_BYTES];
+        static uint8_t question[OBSERVED_INSTANCE_BYTES];
+        static uint8_t confirme[OBSERVED_INSTANCE_BYTES];
+        constexpr int ongletCharge = 4;
+        constexpr int8_t canalCharge = channelOfTab(ongletCharge);
+        static_assert(canalCharge == 3, "tab 4 drives channel 3");
+
+        int confirmPresses = 2;
+        if (const char* e = getenv("CHG_CONFIRM_PRESSES")) confirmPresses = atoi(e);
+        if (confirmPresses < 1 || confirmPresses > 4) {
+            fprintf(stderr, "CHG_CONFIRM_PRESSES hors de 1..4\n");
+            return 2;
+        }
+
+        playPress(avr);
+        run_for(avr, 1000.0);
+        readInstances(avr, avant);
+
+        const int8_t choisi = g_expected_engine.getSelectedPattern(canalCharge);
+        unsigned attendu = (choisi >= 0)
+            ? flexseq::factoryStepMask((uint8_t)choisi) : 0u;
+        if (const char* e = getenv("CHG_EXPECT_MASK")) attendu = (unsigned)strtoul(e, NULL, 16);
+        printf("chg_depart         canal %d template %d masque %04x attendu %04x\n",
+               (int)canalCharge, (int)choisi,
+               lowMaskOfInstance(avant, canalCharge), attendu);
+
+        // 1. UNE COPIE PROPRE CHARGE SANS QUESTION.
+        setChannelModeToSeq(avr, ongletCharge);
+        alignTab(avr, ongletCharge);
+        uint32_t marque = g_twi_bytes;
+        pressFor(avr, (double)PRESS_MS);
+        const int curseurEntree = highlightedLine();
+        pressFor(avr, (double)PRESS_MS);
+        pressFor(avr, (double)PRESS_MS);
+        run_for(avr, 300.0);
+        readInstances(avr, propre);
+        printf("chg_propre         curseur %d masque %04x twi %u\n",
+               curseurEntree, lowMaskOfInstance(propre, canalCharge),
+               g_twi_bytes - marque);
+
+        // 2. UNE EDITION REND LA COPIE DIFFERENTE DU TEMPLATE.
+        backToBar(avr);
+        alignTab(avr, ongletCharge);
+        pressFor(avr, (double)PRESS_MS);
+        rotate(avr, flexseq::UiController::SEQ_FIELD_INDEX_EDIT_ENTRY, 1);
+        pressFor(avr, (double)PRESS_MS);
+        marque = g_twi_bytes;
+        pressFor(avr, (double)PRESS_MS);
+        pressFor(avr, (double)LONG_PRESS_MS);
+        run_for(avr, 300.0);
+        readInstances(avr, edite);
+        printf("chg_edite          masque %04x twi %u\n",
+               lowMaskOfInstance(edite, canalCharge), g_twi_bytes - marque);
+
+        // 3. LE PREMIER APPUI POSE LA QUESTION, ET NE CHARGE PAS.
+        int crans = 0;
+        while (highlightedLine() != CURSEUR_SUR_LA_GRANDE_VALEUR
+               && crans < CURSOR_SEARCH_LIMIT) {
+            rotate(avr, 1, 1);
+            ++crans;
+        }
+        const int curseurQuestion = highlightedLine();
+        marque = g_twi_bytes;
+        pressFor(avr, (double)PRESS_MS);
+        pressFor(avr, (double)PRESS_MS);
+        run_for(avr, 300.0);
+        readInstances(avr, question);
+        printf("chg_question       curseur %d crans %d masque %04x twi %u\n",
+               curseurQuestion, crans, lowMaskOfInstance(question, canalCharge),
+               g_twi_bytes - marque);
+
+        // 4. LE SECOND APPUI EXECUTE.
+        marque = g_twi_bytes;
+        for (int i = 1; i < confirmPresses; ++i) pressFor(avr, (double)PRESS_MS);
+        run_for(avr, 300.0);
+        readInstances(avr, confirme);
+        uint32_t premier = 0;
+        const uint32_t ecarts = instancesDiffCount(question, confirme, &premier);
+        printf("chg_confirme       appuis %d masque %04x ecarts %u canal %d twi %u\n",
+               confirmPresses, lowMaskOfInstance(confirme, canalCharge),
+               ecarts, (int)channelOfOffset(premier), g_twi_bytes - marque);
+
+        printf("chg_voisins       ");
+        for (uint8_t c = 0; c < OBSERVED_CHANNEL_COUNT; ++c) {
+            if ((int8_t)c == canalCharge) continue;
+            printf(" %04x", lowMaskOfInstance(confirme, (int8_t)c));
+        }
+        printf("\n");
+        printf("chg_voisins_depart");
+        for (uint8_t c = 0; c < OBSERVED_CHANNEL_COUNT; ++c) {
+            if ((int8_t)c == canalCharge) continue;
+            printf(" %04x", lowMaskOfInstance(avant, (int8_t)c));
+        }
+        printf("\n");
+        printf("chg_temoin         lectures %lu echecs %lu fautes %lu\n",
+               (unsigned long)g_instance_reads, (unsigned long)g_instance_read_faults,
+               (unsigned long)g_instance_faults);
         return 0;
     }
 

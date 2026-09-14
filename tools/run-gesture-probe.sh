@@ -2303,6 +2303,84 @@ fi
 
 printf '\n'
 
+# --- LOT 16E ETAPE 5h : LOAD SUR LES BROCHES, ET LA QUESTION ---------------
+#
+# L oracle est le MASQUE du canal, qui doit devenir celui du template que le
+# canal a selectionne. Le harnais le derive de la table du domaine.
+LOGC="$WORK/logc"
+progress "parcours chargement (LOAD et sa confirmation)"
+"$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$INSTANCE_PTR_ADDR" "$BOOT_MS" \
+     "$WORK/perchannel.bin" 384 chargement "$SUPPRESSED_ADDR" > "$LOGC" 2>&1
+RC=$?
+if [ "$RC" != "0" ]; then
+  cat "$LOGC"
+  case "$RC" in
+    3) dieinval "$LOGC" "controle des instances en echec sur le parcours chargement, aucun verdict sur le firmware" ;;
+    *) die "le parcours chargement s'est termine anormalement (code $RC)" ;;
+  esac
+fi
+
+printf '\n%s--- PARCOURS CHARGEMENT : LOAD ET SA CONFIRMATION ---%s\n' "$C_B" "$C_0"
+grep -E '^chg_' "$LOGC" | sed 's/^/  /'
+printf '\n'
+
+C_DEPART="$(grep -E '^chg_depart ' "$LOGC" | awk '{print $7}')"
+C_ATTENDU="$(grep -E '^chg_depart ' "$LOGC" | awk '{print $9}')"
+C_CURSEUR="$(grep -E '^chg_propre ' "$LOGC" | awk '{print $3}')"
+C_PROPRE="$(grep -E '^chg_propre ' "$LOGC" | awk '{print $5}')"
+C_EDITE="$(grep -E '^chg_edite ' "$LOGC" | awk '{print $3}')"
+C_QUESTION="$(grep -E '^chg_question ' "$LOGC" | awk '{print $7}')"
+C_CONFIRME="$(grep -E '^chg_confirme ' "$LOGC" | awk '{print $5}')"
+C_VOISINS="$(grep -E '^chg_voisins ' "$LOGC" | sed 's/^chg_voisins *//' | tr -s ' ')"
+C_VOISINS0="$(grep -E '^chg_voisins_depart' "$LOGC" | sed 's/^chg_voisins_depart *//' | tr -s ' ')"
+C_FAUTES="$(grep -E '^chg_temoin ' "$LOGC" | awk '{print $7}')"
+
+if [ -z "$C_ATTENDU" ] || [ -z "$C_CONFIRME" ] || [ "${C_FAUTES:-1}" != "0" ]; then
+  inval "chargement : instrument" "releve incomplet ou acces d instance en faute : aucun verdict sur ce parcours"
+elif [ "$C_DEPART" = "$C_ATTENDU" ]; then
+  inval "chargement : discrimination" "le canal porte deja le masque du template ($C_DEPART) : un chargement ne se verrait pas"
+else
+  ok "chargement : discrimination" "le canal part de $C_DEPART et le template porte $C_ATTENDU : un chargement se voit"
+
+  if [ "$C_CURSEUR" = "-3" ]; then
+    ok "chargement : le curseur entre sur la grande valeur" "curseur -3, la position que PRD 5.0 amendement 1bis lui donne"
+  else
+    bad "chargement : le curseur entre sur la grande valeur" "curseur ${C_CURSEUR:-rien}, attendu -3"
+  fi
+
+  if [ "$C_PROPRE" = "$C_ATTENDU" ]; then
+    ok "chargement : une copie propre charge sans question" "masque $C_PROPRE, celui du template, apres deux appuis courts"
+  else
+    bad "chargement : une copie propre charge sans question" "masque $C_PROPRE, attendu $C_ATTENDU"
+  fi
+
+  if [ "$C_EDITE" != "$C_ATTENDU" ]; then
+    ok "chargement : l edition eloigne la copie" "masque $C_EDITE, different du template : la copie a change"
+  else
+    inval "chargement : l edition eloigne la copie" "masque inchange a $C_EDITE : l edition n a pas pris, la question n est pas attribuable"
+  fi
+
+  if [ "$C_QUESTION" = "$C_EDITE" ]; then
+    ok "chargement : le premier appui ne charge pas" "masque $C_QUESTION, celui de la copie editee : la question est posee, rien n est detruit"
+  else
+    bad "chargement : le premier appui ne charge pas" "masque $C_QUESTION, attendu $C_EDITE"
+  fi
+
+  if [ "$C_CONFIRME" = "$C_ATTENDU" ]; then
+    ok "chargement : le second appui charge" "masque $C_CONFIRME, celui du template"
+  else
+    bad "chargement : le second appui charge" "masque $C_CONFIRME, attendu $C_ATTENDU"
+  fi
+
+  if [ "$C_VOISINS" = "$C_VOISINS0" ]; then
+    ok "chargement : les cinq autres canaux" "masques $C_VOISINS, identiques au depart"
+  else
+    bad "chargement : les cinq autres canaux" "masques $C_VOISINS, au depart $C_VOISINS0"
+  fi
+fi
+
+printf '\n'
+
 LOG9="$WORK/log9"
 progress "parcours bootstrap (semis du firmware au premier demarrage)"
 "$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$INSTANCE_PTR_ADDR" "$BOOT_MS" \
