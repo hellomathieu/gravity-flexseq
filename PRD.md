@@ -328,6 +328,32 @@ The gesture that names a template does not change: `SHIFT` plus a rotation moves
 
 ⚠️ **One fact of point 2 above is OVERTAKEN.** Point 2 says that the `PATTERN` field of a channel changes the displayed number and loads nothing. That was true, and `1ter` makes it false. The decision of point 2 is not re-opened here: the `PATTERNS` tab keeps its sixteen slots.
 
+**AMENDMENT OF 2026-09-14 (second one of the day) — the pattern is chosen in its own field, and a destructive load asks `YES` or `NO`.** It supersedes `1ter` above **in full**. The load itself, the change flag and point 2 stay exact.
+
+⚠️ **THE OWNER REFUSED `1ter` AFTER READING IT ON THE MODULE.** A rotation that loads leaves no moment to look at what is about to be played, and the question it raised offered no visible answer. The field comes back, and it carries the NAME of the template instead of an action.
+
+**1quater. The big value opens on the template name, and a short press loads it.** On a channel in `SEQ`:
+
+- the cursor stops on the big value, which is the FIRST position. `MODE`, `EDIT` and `CONFIG` follow at 1, 2 and 3;
+- a short press OPENS the field, and the name of the template is framed;
+- a rotation moves through the sixteen templates, `A1` to `B8`, and it stops at both ends. It changes what the screen SHOWS and nothing else: the channel keeps playing what it had;
+- a short press LOADS the displayed template into the channel, and closes the field;
+- a long press closes the field and restores the name of the template that the channel plays.
+
+**A load that would destroy an edited copy asks first, and the answer is a choice.** The label of the big value becomes `SURE: YES / NO`, and the big value keeps showing the template that would be loaded, so the question names what it is about. A rotation moves between the two words, and the selected one renders inverted. **`NO` is selected first**, by a decision of the owner: one short press too many must destroy nothing. A short press on `YES` loads. A short press on `NO` closes the field and restores the name of the template that the channel plays.
+
+⚠️ **THE ALERT SITS UNDER THE NAME OF THE PATTERN, and the large font never writes it** — a decision of the owner of 2026-09-14. The name keeps its place and its size, so the question always names the template it is about, and the alert takes the line of the label, one row below.
+
+⚠️ **AND THE FONT COULD NOT WRITE IT ANYWAY.** `stkL`, the large font of the original, carries twenty-one glyphs: `x`, `%`, `/`, the ten digits, and `A B D E I M T X`. It can draw neither `YES` nor `NO`. `velvetscreen` carries the twenty-six capitals, so the question goes where the label goes.
+
+⚠️ **THE STRING CARRIES NO QUESTION MARK**, for the reason already recorded on 2026-09-14: `velvetscreen` has none. `SURE: YES / NO` is the exact string.
+
+**The six copies count as CLEAN at each boot**, by a decision of the owner of 2026-09-14. The change flag lives in RAM, and no record of §11.1 carries it. ⚠️ **The accepted consequence is named**: after a power cut, the first load of a channel destroys an edited copy without asking. The owner weighed the other route — to count the six copies as changed at each boot, so one question per channel per power-up — and refused it.
+
+**`selectedPattern` never names a template that the channel does not play.** The candidate lives in the controller while the field is open, and it reaches `selectedPattern` only on a confirmed load. This is what lets `NO` restore the name, and it keeps the base of the `PATTERN` modulation stable while the user looks around.
+
+**`SAVE` has no interface, and that is unchanged.** §12.9 places its design in lot E.
+
 ---
 
 ### 5.1 Shared pattern bank — SUPERSEDED by §5.0
