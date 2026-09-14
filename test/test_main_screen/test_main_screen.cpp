@@ -568,9 +568,9 @@ void test_the_cursor_marks_the_line_it_is_on_and_no_other() {
     canvas.reset();
     MainScreenModel m = channelTab();
     m.insideTab = true;
-    // PRD 5.0 amendement 1ter : la position 0 nomme MODE, qui est la PREMIERE
-    // ligne. La grande valeur ne prend plus le curseur.
-    m.cursor = 0;
+    // PRD 5.0 amendement 1quater : la position 1 nomme MODE, qui est la PREMIERE
+    // ligne. La grande valeur tient la position 0.
+    m.cursor = 1;
     drawMainScreen(canvas, m);
     TEST_ASSERT_TRUE_MESSAGE(lineTopRowInk(canvas, 0) > 0,
         "la ligne du champ nomme porte le pave");
@@ -580,19 +580,19 @@ void test_the_cursor_marks_the_line_it_is_on_and_no_other() {
         "la grande valeur ne porte rien : le curseur n y est pas");
 }
 
-// PRD 5.0 amendement 1ter : aucune position du curseur ne marque la grande
-// valeur. Les trois positions marquent les trois lignes, et rien d autre.
-void test_no_cursor_position_marks_the_big_value() {
-    for (uint8_t position = 0; position < 3; ++position) {
-        canvas.reset();
-        MainScreenModel m = channelTab();
-        m.insideTab = true;
-        m.cursor = position;
-        drawMainScreen(canvas, m);
-        TEST_ASSERT_EQUAL_UINT16_MESSAGE(0, bigLabelTopRowInk(canvas),
-            "la grande valeur ne porte jamais le pave");
-        TEST_ASSERT_TRUE_MESSAGE(lineTopRowInk(canvas, position) > 0,
-            "et la ligne du curseur le porte");
+// Le curseur pose sur la grande valeur ne doit PAS marquer une ligne en meme
+// temps. Un ecran qui porte deux surbrillances ne dit plus ou est le curseur.
+void test_the_cursor_on_the_big_value_marks_no_line() {
+    canvas.reset();
+    MainScreenModel m = channelTab();
+    m.insideTab = true;
+    m.cursor = 0;
+    drawMainScreen(canvas, m);
+    TEST_ASSERT_TRUE_MESSAGE(bigLabelTopRowInk(canvas) > 0,
+        "la grande valeur porte le pave");
+    for (uint8_t line = 0; line < 3; ++line) {
+        TEST_ASSERT_EQUAL_UINT16_MESSAGE(0, lineTopRowInk(canvas, line),
+            "et aucune ligne ne le porte avec elle");
     }
 }
 
@@ -614,7 +614,7 @@ void test_the_highlight_marks_the_line_of_the_field_the_domain_names() {
     TEST_ASSERT_EQUAL_UINT8(UiController::TAB_FIRST_CHANNEL, ui.currentTab());
     ui.handle(UiController::EVENT_PRESS);
     TEST_ASSERT_EQUAL_UINT8_MESSAGE(UiController::SEQ_CHANNEL_TAB_FIELDS,
-        ui.fieldCount(), "un canal en SEQ porte trois positions");
+        ui.fieldCount(), "un canal en SEQ porte quatre positions");
 
     for (uint8_t position = 0; position < UiController::SEQ_CHANNEL_TAB_FIELDS;
          ++position) {
@@ -1068,52 +1068,124 @@ void test_the_patterns_tab_takes_the_three_lines_of_the_original() {
     TEST_ASSERT_EQUAL_STRING("", flashLabel);
 }
 
-// PRD 5.0 amendement 1ter : la grande valeur ne nomme plus d action. Elle porte
-// la QUESTION tant qu un chargement destructeur attend sa reponse.
-void test_the_question_replaces_the_label_by_its_own_word() {
-    namespace ms = flexseq::mainscreen;
+// PRD 5.0 amendement 1quater : la question prend la ligne de l etiquette, UNE
+// ligne sous le nom du pattern. La grande police ne l ecrit JAMAIS : elle ne
+// porte ni Y, ni N, ni O, ni S.
+void test_the_question_takes_the_label_line() {
     auto draw = [](bool ask) {
         canvas.reset();
         flexseq::MainScreenModel m = channelTab();
+        m.insideTab = true;
+        m.cursor = 0;
+        m.fieldOpen = true;
         m.patternAsk = ask;
         drawMainScreen(canvas, m);
     };
 
     draw(false);
     TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("PATTERN"),
-        "sans question, le champ nomme le parametre");
-    TEST_ASSERT_NULL(canvas.find("SURE"));
+        "sans question, la ligne nomme le parametre");
+    TEST_ASSERT_NULL(canvas.find("SURE: NO"));
 
     draw(true);
-    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("SURE"), "la question porte son mot");
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("SURE: NO"),
+        "la question porte son mot, et NO vient en premier");
     TEST_ASSERT_NULL_MESSAGE(canvas.find("PATTERN"),
         "et elle remplace le parametre");
 }
 
-// ⚠️ La question se lit SUR LA BARRE, et c est la ou le geste vit. La lier au
-// curseur la rendrait invisible a l endroit meme ou elle est posee.
-void test_the_question_shows_outside_the_tab() {
+// ⚠️ Le NOM du pattern reste, en grande police, pendant la question : elle nomme
+// ainsi le template dont elle parle. Decision du proprietaire.
+void test_the_name_stays_under_the_question() {
     canvas.reset();
     flexseq::MainScreenModel m = channelTab();
-    m.insideTab = false;
+    m.insideTab = true;
+    m.cursor = 0;
+    m.fieldOpen = true;
+    m.patternIndex = 9;
     m.patternAsk = true;
     drawMainScreen(canvas, m);
-    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("SURE"),
-        "le geste part de la barre, donc la question s y voit");
+    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("B2"),
+        "le nom du template reste affiche");
 }
 
-// La page CONFIG porte la meme etiquette et un autre champ : elle ne doit jamais
-// afficher la question.
+// La question ne vit QUE dans le champ ouvert : ni sur la barre, ni le champ
+// ferme.
+void test_the_question_needs_the_open_field() {
+    auto ink = [](bool insideTab, bool open) {
+        canvas.reset();
+        flexseq::MainScreenModel m = channelTab();
+        m.insideTab = insideTab;
+        m.cursor = 0;
+        m.fieldOpen = open;
+        m.patternAsk = true;
+        drawMainScreen(canvas, m);
+        return canvas.find("SURE: NO") != nullptr;
+    };
+    TEST_ASSERT_FALSE_MESSAGE(ink(false, false), "pas sur la barre");
+    TEST_ASSERT_FALSE_MESSAGE(ink(true, false), "pas le champ ferme");
+    TEST_ASSERT_TRUE_MESSAGE(ink(true, true), "dans le champ ouvert");
+}
+
+// ⚠️ UN SEUL MOT A LA FOIS : la reponse armee EST le mot affiche. C est une
+// mesure, pas une preference — les deux mots avec inversion coutaient 372 octets
+// de Flash contre 64.
+void test_the_word_shown_is_the_answer() {
+    auto draw = [](bool yes) {
+        canvas.reset();
+        flexseq::MainScreenModel m = channelTab();
+        m.insideTab = true;
+        m.cursor = 0;
+        m.fieldOpen = true;
+        m.patternAsk = true;
+        m.patternYes = yes;
+        drawMainScreen(canvas, m);
+    };
+    draw(false);
+    TEST_ASSERT_NOT_NULL(canvas.find("SURE: NO"));
+    TEST_ASSERT_NULL(canvas.find("SURE: YES"));
+    draw(true);
+    TEST_ASSERT_NOT_NULL(canvas.find("SURE: YES"));
+    TEST_ASSERT_NULL(canvas.find("SURE: NO"));
+}
+
+// La page CONFIG porte la meme etiquette et un autre champ en position 0 : elle
+// ne doit jamais afficher la question.
 void test_the_question_never_replaces_the_label_on_the_config_page() {
     canvas.reset();
     flexseq::MainScreenModel m = channelTab();
     m.insideTab = true;
+    m.cursor = 0;
+    m.fieldOpen = true;
     m.configPage = true;
     m.patternAsk = true;
     drawMainScreen(canvas, m);
     TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("PATTERN"),
         "la page CONFIG garde son etiquette");
-    TEST_ASSERT_NULL(canvas.find("SURE"));
+    TEST_ASSERT_NULL(canvas.find("SURE: NO"));
+}
+
+// Le champ OUVERT encadre le nom : c est ce qui separe « le curseur est ici » de
+// « le champ est ouvert ».
+void test_the_open_field_frames_the_name() {
+    auto ink = [](bool open) {
+        canvas.reset();
+        flexseq::MainScreenModel m = channelTab();
+        m.insideTab = true;
+        m.cursor = 0;
+        m.fieldOpen = open;
+        m.patternIndex = 9;
+        drawMainScreen(canvas, m);
+        uint16_t n = 0;
+        for (uint8_t x = 0; x < 60; ++x) {
+            for (uint8_t y = 0; y < 34; ++y) {
+                if (canvas.at(x, y)) ++n;
+            }
+        }
+        return n;
+    };
+    TEST_ASSERT_GREATER_THAN_UINT16_MESSAGE(ink(false), ink(true),
+        "le cadre ajoute de l encre autour du nom");
 }
 
 // ⚠️ L onglet PATTERNS porte la MEME etiquette et un autre champ. Ce test
@@ -1131,9 +1203,9 @@ void test_the_question_never_shows_on_the_patterns_tab() {
     TEST_ASSERT_NULL(canvas.find("SURE"));
 }
 
-// PRD 5.0 amendement 1ter : le curseur ne se pose plus sur la grande valeur,
-// donc son etiquette ne s inverse jamais — ni dans l onglet, ni ailleurs.
-void test_the_big_value_label_never_inverts() {
+// Le curseur peut se poser sur la grande valeur, et il faut le VOIR.
+// L etiquette PATTERN s inverse, comme la valeur ouverte d un en-tete.
+void test_the_cursor_on_the_big_value_inverts_its_label() {
     namespace ms = flexseq::mainscreen;
     auto inkUnderLabel = [](bool insideTab) {
         canvas.reset();
@@ -1156,9 +1228,9 @@ void test_the_big_value_label_never_inverts() {
         }
         return ink;
     };
-    TEST_ASSERT_EQUAL_UINT16_MESSAGE(
+    TEST_ASSERT_GREATER_THAN_UINT16_MESSAGE(
         inkUnderLabel(false), inkUnderLabel(true),
-        "entrer dans l onglet ne change rien a la grande valeur");
+        "le curseur pose sur la grande valeur encre davantage");
 }
 
 void test_the_settings_tab_headline_stays_empty() {
@@ -1219,7 +1291,7 @@ int main() {
     RUN_TEST(test_the_settings_tab_is_empty_while_it_is_deferred);
 
     RUN_TEST(test_the_cursor_marks_the_line_it_is_on_and_no_other);
-    RUN_TEST(test_no_cursor_position_marks_the_big_value);
+    RUN_TEST(test_the_cursor_on_the_big_value_marks_no_line);
     RUN_TEST(test_the_highlight_marks_the_line_of_the_field_the_domain_names);
     RUN_TEST(test_opening_a_field_moves_the_mark_from_the_label_to_the_value);
     RUN_TEST(test_no_cursor_is_drawn_while_on_the_tab_bar);
@@ -1233,9 +1305,12 @@ int main() {
     RUN_TEST(test_the_patterns_tab_names_the_slot_in_the_main_value);
     RUN_TEST(test_the_slot_state_is_a_square_beside_the_label);
     RUN_TEST(test_the_patterns_tab_takes_the_three_lines_of_the_original);
-    RUN_TEST(test_the_big_value_label_never_inverts);
-    RUN_TEST(test_the_question_replaces_the_label_by_its_own_word);
-    RUN_TEST(test_the_question_shows_outside_the_tab);
+    RUN_TEST(test_the_cursor_on_the_big_value_inverts_its_label);
+    RUN_TEST(test_the_question_takes_the_label_line);
+    RUN_TEST(test_the_name_stays_under_the_question);
+    RUN_TEST(test_the_question_needs_the_open_field);
+    RUN_TEST(test_the_word_shown_is_the_answer);
+    RUN_TEST(test_the_open_field_frames_the_name);
         RUN_TEST(test_the_question_never_replaces_the_label_on_the_config_page);
     RUN_TEST(test_the_question_never_shows_on_the_patterns_tab);
     RUN_TEST(test_the_settings_tab_headline_stays_empty);

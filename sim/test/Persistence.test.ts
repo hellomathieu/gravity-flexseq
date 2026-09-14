@@ -1451,19 +1451,17 @@ describe("les defauts de la version 3 (B4b.6.5)", () => {
  * l execute : ADR 0002 interdit au domaine de lire l EEPROM.
  */
 /*
- * PRD 5.0 amendement 1ter — les six copies comptent comme CHANGEES a chaque
- * demarrage. Le drapeau vit en RAM et aucun record de 11.1 ne le porte, donc une
- * coupure laisse le module incapable de distinguer une copie editee d une copie
- * propre.
+ * PRD 5.0 amendement 1quater — les six copies partent PROPRES, decision du
+ * proprietaire. Consequence acceptee et nommee : apres une coupure, le premier
+ * chargement d un canal ecrase une copie editee sans rien demander.
  *
- * ⚠️ CE TEST MANQUAIT, et la passe de mutation l a dit : le C++ le portait, le
- * TypeScript non, donc la valeur de demarrage n etait tenue que d un cote.
+ * ⚠️ CE TEST MANQUAIT cote TypeScript, et la passe de mutation l a dit.
  */
 describe("ModulatedPatternState — la valeur de demarrage du drapeau", () => {
-  it("les six canaux partent changes", () => {
+  it("aucun canal ne part change", () => {
     const state = new ModulatedPatternState();
     for (let ch = 0; ch < CHANNEL_COUNT; ++ch) {
-      expect(state.isDirty(ch)).toBe(true);
+      expect(state.isDirty(ch)).toBe(false);
     }
   });
 
@@ -1513,18 +1511,22 @@ describe("servicePatternAction — LOAD charge, lot 16E etape 5d", () => {
     return copy;
   }
 
-  // PRD 5.0 amendement 1ter : SHIFT plus une rotation nomme le template ET le
-  // charge. Le curseur ne stationne plus sur la grande valeur, donc le geste
-  // part de la barre d onglets.
-  //
-  // ⚠️ Le second cran n est PAS systematique : une copie changee mange le
-  // premier, et un rig sans ModulatedPatternState n a pas de copie changee du
-  // tout. Le helper lit donc la question au lieu de supposer le nombre de crans.
-  function loadByRotation(r: ReturnType<typeof rigV3>, target: number): void {
+  // PRD 5.0 amendement 1quater : le curseur s arrete sur la grande valeur, un
+  // appui court ouvre le champ, une rotation choisit le nom, et un appui court
+  // charge. Une copie changee fait poser la question, et YES la confirme.
+  function loadByField(r: ReturnType<typeof rigV3>, target: number): void {
     r.engine.setChannelMode(0, ChannelMode.SEQ);
     r.engine.setSelectedPattern(0, target - 1);
-    r.ui.handle(UiEvent.ShiftRotate, 1);
-    if (r.ui.patternAskPending) r.ui.handle(UiEvent.ShiftRotate, 1);
+    r.ui.handle(UiEvent.Press);
+    expect(r.ui.field).toBe(UiField.Pattern);
+    r.ui.handle(UiEvent.Press);
+    r.ui.handle(UiEvent.Rotate, 1);
+    expect(r.ui.displayedPattern).toBe(target);
+    r.ui.handle(UiEvent.Press);
+    if (r.ui.patternAskPending) {
+      r.ui.handle(UiEvent.Rotate, 1);
+      r.ui.handle(UiEvent.Press);
+    }
     expect(r.ui.patternAskPending).toBe(false);
     expect(r.engine.getSelectedPattern(0)).toBe(target);
   }
@@ -1535,7 +1537,7 @@ describe("servicePatternAction — LOAD charge, lot 16E etape 5d", () => {
     const wanted = distinctContent(7);
     seedTemplate(ee, 11, wanted, 21);
 
-    loadByRotation(r, 11);
+    loadByField(r, 11);
     servicePatternAction(ee, r.image, r.engine, r.ui);
 
     expect(sameContent(wanted, r.engine.instanceForChannel(0)!)).toBe(true);
@@ -1559,7 +1561,7 @@ describe("servicePatternAction — LOAD charge, lot 16E etape 5d", () => {
     const first = distinctContent(7);
     seedTemplate(ee, 11, first, 21);
 
-    loadByRotation(r, 11);
+    loadByField(r, 11);
     servicePatternAction(ee, r.image, r.engine, r.ui);
     expect(sameContent(first, r.engine.instanceForChannel(0)!)).toBe(true);
 
@@ -1576,7 +1578,7 @@ describe("servicePatternAction — LOAD charge, lot 16E etape 5d", () => {
     const wanted = distinctContent(2);
     seedTemplate(ee, 3, wanted, 18);
 
-    loadByRotation(r, 3);
+    loadByField(r, 3);
     servicePatternAction(ee, r.image, r.engine, r.ui);
     expect(sameContent(wanted, r.engine.instanceForChannel(0)!)).toBe(true);
   });
@@ -1588,7 +1590,7 @@ describe("servicePatternAction — LOAD charge, lot 16E etape 5d", () => {
     seedTemplate(ee, 12, wanted, 19);
     const before = snapshot(r.engine.instanceForChannel(0)!);
 
-    loadByRotation(r, 12);
+    loadByField(r, 12);
     ee.busyFlag = true;
     servicePatternAction(ee, r.image, r.engine, r.ui);
     expect(sameContent(before, r.engine.instanceForChannel(0)!)).toBe(true);
@@ -1598,14 +1600,20 @@ describe("servicePatternAction — LOAD charge, lot 16E etape 5d", () => {
     expect(sameContent(wanted, r.engine.instanceForChannel(0)!)).toBe(true);
   });
 
+  // ⚠️ LE DRAPEAU DOIT ETRE LEVE D ABORD. Sous PRD 5.0 amendement 1quater les
+  // six copies partent PROPRES, donc un test qui charge sans avoir edite verifie
+  // que faux est faux : il passait sans rien prouver, et la passe de mutation
+  // l a dit.
   it("un chargement fait tomber le drapeau de changement", () => {
     const ee = new BusyEeprom();
     const r = rigV3();
     const state = new ModulatedPatternState();
     r.engine.setModulatedPatterns(state);
     seedTemplate(ee, 11, distinctContent(7), 21);
+    state.markDirty(0);
+    expect(state.isDirty(0), "le drapeau est leve avant le chargement").toBe(true);
 
-    loadByRotation(r, 11);
+    loadByField(r, 11);
     servicePatternAction(ee, r.image, r.engine, r.ui);
     expect(state.isDirty(0)).toBe(false);
   });

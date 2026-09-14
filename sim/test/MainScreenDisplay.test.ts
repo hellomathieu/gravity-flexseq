@@ -71,6 +71,7 @@ function channelTab(tab = 1): MainScreenModel {
     stepTicks: 96,
     mainParameter: MainParameter.Pattern,
     patternAsk: false,
+    patternYes: false,
     cv1Target: 0,
     cv2Target: 0,
     configPage: false,

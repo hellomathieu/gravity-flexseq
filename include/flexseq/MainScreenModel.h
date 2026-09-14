@@ -39,6 +39,7 @@ struct MainScreenModel {
     uint16_t stepTicks;
     uint8_t mainParameter;
     bool patternAsk;
+    bool patternYes;
 
     uint8_t cv1Target;
     uint8_t cv2Target;

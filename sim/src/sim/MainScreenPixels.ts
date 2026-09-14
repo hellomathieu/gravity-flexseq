@@ -86,9 +86,13 @@ export const LBL_SUBDIVISION = "SUBDIVISION";
 export const LBL_SKIP_CHANCE = "SKIP CHANCE";
 export const LBL_LENGTH = "LENGTH:";
 export const LBL_PATTERN = "PATTERN";
-const LBL_LOAD = "LOAD";
-const LBL_SAVE = "SAVE";
-const LBL_SURE = "SURE";
+// PRD 5.0 amendement 1quater : la question est UNE ligne sous le nom du pattern,
+// et la grande police ne l ecrit jamais.
+//
+// ⚠️ UN SEUL MOT A LA FOIS, et c est une MESURE : 372 octets de Flash pour les
+// deux mots avec inversion, contre 64 pour ces deux etiquettes.
+const LBL_SURE_YES = "SURE: YES";
+const LBL_SURE_NO = "SURE: NO";
 
 const VELVETSCREEN_HEIGHT = 5;
 const STK_L_HEIGHT = 23;
@@ -190,12 +194,32 @@ export function isChannelTab(model: MainScreenModel): boolean {
   return model.tab >= TAB_FIRST_CHANNEL && model.tab <= TAB_LAST_CHANNEL;
 }
 
+// PRD 5.0 amendement 1quater. Les trois lignes de l original suivent donc d un
+// rang, et le numero d une ligne N EST PLUS l index du curseur.
+export function bigValueTakesCursor(model: MainScreenModel): boolean {
+  return isChannelTab(model) && !model.configPage && model.mode === ChannelMode.SEQ;
+}
+
+export function cursorOfLine(model: MainScreenModel, line: number): number {
+  return line + (bigValueTakesCursor(model) ? 1 : 0);
+}
+
+// Le champ de la grande valeur est OUVERT : le nom du template s encadre.
+export function patternFieldIsOpen(model: MainScreenModel): boolean {
+  return bigValueTakesCursor(model) && model.insideTab && model.fieldOpen
+    && model.cursor === 0;
+}
+
+// La question attend sa reponse. Elle ne s affiche que dans le champ ouvert.
+export function patternQuestionIsUp(model: MainScreenModel): boolean {
+  return patternFieldIsOpen(model) && model.patternAsk;
+}
+
 export function mainLabelOf(model: MainScreenModel): string {
   if (model.configPage || model.mainParameter === MainParameter.Pattern) {
-    // ⚠️ La question appartient a un onglet de CANAL. L onglet PATTERNS porte
-    // la meme etiquette et un autre champ, et la page CONFIG designe LENGTH en
-    // position 0 : ni l un ni l autre ne doit la montrer.
-    if (model.patternAsk && !model.configPage && isChannelTab(model)) return LBL_SURE;
+    if (patternQuestionIsUp(model)) {
+      return model.patternYes ? LBL_SURE_YES : LBL_SURE_NO;
+    }
     return LBL_PATTERN;
   }
   return model.mainParameter === MainParameter.SkipChance ? LBL_SKIP_CHANCE : LBL_SUBDIVISION;
@@ -298,7 +322,13 @@ function drawLegacyChannel(ink: Ink, model: MainScreenModel): void {
   const value = mainValueOf(model);
   if (value !== "") {
     const w = textWidth(value, STK_L);
-    ink.drawStr(MAIN_CENTRE_X - Math.floor(w / 2), MAIN_VALUE_BASELINE_Y, value, STK_L);
+    const vx = MAIN_CENTRE_X - Math.floor(w / 2);
+    ink.drawStr(vx, MAIN_VALUE_BASELINE_Y, value, STK_L);
+    // PRD 5.0 amendement 1quater : le champ ouvert ENCADRE le nom.
+    if (patternFieldIsOpen(model)) {
+      const top = MAIN_VALUE_BASELINE_Y - (STK_L_HEIGHT - 1);
+      ink.drawFrame(vx - 2, top - 2, w + 4, STK_L_HEIGHT + 4);
+    }
   }
 
   const mainLabel = mainLabelOf(model);
@@ -313,12 +343,22 @@ function drawLegacyChannel(ink: Ink, model: MainScreenModel): void {
       ink.drawBox(labelX - lead, gy, MAIN_LABEL_GLYPH_W, MAIN_LABEL_GLYPH_W);
     }
   }
-  ink.drawStr(labelX, MAIN_LABEL_BASELINE_Y, mainLabel, VELVETSCREEN);
+  // Le curseur sur la grande valeur : l etiquette s inverse.
+  if (bigValueTakesCursor(model) && model.insideTab && model.cursor === 0
+      && !model.fieldOpen) {
+    ink.drawBox(labelX - 1, MAIN_LABEL_BASELINE_Y - VELVETSCREEN_HEIGHT - 1,
+                lw + 2, VELVETSCREEN_HEIGHT + 2);
+    ink.setDrawColor(0);
+    ink.drawStr(labelX, MAIN_LABEL_BASELINE_Y, mainLabel, VELVETSCREEN);
+    ink.setDrawColor(1);
+  } else {
+    ink.drawStr(labelX, MAIN_LABEL_BASELINE_Y, mainLabel, VELVETSCREEN);
+  }
 
   for (let line = 0; line < 3; ++line) {
     const base = LINE_0_BASELINE_Y + line * LINE_SPACING_Y;
     const [text, lineValue] = legacyLine(model, line);
-    const onCursor = model.insideTab && model.cursor === line;
+    const onCursor = model.insideTab && model.cursor === cursorOfLine(model, line);
     const labelW = textWidth(text, VELVETSCREEN);
     if (onCursor && !model.fieldOpen) {
       ink.drawBox(

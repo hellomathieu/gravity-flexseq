@@ -33,6 +33,7 @@ export interface MainScreenModel {
   stepTicks: number;
   mainParameter: MainParameter;
   patternAsk: boolean;
+  patternYes: boolean;
 
   cv1Target: number;
   cv2Target: number;
@@ -78,6 +79,7 @@ export function mainScreenModelOf(ui: UiController, engine: SequencerEngine): Ma
     stepTicks: 0,
     mainParameter: parameterOf(ui.mainField),
     patternAsk: ui.patternAskPending,
+    patternYes: ui.patternAnswerIsYes,
     cv1Target: CvDestination.NONE,
     cv2Target: CvDestination.NONE,
     configPage: ui.isOnConfigPage,
@@ -90,7 +92,9 @@ export function mainScreenModelOf(ui: UiController, engine: SequencerEngine): Ma
     model.patternIndex = ui.slotCursor;
   }
   if (channel >= 0) {
-    model.patternIndex = engine.getSelectedPattern(channel);
+    // PRD 5.0 amendement 1quater : l ecran montre le nom CHOISI, que le canal
+    // ne joue pas forcement encore.
+    model.patternIndex = ui.displayedPattern;
     model.length = engine.getBaseLength(channel);
     model.subdiv = engine.getSubdiv(channel);
     model.barLength = engine.getBarLength(channel);

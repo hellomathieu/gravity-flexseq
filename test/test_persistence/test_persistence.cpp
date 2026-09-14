@@ -2776,17 +2776,15 @@ void clearEveryChannelFlag(flexseq::ModulatedPatternState& state) {
 
 }  // namespace
 
-// PRD 5.0 amendement 1ter : le drapeau vit en RAM et aucun record ne le porte,
-// donc une coupure laisse le module incapable de distinguer une copie editee
-// d une copie propre. Il part donc a un, pour les six canaux.
-void test_a_fresh_state_carries_the_six_channels_as_changed() {
+// PRD 5.0 amendement 1quater : les six copies partent PROPRES, decision du
+// proprietaire. Consequence acceptee et nommee : apres une coupure, le premier
+// chargement d un canal ecrase une copie editee sans rien demander.
+void test_a_fresh_state_carries_no_dirty_channel() {
     EditorRig r;
     for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-        TEST_ASSERT_TRUE_MESSAGE(r.state.isDirty(ch),
-                                 "le module ne sait pas, donc il demande");
+        TEST_ASSERT_FALSE_MESSAGE(r.state.isDirty(ch), "rien n a ete edite");
     }
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0x3F, r.state.dirty,
-                                    "six bits, et aucun au-dela");
+    TEST_ASSERT_EQUAL_UINT8(0, r.state.dirty);
 }
 
 void test_editing_a_step_raises_the_flag_of_that_channel_alone() {
@@ -2942,23 +2940,26 @@ void test_the_written_length_is_the_length_shown_in_the_header() {
 
 namespace {
 
-// PRD 5.0 amendement 1ter : SHIFT plus une rotation nomme le template ET le
-// charge. Le curseur ne stationne plus sur la grande valeur, donc le geste part
-// de la barre d onglets.
-//
-// ⚠️ Le second cran n est PAS systematique : une copie changee mange le premier,
-// et un rig sans ModulatedPatternState n a pas de copie changee du tout. Le
-// helper lit donc la question au lieu de supposer le nombre de crans.
-void loadByRotation(RigV3& r, uint8_t target) {
+// PRD 5.0 amendement 1quater : le curseur s arrete sur la grande valeur, un
+// appui court ouvre le champ, une rotation choisit le nom, et un appui court
+// charge. Une copie changee fait poser la question, et YES la confirme.
+void loadByField(RigV3& r, uint8_t target) {
     r.engine.setChannelMode(0, flexseq::MODE_SEQ);
     r.engine.setSelectedPattern(0, static_cast<uint8_t>(target - 1));
-    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+    r.ui.handle(UiController::EVENT_PRESS);              // entre dans l onglet
+    TEST_ASSERT_EQUAL(UiController::FIELD_PATTERN, r.ui.field());
+    r.ui.handle(UiController::EVENT_PRESS);              // ouvre le champ
+    r.ui.handle(UiController::EVENT_ROTATE, 1);          // choisit le nom
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(target, r.ui.displayedPattern(),
+                                    "le geste atteint le template vise");
+    r.ui.handle(UiController::EVENT_PRESS);              // charge, ou demande
     if (r.ui.patternAskPending()) {
-        r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+        r.ui.handle(UiController::EVENT_ROTATE, 1);      // YES
+        r.ui.handle(UiController::EVENT_PRESS);
     }
     TEST_ASSERT_FALSE_MESSAGE(r.ui.patternAskPending(), "la question est repondue");
     TEST_ASSERT_EQUAL_UINT8_MESSAGE(target, r.engine.getSelectedPattern(0),
-                                    "le geste atteint le template vise");
+                                    "le canal adopte le template");
 }
 
 }  // namespace
@@ -2969,7 +2970,7 @@ void test_a_validated_load_copies_the_template_into_the_channel() {
     const Pattern wanted = distinctContent(7);
     writeTemplateRecord(ee, 11, wanted, 21);
 
-    loadByRotation(r, 11);
+    loadByField(r, 11);
     flexseq::servicePatternAction(ee, r.image, r.engine, r.ui);
 
     TEST_ASSERT_TRUE_MESSAGE(sameContent(wanted, *r.engine.instanceForChannel(0)),
@@ -2998,7 +2999,7 @@ void test_a_demand_is_executed_once() {
     const Pattern first = distinctContent(7);
     writeTemplateRecord(ee, 11, first, 21);
 
-    loadByRotation(r, 11);
+    loadByField(r, 11);
     flexseq::servicePatternAction(ee, r.image, r.engine, r.ui);
     TEST_ASSERT_TRUE(sameContent(first, *r.engine.instanceForChannel(0)));
 
@@ -3016,7 +3017,7 @@ void test_a_frozen_slot_loads() {
     const Pattern wanted = distinctContent(2);
     writeTemplateRecord(ee, 3, wanted, 18);
 
-    loadByRotation(r, 3);
+    loadByField(r, 3);
     flexseq::servicePatternAction(ee, r.image, r.engine, r.ui);
     TEST_ASSERT_TRUE(sameContent(wanted, *r.engine.instanceForChannel(0)));
 }
@@ -3030,7 +3031,7 @@ void test_a_busy_storage_keeps_the_demand() {
     writeTemplateRecord(ee, 12, wanted, 19);
     const Pattern before = *r.engine.instanceForChannel(0);
 
-    loadByRotation(r, 12);
+    loadByField(r, 12);
     ee.busyFlag = true;
     flexseq::servicePatternAction(ee, r.image, r.engine, r.ui);
     TEST_ASSERT_TRUE_MESSAGE(sameContent(before, *r.engine.instanceForChannel(0)),
@@ -3050,7 +3051,7 @@ void test_a_load_clears_the_change_flag() {
     r.engine.setModulatedPatterns(&state);
     writeTemplateRecord(ee, 11, distinctContent(7), 21);
 
-    loadByRotation(r, 11);
+    loadByField(r, 11);
     flexseq::servicePatternAction(ee, r.image, r.engine, r.ui);
     TEST_ASSERT_FALSE(state.isDirty(0));
 }
@@ -3233,7 +3234,7 @@ int main() {
     RUN_TEST(test_opening_the_editor_invalidates_the_timing_cache);
     RUN_TEST(test_the_editor_sets_a_ratchet_on_the_template);
     RUN_TEST(test_the_audition_emits_the_template_on_channel_one);
-    RUN_TEST(test_a_fresh_state_carries_the_six_channels_as_changed);
+    RUN_TEST(test_a_fresh_state_carries_no_dirty_channel);
     RUN_TEST(test_editing_a_step_raises_the_flag_of_that_channel_alone);
     RUN_TEST(test_editing_the_length_of_a_channel_raises_its_flag);
     RUN_TEST(test_the_template_editor_raises_no_channel_flag);

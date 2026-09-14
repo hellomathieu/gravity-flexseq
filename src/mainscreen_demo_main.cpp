@@ -124,13 +124,17 @@ void setup() {
 #endif
 
 #if defined(FLEXSEQ_DEMO_PATTERN_ASK)
-    // PRD 5.0 amendement 1ter : la QUESTION, posee par SHIFT plus une rotation
-    // sur une copie changee. Aucun etat d interface n est pose a la main : le
-    // panneau montre ce qu un geste produit.
+    // PRD 5.0 amendement 1quater : la QUESTION, posee par un appui court dans le
+    // champ ouvert sur une copie changee. Aucun etat d interface n est pose a la
+    // main : le panneau montre ce qu une suite de gestes produit.
     //
     // Le canal est marque comme change, sans quoi la question n existerait pas.
     modulated.markDirty(DEMO_TAB - 1);
-    ui.handle(flexseq::UiController::EVENT_SHIFT_ROTATE, 1);
+    while (ui.cursor() != flexseq::UiController::SEQ_FIELD_INDEX_PATTERN) {
+        ui.handle(flexseq::UiController::EVENT_ROTATE, 1);
+    }
+    ui.handle(flexseq::UiController::EVENT_PRESS);   // ouvre le champ
+    ui.handle(flexseq::UiController::EVENT_PRESS);   // pose la question
 #endif
     gravity.clock.AttachIntHandler(onOutputTick);
     transport.start();

@@ -8,6 +8,7 @@ import {
   SEQ_CHANNEL_TAB_FIELDS,
   SEQ_FIELD_INDEX_CONFIG,
   SEQ_FIELD_INDEX_EDIT_ENTRY,
+  SEQ_FIELD_INDEX_PATTERN,
   SEQ_FIELD_INDEX_MODE,
   UiController,
   UiEvent,
@@ -62,6 +63,7 @@ const PANEL_MODEL: MainScreenModel = {
   stepTicks: 24,
   mainParameter: MainParameter.Subdiv,
   patternAsk: false,
+  patternYes: false,
   cv1Target: 0,
   cv2Target: 0,
   configPage: false,
@@ -272,25 +274,22 @@ describe("la convention verticale de u8g2 (ADR 0012)", () => {
  * compile avec `-DFLEXSEQ_DEMO_MODE_SEQ=1`, meme methode et meme modele : seuls
  * le mode et le parametre principal changent.
  *
- * ⚠️ RELEVE A NOUVEAU le 2026-09-14 apres PRD 5.0 amendement 1ter : 977 pixels.
- * Le curseur du panneau est en position 2, qui nommait EDIT tant que la grande
- * valeur tenait la position 0 ; elle a rendu cette position, donc la position 2
- * nomme CONFIG et la surbrillance descend d un rang. Le mot est plus long, donc
- * le pave encre davantage.
- *
- * ⚠️ Le chiffre a d abord valu 977, puis 931, et il revaut 977 : ce n est pas
+ * ⚠️ RELEVE A NOUVEAU le 2026-09-14 apres PRD 5.0 amendement 1quater : 931
+ * pixels. Le curseur du panneau est en position 2, qui nomme EDIT tant que la
+ * grande valeur tient la position 0. Le chiffre a valu 931, puis 977 sous
+ * l amendement 1ter qui retirait cette position, et il revaut 931 : ce n est pas
  * un aller-retour fortuit, c est la meme ligne qui reprend sa surbrillance.
  */
 const SEQ_PANEL_ROWS: ReadonlyArray<readonly [number, number]> = [
   [3, 20], [4, 14], [5, 35], [6, 32], [7, 41], [8, 15], [9, 12], [10, 12],
-  [11, 9], [12, 9], [13, 10], [14, 26], [15, 22], [16, 27], [17, 20], [18, 22],
-  [19, 11], [20, 10], [21, 9], [22, 9], [23, 9], [24, 39], [25, 40], [26, 43],
-  [27, 39], [28, 18], [29, 19], [30, 29], [36, 20], [37, 12], [38, 19], [39, 11],
-  [40, 13], [52, 120], [56, 12], [57, 12], [58, 29], [59, 30], [60, 30], [61, 28],
-  [62, 28], [63, 12],
+  [11, 9], [12, 9], [13, 27], [14, 21], [15, 29], [16, 28], [17, 27], [18, 21],
+  [19, 28], [20, 10], [21, 9], [22, 9], [23, 9], [24, 10], [25, 37], [26, 34],
+  [27, 36], [28, 11], [29, 10], [36, 20], [37, 12], [38, 19], [39, 11], [40, 13],
+  [52, 120], [56, 12], [57, 12], [58, 29], [59, 30], [60, 30], [61, 28], [62, 28],
+  [63, 12],
 ];
 
-const SEQ_PANEL_INK = 977;
+const SEQ_PANEL_INK = 931;
 
 describe("l onglet d un canal en SEQ", () => {
   const seq: MainScreenModel = {
@@ -416,9 +415,8 @@ const PATTERNS_PANEL_INK = 801;
 
 // Lot 16E etape 5a : le curseur peut se poser sur la grande valeur, et il faut
 // le VOIR. L etiquette s inverse, comme la valeur ouverte d un en-tete.
-// PRD 5.0 amendement 1ter : la grande valeur ne prend plus le curseur, donc son
-// etiquette ne s inverse jamais — ni dans l onglet, ni ailleurs.
-describe("la grande valeur ne porte jamais le curseur", () => {
+// Le curseur peut se poser sur la grande valeur, et il faut le VOIR.
+describe("le curseur sur la grande valeur", () => {
   const seqTab = (insideTab: boolean): MainScreenModel => ({
     ...PANEL_MODEL,
     tab: TAB_FIRST_CHANNEL,
@@ -443,8 +441,8 @@ describe("la grande valeur ne porte jamais le curseur", () => {
     return n;
   };
 
-  it("entrer dans l onglet ne change rien a la grande valeur", () => {
-    expect(inkAround(true)).toBe(inkAround(false));
+  it("encre davantage quand le curseur y est pose", () => {
+    expect(inkAround(true)).toBeGreaterThan(inkAround(false));
   });
 });
 
@@ -505,14 +503,12 @@ describe("la surbrillance suit le champ, pas le numero de ligne", () => {
     expect(lineInk(pixels, 1)).toBe(0);
   });
 
-  // PRD 5.0 amendement 1ter : aucune position du curseur ne marque la grande
-  // valeur.
-  it("aucune position du curseur ne marque la grande valeur", () => {
-    for (let position = 0; position < 3; position += 1) {
-      const { pixels } = renderMainScreen(seqTab(position));
-      expect(bigInk(pixels)).toBe(0);
-      expect(lineInk(pixels, position)).toBeGreaterThan(0);
-    }
+  it("le curseur sur la grande valeur ne marque aucune ligne", () => {
+    const { pixels } = renderMainScreen(seqTab(SEQ_FIELD_INDEX_PATTERN));
+    expect(bigInk(pixels)).toBeGreaterThan(0);
+    expect(lineInk(pixels, 0)).toBe(0);
+    expect(lineInk(pixels, 1)).toBe(0);
+    expect(lineInk(pixels, 2)).toBe(0);
   });
 
   // L ORACLE : le domaine nomme le champ, l ecran marque sa ligne. Un VRAI
@@ -534,6 +530,7 @@ describe("la surbrillance suit le champ, pas le numero de ligne", () => {
       [UiField.Mode]: 0,
       [UiField.EditEntry]: 1,
       [UiField.Config]: 2,
+      [UiField.Pattern]: -1,
     };
 
     for (let position = 0; position < SEQ_CHANNEL_TAB_FIELDS; position += 1) {
@@ -563,7 +560,9 @@ describe("la surbrillance suit le champ, pas le numero de ligne", () => {
 // Lot 16E etape 5c : le champ de la grande valeur, une fois OUVERT, nomme
 // l action au lieu de nommer le parametre. C est le seul signal qui separe
 // « le curseur est ici » de « le champ est ouvert ».
-describe("le champ ouvert nomme l action — lot 16E etape 5c", () => {
+// PRD 5.0 amendement 1quater : la question prend la ligne de l etiquette, UNE
+// ligne sous le nom du pattern.
+describe("la question SURE: YES / NO", () => {
   const seq = (ask: boolean,
                extra: Partial<MainScreenModel> = {}): MainScreenModel => ({
     ...PANEL_MODEL,
@@ -571,24 +570,33 @@ describe("le champ ouvert nomme l action — lot 16E etape 5c", () => {
     mode: ChannelMode.SEQ,
     insideTab: true,
     cursor: 0,
+    fieldOpen: true,
     fieldCount: SEQ_CHANNEL_TAB_FIELDS,
     mainParameter: MainParameter.Pattern,
     patternAsk: ask,
     ...extra,
   });
 
-  it("sans question, il nomme le parametre", () => {
+  it("sans question, la ligne nomme le parametre", () => {
     expect(mainLabelOf(seq(false))).toBe("PATTERN");
   });
 
-  // PRD 5.0 amendement 1ter : la question porte son propre mot.
-  it("la question remplace le parametre par son propre mot", () => {
-    expect(mainLabelOf(seq(true))).toBe("SURE");
+  // ⚠️ UN SEUL MOT A LA FOIS : la reponse armee EST le mot affiche.
+  it("la question porte son mot, et NO vient en premier", () => {
+    expect(mainLabelOf(seq(true))).toBe("SURE: NO");
   });
 
-  // ⚠️ Elle se lit SUR LA BARRE : c est la ou le geste vit.
-  it("la question se voit hors de l onglet", () => {
-    expect(mainLabelOf(seq(true, { insideTab: false }))).toBe("SURE");
+  it("le mot suit la reponse armee", () => {
+    expect(mainLabelOf(seq(true, { patternYes: true }))).toBe("SURE: YES");
+  });
+
+  // La question ne vit QUE dans le champ ouvert.
+  it("le champ ferme ne montre pas la question", () => {
+    expect(mainLabelOf(seq(true, { fieldOpen: false }))).toBe("PATTERN");
+  });
+
+  it("la barre ne montre pas la question", () => {
+    expect(mainLabelOf(seq(true, { insideTab: false }))).toBe("PATTERN");
   });
 
   it("la page CONFIG garde son etiquette", () => {
@@ -599,11 +607,11 @@ describe("le champ ouvert nomme l action — lot 16E etape 5c", () => {
     expect(mainLabelOf(seq(true, { tab: TAB_PATTERNS }))).toBe("PATTERN");
   });
 
-  // Le rendu suit l etiquette : le mot change, donc l encre change avec lui.
-  it("le rendu dessine le mot de la question", () => {
-    const calme = renderMainScreen(seq(false)).count;
-    const question = renderMainScreen(seq(true)).count;
-    expect(question).not.toBe(calme);
+  // Le champ OUVERT encadre le nom.
+  it("le champ ouvert encadre le nom", () => {
+    const ouvert = renderMainScreen(seq(false)).count;
+    const ferme = renderMainScreen(seq(false, { fieldOpen: false })).count;
+    expect(ouvert).toBeGreaterThan(ferme);
   });
 });
 

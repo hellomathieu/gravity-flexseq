@@ -212,17 +212,9 @@ struct ModulatedPatternState {
     static constexpr uint8_t NO_EDITOR = 0xFF;
     static constexpr uint8_t EDITOR_CHANNEL = 0;
 
-    // PRD 5.0 amendement 1ter : les six copies comptent comme CHANGEES a chaque
-    // demarrage. Le drapeau vit en RAM et aucun record de 11.1 ne le porte, donc
-    // une coupure laisse le module incapable de distinguer une copie editee
-    // d une copie propre. Ce n est pas une precaution : c est la verite.
-    static constexpr uint8_t ALL_CHANNELS_DIRTY =
-        static_cast<uint8_t>((1u << SequencerEngine::CHANNEL_COUNT) - 1u);
-
     ModulatedPatternState()
         : pattern(), length{}, loaded{}, cursor(0), editorTemplate(NO_EDITOR),
-          editorSavedMode(0), editorSavedLength(0), editorDirty(0),
-          dirty(ALL_CHANNELS_DIRTY) {
+          editorSavedMode(0), editorSavedLength(0), editorDirty(0), dirty(0) {
         for (uint8_t c = 0; c < SequencerEngine::CHANNEL_COUNT; ++c) {
             loaded[c] = NOT_MODULATED;
         }
@@ -234,10 +226,14 @@ struct ModulatedPatternState {
         return editorTemplate != NO_EDITOR && channel == EDITOR_CHANNEL;
     }
 
-    // PRD 5.0 amendement 1ter : un bit par canal, la copie du canal differe du
-    // template qu il a charge. Il garde le chargement : une copie changee mange
-    // le premier cran et pose la question. Il n est JAMAIS persiste, et c est
-    // pourquoi les six bits partent a un au demarrage.
+    // PRD 5.0 amendement 1quater : un bit par canal, la copie du canal differe
+    // du template qu il a charge. Il garde le chargement : une copie changee
+    // fait poser la question SURE: YES / NO.
+    //
+    // ⚠️ Il n est JAMAIS persiste, et les six bits partent a ZERO — decision du
+    // proprietaire du 2026-09-14. Consequence acceptee et nommee : apres une
+    // coupure, le premier chargement d un canal ecrase une copie editee sans
+    // rien demander.
     //
     // Le garde de borne n est pas decoratif : les six bits vivent dans un octet,
     // donc un index hors des six deborderait sur un voisin.

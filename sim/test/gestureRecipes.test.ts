@@ -69,9 +69,9 @@ describe('couche 1 — recettes de gestes contre le MODELE de reference, jamais 
       driver.goToTab(TAB_FIRST_CHANNEL + 1);
       expect(ui.level).toBe(UiLevel.Tab);
       expect(ui.currentTab).toBe(TAB_FIRST_CHANNEL + 1);
-      // PRD 5.0 amendement 1ter : la grande valeur ne prend plus le curseur,
-      // donc MODE est le premier champ dans les trois modes.
-      expect(ui.field).toBe(UiField.Mode);
+      // PRD 5.0 amendement 1quater : la grande valeur reprend la premiere
+      // position, et elle porte le nom du template.
+      expect(ui.field).toBe(UiField.Pattern);
     });
 
     it('2. la recette pose le curseur sur le champ demande, en autant de rotations que la distance', () => {
@@ -83,10 +83,10 @@ describe('couche 1 — recettes de gestes contre le MODELE de reference, jamais 
         .slice(before)
         .filter((g) => g.event === UiEvent.Rotate).length;
       expect(ui.field).toBe(UiField.Subdiv);
-      // deux crans sur l onglet pour atteindre CONFIG, un appui, puis un cran
+      // trois crans sur l onglet pour atteindre CONFIG, un appui, puis un cran
       // sur la page pour atteindre SUBDIV. Le champ a demenage au lot 12, et la
-      // grande valeur a rendu sa position au PRD 5.0 amendement 1ter.
-      expect(rotations).toBe(3);
+      // grande valeur tient la premiere position — PRD 5.0 amendement 1quater.
+      expect(rotations).toBe(4);
       expect(rotations).toBeLessThan(SEQ_CHANNEL_TAB_FIELDS + CONFIG_PAGE_FIELDS);
     });
 

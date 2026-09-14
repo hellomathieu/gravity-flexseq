@@ -16,8 +16,10 @@ MainScreenModel mainScreenModelOf(const UiController& ui, const SequencerEngine&
     model.cursor = ui.cursor();
     model.fieldOpen = ui.fieldOpen();
     model.fieldCount = ui.fieldCount();
+    // PRD 5.0 amendement 1quater : l ecran montre le nom CHOISI, que le canal
+    // ne joue pas forcement encore. Sans choix en cours, c est celui qu il joue.
     model.patternIndex = onChannel
-        ? engine.getSelectedPattern(ch)
+        ? ui.displayedPattern()
         : (ui.currentTab() == UiController::TAB_PATTERNS
                ? static_cast<int8_t>(ui.slotCursor())
                : static_cast<int8_t>(-1));
@@ -48,6 +50,7 @@ MainScreenModel mainScreenModelOf(const UiController& ui, const SequencerEngine&
         ? static_cast<uint8_t>(engine.getCvDestination(ch, CV_SOURCE_2))
         : static_cast<uint8_t>(CV_DEST_NONE);
     model.patternAsk = ui.patternAskPending();
+    model.patternYes = ui.patternAnswerIsYes();
     model.configPage = ui.isOnConfigPage();
     model.tempo = ui.tempo();
     model.clockSource = ui.clockSource();

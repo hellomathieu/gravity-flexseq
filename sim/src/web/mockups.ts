@@ -56,6 +56,7 @@ function mainModel(over: Partial<MainScreenModel>): MainScreenModel {
     stepTicks: 24,
     mainParameter: MainParameter.Subdiv,
     patternAsk: false,
+    patternYes: false,
     cv1Target: 0,
     cv2Target: 0,
     configPage: false,

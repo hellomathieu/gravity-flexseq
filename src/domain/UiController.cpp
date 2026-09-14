@@ -94,6 +94,8 @@ UiController::UiController(SequencerEngine& engine, Transport& transport)
       onConfigPage_(false),
       fieldOpen_(false),
       patternAsk_(false),
+      patternYes_(false),
+      patternBrowse_(NO_BROWSE),
       pendingAction_(PATTERN_ACTION_NONE),
       pendingChannel_(0),
       tempo_(DEFAULT_TEMPO),
@@ -143,26 +145,70 @@ bool UiController::takePatternAction(uint8_t& action, uint8_t& channel) {
     return true;
 }
 
-// PRD 5.0 amendement 1ter : SHIFT plus une rotation nomme le template ET le
-// charge. Une copie propre charge tout de suite. Une copie modifiee mange son
-// premier cran : le numero ne bouge pas, l etiquette devient SURE, et le cran
-// suivant avance dans SON sens puis charge.
-//
-// Le numero ne bouge JAMAIS tant que la question est posee, donc l ecran nomme
-// toujours le template que le canal joue.
-void UiController::rotatePatternSlot(int8_t delta) {
-    if (!patternAsk_ && channelCopyHasChanged()) {
-        patternAsk_ = true;
-        return;
+// Le nom que l ECRAN montre. Sans choix en cours, c est celui que le canal joue.
+int8_t UiController::displayedPattern() const {
+    if (patternBrowse_ != NO_BROWSE) {
+        return patternBrowse_;
     }
-    patternAsk_ = false;
     const int8_t channel = selectedChannel();
-    if (channel < 0) {
+    return channel < 0 ? NO_BROWSE : engine_.getSelectedPattern(
+        static_cast<uint8_t>(channel));
+}
+
+// SHIFT plus une rotation, et la rotation dans le champ ouvert, deplacent le
+// meme choix. PRD 5.0 amendement 1quater : ce geste ne charge RIEN.
+void UiController::browsePattern(int8_t delta) {
+    const int8_t shown = displayedPattern();
+    if (shown < 0) {
         return;
     }
-    adjustFieldValue(FIELD_PATTERN, delta);
+    patternBrowse_ = static_cast<int8_t>(clampIndex(
+        static_cast<uint8_t>(shown), oneStep(delta),
+        SequencerEngine::PATTERN_COUNT));
+}
+
+// Le chargement du nom choisi. selectedPattern ne bouge qu ICI : c est le seul
+// endroit ou le canal se met a jouer autre chose.
+void UiController::postPatternLoad() {
+    const int8_t channel = selectedChannel();
+    const int8_t wanted = displayedPattern();
+    if (channel < 0 || wanted < 0) {
+        return;
+    }
+    engine_.setSelectedPattern(static_cast<uint8_t>(channel),
+                               static_cast<uint8_t>(wanted));
+    patternBrowse_ = NO_BROWSE;
     pendingAction_ = PATTERN_ACTION_LOAD;
     pendingChannel_ = static_cast<uint8_t>(channel);
+}
+
+// Un appui court dans le champ ouvert de la grande valeur. Rend true quand le
+// champ doit RESTER ouvert, ce qui n arrive que lorsque la question vient d etre
+// posee.
+//
+// PRD 5.0 amendement 1quater : une copie propre charge sans question ; une copie
+// modifiee voit son etiquette devenir SURE: YES / NO, et c est le mot choisi qui
+// decide. NO rend son nom au template joue.
+bool UiController::pressInPatternField() {
+    if (patternAsk_) {
+        patternAsk_ = false;
+        if (patternYes_) {
+            postPatternLoad();
+        } else {
+            // NO rend son nom au template que le canal joue.
+            patternBrowse_ = NO_BROWSE;
+        }
+        return false;
+    }
+    if (channelCopyHasChanged()) {
+        // ⚠️ NO est arme le premier : un appui court de trop ne doit rien
+        // detruire. Decision du proprietaire du 2026-09-14.
+        patternAsk_ = true;
+        patternYes_ = false;
+        return true;
+    }
+    postPatternLoad();
+    return false;
 }
 
 uint8_t UiController::fieldCount() const {
@@ -213,6 +259,7 @@ UiController::Field UiController::fieldAt(uint8_t index) const {
         }
     }
     switch (index) {
+        case SEQ_FIELD_INDEX_PATTERN: return FIELD_PATTERN;
         case SEQ_FIELD_INDEX_MODE: return FIELD_MODE;
         case SEQ_FIELD_INDEX_EDIT_ENTRY: return FIELD_EDIT_ENTRY;
         default: return FIELD_CONFIG;
@@ -236,21 +283,6 @@ Pattern* UiController::currentPattern() const {
 
 void UiController::handle(Event event, int8_t delta) {
     ++revision_;
-    // PRD 5.0 amendement 1ter : seul le geste qui pose la question y repond.
-    // Le garde vit ICI, et non dans chaque branche : trois sites finiraient par
-    // diverger, et une question resterait posee sur un ecran qui ne la montre
-    // plus.
-    //
-    // ⚠️ LES DEUX EVENEMENTS DE SHIFT SONT EXCLUS, et la sonde de gestes a
-    // trouve pourquoi. `onShiftPress()` part a CHAQUE relachement de SHIFT, et
-    // la rotation ne le supprime pas — seul l appui long l est. Le relachement
-    // fait donc partie du geste, et il annulait la question a chaque cran :
-    // aucun cran ne confirmait jamais. Les deux evenements ne changent rien
-    // dans ce controleur, donc ils ne doivent rien annuler.
-    if (event != EVENT_SHIFT_ROTATE && event != EVENT_SHIFT_PRESS
-        && event != EVENT_SHIFT_PLAY_PRESS) {
-        patternAsk_ = false;
-    }
     if (event == EVENT_PLAY_PRESS) {
         togglePlay();
         return;
@@ -271,10 +303,20 @@ void UiController::handleTabBar(Event event, int8_t delta) {
             currentTab_ = wrapIndex(currentTab_, oneStep(delta), TAB_COUNT);
             cursor_ = 0;
             fieldOpen_ = false;
+            // ⚠️ Le choix en cours appartient au canal qu on quitte. Sans ce
+            // retour a la sentinelle, l onglet suivant afficherait un nom qui
+            // n est pas le sien, et un octet par canal serait la seule autre
+            // facon de l eviter.
+            patternBrowse_ = NO_BROWSE;
+            patternAsk_ = false;
             break;
         case EVENT_SHIFT_ROTATE:
+            // Le geste de l original : il choisit la valeur du champ principal.
+            // Sur un canal en SEQ ce champ est le PATTERN, et PRD 5.0 amendement
+            // 1quater dit que ce choix ne charge RIEN. Le chargement demande un
+            // appui court dans le champ.
             if (mainField() == FIELD_PATTERN) {
-                rotatePatternSlot(delta);
+                browsePattern(delta);
             } else {
                 adjustFieldValue(mainField(), delta);
             }
@@ -294,17 +336,33 @@ void UiController::handleTabBar(Event event, int8_t delta) {
 void UiController::handleTab(Event event, int8_t delta) {
     switch (event) {
         case EVENT_ROTATE:
-            if (fieldOpen_) {
+            if (fieldOpen_ && field() == FIELD_PATTERN) {
+                if (patternAsk_) {
+                    // Deux mots seulement : une rotation passe de l un a l autre.
+                    patternYes_ = !patternYes_;
+                } else {
+                    browsePattern(delta);
+                }
+            } else if (fieldOpen_) {
                 adjustField(delta);
             } else {
                 cursor_ = wrapIndex(cursor_, oneStep(delta), fieldCount());
             }
             break;
         case EVENT_SHIFT_ROTATE:
-            adjustField(delta);
+            // Le meme choix que depuis la barre : le champ principal d un canal
+            // en SEQ est le PATTERN, et ce geste ne charge rien.
+            if (field() == FIELD_PATTERN) {
+                browsePattern(delta);
+            } else {
+                adjustField(delta);
+            }
             break;
         case EVENT_PRESS:
             if (fieldOpen_) {
+                if (field() == FIELD_PATTERN && pressInPatternField()) {
+                    break;
+                }
                 fieldOpen_ = false;
             } else if (field() == FIELD_EDIT_ENTRY) {
                 level_ = LEVEL_EDIT;
@@ -315,10 +373,13 @@ void UiController::handleTab(Event event, int8_t delta) {
                 cursor_ = CONFIG_FIELD_INDEX_LENGTH;
             } else if (field() != FIELD_NONE) {
                 fieldOpen_ = true;
+                patternAsk_ = false;
+                patternYes_ = false;
             }
             break;
         case EVENT_LONG_PRESS:
             if (fieldOpen_) {
+                patternAsk_ = false;
                 fieldOpen_ = false;
             } else if (onConfigPage_) {
                 onConfigPage_ = false;
@@ -454,16 +515,6 @@ void UiController::adjustFieldValue(Field target, int8_t raw) {
     const uint8_t ch = static_cast<uint8_t>(selected);
 
     switch (target) {
-        case FIELD_PATTERN: {
-            const int8_t current = engine_.getSelectedPattern(ch);
-            if (current < 0) {
-                break;
-            }
-            engine_.setSelectedPattern(
-                ch, clampIndex(static_cast<uint8_t>(current), delta,
-                               SequencerEngine::PATTERN_COUNT));
-            break;
-        }
         case FIELD_LENGTH:
             engine_.setBaseLength(ch, static_cast<uint8_t>(clampRange(
                 static_cast<int16_t>(engine_.getBaseLength(ch) + delta),
@@ -485,12 +536,16 @@ void UiController::adjustFieldValue(Field target, int8_t raw) {
                 static_cast<uint8_t>(engine_.getChannelMode(ch)), delta,
                 CHANNEL_MODE_COUNT);
             engine_.setChannelMode(ch, static_cast<ChannelMode>(next));
-            // ⚠️ AUCUN RECALAGE DU CURSEUR ICI, et c est une propriete, pas un
-            // oubli. Le mode ne change que par le champ sous le curseur —
-            // mainField() ne nomme jamais MODE — donc le curseur est DEJA sur
-            // MODE, qui est la position 0 dans les trois modes. PRD 5.0
-            // amendement 1ter porte la preuve, et la sonde de mutation l a
-            // etablie : deux mutants de la ligne retiree etaient equivalents.
+            // ⚠️ LE RECALAGE REDEVIENT NECESSAIRE sous PRD 5.0 amendement
+            // 1quater : la position 0 porte MODE hors SEQ et la GRANDE VALEUR
+            // en SEQ. Sans lui le curseur resterait immobile pendant que le
+            // champ sous lui changerait, et un appui court ouvrirait le champ du
+            // pattern au lieu de MODE. C est le seul endroit du firmware ou un
+            // geste deplace ce que le curseur designe.
+            //
+            // ⚠️ Il etait un no-op sous 1ter, ou les trois modes portaient MODE
+            // en position 0, et la sonde de mutation l avait etabli.
+            cursor_ = isLegacyModeTab() ? 0 : SEQ_FIELD_INDEX_MODE;
             break;
         }
         case FIELD_MOD: {
