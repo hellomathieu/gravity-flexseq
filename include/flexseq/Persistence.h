@@ -9,6 +9,7 @@
 #include <flexseq/Preferences.h>
 #include <flexseq/SequencerEngine.h>
 #include <flexseq/Subdiv.h>
+#include <flexseq/PatternAction.h>
 #include <flexseq/UiController.h>
 
 namespace flexseq {
@@ -605,6 +606,32 @@ void serviceTemplateEditor(Storage& storage, SequencerEngine& engine,
         state.editorTemplate = ModulatedPatternState::NO_EDITOR;
         state.loaded[CH] = ModulatedPatternState::NOT_MODULATED;
         engine.refreshTiming(CH);   // ADR 0011
+    }
+}
+
+// Lot 16E etape 5d : le controleur POSE une demande d action sur la grande
+// valeur, et ce service l EXECUTE. La separation est celle d ADR 0002 : le
+// domaine ne connait pas le Storage.
+//
+// ⚠️ Une EEPROM occupee GARDE la demande. La consommer sans charger la perdrait
+// en silence, et l utilisateur verrait un appui court sans effet.
+template <typename Storage, typename Image>
+void servicePatternAction(Storage& storage, Image& image, SequencerEngine& engine,
+                          UiController& ui) {
+    if (storage.busy()) {
+        return;
+    }
+    uint8_t action = 0;
+    uint8_t channel = 0;
+    if (!ui.takePatternAction(action, channel)) {
+        return;
+    }
+    const int8_t index = engine.getSelectedPattern(channel);
+    if (index < 0) {
+        return;
+    }
+    if (action == PATTERN_ACTION_LOAD) {
+        (void)image.loadTemplate(storage, channel, static_cast<uint8_t>(index));
     }
 }
 

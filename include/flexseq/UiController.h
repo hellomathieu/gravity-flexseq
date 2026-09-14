@@ -107,6 +107,10 @@ public:
     uint8_t patternAction() const { return patternAction_; }
     uint8_t patternActionCount() const;
 
+    // Le controleur POSE une demande, il ne l execute pas : ADR 0002 lui
+    // interdit de connaitre le Storage. Le service la consomme, une seule fois.
+    bool takePatternAction(uint8_t& action, uint8_t& channel);
+
     uint8_t stepCursor() const { return stepCursor_; }
     uint8_t slotCursor() const { return slotCursor_; }
     bool isOnHeader() const { return onHeader_; }
@@ -135,6 +139,8 @@ private:
     void toggleStep();
     void clearPattern();
     void markTemplateEdited();
+    bool channelCopyHasChanged() const;
+    void requestPatternAction();
     void adjustTemplateLength(int8_t delta);
 
     Pattern* currentPattern() const;
@@ -151,6 +157,8 @@ private:
     bool onConfigPage_;
     bool fieldOpen_;
     uint8_t patternAction_;
+    uint8_t pendingAction_;
+    uint8_t pendingChannel_;
     uint16_t tempo_;
     uint8_t clockSource_;
     uint8_t revision_;

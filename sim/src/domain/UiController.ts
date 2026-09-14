@@ -126,6 +126,8 @@ export class UiController {
   private source = 0;
   private rev = 0;
   private action: PatternAction = PatternAction.Load;
+  private pending: PatternAction = PatternAction.None;
+  private pendingChannel = 0;
 
   constructor(
     private readonly engine: SequencerEngine,
@@ -175,12 +177,34 @@ export class UiController {
   // — PRD 12.9 point 5. Un moteur non cable n a pas de drapeau : il ne propose
   // alors que LOAD.
   get patternActionCount(): number {
+    return this.channelCopyHasChanged() ? PATTERN_ACTION_COUNT : 1;
+  }
+
+  // Le controleur POSE une demande, il ne l execute pas : ADR 0002 lui interdit
+  // de connaitre le Storage. Le service la consomme, une seule fois.
+  takePatternAction(): { action: PatternAction; channel: number } | null {
+    if (this.pending === PatternAction.None) return null;
+    const taken = { action: this.pending, channel: this.pendingChannel };
+    this.pending = PatternAction.None;
+    return taken;
+  }
+
+  // ⚠️ ETAPE INTERMEDIAIRE, lot 16E 5d : seul LOAD sur une copie PROPRE pose une
+  // demande. La confirmation d une copie modifiee arrive au 5f. D ici la, rien
+  // n est detruit.
+  private requestPatternAction(): void {
+    if (this.action !== PatternAction.Load || this.channelCopyHasChanged()) return;
+    const channel = this.selectedChannel;
+    if (channel < 0) return;
+    this.pending = PatternAction.Load;
+    this.pendingChannel = channel;
+  }
+
+  private channelCopyHasChanged(): boolean {
     const state = this.engine.modulatedPatterns();
     const channel = this.selectedChannel;
-    if (state === null || channel < 0) {
-      return 1;
-    }
-    return state.isDirty(channel) ? PATTERN_ACTION_COUNT : 1;
+    if (state === null || channel < 0) return false;
+    return state.isDirty(channel);
   }
 
   get fieldCount(): number {
@@ -337,6 +361,7 @@ export class UiController {
         break;
       case UiEvent.Press:
         if (this.open) {
+          if (this.field === UiField.Pattern) this.requestPatternAction();
           this.open = false;
         } else if (this.field === UiField.EditEntry) {
           this.currentLevel = UiLevel.Edit;

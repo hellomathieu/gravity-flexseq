@@ -1080,3 +1080,67 @@ describe("UiController — l action de la grande valeur", () => {
     expect(ui.patternAction).toBe(PatternAction.Load);
   });
 });
+
+/*
+ * Lot 16E etape 5d — un appui court sur LOAD POSE une demande. Le controleur ne
+ * lit jamais l EEPROM, ADR 0002 : c est un service qui execute.
+ */
+describe("UiController — la demande d action", () => {
+  const rigWith = (dirty: boolean) => {
+    const engine = new SequencerEngine();
+    for (let ch = 0; ch < engine.channelCount(); ++ch) {
+      engine.setChannelMode(ch, ChannelMode.SEQ);
+    }
+    const state = new ModulatedPatternState();
+    if (dirty) state.markDirty(0);
+    engine.setModulatedPatterns(state);
+    const ui = new UiController(engine, new Transport(engine));
+    ui.handle(UiEvent.Press);
+    for (let guard = 0; guard < SEQ_CHANNEL_TAB_FIELDS; guard += 1) {
+      if (ui.field === UiField.Pattern) break;
+      ui.handle(UiEvent.Rotate, 1);
+    }
+    ui.handle(UiEvent.Press);
+    return { engine, state, ui };
+  };
+
+  it("valider LOAD pose une demande", () => {
+    const { ui } = rigWith(false);
+    ui.handle(UiEvent.Press);
+    const demand = ui.takePatternAction();
+    expect(demand).not.toBeNull();
+    expect(demand!.action).toBe(PatternAction.Load);
+    expect(demand!.channel).toBe(0);
+    expect(ui.fieldOpen).toBe(false);
+  });
+
+  it("une demande n est servie qu une fois", () => {
+    const { ui } = rigWith(false);
+    ui.handle(UiEvent.Press);
+    expect(ui.takePatternAction()).not.toBeNull();
+    expect(ui.takePatternAction()).toBeNull();
+  });
+
+  it("sans geste, aucune demande", () => {
+    const engine = new SequencerEngine();
+    const ui = new UiController(engine, new Transport(engine));
+    expect(ui.takePatternAction()).toBeNull();
+    ui.handle(UiEvent.Press);
+    expect(ui.takePatternAction()).toBeNull();
+  });
+
+  // ⚠️ ETAPE INTERMEDIAIRE : la confirmation arrive au 5f.
+  it("une copie modifiee ne pose pas encore de demande", () => {
+    const { ui } = rigWith(true);
+    ui.handle(UiEvent.Press);
+    expect(ui.takePatternAction()).toBeNull();
+  });
+
+  it("valider SAVE ne pose aucune demande", () => {
+    const { ui } = rigWith(true);
+    ui.handle(UiEvent.Rotate, 1);
+    expect(ui.patternAction).toBe(PatternAction.Save);
+    ui.handle(UiEvent.Press);
+    expect(ui.takePatternAction()).toBeNull();
+  });
+});

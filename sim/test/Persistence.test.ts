@@ -31,7 +31,9 @@ import {
   SequencerEngine,
 } from "../src/domain/SequencerEngine.js";
 import { Transport } from "../src/domain/Transport.js";
-import { DEFAULT_TEMPO, UiController } from "../src/domain/UiController.js";
+import { DEFAULT_TEMPO, UiController, UiEvent, UiField } from "../src/domain/UiController.js";
+import { ModulatedPatternState } from "../src/domain/ModulatedPatternState.js";
+import { PatternAction } from "../src/domain/PatternAction.js";
 import {
   Pattern,
   RATCHET_3,
@@ -41,6 +43,7 @@ import {
   RATCHET_TRIPLET,
 } from "../src/domain/Pattern.js";
 import { subdivAt } from "./helpers/subdivAt.js";
+import { servicePatternAction } from "../src/domain/Persistence.js";
 
 const SENTINEL = 0x5a;
 
@@ -1440,5 +1443,148 @@ describe("les defauts de la version 3 (B4b.6.5)", () => {
       expect(r.engine.getOffset(ch)).toBe(0);
       expect(r.engine.getSkipChance(ch)).toBe(0);
     }
+  });
+});
+
+/*
+ * Lot 16E etape 5d — LOAD charge. Le controleur POSE la demande, ce service
+ * l execute : ADR 0002 interdit au domaine de lire l EEPROM.
+ */
+describe("servicePatternAction — LOAD charge, lot 16E etape 5d", () => {
+  class BusyEeprom extends FakeEeprom {
+    busyFlag = false;
+    busy(): boolean {
+      return this.busyFlag;
+    }
+  }
+
+  function seedTemplate(ee: Storage, index: number, content: Pattern, length: number): void {
+    for (let offset = 0; offset < v3.TEMPLATE_RECORD; ++offset) {
+      ee.write(v3.templateAddress(index, offset), v3.templateByte(content, length, offset));
+    }
+  }
+
+  function distinctContent(seed: number): Pattern {
+    const p = new Pattern();
+    p.writeStep(seed % Pattern.DEFAULT_TOTAL_STEPS, true);
+    p.writeStep((seed + 7) % Pattern.DEFAULT_TOTAL_STEPS, true);
+    p.setRatchet(seed % Pattern.DEFAULT_TOTAL_STEPS, RATCHET_3);
+    return p;
+  }
+
+  function sameContent(a: Pattern, b: Pattern): boolean {
+    for (let i = 0; i < Pattern.DEFAULT_TOTAL_STEPS; ++i) {
+      if (a.readStep(i) !== b.readStep(i)) return false;
+      if (a.getRatchet(i) !== b.getRatchet(i)) return false;
+    }
+    return true;
+  }
+
+  function snapshot(p: Pattern): Pattern {
+    const copy = new Pattern();
+    for (let i = 0; i < Pattern.DEFAULT_TOTAL_STEPS; ++i) {
+      copy.writeStep(i, p.readStep(i) === true);
+      copy.setRatchet(i, p.getRatchet(i) ?? 0);
+    }
+    return copy;
+  }
+
+  // Ouvre la grande valeur du channel 0 et valide l action affichee.
+  function validateBigValue(r: ReturnType<typeof rigV3>): void {
+    r.engine.setChannelMode(0, ChannelMode.SEQ);
+    r.ui.handle(UiEvent.Press);
+    for (let guard = 0; guard < 4; guard += 1) {
+      if (r.ui.field === UiField.Pattern) break;
+      r.ui.handle(UiEvent.Rotate, 1);
+    }
+    expect(r.ui.field).toBe(UiField.Pattern);
+    r.ui.handle(UiEvent.Press);
+    r.ui.handle(UiEvent.Press);
+  }
+
+  it("un LOAD valide copie le template dans le channel", () => {
+    const ee = new BusyEeprom();
+    const r = rigV3();
+    const wanted = distinctContent(7);
+    seedTemplate(ee, 11, wanted, 21);
+    r.engine.setSelectedPattern(0, 11);
+
+    validateBigValue(r);
+    servicePatternAction(ee, r.image, r.engine, r.ui);
+
+    expect(sameContent(wanted, r.engine.instanceForChannel(0)!)).toBe(true);
+    expect(r.engine.getBaseLength(0)).toBe(21);
+  });
+
+  it("sans demande, le service ne touche a rien", () => {
+    const ee = new BusyEeprom();
+    const r = rigV3();
+    seedTemplate(ee, 11, distinctContent(7), 21);
+    r.engine.setSelectedPattern(0, 11);
+    const before = snapshot(r.engine.instanceForChannel(0)!);
+
+    servicePatternAction(ee, r.image, r.engine, r.ui);
+    expect(sameContent(before, r.engine.instanceForChannel(0)!)).toBe(true);
+  });
+
+  it("la demande est consommee : le second passage ne recharge rien", () => {
+    const ee = new BusyEeprom();
+    const r = rigV3();
+    const first = distinctContent(7);
+    seedTemplate(ee, 11, first, 21);
+    r.engine.setSelectedPattern(0, 11);
+
+    validateBigValue(r);
+    servicePatternAction(ee, r.image, r.engine, r.ui);
+    expect(sameContent(first, r.engine.instanceForChannel(0)!)).toBe(true);
+
+    seedTemplate(ee, 11, distinctContent(2), 19);
+    servicePatternAction(ee, r.image, r.engine, r.ui);
+    expect(sameContent(first, r.engine.instanceForChannel(0)!)).toBe(true);
+    expect(r.engine.getBaseLength(0)).toBe(21);
+  });
+
+  // Le gel de A1 a A8 porte sur l ECRITURE, jamais sur la lecture.
+  it("un emplacement gele se charge", () => {
+    const ee = new BusyEeprom();
+    const r = rigV3();
+    const wanted = distinctContent(2);
+    seedTemplate(ee, 3, wanted, 18);
+    r.engine.setSelectedPattern(0, 3);
+
+    validateBigValue(r);
+    servicePatternAction(ee, r.image, r.engine, r.ui);
+    expect(sameContent(wanted, r.engine.instanceForChannel(0)!)).toBe(true);
+  });
+
+  it("une EEPROM occupee GARDE la demande", () => {
+    const ee = new BusyEeprom();
+    const r = rigV3();
+    const wanted = distinctContent(4);
+    seedTemplate(ee, 12, wanted, 19);
+    r.engine.setSelectedPattern(0, 12);
+    const before = snapshot(r.engine.instanceForChannel(0)!);
+
+    validateBigValue(r);
+    ee.busyFlag = true;
+    servicePatternAction(ee, r.image, r.engine, r.ui);
+    expect(sameContent(before, r.engine.instanceForChannel(0)!)).toBe(true);
+
+    ee.busyFlag = false;
+    servicePatternAction(ee, r.image, r.engine, r.ui);
+    expect(sameContent(wanted, r.engine.instanceForChannel(0)!)).toBe(true);
+  });
+
+  it("un chargement fait tomber le drapeau de changement", () => {
+    const ee = new BusyEeprom();
+    const r = rigV3();
+    const state = new ModulatedPatternState();
+    r.engine.setModulatedPatterns(state);
+    seedTemplate(ee, 11, distinctContent(7), 21);
+    r.engine.setSelectedPattern(0, 11);
+
+    validateBigValue(r);
+    servicePatternAction(ee, r.image, r.engine, r.ui);
+    expect(state.isDirty(0)).toBe(false);
   });
 });

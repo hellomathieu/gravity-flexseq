@@ -15,6 +15,10 @@ enum PatternAction : uint8_t {
     PATTERN_ACTION_LOAD = 0,
     PATTERN_ACTION_SAVE = 1,
     PATTERN_ACTION_COUNT = 2,
+    // Aucune action demandee. Le controleur POSE une demande, et le service qui
+    // connait l EEPROM la consomme : ADR 0002 interdit au domaine de lire le
+    // materiel.
+    PATTERN_ACTION_NONE = 0xFF,
 };
 
 }  // namespace flexseq

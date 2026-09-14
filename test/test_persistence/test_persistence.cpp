@@ -2910,8 +2910,133 @@ void test_the_written_length_is_the_length_shown_in_the_header() {
         20, r.ee.read(persist::v3::templateAddress(11, persist::v3::RECORD_LENGTH_AT)));
 }
 
+/*
+ * Lot 16E etape 5d — LOAD charge. Le controleur POSE la demande, ce service
+ * l execute : ADR 0002 interdit au domaine de lire l EEPROM.
+ */
+
+namespace {
+
+// Ouvre la grande valeur du canal 0 et valide l action affichee.
+void validateBigValue(RigV3& r) {
+    r.engine.setChannelMode(0, flexseq::MODE_SEQ);
+    r.ui.handle(UiController::EVENT_PRESS);
+    for (uint8_t guard = 0; guard < UiController::SEQ_CHANNEL_TAB_FIELDS; ++guard) {
+        if (r.ui.field() == UiController::FIELD_PATTERN) break;
+        r.ui.handle(UiController::EVENT_ROTATE, 1);
+    }
+    TEST_ASSERT_EQUAL(UiController::FIELD_PATTERN, r.ui.field());
+    r.ui.handle(UiController::EVENT_PRESS);
+    r.ui.handle(UiController::EVENT_PRESS);
+}
+
+}  // namespace
+
+void test_a_validated_load_copies_the_template_into_the_channel() {
+    FakeEeprom ee;
+    RigV3 r;
+    const Pattern wanted = distinctContent(7);
+    writeTemplateRecord(ee, 11, wanted, 21);
+    r.engine.setSelectedPattern(0, 11);
+
+    validateBigValue(r);
+    flexseq::servicePatternAction(ee, r.image, r.engine, r.ui);
+
+    TEST_ASSERT_TRUE_MESSAGE(sameContent(wanted, *r.engine.instanceForChannel(0)),
+        "le contenu vient du template");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(21, r.engine.getBaseLength(0),
+        "et la longueur aussi");
+}
+
+void test_the_service_does_nothing_without_a_demand() {
+    FakeEeprom ee;
+    RigV3 r;
+    writeTemplateRecord(ee, 11, distinctContent(7), 21);
+    r.engine.setSelectedPattern(0, 11);
+    const Pattern before = *r.engine.instanceForChannel(0);
+
+    flexseq::servicePatternAction(ee, r.image, r.engine, r.ui);
+    TEST_ASSERT_TRUE_MESSAGE(sameContent(before, *r.engine.instanceForChannel(0)),
+        "sans demande, le service ne touche a rien");
+}
+
+// L oracle est le COMPORTEMENT : le template change apres le premier service, et
+// un second passage ne doit pas aller le relire.
+void test_a_demand_is_executed_once() {
+    FakeEeprom ee;
+    RigV3 r;
+    const Pattern first = distinctContent(7);
+    writeTemplateRecord(ee, 11, first, 21);
+    r.engine.setSelectedPattern(0, 11);
+
+    validateBigValue(r);
+    flexseq::servicePatternAction(ee, r.image, r.engine, r.ui);
+    TEST_ASSERT_TRUE(sameContent(first, *r.engine.instanceForChannel(0)));
+
+    writeTemplateRecord(ee, 11, distinctContent(2), 19);
+    flexseq::servicePatternAction(ee, r.image, r.engine, r.ui);
+    TEST_ASSERT_TRUE_MESSAGE(sameContent(first, *r.engine.instanceForChannel(0)),
+        "la demande est consommee : le second passage ne recharge rien");
+    TEST_ASSERT_EQUAL_UINT8(21, r.engine.getBaseLength(0));
+}
+
+// Le gel de A1 a A8 porte sur l ECRITURE, jamais sur la lecture.
+void test_a_frozen_slot_loads() {
+    FakeEeprom ee;
+    RigV3 r;
+    const Pattern wanted = distinctContent(2);
+    writeTemplateRecord(ee, 3, wanted, 18);
+    r.engine.setSelectedPattern(0, 3);
+
+    validateBigValue(r);
+    flexseq::servicePatternAction(ee, r.image, r.engine, r.ui);
+    TEST_ASSERT_TRUE(sameContent(wanted, *r.engine.instanceForChannel(0)));
+}
+
+// Une EEPROM occupee GARDE la demande : la consommer sans charger la perdrait
+// en silence.
+void test_a_busy_storage_keeps_the_demand() {
+    FakeEeprom ee;
+    RigV3 r;
+    const Pattern wanted = distinctContent(4);
+    writeTemplateRecord(ee, 12, wanted, 19);
+    r.engine.setSelectedPattern(0, 12);
+    const Pattern before = *r.engine.instanceForChannel(0);
+
+    validateBigValue(r);
+    ee.busyFlag = true;
+    flexseq::servicePatternAction(ee, r.image, r.engine, r.ui);
+    TEST_ASSERT_TRUE_MESSAGE(sameContent(before, *r.engine.instanceForChannel(0)),
+        "rien n est charge tant que l EEPROM est occupee");
+
+    ee.busyFlag = false;
+    flexseq::servicePatternAction(ee, r.image, r.engine, r.ui);
+    TEST_ASSERT_TRUE_MESSAGE(sameContent(wanted, *r.engine.instanceForChannel(0)),
+        "et la demande a survecu");
+}
+
+// Le chargement remet la copie a l identique du template : le drapeau tombe.
+void test_a_load_clears_the_change_flag() {
+    FakeEeprom ee;
+    RigV3 r;
+    flexseq::ModulatedPatternState state;
+    r.engine.setModulatedPatterns(&state);
+    writeTemplateRecord(ee, 11, distinctContent(7), 21);
+    r.engine.setSelectedPattern(0, 11);
+
+    validateBigValue(r);
+    flexseq::servicePatternAction(ee, r.image, r.engine, r.ui);
+    TEST_ASSERT_FALSE(state.isDirty(0));
+}
+
 int main() {
     UNITY_BEGIN();
+    RUN_TEST(test_a_validated_load_copies_the_template_into_the_channel);
+    RUN_TEST(test_the_service_does_nothing_without_a_demand);
+    RUN_TEST(test_a_demand_is_executed_once);
+    RUN_TEST(test_a_frozen_slot_loads);
+    RUN_TEST(test_a_busy_storage_keeps_the_demand);
+    RUN_TEST(test_a_load_clears_the_change_flag);
 
     RUN_TEST(test_the_loader_refuses_a_channel_out_of_range);
     RUN_TEST(test_the_loader_refuses_a_template_out_of_range);

@@ -1,3 +1,4 @@
+import { PatternAction } from "./PatternAction.js";
 import {
   FACTORY_MASK_BYTES,
   FACTORY_STEP_COUNT,
@@ -228,6 +229,9 @@ export function defaultPreferences(): Preferences {
 export interface Storage {
   read(address: number): number;
   write(address: number, value: number): void;
+  // Le C++ l exige ; ici elle est facultative, les bouchons anciens n en ayant
+  // pas. Absente, elle vaut « libre ».
+  busy?(): boolean;
 }
 
 function toSigned16(value: number): number {
@@ -782,4 +786,26 @@ export function bootstrap(
   image.loadTemplatesIntoInstances(storage);
   scheduler.markDirty(nowMs);
   return false;
+}
+
+// Lot 16E etape 5d : le controleur POSE une demande d action sur la grande
+// valeur, et ce service l EXECUTE. La separation est celle d ADR 0002 : le
+// domaine ne connait pas le Storage.
+//
+// ⚠️ Une EEPROM occupee GARDE la demande. La consommer sans charger la perdrait
+// en silence, et l utilisateur verrait un appui court sans effet.
+export function servicePatternAction(
+  storage: Storage,
+  image: PersistentImageV3,
+  engine: SequencerEngine,
+  ui: UiController,
+): void {
+  if (storage.busy?.() === true) return;
+  const demand = ui.takePatternAction();
+  if (demand === null) return;
+  const index = engine.getSelectedPattern(demand.channel);
+  if (index < 0) return;
+  if (demand.action === PatternAction.Load) {
+    image.loadTemplate(storage, demand.channel, index);
+  }
 }

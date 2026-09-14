@@ -94,6 +94,8 @@ UiController::UiController(SequencerEngine& engine, Transport& transport)
       onConfigPage_(false),
       fieldOpen_(false),
       patternAction_(PATTERN_ACTION_LOAD),
+      pendingAction_(PATTERN_ACTION_NONE),
+      pendingChannel_(0),
       tempo_(DEFAULT_TEMPO),
       clockSource_(0),
       revision_(0) {}
@@ -122,14 +124,42 @@ bool UiController::isLegacyModeTab() const {
 // SAVE n apparait que si la copie du canal differe du template qu il a charge —
 // PRD 12.9 point 5. Un moteur non cable n a pas de drapeau : il ne propose donc
 // que LOAD, et il ne lit jamais un pointeur nul.
-uint8_t UiController::patternActionCount() const {
+bool UiController::channelCopyHasChanged() const {
     const ModulatedPatternState* modulated = engine_.modulatedPatterns();
     const int8_t channel = selectedChannel();
     if (modulated == nullptr || channel < 0) {
-        return 1;
+        return false;
     }
-    return modulated->isDirty(static_cast<uint8_t>(channel))
-        ? PATTERN_ACTION_COUNT : 1;
+    return modulated->isDirty(static_cast<uint8_t>(channel));
+}
+
+uint8_t UiController::patternActionCount() const {
+    return channelCopyHasChanged() ? PATTERN_ACTION_COUNT : 1;
+}
+
+bool UiController::takePatternAction(uint8_t& action, uint8_t& channel) {
+    if (pendingAction_ == PATTERN_ACTION_NONE) {
+        return false;
+    }
+    action = pendingAction_;
+    channel = pendingChannel_;
+    pendingAction_ = PATTERN_ACTION_NONE;
+    return true;
+}
+
+// ⚠️ ETAPE INTERMEDIAIRE, lot 16E 5d : seul LOAD sur une copie PROPRE pose une
+// demande. La confirmation d une copie modifiee arrive au 5f, et l ecriture au
+// 5e. D ici la, rien n est detruit et rien n est ecrit.
+void UiController::requestPatternAction() {
+    if (patternAction_ != PATTERN_ACTION_LOAD || channelCopyHasChanged()) {
+        return;
+    }
+    const int8_t channel = selectedChannel();
+    if (channel < 0) {
+        return;
+    }
+    pendingAction_ = PATTERN_ACTION_LOAD;
+    pendingChannel_ = static_cast<uint8_t>(channel);
 }
 
 uint8_t UiController::fieldCount() const {
@@ -259,6 +289,9 @@ void UiController::handleTab(Event event, int8_t delta) {
             break;
         case EVENT_PRESS:
             if (fieldOpen_) {
+                if (field() == FIELD_PATTERN) {
+                    requestPatternAction();
+                }
                 fieldOpen_ = false;
             } else if (field() == FIELD_EDIT_ENTRY) {
                 level_ = LEVEL_EDIT;

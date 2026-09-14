@@ -1491,8 +1491,94 @@ void test_an_engine_without_the_buffer_offers_load_alone() {
     TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_LOAD, r.ui.patternAction());
 }
 
+/*
+ * Lot 16E etape 5d — un appui court sur LOAD POSE une demande. Le controleur ne
+ * lit jamais l EEPROM, ADR 0002 : c est un service qui execute.
+ */
+
+void test_validating_load_posts_a_request() {
+    Rig r;
+    flexseq::ModulatedPatternState state;
+    r.engine.setModulatedPatterns(&state);
+
+    openPatternField(r);
+    r.ui.handle(UiController::EVENT_PRESS);
+
+    uint8_t action = 0xAA;
+    uint8_t channel = 0xAA;
+    TEST_ASSERT_TRUE_MESSAGE(r.ui.takePatternAction(action, channel),
+        "l appui court sur LOAD pose une demande");
+    TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_LOAD, action);
+    TEST_ASSERT_EQUAL_UINT8(0, channel);
+    TEST_ASSERT_FALSE_MESSAGE(r.ui.fieldOpen(), "et le champ se ferme");
+}
+
+void test_a_demand_is_served_once() {
+    Rig r;
+    flexseq::ModulatedPatternState state;
+    r.engine.setModulatedPatterns(&state);
+
+    openPatternField(r);
+    r.ui.handle(UiController::EVENT_PRESS);
+
+    uint8_t action = 0;
+    uint8_t channel = 0;
+    TEST_ASSERT_TRUE(r.ui.takePatternAction(action, channel));
+    TEST_ASSERT_FALSE_MESSAGE(r.ui.takePatternAction(action, channel),
+        "la demande est consommee, et une seule fois");
+}
+
+void test_no_gesture_posts_no_demand() {
+    Rig r;
+    uint8_t action = 0;
+    uint8_t channel = 0;
+    TEST_ASSERT_FALSE(r.ui.takePatternAction(action, channel));
+    r.enterTab();
+    TEST_ASSERT_FALSE_MESSAGE(r.ui.takePatternAction(action, channel),
+        "entrer dans un onglet ne demande rien");
+}
+
+// ⚠️ ETAPE INTERMEDIAIRE : la confirmation arrive au 5f. D ici la, une copie
+// modifiee ne charge PAS, et rien n est detruit.
+void test_a_changed_copy_posts_no_demand_yet() {
+    Rig r;
+    flexseq::ModulatedPatternState state;
+    r.engine.setModulatedPatterns(&state);
+    state.markDirty(0);
+
+    openPatternField(r);
+    r.ui.handle(UiController::EVENT_PRESS);
+
+    uint8_t action = 0;
+    uint8_t channel = 0;
+    TEST_ASSERT_FALSE_MESSAGE(r.ui.takePatternAction(action, channel),
+        "sans confirmation, une copie modifiee ne se charge pas");
+}
+
+// Un appui court sur SAVE ne demande rien : l ecriture arrive au 5e.
+void test_validating_save_posts_no_demand_yet() {
+    Rig r;
+    flexseq::ModulatedPatternState state;
+    r.engine.setModulatedPatterns(&state);
+    state.markDirty(0);
+
+    openPatternField(r);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_SAVE, r.ui.patternAction());
+    r.ui.handle(UiController::EVENT_PRESS);
+
+    uint8_t action = 0;
+    uint8_t channel = 0;
+    TEST_ASSERT_FALSE(r.ui.takePatternAction(action, channel));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
+    RUN_TEST(test_validating_load_posts_a_request);
+    RUN_TEST(test_a_demand_is_served_once);
+    RUN_TEST(test_no_gesture_posts_no_demand);
+    RUN_TEST(test_a_changed_copy_posts_no_demand_yet);
+    RUN_TEST(test_validating_save_posts_no_demand_yet);
     RUN_TEST(test_a_clean_copy_offers_load_alone);
     RUN_TEST(test_a_changed_copy_offers_save_as_well);
     RUN_TEST(test_the_action_clamps_at_both_ends);

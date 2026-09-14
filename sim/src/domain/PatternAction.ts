@@ -11,6 +11,9 @@
 export enum PatternAction {
   Load = 0,
   Save = 1,
+  // Aucune action demandee. Le controleur POSE une demande, et le service qui
+  // connait l EEPROM la consomme.
+  None = 0xff,
 }
 
 export const PATTERN_ACTION_COUNT = 2;

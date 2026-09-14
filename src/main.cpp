@@ -285,6 +285,7 @@ void loop() {
 
     flexseq::serviceTemplateEditor(eeprom, engine, ui, modulatedPatterns,
                                    persistence, persistentImage);
+    flexseq::servicePatternAction(eeprom, persistentImage, engine, ui);
     flexseq::serviceOneModulationTemplateLoad(eeprom, engine, modulatedPatterns);
 
     if (ticks > 0) {
