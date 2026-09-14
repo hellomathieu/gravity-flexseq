@@ -214,7 +214,7 @@ struct ModulatedPatternState {
 
     ModulatedPatternState()
         : pattern(), length{}, loaded{}, cursor(0), editorTemplate(NO_EDITOR),
-          editorSavedMode(0), editorSavedLength(0), editorDirty(0) {
+          editorSavedMode(0), editorSavedLength(0), editorDirty(0), dirty(0) {
         for (uint8_t c = 0; c < SequencerEngine::CHANNEL_COUNT; ++c) {
             loaded[c] = NOT_MODULATED;
         }
@@ -224,6 +224,29 @@ struct ModulatedPatternState {
     // l editeur est ferme, toute autre valeur nomme l emplacement qu il ecrira.
     bool heldByEditor(uint8_t channel) const {
         return editorTemplate != NO_EDITOR && channel == EDITOR_CHANNEL;
+    }
+
+    // PRD 5.0 amendement 1bis : un bit par canal, la copie du canal differe du
+    // template qu il a charge. Il garde le chargement, et il commande
+    // l apparition de SAVE. Il n est JAMAIS persiste.
+    //
+    // Le garde de borne n est pas decoratif : les six bits vivent dans un octet,
+    // donc un index hors des six deborderait sur un voisin.
+    bool isDirty(uint8_t channel) const {
+        return channel < SequencerEngine::CHANNEL_COUNT
+               && (dirty & static_cast<uint8_t>(1u << channel)) != 0;
+    }
+
+    void markDirty(uint8_t channel) {
+        if (channel < SequencerEngine::CHANNEL_COUNT) {
+            dirty = static_cast<uint8_t>(dirty | static_cast<uint8_t>(1u << channel));
+        }
+    }
+
+    void clearDirty(uint8_t channel) {
+        if (channel < SequencerEngine::CHANNEL_COUNT) {
+            dirty = static_cast<uint8_t>(dirty & ~static_cast<uint8_t>(1u << channel));
+        }
     }
 
     // PRD 5.0 point 11 : tant que l editeur est ouvert, le canal d audition est
@@ -244,7 +267,11 @@ struct ModulatedPatternState {
     uint8_t editorSavedMode;
     uint8_t editorSavedLength;
     uint8_t editorDirty;
+    uint8_t dirty;
 };
+
+static_assert(SequencerEngine::CHANNEL_COUNT <= 8,
+              "the change flag holds one bit per channel in a single byte");
 
 static_assert(ModulatedPatternState::NOT_MODULATED
                   > SequencerEngine::PATTERN_COUNT - 1,

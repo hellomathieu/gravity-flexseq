@@ -296,6 +296,13 @@ public:
         return persist::v3::templateByte(*instance, engine_.getBaseLength(channel), offset);
     }
 
+    void clearChannelChangeFlag(uint8_t channel) {
+        ModulatedPatternState* modulated = engine_.modulatedPatterns();
+        if (modulated != nullptr) {
+            modulated->clearDirty(channel);
+        }
+    }
+
     template <typename Storage>
     bool saveTemplate(Storage& storage, uint8_t channel, uint8_t index) {
         if (index < persist::v3::FROZEN_TEMPLATE_COUNT
@@ -311,6 +318,8 @@ public:
             storage.write(persist::v3::templateAddress(index, offset),
                           persist::v3::templateByte(*instance, length, offset));
         }
+        // PRD 12.9 point 6 : le canal adopte l emplacement, et le drapeau tombe.
+        clearChannelChangeFlag(channel);
         return true;
     }
 
@@ -334,6 +343,8 @@ public:
             storage.read(persist::v3::templateAddress(index,
                                                       persist::v3::RECORD_LENGTH_AT)));
         engine_.setSelectedPattern(channel, index);
+        // La copie est de nouveau le template : PRD 5.0 amendement 1bis.
+        clearChannelChangeFlag(channel);
         return true;
     }
 

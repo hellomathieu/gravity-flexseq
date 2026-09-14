@@ -398,6 +398,7 @@ void UiController::adjustFieldValue(Field target, int8_t raw) {
                 static_cast<int16_t>(engine_.getBaseLength(ch) + delta),
                 static_cast<int16_t>(SequencerEngine::MIN_LENGTH),
                 static_cast<int16_t>(SequencerEngine::MAX_LENGTH))));
+            markTemplateEdited();
             break;
         case FIELD_SUBDIV: {
             int8_t index = subdivIndexOf(engine_.getSubdiv(ch));
@@ -546,13 +547,21 @@ void UiController::clearPattern() {
 
 // ADR 0013 : l editeur de templates ecrit son enregistrement en sortant, et
 // seulement s il a change. Le drapeau vit avec le tampon.
+// Les deux drapeaux ne se confondent pas : dans l editeur de templates c est le
+// TEMPLATE qui change, ailleurs c est la COPIE d un canal. Un seul point de pose
+// pour les deux, parce que les quatre sites d edition passent tous par ici.
 void UiController::markTemplateEdited() {
-    if (currentTab_ != TAB_PATTERNS || level_ != LEVEL_EDIT) {
+    ModulatedPatternState* modulated = engine_.modulatedPatterns();
+    if (modulated == nullptr) {
         return;
     }
-    ModulatedPatternState* modulated = engine_.modulatedPatterns();
-    if (modulated != nullptr) {
+    if (currentTab_ == TAB_PATTERNS && level_ == LEVEL_EDIT) {
         modulated->editorDirty = 1;
+        return;
+    }
+    const int8_t channel = selectedChannel();
+    if (channel >= 0) {
+        modulated->markDirty(static_cast<uint8_t>(channel));
     }
 }
 

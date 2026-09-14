@@ -1751,6 +1751,19 @@ MUTANTS = [
      "include/flexseq/SequencerEngine.h",
      "        return editorTemplate == NO_EDITOR || channel == EDITOR_CHANNEL;",
      "        return true;", "cpp"),
+    # Lot 16E etape 5b : le drapeau par canal.
+    ("cpp: the length gesture does not raise the change flag",
+     "src/domain/UiController.cpp",
+     "                static_cast<int16_t>(SequencerEngine::MAX_LENGTH))));\n"
+     "            markTemplateEdited();",
+     "                static_cast<int16_t>(SequencerEngine::MAX_LENGTH))));",
+     "cpp"),
+    ("cpp: a load leaves the channel dirty",
+     "include/flexseq/Persistence.h",
+     "        // La copie est de nouveau le template : PRD 5.0 amendement 1bis.\n"
+     "        clearChannelChangeFlag(channel);\n",
+     "",
+     "cpp"),
     ("cpp: main forgets the silence guard (pins)",
      "src/main.cpp",
      "        if (!modulatedPatterns.channelIsAudible(ch)) {",

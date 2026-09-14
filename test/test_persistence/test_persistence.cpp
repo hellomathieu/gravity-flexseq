@@ -2742,6 +2742,118 @@ void test_the_audition_emits_the_template_on_channel_one() {
         1, onsets, "le canal 1 suit le contenu, il n emet pas a chaque pas");
 }
 
+// Entre dans l ecran EDIT d un canal. Le mode SEQ est obligatoire : EDIT n est
+// atteignable que de la, decision du proprietaire du 2026-09-05.
+void enterChannelEdit(EditorRig& r, uint8_t channel) {
+    r.engine.setChannelMode(channel, flexseq::MODE_SEQ);
+    while (r.ui.currentTab() != UiController::TAB_FIRST_CHANNEL + channel) {
+        r.ui.handle(UiController::EVENT_ROTATE, 1);
+    }
+    r.ui.handle(UiController::EVENT_PRESS);
+    while (r.ui.field() != UiController::FIELD_EDIT_ENTRY) {
+        r.ui.handle(UiController::EVENT_ROTATE, 1);
+    }
+    r.ui.handle(UiController::EVENT_PRESS);
+}
+
+/*
+ * Le drapeau par canal — lot 16E etape 5b, PRD 5.0 amendement 1bis
+ *
+ * Un bit par canal : la copie du canal differe du template qu il a charge. Il
+ * garde le chargement, et il commande l apparition de SAVE.
+ */
+
+void test_a_fresh_state_carries_no_dirty_channel() {
+    EditorRig r;
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        TEST_ASSERT_FALSE_MESSAGE(r.state.isDirty(ch), "rien n a ete edite");
+    }
+}
+
+void test_editing_a_step_raises_the_flag_of_that_channel_alone() {
+    EditorRig r;
+    enterChannelEdit(r, 3);
+    r.ui.handle(UiController::EVENT_PRESS);          // bascule le pas 0
+    TEST_ASSERT_TRUE_MESSAGE(r.state.isDirty(3), "le canal edite");
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        if (ch != 3) {
+            TEST_ASSERT_FALSE_MESSAGE(r.state.isDirty(ch), "et lui seul");
+        }
+    }
+}
+
+// Decision du proprietaire du 2026-09-14 : le record de template stocke une
+// longueur, donc un canal dont la longueur a change ne correspond plus au
+// template charge.
+void test_editing_the_length_of_a_channel_raises_its_flag() {
+    EditorRig r;
+    r.engine.setChannelMode(2, flexseq::MODE_SEQ);
+    while (r.ui.currentTab() != UiController::TAB_FIRST_CHANNEL + 2) {
+        r.ui.handle(UiController::EVENT_ROTATE, 1);
+    }
+    r.ui.handle(UiController::EVENT_PRESS);
+    while (r.ui.field() != UiController::FIELD_CONFIG) {
+        r.ui.handle(UiController::EVENT_ROTATE, 1);
+    }
+    r.ui.handle(UiController::EVENT_PRESS);          // la page CONFIG
+    while (r.ui.field() != UiController::FIELD_LENGTH) {
+        r.ui.handle(UiController::EVENT_ROTATE, 1);
+    }
+    const uint8_t before = r.engine.getBaseLength(2);
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+    TEST_ASSERT_NOT_EQUAL_MESSAGE(before, r.engine.getBaseLength(2),
+                                  "le geste doit avoir change la longueur");
+    TEST_ASSERT_TRUE_MESSAGE(r.state.isDirty(2), "la longueur leve le drapeau");
+}
+
+// ⚠️ setBaseLength a sept appelants et un seul est un geste. Le demarrage et
+// l editeur de templates en font partie : ils ne doivent lever AUCUN bit.
+void test_the_template_editor_raises_no_channel_flag() {
+    EditorRig r;
+    r.selectSlot(11);
+    r.openEditor();
+    r.serve();
+    r.ui.handle(UiController::EVENT_PRESS);          // edite le TEMPLATE
+    // ⚠️ Le drapeau du template se lit AVANT la sortie : sortir ecrit le record
+    // et le fait retomber, ce qui est son contrat.
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, r.state.editorDirty,
+                                    "le drapeau du template, lui, est leve");
+    r.closeEditor();
+    r.serve();
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        TEST_ASSERT_FALSE_MESSAGE(r.state.isDirty(ch),
+                                  "l editeur de templates n edite aucune copie de canal");
+    }
+}
+
+void test_loading_a_template_clears_the_flag_of_the_channel() {
+    EditorRig r;
+    enterChannelEdit(r, 1);
+    r.ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_TRUE(r.state.isDirty(1));
+    TEST_ASSERT_TRUE(r.image.loadTemplate(r.ee, 1, 5));
+    TEST_ASSERT_FALSE_MESSAGE(r.state.isDirty(1),
+                              "la copie est de nouveau le template");
+}
+
+void test_saving_a_template_clears_the_flag_of_the_channel() {
+    EditorRig r;
+    enterChannelEdit(r, 1);
+    r.ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_TRUE(r.state.isDirty(1));
+    TEST_ASSERT_TRUE(r.image.saveTemplate(r.ee, 1, 9));
+    TEST_ASSERT_FALSE_MESSAGE(r.state.isDirty(1),
+                              "le canal adopte l emplacement, PRD 12.9 point 6");
+}
+
+// Le bit vit dans un octet : un index hors des six deborderait sur un voisin.
+void test_an_out_of_range_channel_never_touches_a_bit() {
+    EditorRig r;
+    r.state.markDirty(SequencerEngine::CHANNEL_COUNT);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, r.state.dirty, "aucun bit n a bouge");
+    TEST_ASSERT_FALSE(r.state.isDirty(SequencerEngine::CHANNEL_COUNT));
+}
+
 // PRD 5.0 point 11 : l editeur fait taire les cinq autres canaux. Un canal en
 // CLOCK emet a CHAQUE pas, donc les six emettent des que le transport tourne et
 // l audition est inaudible.
@@ -2970,6 +3082,13 @@ int main() {
     RUN_TEST(test_opening_the_editor_invalidates_the_timing_cache);
     RUN_TEST(test_the_editor_sets_a_ratchet_on_the_template);
     RUN_TEST(test_the_audition_emits_the_template_on_channel_one);
+    RUN_TEST(test_a_fresh_state_carries_no_dirty_channel);
+    RUN_TEST(test_editing_a_step_raises_the_flag_of_that_channel_alone);
+    RUN_TEST(test_editing_the_length_of_a_channel_raises_its_flag);
+    RUN_TEST(test_the_template_editor_raises_no_channel_flag);
+    RUN_TEST(test_loading_a_template_clears_the_flag_of_the_channel);
+    RUN_TEST(test_saving_a_template_clears_the_flag_of_the_channel);
+    RUN_TEST(test_an_out_of_range_channel_never_touches_a_bit);
     RUN_TEST(test_the_editor_silences_the_five_other_channels);
     RUN_TEST(test_outside_the_editor_every_channel_is_audible);
     RUN_TEST(test_the_written_length_is_the_length_shown_in_the_header);
