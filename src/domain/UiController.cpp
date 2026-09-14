@@ -123,7 +123,12 @@ uint8_t UiController::fieldCount() const {
         return CLOCK_TAB_FIELDS;
     }
     if (isChannelTab()) {
-        return onConfigPage_ ? CONFIG_PAGE_FIELDS : CHANNEL_TAB_FIELDS;
+        if (onConfigPage_) {
+            return CONFIG_PAGE_FIELDS;
+        }
+        // La grande valeur n existe qu en SEQ : les deux autres modes ne lisent
+        // aucun pattern.
+        return isLegacyModeTab() ? CHANNEL_TAB_FIELDS : SEQ_CHANNEL_TAB_FIELDS;
     }
     if (currentTab_ == TAB_PATTERNS) {
         return PATTERNS_TAB_FIELDS;
@@ -161,6 +166,7 @@ UiController::Field UiController::fieldAt(uint8_t index) const {
         }
     }
     switch (index) {
+        case SEQ_FIELD_INDEX_PATTERN: return FIELD_PATTERN;
         case SEQ_FIELD_INDEX_MODE: return FIELD_MODE;
         case SEQ_FIELD_INDEX_EDIT_ENTRY: return FIELD_EDIT_ENTRY;
         default: return FIELD_CONFIG;
@@ -414,6 +420,12 @@ void UiController::adjustFieldValue(Field target, int8_t raw) {
                 static_cast<uint8_t>(engine_.getChannelMode(ch)), delta,
                 CHANNEL_MODE_COUNT);
             engine_.setChannelMode(ch, static_cast<ChannelMode>(next));
+            // ⚠️ La position 0 change de sens avec le mode : elle porte MODE
+            // hors SEQ et la grande valeur en SEQ. Sans ce recalage le curseur
+            // resterait immobile pendant que le champ sous lui changerait, et un
+            // appui court ouvrirait LOAD au lieu de MODE. C est le seul endroit
+            // du firmware ou un geste deplace ce que le curseur designe.
+            cursor_ = isLegacyModeTab() ? 0 : SEQ_FIELD_INDEX_MODE;
             break;
         }
         case FIELD_MOD: {

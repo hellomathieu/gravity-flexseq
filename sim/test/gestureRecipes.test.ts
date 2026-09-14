@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { GestureDriver } from '../src/analysis/gestureRecipes';
 import {
   CHANNEL_TAB_FIELDS,
+  SEQ_CHANNEL_TAB_FIELDS,
   CONFIG_PAGE_FIELDS,
   STEP_COUNT,
   TAB_FIRST_CHANNEL,
@@ -68,7 +69,9 @@ describe('couche 1 — recettes de gestes contre le MODELE de reference, jamais 
       driver.goToTab(TAB_FIRST_CHANNEL + 1);
       expect(ui.level).toBe(UiLevel.Tab);
       expect(ui.currentTab).toBe(TAB_FIRST_CHANNEL + 1);
-      expect(ui.field).toBe(UiField.Mode);
+      // Le premier champ d un canal en SEQ est la grande valeur depuis le lot
+      // 16E etape 5a : on choisit le pattern avant de l editer.
+      expect(ui.field).toBe(UiField.Pattern);
     });
 
     it('2. la recette pose le curseur sur le champ demande, en autant de rotations que la distance', () => {
@@ -80,10 +83,11 @@ describe('couche 1 — recettes de gestes contre le MODELE de reference, jamais 
         .slice(before)
         .filter((g) => g.event === UiEvent.Rotate).length;
       expect(ui.field).toBe(UiField.Subdiv);
-      // deux crans sur l onglet pour atteindre CONFIG, un appui, puis un cran
-      // sur la page pour atteindre SUBDIV. Le champ a demenage au lot 12.
-      expect(rotations).toBe(3);
-      expect(rotations).toBeLessThan(CHANNEL_TAB_FIELDS + CONFIG_PAGE_FIELDS);
+      // trois crans sur l onglet pour atteindre CONFIG, un appui, puis un cran
+      // sur la page pour atteindre SUBDIV. Le champ a demenage au lot 12, et la
+      // grande valeur a pris la premiere position au lot 16E etape 5a.
+      expect(rotations).toBe(4);
+      expect(rotations).toBeLessThan(SEQ_CHANNEL_TAB_FIELDS + CONFIG_PAGE_FIELDS);
     });
 
     it('3. un appui long remonte d UN seul niveau', () => {

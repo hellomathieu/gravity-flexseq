@@ -113,6 +113,11 @@ void test_press_enters_a_tab_that_has_fields() {
     r.enterTab();
     TEST_ASSERT_EQUAL(UiController::LEVEL_TAB, r.ui.level());
     TEST_ASSERT_EQUAL_UINT8(0, r.ui.cursor());
+    // Le rig met les six canaux en SEQ, donc le premier champ est la grande
+    // valeur. MODE reste la ligne 1 des trois, un cran plus loin.
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_PATTERN, r.ui.field(),
+        "on choisit le pattern avant de l editer");
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
     TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MODE, r.ui.field(),
         "MODE est la ligne 1, comme dans l original");
 }
@@ -157,14 +162,14 @@ void test_rotate_moves_the_field_cursor_and_wraps() {
     Rig r;
     r.enterTab();
     r.ui.handle(UiController::EVENT_ROTATE, 1);
-    TEST_ASSERT_EQUAL(UiController::FIELD_EDIT_ENTRY, r.ui.field());
-    r.ui.handle(UiController::EVENT_ROTATE, -1);
     TEST_ASSERT_EQUAL(UiController::FIELD_MODE, r.ui.field());
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    TEST_ASSERT_EQUAL(UiController::FIELD_PATTERN, r.ui.field());
     r.ui.handle(UiController::EVENT_ROTATE, -1);
     TEST_ASSERT_EQUAL(UiController::FIELD_CONFIG, r.ui.field());
     r.ui.handle(UiController::EVENT_ROTATE, 1);
-    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MODE, r.ui.field(),
-        "la liste boucle sur son premier champ, qui est MODE");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_PATTERN, r.ui.field(),
+        "la liste boucle sur son premier champ, qui est la grande valeur");
 }
 
 void test_press_opens_a_value_field_and_press_closes_it() {
@@ -926,21 +931,27 @@ void test_a_random_tab_puts_the_subdivision_on_the_second_line() {
     TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MOD, r.ui.fieldAt(2), "ligne 3");
 }
 
+// ⚠️ QUATRE POSITIONS DE CURSEUR, mais TOUJOURS TROIS LIGNES. La grande valeur
+// n est pas une ligne : c est le grand chiffre a gauche. La conformite a
+// l original porte sur les lignes, et elle est intacte.
 void test_a_seq_tab_takes_the_three_lines_of_the_original() {
     ModeRig r(flexseq::MODE_SEQ);
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(3, r.ui.fieldCount(),
-        "trois lignes comme CLOCK et RANDOM, depuis le lot 12");
-    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MODE, r.ui.fieldAt(0),
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(4, r.ui.fieldCount(),
+        "trois lignes, plus la grande valeur depuis le lot 16E etape 5a");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_PATTERN, r.ui.fieldAt(0),
+        "la grande valeur vient en premier : on choisit avant d editer");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MODE, r.ui.fieldAt(1),
         "MODE est la ligne 1 dans les TROIS modes : sans lui, SEQ serait un aller simple");
-    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_EDIT_ENTRY, r.ui.fieldAt(1), "ligne 2 : EDIT");
-    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_CONFIG, r.ui.fieldAt(2), "ligne 3 : CONFIG");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_EDIT_ENTRY, r.ui.fieldAt(2), "ligne 2 : EDIT");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_CONFIG, r.ui.fieldAt(3), "ligne 3 : CONFIG");
 }
 
 void test_the_published_field_indices_agree_with_fieldAt() {
     ModeRig r(flexseq::MODE_SEQ);
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, UiController::SEQ_FIELD_INDEX_MODE, "MODE vaut 0");
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, UiController::SEQ_FIELD_INDEX_EDIT_ENTRY, "EDIT vaut 1");
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(2, UiController::SEQ_FIELD_INDEX_CONFIG, "CONFIG vaut 2");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, UiController::SEQ_FIELD_INDEX_PATTERN, "PATTERN vaut 0");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, UiController::SEQ_FIELD_INDEX_MODE, "MODE vaut 1");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(2, UiController::SEQ_FIELD_INDEX_EDIT_ENTRY, "EDIT vaut 2");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(3, UiController::SEQ_FIELD_INDEX_CONFIG, "CONFIG vaut 3");
     TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MODE,
         r.ui.fieldAt(UiController::SEQ_FIELD_INDEX_MODE), "index et fieldAt : MODE");
     TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_EDIT_ENTRY,
@@ -1059,7 +1070,8 @@ void test_the_config_page_is_left_behind_when_a_tab_is_entered_again() {
     r.ui.handle(UiController::EVENT_PRESS);
     TEST_ASSERT_FALSE_MESSAGE(r.ui.isOnConfigPage(),
         "entrer dans un onglet part de ses propres champs, jamais de CONFIG");
-    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MODE, r.ui.field(), "donc sur MODE");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_PATTERN, r.ui.field(),
+        "donc sur son premier champ, la grande valeur");
 }
 
 void test_the_length_is_edited_on_the_config_page() {
@@ -1076,7 +1088,9 @@ void test_the_length_is_edited_on_the_config_page() {
 
 void test_the_mode_can_always_be_changed_back_out_of_seq() {
     ModeRig r(flexseq::MODE_SEQ);
-    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MODE, r.ui.field(), "MODE est atteignable");
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MODE, r.ui.field(),
+        "MODE reste atteignable, a un cran de la grande valeur");
     r.ui.handle(UiController::EVENT_PRESS);
     r.ui.handle(UiController::EVENT_ROTATE, -1);
     TEST_ASSERT_EQUAL_MESSAGE(flexseq::MODE_RANDOM, r.engine.getChannelMode(0),
@@ -1224,6 +1238,74 @@ void test_the_controller_and_the_format_agree_on_the_frozen_count() {
 }
 
 /*
+ * La grande valeur, premiere position du curseur — lot 16E etape 5a
+ *
+ * PRD 5.0 amendement 1bis : c est la premiere valeur a choisir avant d editer
+ * un pattern. MODE, EDIT et CONFIG passent de 0-1-2 a 1-2-3.
+ */
+
+void test_a_seq_channel_puts_the_big_value_first() {
+    Rig r;
+    r.gotoTab(UiController::TAB_FIRST_CHANNEL);
+    r.engine.setChannelMode(0, flexseq::MODE_SEQ);
+    r.enterTab();
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(4, r.ui.fieldCount(), "quatre positions");
+    TEST_ASSERT_EQUAL(UiController::FIELD_PATTERN, r.ui.fieldAt(0));
+    TEST_ASSERT_EQUAL(UiController::FIELD_MODE, r.ui.fieldAt(1));
+    TEST_ASSERT_EQUAL(UiController::FIELD_EDIT_ENTRY, r.ui.fieldAt(2));
+    TEST_ASSERT_EQUAL(UiController::FIELD_CONFIG, r.ui.fieldAt(3));
+}
+
+void test_the_published_seq_indices_are_zero_to_three() {
+    TEST_ASSERT_EQUAL_UINT8(0, UiController::SEQ_FIELD_INDEX_PATTERN);
+    TEST_ASSERT_EQUAL_UINT8(1, UiController::SEQ_FIELD_INDEX_MODE);
+    TEST_ASSERT_EQUAL_UINT8(2, UiController::SEQ_FIELD_INDEX_EDIT_ENTRY);
+    TEST_ASSERT_EQUAL_UINT8(3, UiController::SEQ_FIELD_INDEX_CONFIG);
+}
+
+// Les deux autres modes ne lisent aucun pattern : la position n existe pas.
+void test_a_clock_channel_keeps_three_positions_and_mode_first() {
+    Rig r;
+    r.engine.setChannelMode(0, flexseq::MODE_CLOCK);
+    r.gotoTab(UiController::TAB_FIRST_CHANNEL);
+    r.enterTab();
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(3, r.ui.fieldCount(), "trois positions");
+    TEST_ASSERT_EQUAL(UiController::FIELD_MODE, r.ui.fieldAt(0));
+}
+
+// ⚠️ Le seul endroit du firmware ou un geste deplace ce que le curseur designe :
+// la position 0 change de sens avec le mode.
+void test_turning_a_channel_to_seq_puts_the_cursor_back_on_mode() {
+    Rig r;
+    r.engine.setChannelMode(0, flexseq::MODE_CLOCK);
+    r.gotoTab(UiController::TAB_FIRST_CHANNEL);
+    r.enterTab();
+    TEST_ASSERT_EQUAL(UiController::FIELD_MODE, r.ui.field());
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);   // CLOCK -> RANDOM
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);   // RANDOM -> SEQ
+    TEST_ASSERT_EQUAL(flexseq::MODE_SEQ, r.engine.getChannelMode(0));
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MODE, r.ui.field(),
+                              "le curseur reste sur MODE, il ne glisse pas sur la grande valeur");
+}
+
+void test_turning_a_channel_back_to_clock_keeps_the_cursor_on_mode() {
+    Rig r;
+    r.gotoTab(UiController::TAB_FIRST_CHANNEL);
+    r.engine.setChannelMode(0, flexseq::MODE_SEQ);
+    r.enterTab();
+    while (r.ui.field() != UiController::FIELD_CONFIG) {
+        r.ui.handle(UiController::EVENT_ROTATE, 1);
+    }
+    r.ui.handle(UiController::EVENT_ROTATE, 1);         // revient sur la grande valeur
+    while (r.ui.field() != UiController::FIELD_MODE) {
+        r.ui.handle(UiController::EVENT_ROTATE, 1);
+    }
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);   // SEQ -> CLOCK
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MODE, r.ui.field(),
+                              "et le curseur ne sort jamais des bornes");
+}
+
+/*
  * Le choix de l image — lot 16E etape 4, correction du 2026-09-13
  *
  * Le declencheur de redessin et le selecteur d ecran lisaient des etats
@@ -1364,6 +1446,11 @@ int main(int, char**) {
     RUN_TEST(test_the_slot_cursor_never_reaches_a_factory_template);
     RUN_TEST(test_the_slot_cursor_stops_on_the_last_template);
     RUN_TEST(test_the_controller_and_the_format_agree_on_the_frozen_count);
+    RUN_TEST(test_a_seq_channel_puts_the_big_value_first);
+    RUN_TEST(test_the_published_seq_indices_are_zero_to_three);
+    RUN_TEST(test_a_clock_channel_keeps_three_positions_and_mode_first);
+    RUN_TEST(test_turning_a_channel_to_seq_puts_the_cursor_back_on_mode);
+    RUN_TEST(test_turning_a_channel_back_to_clock_keeps_the_cursor_on_mode);
     RUN_TEST(test_the_frame_choice_names_the_main_screen_by_default);
     RUN_TEST(test_the_frame_choice_names_the_channel_editor_and_its_channel);
     RUN_TEST(test_the_frame_choice_gives_the_template_editor_its_audition_channel);

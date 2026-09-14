@@ -11,6 +11,7 @@ import {
   SEQ_FIELD_INDEX_CONFIG,
   SEQ_FIELD_INDEX_EDIT_ENTRY,
   SEQ_FIELD_INDEX_MODE,
+  SEQ_FIELD_INDEX_PATTERN,
   STEP_COUNT,
   TAB_CLOCK,
   TAB_COUNT,
@@ -117,7 +118,10 @@ describe("UiController — tab bar", () => {
     enterTab();
     expect(ui.level).toBe(UiLevel.Tab);
     expect(ui.cursor).toBe(0);
-    expect(ui.field).toBe(UiField.Mode);
+    // Le rig met les six canaux en SEQ : le premier champ est la grande valeur.
+    expect(ui.field).toBe(UiField.Pattern);
+    ui.handle(UiEvent.Rotate, 1);
+    expect(ui.field, "MODE est la ligne 1, comme dans l original").toBe(UiField.Mode);
   });
 
   it("press does nothing on the settings tab while it is deferred", () => {
@@ -167,13 +171,13 @@ describe("UiController — inside a tab", () => {
     const { ui, enterTab } = rig();
     enterTab();
     ui.handle(UiEvent.Rotate, 1);
-    expect(ui.field).toBe(UiField.EditEntry);
-    ui.handle(UiEvent.Rotate, -1);
     expect(ui.field).toBe(UiField.Mode);
+    ui.handle(UiEvent.Rotate, -1);
+    expect(ui.field).toBe(UiField.Pattern);
     ui.handle(UiEvent.Rotate, -1);
     expect(ui.field).toBe(UiField.Config);
     ui.handle(UiEvent.Rotate, 1);
-    expect(ui.field).toBe(UiField.Mode);
+    expect(ui.field, "la liste boucle sur la grande valeur").toBe(UiField.Pattern);
   });
 
   it("press opens a value field and press closes it", () => {
@@ -732,9 +736,10 @@ describe("UiController — les trois modes et leurs champs", () => {
 
   it("les index publies sont d'accord avec fieldAt", () => {
     const { ui } = modeRig(ChannelMode.SEQ);
-    expect(SEQ_FIELD_INDEX_MODE).toBe(0);
-    expect(SEQ_FIELD_INDEX_EDIT_ENTRY).toBe(1);
-    expect(SEQ_FIELD_INDEX_CONFIG).toBe(2);
+    expect(SEQ_FIELD_INDEX_PATTERN).toBe(0);
+    expect(SEQ_FIELD_INDEX_MODE).toBe(1);
+    expect(SEQ_FIELD_INDEX_EDIT_ENTRY).toBe(2);
+    expect(SEQ_FIELD_INDEX_CONFIG).toBe(3);
     expect(ui.fieldAt(SEQ_FIELD_INDEX_MODE)).toBe(UiField.Mode);
     expect(ui.fieldAt(SEQ_FIELD_INDEX_EDIT_ENTRY)).toBe(UiField.EditEntry);
     expect(ui.fieldAt(SEQ_FIELD_INDEX_CONFIG)).toBe(UiField.Config);
@@ -742,9 +747,9 @@ describe("UiController — les trois modes et leurs champs", () => {
 
   it("la page CONFIG porte LENGTH, SUBDIV et MOD", () => {
     const { ui } = modeRig(ChannelMode.SEQ);
-    ui.handle(UiEvent.Rotate, 1);
-    ui.handle(UiEvent.Rotate, 1);
-    expect(ui.field).toBe(UiField.Config);
+    // ⚠️ On tourne JUSQU AU champ, jamais d un nombre de crans fixe : une
+    // position ajoutee a l onglet casserait le compte, et c est arrive.
+    while (ui.field !== UiField.Config) ui.handle(UiEvent.Rotate, 1);
     ui.handle(UiEvent.Press);
     expect(ui.isOnConfigPage).toBe(true);
     expect(ui.fieldCount).toBe(3);
@@ -758,8 +763,7 @@ describe("UiController — les trois modes et leurs champs", () => {
 
   it("un appui long quitte la page CONFIG pour l'onglet", () => {
     const { ui } = modeRig(ChannelMode.SEQ);
-    ui.handle(UiEvent.Rotate, 1);
-    ui.handle(UiEvent.Rotate, 1);
+    while (ui.field !== UiField.Config) ui.handle(UiEvent.Rotate, 1);
     ui.handle(UiEvent.Press);
     ui.handle(UiEvent.LongPress);
     expect(ui.isOnConfigPage).toBe(false);
@@ -767,17 +771,20 @@ describe("UiController — les trois modes et leurs champs", () => {
     expect(ui.field).toBe(UiField.Config);
   });
 
+  // ⚠️ QUATRE positions de curseur, mais TOUJOURS TROIS LIGNES. La grande
+  // valeur n est pas une ligne : c est le grand chiffre a gauche.
   it("un onglet SEQ prend les trois lignes de l'original", () => {
     const { ui } = modeRig(ChannelMode.SEQ);
-    expect(ui.fieldCount).toBe(3);
-    expect(ui.fieldAt(0)).toBe(UiField.Mode);
-    expect(ui.fieldAt(1)).toBe(UiField.EditEntry);
-    expect(ui.fieldAt(2)).toBe(UiField.Config);
+    expect(ui.fieldCount).toBe(4);
+    expect(ui.fieldAt(0)).toBe(UiField.Pattern);
+    expect(ui.fieldAt(1)).toBe(UiField.Mode);
+    expect(ui.fieldAt(2)).toBe(UiField.EditEntry);
+    expect(ui.fieldAt(3)).toBe(UiField.Config);
   });
 
   it("SEP vit dans l'en-tete de l'ecran EDIT", () => {
     const { ui, engine } = modeRig(ChannelMode.SEQ);
-    ui.handle(UiEvent.Rotate, 1);
+    while (ui.field !== UiField.EditEntry) ui.handle(UiEvent.Rotate, 1);
     ui.handle(UiEvent.Press);
     expect(ui.level).toBe(UiLevel.Edit);
     ui.handle(UiEvent.Rotate, -1);
@@ -796,7 +803,8 @@ describe("UiController — les trois modes et leurs champs", () => {
 
   it("on peut toujours ressortir de SEQ", () => {
     const { ui, engine } = modeRig(ChannelMode.SEQ);
-    expect(ui.field).toBe(UiField.Mode);
+    ui.handle(UiEvent.Rotate, 1);
+    expect(ui.field, "MODE reste a un cran de la grande valeur").toBe(UiField.Mode);
     ui.handle(UiEvent.Press);
     ui.handle(UiEvent.Rotate, -1);
     expect(engine.getChannelMode(0)).toBe(ChannelMode.RANDOM);

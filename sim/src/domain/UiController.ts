@@ -65,11 +65,15 @@ export const FIRST_WRITABLE_TEMPLATE = 8;
 export const CLOCK_TAB_FIELDS = 2;
 export const PATTERNS_TAB_FIELDS = 1;
 export const CHANNEL_TAB_FIELDS = 3;
+export const SEQ_CHANNEL_TAB_FIELDS = 4;
 export const CONFIG_PAGE_FIELDS = 3;
 
-export const SEQ_FIELD_INDEX_MODE = 0;
-export const SEQ_FIELD_INDEX_EDIT_ENTRY = 1;
-export const SEQ_FIELD_INDEX_CONFIG = 2;
+// PRD 5.0 amendement 1bis : la grande valeur est la PREMIERE position, parce
+// qu elle est la premiere valeur a choisir avant d editer un pattern.
+export const SEQ_FIELD_INDEX_PATTERN = 0;
+export const SEQ_FIELD_INDEX_MODE = 1;
+export const SEQ_FIELD_INDEX_EDIT_ENTRY = 2;
+export const SEQ_FIELD_INDEX_CONFIG = 3;
 
 export const CONFIG_FIELD_INDEX_LENGTH = 0;
 export const CONFIG_FIELD_INDEX_SUBDIV = 1;
@@ -164,7 +168,10 @@ export class UiController {
   get fieldCount(): number {
     if (this.tab === TAB_CLOCK) return CLOCK_TAB_FIELDS;
     if (this.isChannelTab) {
-      return this.configPage ? CONFIG_PAGE_FIELDS : CHANNEL_TAB_FIELDS;
+      if (this.configPage) return CONFIG_PAGE_FIELDS;
+      // La grande valeur n existe qu en SEQ : les deux autres modes ne lisent
+      // aucun pattern.
+      return this.isLegacyModeTab ? CHANNEL_TAB_FIELDS : SEQ_CHANNEL_TAB_FIELDS;
     }
     if (this.tab === TAB_PATTERNS) return PATTERNS_TAB_FIELDS;
     return 0;
@@ -202,6 +209,8 @@ export class UiController {
       }
     }
     switch (index) {
+      case SEQ_FIELD_INDEX_PATTERN:
+        return UiField.Pattern;
       case SEQ_FIELD_INDEX_MODE:
         return UiField.Mode;
       case SEQ_FIELD_INDEX_EDIT_ENTRY:
@@ -439,6 +448,10 @@ export class UiController {
         if (channel < 0) break;
         const current = this.engine.getChannelMode(channel) as number;
         this.engine.setChannelMode(channel, clampIndex(current, delta, CHANNEL_MODE_COUNT));
+        // ⚠️ La position 0 change de sens avec le mode : elle porte MODE hors
+        // SEQ et la grande valeur en SEQ. Sans ce recalage le curseur resterait
+        // immobile pendant que le champ sous lui changerait.
+        this.fieldCursor = this.isLegacyModeTab ? 0 : SEQ_FIELD_INDEX_MODE;
         break;
       }
       case UiField.Mod: {
