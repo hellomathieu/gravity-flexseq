@@ -210,6 +210,23 @@ anyone decided to live with it.
 
 ## Method rules born from these subjects
 
+**A witness must not repeat the mapping that the code under test applies.**
+Written 2026-09-14, after a defect that eight green test gates and a green
+gesture probe did not see. The big value took the first cursor position, so the
+three lines of a channel tab moved from index 0-1-2 to 1-2-3. The screen code
+still compared the cursor to the LINE NUMBER. It therefore marked the wrong
+line: the cursor on `MODE` marked `EDIT`, the cursor on `CONFIG` marked nothing,
+and the cursor on the big value marked two labels at once. The gesture probe
+stayed green, because its witness reports the line that carries ink, and its
+criteria expect a cursor index. The two carry the same error, so they agree.
+This is the trap of 2026-08-23 at a new site: an assertion must not compare
+against the thing it tests. The TypeScript mirror carries the same code, so the
+parity stayed green as well. **Three rules come out of it**: a witness must
+report a measurement that the code under test does not derive · a render that
+derives a rule of the domain needs one test that drives the real controller and
+compares the two · and parity between two languages proves agreement, never
+correctness.
+
 **A witness row is MEASURED, never deduced — and a harness that cannot say where
 the cursor is cannot attribute a defect.** Written 2026-09-14, after a diagnosis
 that cost several probe runs. The gesture probe reported one channel out of six
