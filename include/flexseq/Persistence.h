@@ -233,8 +233,8 @@ public:
         : engine_(engine), ui_(ui), prefs_(preferences) {}
 
     uint16_t addressAt(uint16_t index) const;
-    uint8_t byteAt(uint16_t index) const;
-    void applyByte(uint16_t index, uint8_t value);
+    __attribute__((noinline)) uint8_t byteAt(uint16_t index) const;
+    __attribute__((noinline)) void applyByte(uint16_t index, uint8_t value);
     void resetToDefaults();
 
     template <typename Storage>
