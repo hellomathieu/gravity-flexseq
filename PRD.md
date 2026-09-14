@@ -300,6 +300,34 @@ The gesture that names a template does not change: `SHIFT` plus a rotation moves
 
 **Architecture:** ADR 0013 records where the template under edit lives.
 
+**AMENDMENT OF 2026-09-14 — a rotation loads the pattern, and the action field leaves the channel tab.** It supersedes four statements of `1bis` above: the field that opens on a short press, the rotation that moves between `LOAD` and `SAVE`, the big value as the first cursor position, and the destination selector of §12.9 that disappeared with it. The load itself and the change flag stay exact.
+
+⚠️ **THE OWNER READ THE FIELD ON THE MODULE AND FOUND IT TOO COMPLICATED.** To choose a pattern took four gestures: a short press to enter the tab, a rotation to reach the big value, a short press to open it, then `SHIFT` plus a rotation to name the template. ⚠️ **The cause is the model, and not the screen.** The original shares its sixteen patterns, so to select one is to play it. FlexSeq gives each channel a copy (ADR 0006), and a copy must be loaded.
+
+**1ter. `SHIFT` plus a rotation names the template AND loads it.** The gesture keeps its place on the tab bar. On a channel in `SEQ`:
+
+- a **clean** copy: the number moves by one slot, and the template loads at once;
+- a **changed** copy: the first detent moves nothing and loads nothing. The label `PATTERN` becomes `SURE`. The next `SHIFT` plus a rotation moves the number in its own direction, and loads it;
+- a successful load clears the change flag. The detents that follow therefore load with no question.
+
+⚠️ **The number never moves while the question stands**, by a decision of the owner. The screen therefore always names the template that the channel plays.
+
+**Anything that is not `SHIFT` plus a rotation cancels the question.** A short press, a long press and a change of tab restore the label `PATTERN`. Only the gesture that raised the question can answer it.
+
+**The big value no longer takes the cursor, and `LOAD` and `SAVE` leave the screen.** A channel tab in `SEQ` returns to three cursor positions: `MODE` 0, `EDIT` 1 and `CONFIG` 2. ⚠️ **The decision of 2026-09-14 that gave the big value the first position is withdrawn.**
+
+⚠️ **The rule that puts the cursor back on `MODE` STAYS, and its reason changes.** It was written for position 0, which the big value took. Position **1** carries `OFFSET` in `CLOCK` and `EDIT` in `SEQ`. Without the rule, a short press after a change of mode would enter the editor instead of opening `OFFSET`.
+
+**Point 2 above is preserved, and that is why this wording stands where the first one fell.** The wording withdrawn on 2026-09-13 loaded on every detent. It put the destruction of an edited copy within reach of one detent. Here a changed copy always asks first. A clean copy holds nothing that the user wrote, so to replace it destroys nothing.
+
+**The six copies count as changed at each boot**, by a decision of the owner of 2026-09-14. The change flag lives in RAM, and no record of §11.1 carries it. A power cut leaves the module unable to tell an edited copy from a clean one. The first detent on a channel therefore asks once per power-up. ⚠️ **This is not a precaution: it is the truth.** The module does not know. Two other routes were weighed and refused — to accept the loss, and to compare the copy to its template at the detent. The second needs the service that reads the EEPROM, and its price is not measured.
+
+**`SAVE` leaves the channel tab, and the divergence it carried closes.** The field offered a value that a short press did not run, `SAVE` being out of lot 16E. ⚠️ **No interface writes a channel copy into a template**, which was already true.
+
+⚠️ **The destination selector of §12.9 is an OPEN question again.** `1bis` closed it by making the destination the big value of a channel tab. That field is gone, so the detailed design of `SAVE` returns to lot E, where §12.9 already places it.
+
+⚠️ **One fact of point 2 above is OVERTAKEN.** Point 2 says that the `PATTERN` field of a channel changes the displayed number and loads nothing. That was true, and `1ter` makes it false. The decision of point 2 is not re-opened here: the `PATTERNS` tab keeps its sixteen slots.
+
 ---
 
 ### 5.1 Shared pattern bank — SUPERSEDED by §5.0
