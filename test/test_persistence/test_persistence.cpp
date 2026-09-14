@@ -2742,6 +2742,41 @@ void test_the_audition_emits_the_template_on_channel_one() {
         1, onsets, "le canal 1 suit le contenu, il n emet pas a chaque pas");
 }
 
+// PRD 5.0 point 11 : l editeur fait taire les cinq autres canaux. Un canal en
+// CLOCK emet a CHAQUE pas, donc les six emettent des que le transport tourne et
+// l audition est inaudible.
+void test_the_editor_silences_the_five_other_channels() {
+    EditorRig r;
+    r.selectSlot(11);
+    r.openEditor();
+    r.serve();
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        const bool audible = r.state.channelIsAudible(ch);
+        if (ch == flexseq::ModulatedPatternState::EDITOR_CHANNEL) {
+            TEST_ASSERT_TRUE_MESSAGE(audible, "le canal d audition reste audible");
+        } else {
+            TEST_ASSERT_FALSE_MESSAGE(audible, "les cinq autres se taisent");
+        }
+    }
+}
+
+// Hors de l editeur, les six canaux sont audibles : le silence ne survit pas a
+// la fermeture, et il n a jamais lieu quand l editeur n a pas ete ouvert.
+void test_outside_the_editor_every_channel_is_audible() {
+    EditorRig r;
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        TEST_ASSERT_TRUE_MESSAGE(r.state.channelIsAudible(ch), "avant l ouverture");
+    }
+    r.selectSlot(11);
+    r.openEditor();
+    r.serve();
+    r.closeEditor();
+    r.serve();
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        TEST_ASSERT_TRUE_MESSAGE(r.state.channelIsAudible(ch), "apres la fermeture");
+    }
+}
+
 void test_the_written_length_is_the_length_shown_in_the_header() {
     EditorRig r;
     r.selectSlot(11);
@@ -2935,6 +2970,8 @@ int main() {
     RUN_TEST(test_opening_the_editor_invalidates_the_timing_cache);
     RUN_TEST(test_the_editor_sets_a_ratchet_on_the_template);
     RUN_TEST(test_the_audition_emits_the_template_on_channel_one);
+    RUN_TEST(test_the_editor_silences_the_five_other_channels);
+    RUN_TEST(test_outside_the_editor_every_channel_is_audible);
     RUN_TEST(test_the_written_length_is_the_length_shown_in_the_header);
 
     return UNITY_END();

@@ -298,7 +298,13 @@ void loop() {
     // paie donc UN onset par passage et seulement sur une sortie basse, sur
     // TOUT passage — y compris ceux sans tick, sinon le surplus serait perdu.
     for (uint8_t ch = 0; ch < flexseq::SequencerEngine::CHANNEL_COUNT; ++ch) {
-        if (!gravity.outputs[ch].On() && triggers.takeTrigger(ch)) {
+        if (!modulatedPatterns.channelIsAudible(ch)) {
+            // PRD 5.0 point 11. La dette est VIDEE et jetee : la laisser en
+            // attente ferait partir tout le retard d un coup a la fermeture de
+            // l editeur.
+            while (triggers.takeTrigger(ch)) {
+            }
+        } else if (!gravity.outputs[ch].On() && triggers.takeTrigger(ch)) {
             gravity.outputs[ch].Trigger();
         }
     }

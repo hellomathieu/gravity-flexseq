@@ -226,6 +226,16 @@ struct ModulatedPatternState {
         return editorTemplate != NO_EDITOR && channel == EDITOR_CHANNEL;
     }
 
+    // PRD 5.0 point 11 : tant que l editeur est ouvert, le canal d audition est
+    // le seul qui emette. Un canal en CLOCK emet a CHAQUE pas, donc sans cela
+    // les six sortent ensemble et l audition ne s entend pas.
+    //
+    // La decision vit ICI et non dans src/main.cpp, qu aucun test natif ne
+    // compile — docs/open-risks.md ligne 99.
+    bool channelIsAudible(uint8_t channel) const {
+        return editorTemplate == NO_EDITOR || channel == EDITOR_CHANNEL;
+    }
+
     Pattern pattern[SequencerEngine::CHANNEL_COUNT];
     uint8_t length[SequencerEngine::CHANNEL_COUNT];
     uint8_t loaded[SequencerEngine::CHANNEL_COUNT];

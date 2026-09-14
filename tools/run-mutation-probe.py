@@ -1744,6 +1744,13 @@ MUTANTS = [
      "        resetMask |= 1u << flexseq::CV_SOURCE_1;\n"
      "    }",
      "probe-cvreset"),
+    # PRD 5.0 point 11 : l editeur fait taire les cinq autres canaux. DEUX
+    # mutants, parce que la decision et son cablage vivent dans deux fichiers et
+    # que src/main.cpp n est compile par aucun test natif.
+    ("cpp: the template editor silences nobody",
+     "include/flexseq/SequencerEngine.h",
+     "        return editorTemplate == NO_EDITOR || channel == EDITOR_CHANNEL;",
+     "        return true;", "cpp"),
 ]
 
 SUITES = {
