@@ -494,7 +494,29 @@ void drawLegacyChannel(Canvas& canvas, const Band& band, const MainScreenModel& 
                 canvas.drawBox(gx, gy, ms::MAIN_LABEL_GLYPH_W, ms::MAIN_LABEL_GLYPH_W);
             }
         }
-        canvas.drawStr(textX, ms::MAIN_LABEL_BASELINE_Y, text);
+        // Le curseur sur la grande valeur : l etiquette s inverse, comme la
+        // valeur ouverte d un en-tete. Sans elle on ne verrait pas ou est le
+        // curseur sur cette position — lot 16E etape 5a.
+        // ⚠️ PAS sur la page CONFIG : la position 0 y designe LENGTH, et la
+        // grande valeur s inversait alors a tort. Le temoin du curseur de la
+        // sonde de gestes a trouve ce defaut en lisant DEUX surbrillances.
+        if (isChannelTab(model) && model.insideTab && !model.configPage
+            && model.cursor == 0 && model.mode == static_cast<uint8_t>(MODE_SEQ)) {
+            // ⚠️ Les glyphes de velvetscreen occupent base-5 a base-1. La boite
+            // part donc de base-6, une rangee AU-DESSUS du texte, comme celle
+            // d une ligne : sinon elle ne degage rien en haut et en degage deux
+            // en bas, et la rangee du haut ne peut plus servir de temoin.
+            canvas.drawBox(static_cast<uint8_t>(textX - 1),
+                           static_cast<uint8_t>(ms::MAIN_LABEL_BASELINE_Y
+                                                - FONT_VELVETSCREEN_HEIGHT - 1),
+                           static_cast<uint8_t>(w + 2),
+                           static_cast<uint8_t>(FONT_VELVETSCREEN_HEIGHT + 2));
+            canvas.setDrawColor(0);
+            canvas.drawStr(textX, ms::MAIN_LABEL_BASELINE_Y, text);
+            canvas.setDrawColor(1);
+        } else {
+            canvas.drawStr(textX, ms::MAIN_LABEL_BASELINE_Y, text);
+        }
     }
 
     for (uint8_t line = 0; line < 3; ++line) {

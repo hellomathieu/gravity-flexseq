@@ -1772,6 +1772,17 @@ MUTANTS = [
      "        this.fieldCursor = this.isLegacyModeTab ? 0 : SEQ_FIELD_INDEX_MODE;\n",
      "",
      "ts-ui"),
+    ("cpp: the cursor on the big value is invisible",
+     "include/flexseq/MainScreen.h",
+     "        if (isChannelTab(model) && model.insideTab && !model.configPage\n"
+     "            && model.cursor == 0 && model.mode == static_cast<uint8_t>(MODE_SEQ)) {",
+     "        if (false) {",
+     "cpp-main-screen"),
+    ("ts: the cursor on the big value is invisible",
+     "sim/src/sim/MainScreenPixels.ts",
+     "  if (legacyTab && model.insideTab && !model.configPage\n      && model.cursor === 0 && model.mode === ChannelMode.SEQ) {",
+     "  if (false) {",
+     "ts-main-screen"),
     # Lot 16E etape 5b : le drapeau par canal.
     ("cpp: the length gesture does not raise the change flag",
      "src/domain/UiController.cpp",

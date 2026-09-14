@@ -291,7 +291,21 @@ function drawLegacyChannel(ink: Ink, model: MainScreenModel): void {
       ink.drawBox(labelX - lead, gy, MAIN_LABEL_GLYPH_W, MAIN_LABEL_GLYPH_W);
     }
   }
-  ink.drawStr(labelX, MAIN_LABEL_BASELINE_Y, mainLabel, VELVETSCREEN);
+  // Le curseur sur la grande valeur : l etiquette s inverse, comme la valeur
+  // ouverte d un en-tete — lot 16E etape 5a.
+  const legacyTab = model.tab >= TAB_FIRST_CHANNEL && model.tab <= TAB_LAST_CHANNEL;
+  // ⚠️ PAS sur la page CONFIG : la position 0 y designe LENGTH.
+  if (legacyTab && model.insideTab && !model.configPage
+      && model.cursor === 0 && model.mode === ChannelMode.SEQ) {
+    // Les glyphes occupent base-5 a base-1 : la boite part de base-6.
+    ink.drawBox(labelX - 1, MAIN_LABEL_BASELINE_Y - VELVETSCREEN_HEIGHT - 1,
+                lw + 2, VELVETSCREEN_HEIGHT + 2);
+    ink.setDrawColor(0);
+    ink.drawStr(labelX, MAIN_LABEL_BASELINE_Y, mainLabel, VELVETSCREEN);
+    ink.setDrawColor(1);
+  } else {
+    ink.drawStr(labelX, MAIN_LABEL_BASELINE_Y, mainLabel, VELVETSCREEN);
+  }
 
   for (let line = 0; line < 3; ++line) {
     const base = LINE_0_BASELINE_Y + line * LINE_SPACING_Y;

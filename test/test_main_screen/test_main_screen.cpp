@@ -965,6 +965,60 @@ void test_the_patterns_tab_takes_the_three_lines_of_the_original() {
     TEST_ASSERT_EQUAL_STRING("", flashLabel);
 }
 
+// Lot 16E etape 5a : le curseur peut se poser sur la grande valeur, et il faut
+// le VOIR. L etiquette PATTERN s inverse, comme la valeur ouverte d un en-tete.
+void test_the_cursor_on_the_big_value_inverts_its_label() {
+    namespace ms = flexseq::mainscreen;
+    auto inkUnderLabel = [](bool insideTab) {
+        canvas.reset();
+        flexseq::MainScreenModel m{};
+        m.tab = ms::TAB_FIRST_CHANNEL;
+        m.mode = static_cast<uint8_t>(flexseq::MODE_SEQ);
+        m.patternIndex = 0;
+        m.mainParameter = flexseq::MAIN_PATTERN;
+        m.insideTab = insideTab;
+        m.cursor = 0;
+        drawMainScreen(canvas, m);
+        const Call* c = canvas.find("PATTERN");
+        TEST_ASSERT_NOT_NULL(c);
+        uint16_t ink = 0;
+        for (uint8_t dy = 0; dy < flexseq::FONT_VELVETSCREEN_HEIGHT; ++dy) {
+            for (uint8_t dx = 0; dx < 6; ++dx) {
+                if (canvas.at(static_cast<uint8_t>(c->x + dx),
+                              static_cast<uint8_t>(c->y - dy))) ++ink;
+            }
+        }
+        return ink;
+    };
+    const uint16_t onBar = inkUnderLabel(false);
+    const uint16_t onCursor = inkUnderLabel(true);
+    TEST_ASSERT_GREATER_THAN_UINT16_MESSAGE(
+        onBar, onCursor, "le curseur pose sur la grande valeur encre davantage");
+
+    // ⚠️ Et PAS sur la page CONFIG, ou la position 0 designe LENGTH.
+    canvas.reset();
+    flexseq::MainScreenModel m{};
+    m.tab = ms::TAB_FIRST_CHANNEL;
+    m.mode = static_cast<uint8_t>(flexseq::MODE_SEQ);
+    m.patternIndex = 0;
+    m.mainParameter = flexseq::MAIN_PATTERN;
+    m.insideTab = true;
+    m.cursor = 0;
+    m.configPage = true;
+    drawMainScreen(canvas, m);
+    const Call* c = canvas.find("PATTERN");
+    TEST_ASSERT_NOT_NULL(c);
+    uint16_t ink = 0;
+    for (uint8_t dy = 0; dy < flexseq::FONT_VELVETSCREEN_HEIGHT; ++dy) {
+        for (uint8_t dx = 0; dx < 6; ++dx) {
+            if (canvas.at(static_cast<uint8_t>(c->x + dx),
+                          static_cast<uint8_t>(c->y - dy))) ++ink;
+        }
+    }
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(onBar, ink,
+        "sur la page CONFIG la grande valeur ne s inverse pas");
+}
+
 void test_the_settings_tab_headline_stays_empty() {
     flexseq::MainScreenModel m{};
     m.tab = flexseq::mainscreen::TAB_SETTINGS;
@@ -972,6 +1026,7 @@ void test_the_settings_tab_headline_stays_empty() {
     flexseq::detail::headlineOf(m, out);
     TEST_ASSERT_EQUAL_STRING("", out);
 }
+
 
 int main() {
     UNITY_BEGIN();
@@ -1034,6 +1089,7 @@ int main() {
     RUN_TEST(test_the_patterns_tab_names_the_slot_in_the_main_value);
     RUN_TEST(test_the_slot_state_is_a_square_beside_the_label);
     RUN_TEST(test_the_patterns_tab_takes_the_three_lines_of_the_original);
+    RUN_TEST(test_the_cursor_on_the_big_value_inverts_its_label);
     RUN_TEST(test_the_settings_tab_headline_stays_empty);
 
     return UNITY_END();

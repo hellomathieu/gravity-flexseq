@@ -13,6 +13,7 @@ import {
   MAIN_VALUE_BASELINE_Y,
   RULE_Y,
   TAB_CLOCK,
+  TAB_FIRST_CHANNEL,
   TAB_PATTERNS,
   ROW_A_BOX_Y,
   ROW_B_BOX_Y,
@@ -389,6 +390,38 @@ const PATTERNS_PANEL_ROWS: ReadonlyArray<readonly [number, number]> = [
 ];
 
 const PATTERNS_PANEL_INK = 801;
+
+// Lot 16E etape 5a : le curseur peut se poser sur la grande valeur, et il faut
+// le VOIR. L etiquette s inverse, comme la valeur ouverte d un en-tete.
+describe("le curseur sur la grande valeur — lot 16E etape 5a", () => {
+  const seqTab = (insideTab: boolean): MainScreenModel => ({
+    ...PANEL_MODEL,
+    tab: TAB_FIRST_CHANNEL,
+    mode: ChannelMode.SEQ,
+    insideTab,
+    cursor: 0,
+    fieldCount: 4,
+    mainParameter: MainParameter.Pattern,
+  });
+
+  const inkAround = (insideTab: boolean): number => {
+    const { pixels } = renderMainScreen(seqTab(insideTab));
+    let n = 0;
+    for (const key of pixels) {
+      const parts = key.split(",");
+      const x = Number(parts[0]);
+      const y = Number(parts[1]);
+      if (x < MAIN_CENTRE_X + 30 && y > MAIN_LABEL_BASELINE_Y - 8 && y <= MAIN_LABEL_BASELINE_Y + 1) {
+        n += 1;
+      }
+    }
+    return n;
+  };
+
+  it("encre davantage quand le curseur y est pose", () => {
+    expect(inkAround(true)).toBeGreaterThan(inkAround(false));
+  });
+});
 
 describe("l onglet PATTERNS — lot 16E etape 4b", () => {
   const patternsTab = (slotEmpty: boolean): MainScreenModel => ({
