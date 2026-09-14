@@ -2324,52 +2324,64 @@ printf '\n%s--- PARCOURS CHARGEMENT : LOAD ET SA CONFIRMATION ---%s\n' "$C_B" "$
 grep -E '^chg_' "$LOGC" | sed 's/^/  /'
 printf '\n'
 
-C_DEPART="$(grep -E '^chg_depart ' "$LOGC" | awk '{print $7}')"
-C_ATTENDU="$(grep -E '^chg_depart ' "$LOGC" | awk '{print $9}')"
-C_CURSEUR="$(grep -E '^chg_propre ' "$LOGC" | awk '{print $3}')"
-C_PROPRE="$(grep -E '^chg_propre ' "$LOGC" | awk '{print $5}')"
+C_DEPART="$(grep -E '^chg_depart ' "$LOGC" | awk '{print $5}')"
+C_ATT1="$(grep -E '^chg_depart ' "$LOGC" | awk '{print $7}')"
+C_ATT2="$(grep -E '^chg_depart ' "$LOGC" | awk '{print $8}')"
+C_ATT3="$(grep -E '^chg_depart ' "$LOGC" | awk '{print $9}')"
+C_Q1="$(grep -E '^chg_question1 ' "$LOGC" | awk '{print $3}')"
+C_CH1="$(grep -E '^chg_charge1 ' "$LOGC" | awk '{print $5}')"
+C_CH2="$(grep -E '^chg_charge2 ' "$LOGC" | awk '{print $3}')"
 C_EDITE="$(grep -E '^chg_edite ' "$LOGC" | awk '{print $3}')"
-C_QUESTION="$(grep -E '^chg_question ' "$LOGC" | awk '{print $7}')"
-C_CONFIRME="$(grep -E '^chg_confirme ' "$LOGC" | awk '{print $5}')"
+C_Q2="$(grep -E '^chg_question2 ' "$LOGC" | awk '{print $3}')"
+C_CH3="$(grep -E '^chg_charge3 ' "$LOGC" | awk '{print $3}')"
 C_VOISINS="$(grep -E '^chg_voisins ' "$LOGC" | sed 's/^chg_voisins *//' | tr -s ' ')"
 C_VOISINS0="$(grep -E '^chg_voisins_depart' "$LOGC" | sed 's/^chg_voisins_depart *//' | tr -s ' ')"
 C_FAUTES="$(grep -E '^chg_temoin ' "$LOGC" | awk '{print $7}')"
 
-if [ -z "$C_ATTENDU" ] || [ -z "$C_CONFIRME" ] || [ "${C_FAUTES:-1}" != "0" ]; then
+if [ -z "$C_ATT1" ] || [ -z "$C_CH3" ] || [ "${C_FAUTES:-1}" != "0" ]; then
   inval "chargement : instrument" "releve incomplet ou acces d instance en faute : aucun verdict sur ce parcours"
-elif [ "$C_DEPART" = "$C_ATTENDU" ]; then
-  inval "chargement : discrimination" "le canal porte deja le masque du template ($C_DEPART) : un chargement ne se verrait pas"
+elif [ "$C_DEPART" = "$C_ATT1" ] || [ "$C_ATT1" = "$C_ATT2" ] || [ "$C_ATT2" = "$C_ATT3" ]; then
+  inval "chargement : discrimination" "le depart $C_DEPART et les trois templates $C_ATT1 $C_ATT2 $C_ATT3 ne sont pas tous distincts : un chargement ne se verrait pas"
 else
-  ok "chargement : discrimination" "le canal part de $C_DEPART et le template porte $C_ATTENDU : un chargement se voit"
+  ok "chargement : discrimination" "depart $C_DEPART, templates $C_ATT1 $C_ATT2 $C_ATT3, tous distincts"
 
-  if [ "$C_CURSEUR" = "-3" ]; then
-    ok "chargement : le curseur entre sur la grande valeur" "curseur -3, la position que PRD 5.0 amendement 1bis lui donne"
+  # PRD 5.0 amendement 1ter : les six copies partent CHANGEES, donc le tout
+  # premier cran pose la question et ne bouge rien.
+  if [ "$C_Q1" = "$C_DEPART" ]; then
+    ok "chargement : au demarrage, le premier cran pose la question" "masque $C_Q1, celui du depart : rien n est charge et le numero n a pas bouge"
   else
-    bad "chargement : le curseur entre sur la grande valeur" "curseur ${C_CURSEUR:-rien}, attendu -3"
+    bad "chargement : au demarrage, le premier cran pose la question" "masque $C_Q1, attendu $C_DEPART"
   fi
 
-  if [ "$C_PROPRE" = "$C_ATTENDU" ]; then
-    ok "chargement : une copie propre charge sans question" "masque $C_PROPRE, celui du template, apres deux appuis courts"
+  if [ "$C_CH1" = "$C_ATT1" ]; then
+    ok "chargement : le cran suivant avance et charge" "masque $C_CH1, celui du template 1"
   else
-    bad "chargement : une copie propre charge sans question" "masque $C_PROPRE, attendu $C_ATTENDU"
+    bad "chargement : le cran suivant avance et charge" "masque $C_CH1, attendu $C_ATT1"
   fi
 
-  if [ "$C_EDITE" != "$C_ATTENDU" ]; then
-    ok "chargement : l edition eloigne la copie" "masque $C_EDITE, different du template : la copie a change"
+  # Le chargement a remis la copie a l identique du template : plus de question.
+  if [ "$C_CH2" = "$C_ATT2" ]; then
+    ok "chargement : une copie propre charge en un seul cran" "masque $C_CH2, celui du template 2"
+  else
+    bad "chargement : une copie propre charge en un seul cran" "masque $C_CH2, attendu $C_ATT2"
+  fi
+
+  if [ "$C_EDITE" != "$C_CH2" ]; then
+    ok "chargement : l edition eloigne la copie" "masque $C_EDITE, different de $C_CH2 : la copie a change"
   else
     inval "chargement : l edition eloigne la copie" "masque inchange a $C_EDITE : l edition n a pas pris, la question n est pas attribuable"
   fi
 
-  if [ "$C_QUESTION" = "$C_EDITE" ]; then
-    ok "chargement : le premier appui ne charge pas" "masque $C_QUESTION, celui de la copie editee : la question est posee, rien n est detruit"
+  if [ "$C_Q2" = "$C_EDITE" ]; then
+    ok "chargement : une copie changee mange le cran" "masque $C_Q2, celui de la copie editee : la question est posee, rien n est detruit"
   else
-    bad "chargement : le premier appui ne charge pas" "masque $C_QUESTION, attendu $C_EDITE"
+    bad "chargement : une copie changee mange le cran" "masque $C_Q2, attendu $C_EDITE"
   fi
 
-  if [ "$C_CONFIRME" = "$C_ATTENDU" ]; then
-    ok "chargement : le second appui charge" "masque $C_CONFIRME, celui du template"
+  if [ "$C_CH3" = "$C_ATT3" ]; then
+    ok "chargement : le cran d apres charge" "masque $C_CH3, celui du template 3"
   else
-    bad "chargement : le second appui charge" "masque $C_CONFIRME, attendu $C_ATTENDU"
+    bad "chargement : le cran d apres charge" "masque $C_CH3, attendu $C_ATT3"
   fi
 
   if [ "$C_VOISINS" = "$C_VOISINS0" ]; then
