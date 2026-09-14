@@ -1,9 +1,24 @@
 # 0013 — The template editor borrows the modulation buffer of channel 1
 
-- **Status:** accepted
+- **Status:** superseded
 - **Date:** 2026-09-13
 - **Supersedes:** —
-- **Superseded by:** —
+- **Superseded by:** `PRD.md` §5.0, amendment of 2026-09-14 (third of the day)
+
+> ⚠️ **SUPERSEDED ON 2026-09-14, and the subject of this decision is REMOVED.**
+> The owner removed the `PATTERNS` tab and its template editor, for the Flash
+> budget: a counter-build measured **896 bytes**, and those bytes buy lots 22,
+> K, 17a and 14. This ADR answered "where does the template under edit live";
+> after the removal nothing is under edit, so the question has no subject.
+>
+> ⚠️ **THE CODE STILL CARRIES THE EDITOR at the time of this note.** The decision
+> is taken and `PRD.md` records it; the removal is the work that follows. Read
+> this ADR as the record of why the editor borrowed the buffer, never as a
+> description of the firmware.
+>
+> **What the removal does NOT touch:** ADR 0006 and the template / instance
+> model, the modulation buffer itself, and its round-robin service. They stay,
+> and ADR 0011 stays with them.
 
 ## Context
 
