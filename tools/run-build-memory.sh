@@ -67,7 +67,16 @@
 #                       233 + 5 x 28 = 373, que 384 couvre. Ce n'est pas un
 #                       desserrement : le plafond des donnees passe de 1792 a
 #                       1664 o, donc la croissance permise tombe de 281 a 153 o.
-#   FLASH_BUDGET_PCT=98 part de Flash au-dela de laquelle on refuse
+#   FLASH_BUDGET_PCT=99 part de Flash au-dela de laquelle on refuse.
+#                       PORTE DE 98 A 99 LE 2026-09-14 par le proprietaire, pour
+#                       laisser passer la confirmation du lot 16E. Le 98 avait
+#                       ete choisi le 2026-09-03 en ecartant le 99, qui laissait
+#                       alors 308 o : l image en occupe 30142 aujourd'hui, donc
+#                       le 99 en laisse 270 et la limite physique 578.
+#                       ⚠️ LE PLAFOND N'EST PAS LE CONTROLE. L'editeur de liens
+#                       refuse au-dela de 30720 quoi qu'il arrive ; ce qu'un
+#                       plafond plus haut reduit, c'est la reserve. Le vrai
+#                       controle par lot reste FLASH_DRIFT, et il ne bouge pas.
 #   RAM_DRIFT=16        croissance de RAM acceptee sans acquittement
 #   FLASH_DRIFT=512     croissance de Flash acceptee sans acquittement
 #
@@ -82,7 +91,7 @@ set -uo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 RAM_RESERVE="${RAM_RESERVE:-384}"
-FLASH_BUDGET_PCT="${FLASH_BUDGET_PCT:-98}"
+FLASH_BUDGET_PCT="${FLASH_BUDGET_PCT:-99}"
 RAM_DRIFT="${RAM_DRIFT:-16}"
 FLASH_DRIFT="${FLASH_DRIFT:-512}"
 BASELINE="tools/memory-baseline"
