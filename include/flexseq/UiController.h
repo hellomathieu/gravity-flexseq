@@ -58,16 +58,15 @@ public:
     static constexpr uint8_t CLOCK_TAB_FIELDS = 2;
     static constexpr uint8_t PATTERNS_TAB_FIELDS = 1;
     static constexpr uint8_t CHANNEL_TAB_FIELDS = 3;
-    static constexpr uint8_t SEQ_CHANNEL_TAB_FIELDS = 4;
+    static constexpr uint8_t SEQ_CHANNEL_TAB_FIELDS = 3;
     static constexpr uint8_t CONFIG_PAGE_FIELDS = 3;
 
-    // PRD 5.0 amendement 1bis : la grande valeur est la PREMIERE position, parce
-    // qu elle est la premiere valeur a choisir avant d editer un pattern. Les
-    // trois autres suivent. Un outil qui lit ces index les lit par leur NOM.
-    static constexpr uint8_t SEQ_FIELD_INDEX_PATTERN = 0;
-    static constexpr uint8_t SEQ_FIELD_INDEX_MODE = 1;
-    static constexpr uint8_t SEQ_FIELD_INDEX_EDIT_ENTRY = 2;
-    static constexpr uint8_t SEQ_FIELD_INDEX_CONFIG = 3;
+    // PRD 5.0 amendement 1ter : la grande valeur ne prend plus le curseur, le
+    // pattern se chargeant par SHIFT plus une rotation. Un outil qui lit ces
+    // index les lit par leur NOM.
+    static constexpr uint8_t SEQ_FIELD_INDEX_MODE = 0;
+    static constexpr uint8_t SEQ_FIELD_INDEX_EDIT_ENTRY = 1;
+    static constexpr uint8_t SEQ_FIELD_INDEX_CONFIG = 2;
 
     static constexpr uint8_t CONFIG_FIELD_INDEX_LENGTH = 0;
     static constexpr uint8_t CONFIG_FIELD_INDEX_SUBDIV = 1;
@@ -104,11 +103,10 @@ public:
     uint8_t cursor() const { return cursor_; }
     bool fieldOpen() const { return fieldOpen_; }
 
-    uint8_t patternAction() const { return patternAction_; }
-
-    // Ce que l ECRAN doit nommer : l action, ou la question qui la precede.
-    uint8_t patternLabelCode() const { return patternAction_; }
-    uint8_t patternActionCount() const;
+    // PRD 5.0 amendement 1ter : la question qui precede un chargement
+    // destructeur. L ecran remplace l etiquette PATTERN par SURE tant qu elle
+    // est posee.
+    bool patternAskPending() const { return patternAsk_; }
 
     // Le controleur POSE une demande, il ne l execute pas : ADR 0002 lui
     // interdit de connaitre le Storage. Le service la consomme, une seule fois.
@@ -143,7 +141,7 @@ private:
     void clearPattern();
     void markTemplateEdited();
     bool channelCopyHasChanged() const;
-    bool pressInPatternField();
+    void rotatePatternSlot(int8_t delta);
     void adjustTemplateLength(int8_t delta);
 
     Pattern* currentPattern() const;
@@ -159,7 +157,7 @@ private:
     bool onHeader_;
     bool onConfigPage_;
     bool fieldOpen_;
-    uint8_t patternAction_;
+    bool patternAsk_;
     uint8_t pendingAction_;
     uint8_t pendingChannel_;
     uint16_t tempo_;

@@ -38,7 +38,7 @@ struct MainScreenModel {
     uint8_t skipChance;
     uint16_t stepTicks;
     uint8_t mainParameter;
-    uint8_t patternAction;
+    bool patternAsk;
 
     uint8_t cv1Target;
     uint8_t cv2Target;

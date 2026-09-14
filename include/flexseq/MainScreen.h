@@ -277,22 +277,6 @@ inline bool usesLegacyLayout(const MainScreenModel& model) {
 }
 
 // La grande valeur prend la PREMIERE position du curseur sur un canal en SEQ —
-// PRD 5.0 amendement 1bis. Les trois lignes de l original suivent donc d un
-// rang, et le numero d une ligne N EST PLUS l index du curseur.
-//
-// Les deux sites qui marquent le curseur lisent CETTE fonction, pour la raison
-// qui a fait naitre uiFrameChoiceOf() : deux lectures separees du meme etat
-// finissent par diverger, et l ecran montre alors autre chose que ce que le
-// curseur designe.
-inline bool bigValueTakesCursor(const MainScreenModel& model) {
-    return isChannelTab(model) && !model.configPage
-        && model.mode == static_cast<uint8_t>(MODE_SEQ);
-}
-
-inline uint8_t cursorOfLine(const MainScreenModel& model, uint8_t line) {
-    return static_cast<uint8_t>(line + (bigValueTakesCursor(model) ? 1 : 0));
-}
-
 FLEXSEQ_LABEL(LBL_MODE, "MODE:");
 FLEXSEQ_LABEL(LBL_OFFSET, "OFFSET:");
 FLEXSEQ_LABEL(LBL_SUBDIV_FIELD, "SUBDIV:");
@@ -308,8 +292,6 @@ FLEXSEQ_LABEL(LBL_SUBDIVISION, "SUBDIVISION");
 FLEXSEQ_LABEL(LBL_SKIP_CHANCE, "SKIP CHANCE");
 FLEXSEQ_LABEL(LBL_LENGTH, "LENGTH:");
 FLEXSEQ_LABEL(LBL_PATTERN, "PATTERN");
-FLEXSEQ_LABEL(LBL_LOAD, "LOAD");
-FLEXSEQ_LABEL(LBL_SAVE, "SAVE");
 FLEXSEQ_LABEL(LBL_SURE, "SURE");
 
 inline const char* modeText(uint8_t mode) {
@@ -343,22 +325,19 @@ inline void mainValueOf(const MainScreenModel& model, char* out) {
     subdivLabel(model.subdiv, out);
 }
 
-// PRD 5.0 amendement 1bis : ouvert, le champ de la grande valeur nomme l ACTION.
-// C est le seul signal qui separe « le curseur est ici » de « le champ est
-// ouvert », l inversion disant deja le premier.
-inline bool patternActionIsOpen(const MainScreenModel& model) {
-    return bigValueTakesCursor(model) && model.insideTab && model.fieldOpen
-        && model.cursor == 0;
-}
-
+// PRD 5.0 amendement 1ter : la grande valeur ne nomme plus d action. Elle porte
+// la QUESTION tant qu un chargement destructeur attend sa reponse, et le numero
+// sous elle ne bouge pas pendant ce temps.
+//
+// La question se lit sur la barre d onglets comme dans l onglet : c est la ou le
+// geste vit, et la lier au curseur la rendrait invisible la ou elle est posee.
 inline const char* mainLabelOf(const MainScreenModel& model) {
     if (model.configPage || model.mainParameter == MAIN_PATTERN) {
-        if (patternActionIsOpen(model)) {
-            if (model.patternAction == PATTERN_ACTION_ASK) {
-                return LBL_SURE;
-            }
-            return model.patternAction == PATTERN_ACTION_SAVE
-                ? LBL_SAVE : LBL_LOAD;
+        // ⚠️ La question appartient a un onglet de CANAL. L onglet PATTERNS
+        // porte la meme etiquette et un autre champ, et la page CONFIG designe
+        // LENGTH en position 0 : ni l un ni l autre ne doit la montrer.
+        if (model.patternAsk && !model.configPage && isChannelTab(model)) {
+            return LBL_SURE;
         }
         return LBL_PATTERN;
     }
@@ -529,28 +508,7 @@ void drawLegacyChannel(Canvas& canvas, const Band& band, const MainScreenModel& 
                 canvas.drawBox(gx, gy, ms::MAIN_LABEL_GLYPH_W, ms::MAIN_LABEL_GLYPH_W);
             }
         }
-        // Le curseur sur la grande valeur : l etiquette s inverse, comme la
-        // valeur ouverte d un en-tete. Sans elle on ne verrait pas ou est le
-        // curseur sur cette position — lot 16E etape 5a.
-        // ⚠️ PAS sur la page CONFIG : la position 0 y designe LENGTH, et la
-        // grande valeur s inversait alors a tort. Le temoin du curseur de la
-        // sonde de gestes a trouve ce defaut en lisant DEUX surbrillances.
-        if (bigValueTakesCursor(model) && model.insideTab && model.cursor == 0) {
-            // ⚠️ Les glyphes de velvetscreen occupent base-5 a base-1. La boite
-            // part donc de base-6, une rangee AU-DESSUS du texte, comme celle
-            // d une ligne : sinon elle ne degage rien en haut et en degage deux
-            // en bas, et la rangee du haut ne peut plus servir de temoin.
-            canvas.drawBox(static_cast<uint8_t>(textX - 1),
-                           static_cast<uint8_t>(ms::MAIN_LABEL_BASELINE_Y
-                                                - FONT_VELVETSCREEN_HEIGHT - 1),
-                           static_cast<uint8_t>(w + 2),
-                           static_cast<uint8_t>(FONT_VELVETSCREEN_HEIGHT + 2));
-            canvas.setDrawColor(0);
-            canvas.drawStr(textX, ms::MAIN_LABEL_BASELINE_Y, text);
-            canvas.setDrawColor(1);
-        } else {
-            canvas.drawStr(textX, ms::MAIN_LABEL_BASELINE_Y, text);
-        }
+        canvas.drawStr(textX, ms::MAIN_LABEL_BASELINE_Y, text);
     }
 
     for (uint8_t line = 0; line < 3; ++line) {
@@ -566,8 +524,7 @@ void drawLegacyChannel(Canvas& canvas, const Band& band, const MainScreenModel& 
         legacyLine(model, line, &flashLabel, value);
         char scratch[10];
         const char* text = label(flashLabel, scratch);
-        const bool onCursor =
-            model.insideTab && model.cursor == cursorOfLine(model, line);
+        const bool onCursor = model.insideTab && model.cursor == line;
 
         const uint8_t labelW = static_cast<uint8_t>(canvas.getStrWidth(text));
         if (onCursor && !model.fieldOpen) {

@@ -5,20 +5,15 @@
 
 namespace flexseq {
 
-// PRD 5.0 amendement 1bis : la grande valeur d un canal en SEQ s ouvre et porte
-// une action. SAVE n existe que si la copie du canal a change, PRD 12.9 point 5.
+// PRD 5.0 amendement 1ter : SHIFT plus une rotation charge le template, et le
+// champ d action a quitte l onglet de canal. SAVE et la question ne sont plus
+// des codes — SAVE n a plus d interface, PRD 12.9 le rend au lot E, et la
+// question est un drapeau du controleur.
 //
-// Les codes vivent ICI et dans aucun autre fichier. Le controleur les choisit et
-// l ecran les nomme : deux definitions du meme code finiraient par diverger, et
-// l ecran nommerait alors une autre action que celle qui s executerait.
+// Les codes vivent ICI et dans aucun autre fichier. Le controleur les pose et le
+// service les consomme : deux definitions du meme code finiraient par diverger.
 enum PatternAction : uint8_t {
     PATTERN_ACTION_LOAD = 0,
-    PATTERN_ACTION_SAVE = 1,
-    PATTERN_ACTION_COUNT = 2,
-    // La question posee avant une action destructrice — PRD 5.0 amendement
-    // 1bis. Elle vit DANS l octet de l action, et non dans un drapeau a part :
-    // la RAM est la ressource critique de ce circuit.
-    PATTERN_ACTION_ASK = 2,
     // Aucune action demandee. Le controleur POSE une demande, et le service qui
     // connait l EEPROM la consomme : ADR 0002 interdit au domaine de lire le
     // materiel.

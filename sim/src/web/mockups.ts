@@ -55,7 +55,7 @@ function mainModel(over: Partial<MainScreenModel>): MainScreenModel {
     skipChance: 3,
     stepTicks: 24,
     mainParameter: MainParameter.Subdiv,
-    patternAction: PatternAction.Load,
+    patternAsk: false,
     cv1Target: 0,
     cv2Target: 0,
     configPage: false,

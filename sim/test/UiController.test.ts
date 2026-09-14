@@ -14,7 +14,6 @@ import {
   SEQ_FIELD_INDEX_CONFIG,
   SEQ_FIELD_INDEX_EDIT_ENTRY,
   SEQ_FIELD_INDEX_MODE,
-  SEQ_FIELD_INDEX_PATTERN,
   STEP_COUNT,
   TAB_CLOCK,
   TAB_COUNT,
@@ -121,10 +120,11 @@ describe("UiController — tab bar", () => {
     enterTab();
     expect(ui.level).toBe(UiLevel.Tab);
     expect(ui.cursor).toBe(0);
-    // Le rig met les six canaux en SEQ : le premier champ est la grande valeur.
-    expect(ui.field).toBe(UiField.Pattern);
+    // PRD 5.0 amendement 1ter : la grande valeur ne prend plus le curseur, donc
+    // MODE tient la premiere position dans les trois modes.
+    expect(ui.field, "MODE est la ligne 0, comme dans l original").toBe(UiField.Mode);
     ui.handle(UiEvent.Rotate, 1);
-    expect(ui.field, "MODE est la ligne 1, comme dans l original").toBe(UiField.Mode);
+    expect(ui.field).toBe(UiField.EditEntry);
   });
 
   it("press does nothing on the settings tab while it is deferred", () => {
@@ -174,13 +174,13 @@ describe("UiController — inside a tab", () => {
     const { ui, enterTab } = rig();
     enterTab();
     ui.handle(UiEvent.Rotate, 1);
-    expect(ui.field).toBe(UiField.Mode);
+    expect(ui.field).toBe(UiField.EditEntry);
     ui.handle(UiEvent.Rotate, -1);
-    expect(ui.field).toBe(UiField.Pattern);
+    expect(ui.field).toBe(UiField.Mode);
     ui.handle(UiEvent.Rotate, -1);
     expect(ui.field).toBe(UiField.Config);
     ui.handle(UiEvent.Rotate, 1);
-    expect(ui.field, "la liste boucle sur la grande valeur").toBe(UiField.Pattern);
+    expect(ui.field, "la liste boucle sur MODE").toBe(UiField.Mode);
   });
 
   it("press opens a value field and press closes it", () => {
@@ -739,10 +739,9 @@ describe("UiController — les trois modes et leurs champs", () => {
 
   it("les index publies sont d'accord avec fieldAt", () => {
     const { ui } = modeRig(ChannelMode.SEQ);
-    expect(SEQ_FIELD_INDEX_PATTERN).toBe(0);
-    expect(SEQ_FIELD_INDEX_MODE).toBe(1);
-    expect(SEQ_FIELD_INDEX_EDIT_ENTRY).toBe(2);
-    expect(SEQ_FIELD_INDEX_CONFIG).toBe(3);
+    expect(SEQ_FIELD_INDEX_MODE).toBe(0);
+    expect(SEQ_FIELD_INDEX_EDIT_ENTRY).toBe(1);
+    expect(SEQ_FIELD_INDEX_CONFIG).toBe(2);
     expect(ui.fieldAt(SEQ_FIELD_INDEX_MODE)).toBe(UiField.Mode);
     expect(ui.fieldAt(SEQ_FIELD_INDEX_EDIT_ENTRY)).toBe(UiField.EditEntry);
     expect(ui.fieldAt(SEQ_FIELD_INDEX_CONFIG)).toBe(UiField.Config);
@@ -778,11 +777,10 @@ describe("UiController — les trois modes et leurs champs", () => {
   // valeur n est pas une ligne : c est le grand chiffre a gauche.
   it("un onglet SEQ prend les trois lignes de l'original", () => {
     const { ui } = modeRig(ChannelMode.SEQ);
-    expect(ui.fieldCount).toBe(4);
-    expect(ui.fieldAt(0)).toBe(UiField.Pattern);
-    expect(ui.fieldAt(1)).toBe(UiField.Mode);
-    expect(ui.fieldAt(2)).toBe(UiField.EditEntry);
-    expect(ui.fieldAt(3)).toBe(UiField.Config);
+    expect(ui.fieldCount).toBe(3);
+    expect(ui.fieldAt(0)).toBe(UiField.Mode);
+    expect(ui.fieldAt(1)).toBe(UiField.EditEntry);
+    expect(ui.fieldAt(2)).toBe(UiField.Config);
   });
 
   it("SEP vit dans l'en-tete de l'ecran EDIT", () => {
@@ -806,8 +804,8 @@ describe("UiController — les trois modes et leurs champs", () => {
 
   it("on peut toujours ressortir de SEQ", () => {
     const { ui, engine } = modeRig(ChannelMode.SEQ);
-    ui.handle(UiEvent.Rotate, 1);
-    expect(ui.field, "MODE reste a un cran de la grande valeur").toBe(UiField.Mode);
+    expect(ui.field, "MODE est la premiere position dans les trois modes")
+      .toBe(UiField.Mode);
     ui.handle(UiEvent.Press);
     ui.handle(UiEvent.Rotate, -1);
     expect(engine.getChannelMode(0)).toBe(ChannelMode.RANDOM);
@@ -980,145 +978,145 @@ describe("l onglet PATTERNS — lot 16E etape 4a", () => {
 });
 
 /*
- * Lot 16E etape 5c — le champ de la grande valeur s ouvre et nomme l action.
- * PRD 5.0 amendement 1bis : un appui court ouvre, une rotation deplace entre
- * LOAD et SAVE, et SAVE n existe que si la copie du canal a change.
+ * PRD 5.0 amendement 1ter — SHIFT plus une rotation nomme le template ET le
+ * charge. Le champ d action a quitte l onglet de canal.
+ *
+ * Le geste vit sur la BARRE d onglets : ces tests n entrent donc jamais dans
+ * l onglet. Miroir de `test/test_ui_controller/test_ui_controller.cpp`.
  */
-describe("UiController — l action de la grande valeur", () => {
-  const openPatternField = (dirty: boolean) => {
+describe("UiController — le pattern se charge a la rotation", () => {
+  // Les six copies partent CHANGEES, donc l ardoise se nettoie ici.
+  const cleanSeqChannel = () => {
     const engine = new SequencerEngine();
     for (let ch = 0; ch < engine.channelCount(); ++ch) {
       engine.setChannelMode(ch, ChannelMode.SEQ);
     }
     const state = new ModulatedPatternState();
-    if (dirty) state.markDirty(0);
+    for (let ch = 0; ch < engine.channelCount(); ++ch) state.clearDirty(ch);
     engine.setModulatedPatterns(state);
     const ui = new UiController(engine, new Transport(engine));
-    ui.handle(UiEvent.Press);
-    for (let guard = 0; guard < SEQ_CHANNEL_TAB_FIELDS; guard += 1) {
-      if (ui.field === UiField.Pattern) break;
-      ui.handle(UiEvent.Rotate, 1);
-    }
-    expect(ui.field).toBe(UiField.Pattern);
-    ui.handle(UiEvent.Press);
     return { engine, state, ui };
   };
 
-  it("une copie propre ne propose que LOAD", () => {
-    const { ui } = openPatternField(false);
-    expect(ui.fieldOpen).toBe(true);
-    expect(ui.patternActionCount).toBe(1);
-    expect(ui.patternAction).toBe(PatternAction.Load);
-    ui.handle(UiEvent.Rotate, 1);
-    expect(ui.patternAction).toBe(PatternAction.Load);
-  });
+  const tookLoad = (ui: UiController): boolean => {
+    const demand = ui.takePatternAction();
+    if (demand === null) return false;
+    expect(demand.action).toBe(PatternAction.Load);
+    return true;
+  };
 
-  it("une copie changee propose aussi SAVE", () => {
-    const { ui } = openPatternField(true);
-    expect(ui.patternActionCount).toBe(2);
-    ui.handle(UiEvent.Rotate, 1);
-    expect(ui.patternAction).toBe(PatternAction.Save);
-    ui.handle(UiEvent.Rotate, -1);
-    expect(ui.patternAction).toBe(PatternAction.Load);
-  });
-
-  it("l action s ecrete aux deux bouts", () => {
-    const { ui } = openPatternField(true);
-    for (let i = 0; i < 5; ++i) ui.handle(UiEvent.Rotate, 1);
-    expect(ui.patternAction).toBe(PatternAction.Save);
-    for (let i = 0; i < 5; ++i) ui.handle(UiEvent.Rotate, -1);
-    expect(ui.patternAction).toBe(PatternAction.Load);
-  });
-
-  // ⚠️ La rotation dans le champ ouvert nommait le template avant cette etape.
-  it("le champ ouvert ne nomme plus le template", () => {
-    const { engine, ui } = openPatternField(true);
-    const before = engine.getSelectedPattern(0);
-    ui.handle(UiEvent.Rotate, 1);
-    expect(engine.getSelectedPattern(0)).toBe(before);
-  });
-
-  it("SHIFT plus rotation nomme toujours le template, champ ouvert", () => {
-    const { engine, ui } = openPatternField(false);
+  it("une copie propre avance et charge en un cran", () => {
+    const { engine, ui } = cleanSeqChannel();
     const before = engine.getSelectedPattern(0);
     ui.handle(UiEvent.ShiftRotate, 1);
     expect(engine.getSelectedPattern(0)).toBe(before + 1);
+    expect(ui.patternAskPending).toBe(false);
+    expect(tookLoad(ui)).toBe(true);
   });
 
-  it("fermer le champ n execute rien", () => {
-    const { engine, state, ui } = openPatternField(true);
-    engine.instanceForChannel(0)!.writeStep(5, true);
-    ui.handle(UiEvent.Rotate, 1);
-    expect(ui.patternAction).toBe(PatternAction.Save);
-    ui.handle(UiEvent.Press);
-    expect(ui.fieldOpen).toBe(false);
-    expect(state.isDirty(0)).toBe(true);
-    expect(engine.instanceForChannel(0)!.readStep(5)).toBe(true);
+  it("une copie changee mange le premier cran", () => {
+    const { engine, state, ui } = cleanSeqChannel();
+    state.markDirty(0);
+    const before = engine.getSelectedPattern(0);
+    ui.handle(UiEvent.ShiftRotate, 1);
+    expect(ui.patternAskPending).toBe(true);
+    expect(engine.getSelectedPattern(0)).toBe(before);
+    expect(tookLoad(ui)).toBe(false);
   });
 
-  it("le champ s ouvre toujours sur LOAD", () => {
-    const { ui } = openPatternField(true);
-    ui.handle(UiEvent.Rotate, 1);
-    expect(ui.patternAction).toBe(PatternAction.Save);
-    ui.handle(UiEvent.Press);
-    ui.handle(UiEvent.Press);
-    expect(ui.patternAction).toBe(PatternAction.Load);
+  it("le cran suivant la question avance et charge", () => {
+    const { engine, state, ui } = cleanSeqChannel();
+    state.markDirty(0);
+    const before = engine.getSelectedPattern(0);
+    ui.handle(UiEvent.ShiftRotate, 1);
+    ui.handle(UiEvent.ShiftRotate, 1);
+    expect(ui.patternAskPending).toBe(false);
+    expect(engine.getSelectedPattern(0)).toBe(before + 1);
+    expect(tookLoad(ui)).toBe(true);
   });
 
-  // Un moteur non cable n a pas de drapeau : le champ ne propose que LOAD, et
-  // il ne lit jamais un pointeur nul.
-  it("un moteur sans tampon ne propose que LOAD", () => {
-    const engine = new SequencerEngine();
-    for (let ch = 0; ch < engine.channelCount(); ++ch) {
-      engine.setChannelMode(ch, ChannelMode.SEQ);
-    }
-    const ui = new UiController(engine, new Transport(engine));
-    ui.handle(UiEvent.Press);
-    expect(ui.field).toBe(UiField.Pattern);
-    ui.handle(UiEvent.Press);
-    expect(ui.patternActionCount).toBe(1);
-    expect(ui.patternAction).toBe(PatternAction.Load);
+  // ⚠️ Le SENS du second cran est le sien, et non celui du premier.
+  it("la reponse suit son propre sens", () => {
+    const { engine, state, ui } = cleanSeqChannel();
+    state.markDirty(0);
+    engine.setSelectedPattern(0, 5);
+    ui.handle(UiEvent.ShiftRotate, 1);
+    ui.handle(UiEvent.ShiftRotate, -1);
+    expect(engine.getSelectedPattern(0)).toBe(4);
   });
-});
 
-/*
- * Lot 16E etape 5d — un appui court sur LOAD POSE une demande. Le controleur ne
- * lit jamais l EEPROM, ADR 0002 : c est un service qui execute.
- */
-describe("UiController — la demande d action", () => {
-  const rigWith = (dirty: boolean) => {
-    const engine = new SequencerEngine();
-    for (let ch = 0; ch < engine.channelCount(); ++ch) {
-      engine.setChannelMode(ch, ChannelMode.SEQ);
-    }
-    const state = new ModulatedPatternState();
-    if (dirty) state.markDirty(0);
-    engine.setModulatedPatterns(state);
-    const ui = new UiController(engine, new Transport(engine));
-    ui.handle(UiEvent.Press);
-    for (let guard = 0; guard < SEQ_CHANNEL_TAB_FIELDS; guard += 1) {
-      if (ui.field === UiField.Pattern) break;
-      ui.handle(UiEvent.Rotate, 1);
-    }
-    ui.handle(UiEvent.Press);
-    return { engine, state, ui };
+  it("la question n est posee qu une fois par changement", () => {
+    const { engine, state, ui } = cleanSeqChannel();
+    state.markDirty(0);
+    ui.handle(UiEvent.ShiftRotate, 1);
+    ui.handle(UiEvent.ShiftRotate, 1);
+    state.clearDirty(0);
+    const before = engine.getSelectedPattern(0);
+    ui.handle(UiEvent.ShiftRotate, 1);
+    expect(ui.patternAskPending).toBe(false);
+    expect(engine.getSelectedPattern(0)).toBe(before + 1);
+  });
+
+  /*
+   * L annulation. Tout ce qui n est pas SHIFT plus une rotation annule. Le garde
+   * vit en UN seul endroit : ce qui est teste est la REGLE.
+   */
+  const askThenCancel = (event: UiEvent) => {
+    const { state, ui } = cleanSeqChannel();
+    state.markDirty(0);
+    ui.handle(UiEvent.ShiftRotate, 1);
+    expect(ui.patternAskPending).toBe(true);
+    ui.handle(event, 1);
+    expect(ui.patternAskPending).toBe(false);
+    expect(tookLoad(ui)).toBe(false);
   };
 
-  it("valider LOAD pose une demande", () => {
-    const { ui } = rigWith(false);
-    ui.handle(UiEvent.Press);
-    const demand = ui.takePatternAction();
-    expect(demand).not.toBeNull();
-    expect(demand!.action).toBe(PatternAction.Load);
-    expect(demand!.channel).toBe(0);
-    expect(ui.fieldOpen).toBe(false);
+  // ⚠️ CE TEST VIENT DES BROCHES. `onShiftPress()` part a CHAQUE relachement de
+  // SHIFT, et la rotation ne le supprime pas : le relachement fait partie du
+  // geste. Sans cette exclusion, la question etait annulee a chaque cran.
+  it("relacher SHIFT n annule pas la question", () => {
+    const { state, ui } = cleanSeqChannel();
+    state.markDirty(0);
+    ui.handle(UiEvent.ShiftRotate, 1);
+    expect(ui.patternAskPending).toBe(true);
+    ui.handle(UiEvent.ShiftPress);
+    expect(ui.patternAskPending).toBe(true);
+    ui.handle(UiEvent.ShiftRotate, 1);
+    expect(tookLoad(ui)).toBe(true);
+  });
+
+  it("une rotation simple annule la question", () => askThenCancel(UiEvent.Rotate));
+  it("un appui court annule la question", () => askThenCancel(UiEvent.Press));
+  it("un appui long annule la question", () => askThenCancel(UiEvent.LongPress));
+  it("un appui sur PLAY annule la question", () => askThenCancel(UiEvent.PlayPress));
+
+  it("un moteur sans tampon n interroge jamais", () => {
+    const engine = new SequencerEngine();
+    for (let ch = 0; ch < engine.channelCount(); ++ch) {
+      engine.setChannelMode(ch, ChannelMode.SEQ);
+    }
+    const ui = new UiController(engine, new Transport(engine));
+    const before = engine.getSelectedPattern(0);
+    ui.handle(UiEvent.ShiftRotate, 1);
+    expect(ui.patternAskPending).toBe(false);
+    expect(engine.getSelectedPattern(0)).toBe(before + 1);
+    expect(tookLoad(ui)).toBe(true);
+  });
+
+  it("un canal en CLOCK ne charge rien", () => {
+    const { engine, ui } = cleanSeqChannel();
+    engine.setChannelMode(0, ChannelMode.CLOCK);
+    const before = engine.getSelectedPattern(0);
+    ui.handle(UiEvent.ShiftRotate, 1);
+    expect(engine.getSelectedPattern(0)).toBe(before);
+    expect(tookLoad(ui)).toBe(false);
   });
 
   it("une demande n est servie qu une fois", () => {
-    const { ui } = rigWith(false);
-    ui.handle(UiEvent.Press);
-    expect(ui.takePatternAction()).not.toBeNull();
-    expect(ui.takePatternAction()).toBeNull();
+    const { ui } = cleanSeqChannel();
+    ui.handle(UiEvent.ShiftRotate, 1);
+    expect(tookLoad(ui)).toBe(true);
+    expect(tookLoad(ui)).toBe(false);
   });
 
   it("sans geste, aucune demande", () => {
@@ -1129,69 +1127,13 @@ describe("UiController — la demande d action", () => {
     expect(ui.takePatternAction()).toBeNull();
   });
 
-  /*
-   * Lot 16E etape 5f — la confirmation, qui n est PAS une fenetre.
-   */
-  it("une copie modifiee demande avant de charger", () => {
-    const { ui } = rigWith(true);
+  // La grande valeur ne prend plus le curseur : un appui court entre sur MODE.
+  it("le curseur n atteint jamais la grande valeur", () => {
+    const { ui } = cleanSeqChannel();
     ui.handle(UiEvent.Press);
-    expect(ui.takePatternAction()).toBeNull();
-    expect(ui.patternLabelCode).toBe(PatternAction.Ask);
-    expect(ui.fieldOpen).toBe(true);
-  });
-
-  it("un second appui court confirme et charge", () => {
-    const { ui } = rigWith(true);
-    ui.handle(UiEvent.Press);
-    ui.handle(UiEvent.Press);
-    const demand = ui.takePatternAction();
-    expect(demand).not.toBeNull();
-    expect(demand!.action).toBe(PatternAction.Load);
-    expect(ui.fieldOpen).toBe(false);
-  });
-
-  it("une rotation annule la question", () => {
-    const { ui } = rigWith(true);
-    ui.handle(UiEvent.Press);
-    expect(ui.patternLabelCode).toBe(PatternAction.Ask);
-    // ⚠️ LA ROTATION EST EN ARRIERE, ET C EST CE QUI DISCRIMINE. Vers l avant,
-    // l ecretage ramene la question sur SAVE qu elle soit annulee ou non.
-    ui.handle(UiEvent.Rotate, -1);
-    expect(ui.patternLabelCode).toBe(PatternAction.Load);
-    ui.handle(UiEvent.Press);
-    expect(ui.takePatternAction()).toBeNull();
-  });
-
-  it("un appui long annule la question", () => {
-    const { ui } = rigWith(true);
-    ui.handle(UiEvent.Press);
-    ui.handle(UiEvent.LongPress);
-    expect(ui.takePatternAction()).toBeNull();
-    expect(ui.fieldOpen).toBe(false);
-    expect(ui.patternLabelCode).not.toBe(PatternAction.Ask);
-  });
-
-  it("une copie propre n est jamais interrogee", () => {
-    const { ui } = rigWith(false);
-    ui.handle(UiEvent.Press);
-    expect(ui.takePatternAction()).not.toBeNull();
-    expect(ui.patternLabelCode).not.toBe(PatternAction.Ask);
-  });
-
-  it("rouvrir le champ efface la question", () => {
-    const { ui } = rigWith(true);
-    ui.handle(UiEvent.Press);
-    expect(ui.patternLabelCode).toBe(PatternAction.Ask);
-    ui.handle(UiEvent.LongPress);
-    ui.handle(UiEvent.Press);
-    expect(ui.patternLabelCode).toBe(PatternAction.Load);
-  });
-
-  it("valider SAVE ne pose aucune demande", () => {
-    const { ui } = rigWith(true);
-    ui.handle(UiEvent.Rotate, 1);
-    expect(ui.patternAction).toBe(PatternAction.Save);
-    ui.handle(UiEvent.Press);
-    expect(ui.takePatternAction()).toBeNull();
+    for (let guard = 0; guard < 2 * SEQ_CHANNEL_TAB_FIELDS; guard += 1) {
+      expect(ui.field).not.toBe(UiField.Pattern);
+      ui.handle(UiEvent.Rotate, 1);
+    }
   });
 });

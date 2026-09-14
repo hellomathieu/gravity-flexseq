@@ -14,7 +14,7 @@ namespace {
 flexseq::SequencerEngine engine;
 flexseq::Transport transport(engine);
 flexseq::UiController ui(engine, transport);
-#if defined(FLEXSEQ_DEMO_PATTERN_ACTION)
+#if defined(FLEXSEQ_DEMO_PATTERN_ASK)
 flexseq::ModulatedPatternState modulated;
 #endif
 
@@ -79,7 +79,7 @@ void renderBand() {
 
 void setup() {
     gravity.Init();
-#if defined(FLEXSEQ_DEMO_PATTERN_ACTION)
+#if defined(FLEXSEQ_DEMO_PATTERN_ASK)
     engine.setModulatedPatterns(&modulated);
 #endif
     gravity.display.setFont(flexseq::FONT_VELVETSCREEN);
@@ -123,26 +123,14 @@ void setup() {
     }
 #endif
 
-#if defined(FLEXSEQ_DEMO_PATTERN_ACTION)
-    // Lot 16E etape 5c : la grande valeur, champ OUVERT. Le curseur revient sur
-    // elle par des crans, puis un appui court ouvre le champ, et des crans
-    // choisissent l action. Aucun etat d interface n est pose a la main : le
-    // panneau montre ce qu une suite de gestes produit.
+#if defined(FLEXSEQ_DEMO_PATTERN_ASK)
+    // PRD 5.0 amendement 1ter : la QUESTION, posee par SHIFT plus une rotation
+    // sur une copie changee. Aucun etat d interface n est pose a la main : le
+    // panneau montre ce qu un geste produit.
     //
-    // La valeur du drapeau est le CODE D ETIQUETTE a montrer, celui de
-    // PatternAction.h : 0 donne LOAD, 1 donne SAVE, 2 donne la question SURE?.
-    // Le canal est marque comme change, sans quoi ni SAVE ni la question
-    // n existeraient.
+    // Le canal est marque comme change, sans quoi la question n existerait pas.
     modulated.markDirty(DEMO_TAB - 1);
-    while (ui.cursor() != flexseq::UiController::SEQ_FIELD_INDEX_PATTERN) {
-        ui.handle(flexseq::UiController::EVENT_ROTATE, 1);
-    }
-    ui.handle(flexseq::UiController::EVENT_PRESS);
-    if (FLEXSEQ_DEMO_PATTERN_ACTION == flexseq::PATTERN_ACTION_SAVE) {
-        ui.handle(flexseq::UiController::EVENT_ROTATE, 1);
-    } else if (FLEXSEQ_DEMO_PATTERN_ACTION == flexseq::PATTERN_ACTION_ASK) {
-        ui.handle(flexseq::UiController::EVENT_PRESS);
-    }
+    ui.handle(flexseq::UiController::EVENT_SHIFT_ROTATE, 1);
 #endif
     gravity.clock.AttachIntHandler(onOutputTick);
     transport.start();

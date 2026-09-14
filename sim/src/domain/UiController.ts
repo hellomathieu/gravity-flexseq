@@ -17,7 +17,7 @@ import {
   type SequencerEngine,
 } from "./SequencerEngine.js";
 import { PATTERN_COUNT } from "./PatternBank.js";
-import { PatternAction, PATTERN_ACTION_COUNT } from "./PatternAction.js";
+import { PatternAction } from "./PatternAction.js";
 import { DEFAULT_SUBDIV, SUBDIVS } from "./subdiv.js";
 import type { Transport } from "./Transport.js";
 
@@ -66,15 +66,14 @@ export const FIRST_WRITABLE_TEMPLATE = 8;
 export const CLOCK_TAB_FIELDS = 2;
 export const PATTERNS_TAB_FIELDS = 1;
 export const CHANNEL_TAB_FIELDS = 3;
-export const SEQ_CHANNEL_TAB_FIELDS = 4;
+export const SEQ_CHANNEL_TAB_FIELDS = 3;
 export const CONFIG_PAGE_FIELDS = 3;
 
-// PRD 5.0 amendement 1bis : la grande valeur est la PREMIERE position, parce
-// qu elle est la premiere valeur a choisir avant d editer un pattern.
-export const SEQ_FIELD_INDEX_PATTERN = 0;
-export const SEQ_FIELD_INDEX_MODE = 1;
-export const SEQ_FIELD_INDEX_EDIT_ENTRY = 2;
-export const SEQ_FIELD_INDEX_CONFIG = 3;
+// PRD 5.0 amendement 1ter : la grande valeur ne prend plus le curseur, le
+// pattern se chargeant par SHIFT plus une rotation.
+export const SEQ_FIELD_INDEX_MODE = 0;
+export const SEQ_FIELD_INDEX_EDIT_ENTRY = 1;
+export const SEQ_FIELD_INDEX_CONFIG = 2;
 
 export const CONFIG_FIELD_INDEX_LENGTH = 0;
 export const CONFIG_FIELD_INDEX_SUBDIV = 1;
@@ -125,7 +124,7 @@ export class UiController {
   private currentTempo = DEFAULT_TEMPO;
   private source = 0;
   private rev = 0;
-  private action: PatternAction = PatternAction.Load;
+  private ask = false;
   private pending: PatternAction = PatternAction.None;
   private pendingChannel = 0;
 
@@ -169,20 +168,10 @@ export class UiController {
     return mode === ChannelMode.CLOCK || mode === ChannelMode.RANDOM;
   }
 
-  get patternAction(): PatternAction {
-    return this.action;
-  }
-
-  // Ce que l ECRAN doit nommer : l action, ou la question qui la precede.
-  get patternLabelCode(): PatternAction {
-    return this.action;
-  }
-
-  // SAVE n apparait que si la copie du canal differe du template qu il a charge
-  // — PRD 12.9 point 5. Un moteur non cable n a pas de drapeau : il ne propose
-  // alors que LOAD.
-  get patternActionCount(): number {
-    return this.channelCopyHasChanged() ? PATTERN_ACTION_COUNT : 1;
+  // PRD 5.0 amendement 1ter : la question qui precede un chargement destructeur.
+  // L ecran remplace l etiquette PATTERN par SURE tant qu elle est posee.
+  get patternAskPending(): boolean {
+    return this.ask;
   }
 
   // Le controleur POSE une demande, il ne l execute pas : ADR 0002 lui interdit
@@ -194,26 +183,24 @@ export class UiController {
     return taken;
   }
 
-  // Un appui court dans le champ de la grande valeur. Rend true quand le champ
-  // doit RESTER ouvert, ce qui n arrive que lorsque la question vient de s armer.
+  // PRD 5.0 amendement 1ter : SHIFT plus une rotation nomme le template ET le
+  // charge. Une copie propre charge tout de suite. Une copie modifiee mange son
+  // premier cran : le numero ne bouge pas, l etiquette devient SURE, et le cran
+  // suivant avance dans SON sens puis charge.
   //
-  // PRD 5.0 amendement 1bis : une copie propre charge sans question ; une copie
-  // modifiee voit son etiquette devenir SURE?, et c est le second appui court
-  // qui execute. ⚠️ L ecriture appartient au lot 5e, hors perimetre.
-  private pressInPatternField(): boolean {
-    if (this.action === PatternAction.Ask) {
-      this.action = PatternAction.Load;
-    } else if (this.action !== PatternAction.Load) {
-      return false;
-    } else if (this.channelCopyHasChanged()) {
-      this.action = PatternAction.Ask;
-      return true;
+  // Le numero ne bouge JAMAIS tant que la question est posee, donc l ecran nomme
+  // toujours le template que le canal joue.
+  private rotatePatternSlot(delta: number): void {
+    if (!this.ask && this.channelCopyHasChanged()) {
+      this.ask = true;
+      return;
     }
+    this.ask = false;
     const channel = this.selectedChannel;
-    if (channel < 0) return false;
+    if (channel < 0) return;
+    this.adjustFieldValue(UiField.Pattern, delta);
     this.pending = PatternAction.Load;
     this.pendingChannel = channel;
-    return false;
   }
 
   private channelCopyHasChanged(): boolean {
@@ -267,8 +254,6 @@ export class UiController {
       }
     }
     switch (index) {
-      case SEQ_FIELD_INDEX_PATTERN:
-        return UiField.Pattern;
       case SEQ_FIELD_INDEX_MODE:
         return UiField.Mode;
       case SEQ_FIELD_INDEX_EDIT_ENTRY:
@@ -322,6 +307,20 @@ export class UiController {
 
   handle(event: UiEvent, delta = 0): void {
     this.rev = (this.rev + 1) & 0xff;
+    // PRD 5.0 amendement 1ter : seul le geste qui pose la question y repond. Le
+    // garde vit ICI, et non dans chaque branche : trois sites finiraient par
+    // diverger, et une question resterait posee sur un ecran qui ne la montre
+    // plus.
+    //
+    // ⚠️ LES DEUX EVENEMENTS DE SHIFT SONT EXCLUS, et la sonde de gestes a
+    // trouve pourquoi. `onShiftPress()` part a CHAQUE relachement de SHIFT, et
+    // la rotation ne le supprime pas. Le relachement fait partie du geste, et il
+    // annulait la question a chaque cran. Les deux evenements ne changent rien
+    // dans ce controleur, donc ils ne doivent rien annuler.
+    if (event !== UiEvent.ShiftRotate && event !== UiEvent.ShiftPress
+        && event !== UiEvent.ShiftPlayPress) {
+      this.ask = false;
+    }
     if (event === UiEvent.PlayPress) {
       this.togglePlay();
       return;
@@ -349,7 +348,11 @@ export class UiController {
       return;
     }
     if (event === UiEvent.ShiftRotate) {
-      this.adjustFieldValue(this.mainField, delta);
+      if (this.mainField === UiField.Pattern) {
+        this.rotatePatternSlot(delta);
+      } else {
+        this.adjustFieldValue(this.mainField, delta);
+      }
       return;
     }
     if (event === UiEvent.Press && this.fieldCount > 0) {
@@ -362,12 +365,7 @@ export class UiController {
   private handleTab(event: UiEvent, delta: number): void {
     switch (event) {
       case UiEvent.Rotate:
-        if (this.open && this.field === UiField.Pattern) {
-          // Le champ ouvert choisit une ACTION. Le NUMERO du template se nomme
-          // par SHIFT plus rotation, et ce geste ne change pas.
-          if (this.action === PatternAction.Ask) this.action = PatternAction.Load;
-          this.action = clampIndex(this.action, oneStep(delta), this.patternActionCount);
-        } else if (this.open) {
+        if (this.open) {
           this.adjustField(delta);
         } else {
           this.fieldCursor = wrapIndex(this.fieldCursor, oneStep(delta), this.fieldCount);
@@ -378,7 +376,6 @@ export class UiController {
         break;
       case UiEvent.Press:
         if (this.open) {
-          if (this.field === UiField.Pattern && this.pressInPatternField()) break;
           this.open = false;
         } else if (this.field === UiField.EditEntry) {
           this.currentLevel = UiLevel.Edit;
@@ -389,12 +386,10 @@ export class UiController {
           this.fieldCursor = CONFIG_FIELD_INDEX_LENGTH;
         } else if (this.field !== UiField.None) {
           this.open = true;
-          this.action = PatternAction.Load;
         }
         break;
       case UiEvent.LongPress:
         if (this.open) {
-          if (this.action === PatternAction.Ask) this.action = PatternAction.Load;
           this.open = false;
         } else if (this.configPage) {
           this.configPage = false;
@@ -514,10 +509,11 @@ export class UiController {
         if (channel < 0) break;
         const current = this.engine.getChannelMode(channel) as number;
         this.engine.setChannelMode(channel, clampIndex(current, delta, CHANNEL_MODE_COUNT));
-        // ⚠️ La position 0 change de sens avec le mode : elle porte MODE hors
-        // SEQ et la grande valeur en SEQ. Sans ce recalage le curseur resterait
-        // immobile pendant que le champ sous lui changerait.
-        this.fieldCursor = this.isLegacyModeTab ? 0 : SEQ_FIELD_INDEX_MODE;
+        // ⚠️ AUCUN RECALAGE DU CURSEUR ICI, et c est une propriete, pas un
+        // oubli. Le mode ne change que par le champ sous le curseur —
+        // mainField ne nomme jamais Mode — donc le curseur est DEJA sur MODE,
+        // qui est la position 0 dans les trois modes. PRD 5.0 amendement 1ter
+        // porte la preuve.
         break;
       }
       case UiField.Mod: {

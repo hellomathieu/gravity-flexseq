@@ -180,20 +180,22 @@ export function mainValueOf(model: MainScreenModel): string {
   return subdivLabel(model.subdiv);
 }
 
-// PRD 5.0 amendement 1bis : ouvert, le champ de la grande valeur nomme l ACTION.
-// C est le seul signal qui separe « le curseur est ici » de « le champ est
-// ouvert », l inversion disant deja le premier.
-export function patternActionIsOpen(model: MainScreenModel): boolean {
-  return bigValueTakesCursor(model) && model.insideTab && model.fieldOpen
-    && model.cursor === 0;
+// PRD 5.0 amendement 1ter : la grande valeur ne nomme plus d action. Elle porte
+// la QUESTION tant qu un chargement destructeur attend sa reponse, et le numero
+// sous elle ne bouge pas pendant ce temps.
+//
+// La question se lit sur la barre d onglets comme dans l onglet : c est la ou le
+// geste vit, et la lier au curseur la rendrait invisible la ou elle est posee.
+export function isChannelTab(model: MainScreenModel): boolean {
+  return model.tab >= TAB_FIRST_CHANNEL && model.tab <= TAB_LAST_CHANNEL;
 }
 
 export function mainLabelOf(model: MainScreenModel): string {
   if (model.configPage || model.mainParameter === MainParameter.Pattern) {
-    if (patternActionIsOpen(model)) {
-      if (model.patternAction === PatternAction.Ask) return LBL_SURE;
-      return model.patternAction === PatternAction.Save ? LBL_SAVE : LBL_LOAD;
-    }
+    // ⚠️ La question appartient a un onglet de CANAL. L onglet PATTERNS porte
+    // la meme etiquette et un autre champ, et la page CONFIG designe LENGTH en
+    // position 0 : ni l un ni l autre ne doit la montrer.
+    if (model.patternAsk && !model.configPage && isChannelTab(model)) return LBL_SURE;
     return LBL_PATTERN;
   }
   return model.mainParameter === MainParameter.SkipChance ? LBL_SKIP_CHANCE : LBL_SUBDIVISION;
@@ -233,20 +235,6 @@ export function modText(model: MainScreenModel): string {
 
 // La grande valeur prend la PREMIERE position du curseur sur un canal en SEQ —
 // PRD 5.0 amendement 1bis. Les trois lignes de l original suivent donc d un
-// rang, et le numero d une ligne N EST PLUS l index du curseur.
-//
-// Les deux sites qui marquent le curseur lisent CETTE fonction : deux lectures
-// separees du meme etat finissent par diverger, et l ecran montre alors autre
-// chose que ce que le curseur designe.
-export function bigValueTakesCursor(model: MainScreenModel): boolean {
-  return model.tab >= TAB_FIRST_CHANNEL && model.tab <= TAB_LAST_CHANNEL
-    && !model.configPage && model.mode === ChannelMode.SEQ;
-}
-
-export function cursorOfLine(model: MainScreenModel, line: number): number {
-  return line + (bigValueTakesCursor(model) ? 1 : 0);
-}
-
 export function legacyLine(model: MainScreenModel, index: number): [string, string] {
   // L onglet PATTERNS prend la mise en page d un canal en SEQ.
   if (model.tab === TAB_PATTERNS) {
@@ -325,23 +313,12 @@ function drawLegacyChannel(ink: Ink, model: MainScreenModel): void {
       ink.drawBox(labelX - lead, gy, MAIN_LABEL_GLYPH_W, MAIN_LABEL_GLYPH_W);
     }
   }
-  // Le curseur sur la grande valeur : l etiquette s inverse, comme la valeur
-  // ouverte d un en-tete — lot 16E etape 5a.
-  if (bigValueTakesCursor(model) && model.insideTab && model.cursor === 0) {
-    // Les glyphes occupent base-5 a base-1 : la boite part de base-6.
-    ink.drawBox(labelX - 1, MAIN_LABEL_BASELINE_Y - VELVETSCREEN_HEIGHT - 1,
-                lw + 2, VELVETSCREEN_HEIGHT + 2);
-    ink.setDrawColor(0);
-    ink.drawStr(labelX, MAIN_LABEL_BASELINE_Y, mainLabel, VELVETSCREEN);
-    ink.setDrawColor(1);
-  } else {
-    ink.drawStr(labelX, MAIN_LABEL_BASELINE_Y, mainLabel, VELVETSCREEN);
-  }
+  ink.drawStr(labelX, MAIN_LABEL_BASELINE_Y, mainLabel, VELVETSCREEN);
 
   for (let line = 0; line < 3; ++line) {
     const base = LINE_0_BASELINE_Y + line * LINE_SPACING_Y;
     const [text, lineValue] = legacyLine(model, line);
-    const onCursor = model.insideTab && model.cursor === cursorOfLine(model, line);
+    const onCursor = model.insideTab && model.cursor === line;
     const labelW = textWidth(text, VELVETSCREEN);
     if (onCursor && !model.fieldOpen) {
       ink.drawBox(
@@ -379,7 +356,7 @@ export interface Render {
 
 export function renderMainScreen(model: MainScreenModel): Render {
   const ink = new Ink();
-  const legacy = (model.tab >= TAB_FIRST_CHANNEL && model.tab <= TAB_LAST_CHANNEL)
+  const legacy = isChannelTab(model)
     || model.tab === TAB_PATTERNS;
   const cursorOnHeadline = model.insideTab && model.cursor === 0;
 

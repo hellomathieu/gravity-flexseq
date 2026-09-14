@@ -2760,18 +2760,38 @@ void enterChannelEdit(EditorRig& r, uint8_t channel) {
  * Le drapeau par canal — lot 16E etape 5b, PRD 5.0 amendement 1bis
  *
  * Un bit par canal : la copie du canal differe du template qu il a charge. Il
- * garde le chargement, et il commande l apparition de SAVE.
+ * garde le chargement : une copie changee mange le premier cran du geste.
  */
 
-void test_a_fresh_state_carries_no_dirty_channel() {
+namespace {
+
+// Les six bits partent a un — PRD 5.0 amendement 1ter. Un test qui mesure une
+// EDITION doit donc partir d une ardoise propre, sans quoi il verrait le
+// drapeau du demarrage.
+void clearEveryChannelFlag(flexseq::ModulatedPatternState& state) {
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        state.clearDirty(ch);
+    }
+}
+
+}  // namespace
+
+// PRD 5.0 amendement 1ter : le drapeau vit en RAM et aucun record ne le porte,
+// donc une coupure laisse le module incapable de distinguer une copie editee
+// d une copie propre. Il part donc a un, pour les six canaux.
+void test_a_fresh_state_carries_the_six_channels_as_changed() {
     EditorRig r;
     for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-        TEST_ASSERT_FALSE_MESSAGE(r.state.isDirty(ch), "rien n a ete edite");
+        TEST_ASSERT_TRUE_MESSAGE(r.state.isDirty(ch),
+                                 "le module ne sait pas, donc il demande");
     }
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0x3F, r.state.dirty,
+                                    "six bits, et aucun au-dela");
 }
 
 void test_editing_a_step_raises_the_flag_of_that_channel_alone() {
     EditorRig r;
+    clearEveryChannelFlag(r.state);
     enterChannelEdit(r, 3);
     r.ui.handle(UiController::EVENT_PRESS);          // bascule le pas 0
     TEST_ASSERT_TRUE_MESSAGE(r.state.isDirty(3), "le canal edite");
@@ -2787,6 +2807,7 @@ void test_editing_a_step_raises_the_flag_of_that_channel_alone() {
 // template charge.
 void test_editing_the_length_of_a_channel_raises_its_flag() {
     EditorRig r;
+    clearEveryChannelFlag(r.state);
     r.engine.setChannelMode(2, flexseq::MODE_SEQ);
     while (r.ui.currentTab() != UiController::TAB_FIRST_CHANNEL + 2) {
         r.ui.handle(UiController::EVENT_ROTATE, 1);
@@ -2810,6 +2831,7 @@ void test_editing_the_length_of_a_channel_raises_its_flag() {
 // l editeur de templates en font partie : ils ne doivent lever AUCUN bit.
 void test_the_template_editor_raises_no_channel_flag() {
     EditorRig r;
+    clearEveryChannelFlag(r.state);
     r.selectSlot(11);
     r.openEditor();
     r.serve();
@@ -2828,6 +2850,7 @@ void test_the_template_editor_raises_no_channel_flag() {
 
 void test_loading_a_template_clears_the_flag_of_the_channel() {
     EditorRig r;
+    clearEveryChannelFlag(r.state);
     enterChannelEdit(r, 1);
     r.ui.handle(UiController::EVENT_PRESS);
     TEST_ASSERT_TRUE(r.state.isDirty(1));
@@ -2838,6 +2861,7 @@ void test_loading_a_template_clears_the_flag_of_the_channel() {
 
 void test_saving_a_template_clears_the_flag_of_the_channel() {
     EditorRig r;
+    clearEveryChannelFlag(r.state);
     enterChannelEdit(r, 1);
     r.ui.handle(UiController::EVENT_PRESS);
     TEST_ASSERT_TRUE(r.state.isDirty(1));
@@ -2849,6 +2873,7 @@ void test_saving_a_template_clears_the_flag_of_the_channel() {
 // Le bit vit dans un octet : un index hors des six deborderait sur un voisin.
 void test_an_out_of_range_channel_never_touches_a_bit() {
     EditorRig r;
+    clearEveryChannelFlag(r.state);
     r.state.markDirty(SequencerEngine::CHANNEL_COUNT);
     TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, r.state.dirty, "aucun bit n a bouge");
     TEST_ASSERT_FALSE(r.state.isDirty(SequencerEngine::CHANNEL_COUNT));
@@ -2917,17 +2942,23 @@ void test_the_written_length_is_the_length_shown_in_the_header() {
 
 namespace {
 
-// Ouvre la grande valeur du canal 0 et valide l action affichee.
-void validateBigValue(RigV3& r) {
+// PRD 5.0 amendement 1ter : SHIFT plus une rotation nomme le template ET le
+// charge. Le curseur ne stationne plus sur la grande valeur, donc le geste part
+// de la barre d onglets.
+//
+// ⚠️ Le second cran n est PAS systematique : une copie changee mange le premier,
+// et un rig sans ModulatedPatternState n a pas de copie changee du tout. Le
+// helper lit donc la question au lieu de supposer le nombre de crans.
+void loadByRotation(RigV3& r, uint8_t target) {
     r.engine.setChannelMode(0, flexseq::MODE_SEQ);
-    r.ui.handle(UiController::EVENT_PRESS);
-    for (uint8_t guard = 0; guard < UiController::SEQ_CHANNEL_TAB_FIELDS; ++guard) {
-        if (r.ui.field() == UiController::FIELD_PATTERN) break;
-        r.ui.handle(UiController::EVENT_ROTATE, 1);
+    r.engine.setSelectedPattern(0, static_cast<uint8_t>(target - 1));
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+    if (r.ui.patternAskPending()) {
+        r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
     }
-    TEST_ASSERT_EQUAL(UiController::FIELD_PATTERN, r.ui.field());
-    r.ui.handle(UiController::EVENT_PRESS);
-    r.ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_FALSE_MESSAGE(r.ui.patternAskPending(), "la question est repondue");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(target, r.engine.getSelectedPattern(0),
+                                    "le geste atteint le template vise");
 }
 
 }  // namespace
@@ -2937,9 +2968,8 @@ void test_a_validated_load_copies_the_template_into_the_channel() {
     RigV3 r;
     const Pattern wanted = distinctContent(7);
     writeTemplateRecord(ee, 11, wanted, 21);
-    r.engine.setSelectedPattern(0, 11);
 
-    validateBigValue(r);
+    loadByRotation(r, 11);
     flexseq::servicePatternAction(ee, r.image, r.engine, r.ui);
 
     TEST_ASSERT_TRUE_MESSAGE(sameContent(wanted, *r.engine.instanceForChannel(0)),
@@ -2967,9 +2997,8 @@ void test_a_demand_is_executed_once() {
     RigV3 r;
     const Pattern first = distinctContent(7);
     writeTemplateRecord(ee, 11, first, 21);
-    r.engine.setSelectedPattern(0, 11);
 
-    validateBigValue(r);
+    loadByRotation(r, 11);
     flexseq::servicePatternAction(ee, r.image, r.engine, r.ui);
     TEST_ASSERT_TRUE(sameContent(first, *r.engine.instanceForChannel(0)));
 
@@ -2986,9 +3015,8 @@ void test_a_frozen_slot_loads() {
     RigV3 r;
     const Pattern wanted = distinctContent(2);
     writeTemplateRecord(ee, 3, wanted, 18);
-    r.engine.setSelectedPattern(0, 3);
 
-    validateBigValue(r);
+    loadByRotation(r, 3);
     flexseq::servicePatternAction(ee, r.image, r.engine, r.ui);
     TEST_ASSERT_TRUE(sameContent(wanted, *r.engine.instanceForChannel(0)));
 }
@@ -3000,10 +3028,9 @@ void test_a_busy_storage_keeps_the_demand() {
     RigV3 r;
     const Pattern wanted = distinctContent(4);
     writeTemplateRecord(ee, 12, wanted, 19);
-    r.engine.setSelectedPattern(0, 12);
     const Pattern before = *r.engine.instanceForChannel(0);
 
-    validateBigValue(r);
+    loadByRotation(r, 12);
     ee.busyFlag = true;
     flexseq::servicePatternAction(ee, r.image, r.engine, r.ui);
     TEST_ASSERT_TRUE_MESSAGE(sameContent(before, *r.engine.instanceForChannel(0)),
@@ -3022,9 +3049,8 @@ void test_a_load_clears_the_change_flag() {
     flexseq::ModulatedPatternState state;
     r.engine.setModulatedPatterns(&state);
     writeTemplateRecord(ee, 11, distinctContent(7), 21);
-    r.engine.setSelectedPattern(0, 11);
 
-    validateBigValue(r);
+    loadByRotation(r, 11);
     flexseq::servicePatternAction(ee, r.image, r.engine, r.ui);
     TEST_ASSERT_FALSE(state.isDirty(0));
 }
@@ -3207,7 +3233,7 @@ int main() {
     RUN_TEST(test_opening_the_editor_invalidates_the_timing_cache);
     RUN_TEST(test_the_editor_sets_a_ratchet_on_the_template);
     RUN_TEST(test_the_audition_emits_the_template_on_channel_one);
-    RUN_TEST(test_a_fresh_state_carries_no_dirty_channel);
+    RUN_TEST(test_a_fresh_state_carries_the_six_channels_as_changed);
     RUN_TEST(test_editing_a_step_raises_the_flag_of_that_channel_alone);
     RUN_TEST(test_editing_the_length_of_a_channel_raises_its_flag);
     RUN_TEST(test_the_template_editor_raises_no_channel_flag);

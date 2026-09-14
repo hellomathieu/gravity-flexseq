@@ -69,9 +69,9 @@ describe('couche 1 — recettes de gestes contre le MODELE de reference, jamais 
       driver.goToTab(TAB_FIRST_CHANNEL + 1);
       expect(ui.level).toBe(UiLevel.Tab);
       expect(ui.currentTab).toBe(TAB_FIRST_CHANNEL + 1);
-      // Le premier champ d un canal en SEQ est la grande valeur depuis le lot
-      // 16E etape 5a : on choisit le pattern avant de l editer.
-      expect(ui.field).toBe(UiField.Pattern);
+      // PRD 5.0 amendement 1ter : la grande valeur ne prend plus le curseur,
+      // donc MODE est le premier champ dans les trois modes.
+      expect(ui.field).toBe(UiField.Mode);
     });
 
     it('2. la recette pose le curseur sur le champ demande, en autant de rotations que la distance', () => {
@@ -83,10 +83,10 @@ describe('couche 1 — recettes de gestes contre le MODELE de reference, jamais 
         .slice(before)
         .filter((g) => g.event === UiEvent.Rotate).length;
       expect(ui.field).toBe(UiField.Subdiv);
-      // trois crans sur l onglet pour atteindre CONFIG, un appui, puis un cran
+      // deux crans sur l onglet pour atteindre CONFIG, un appui, puis un cran
       // sur la page pour atteindre SUBDIV. Le champ a demenage au lot 12, et la
-      // grande valeur a pris la premiere position au lot 16E etape 5a.
-      expect(rotations).toBe(4);
+      // grande valeur a rendu sa position au PRD 5.0 amendement 1ter.
+      expect(rotations).toBe(3);
       expect(rotations).toBeLessThan(SEQ_CHANNEL_TAB_FIELDS + CONFIG_PAGE_FIELDS);
     });
 

@@ -113,13 +113,13 @@ void test_press_enters_a_tab_that_has_fields() {
     r.enterTab();
     TEST_ASSERT_EQUAL(UiController::LEVEL_TAB, r.ui.level());
     TEST_ASSERT_EQUAL_UINT8(0, r.ui.cursor());
-    // Le rig met les six canaux en SEQ, donc le premier champ est la grande
-    // valeur. MODE reste la ligne 1 des trois, un cran plus loin.
-    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_PATTERN, r.ui.field(),
-        "on choisit le pattern avant de l editer");
-    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    // PRD 5.0 amendement 1ter : la grande valeur ne prend plus le curseur, donc
+    // MODE tient la premiere position dans les trois modes.
     TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MODE, r.ui.field(),
-        "MODE est la ligne 1, comme dans l original");
+        "MODE est la ligne 0, comme dans l original");
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_EDIT_ENTRY, r.ui.field(),
+        "EDIT suit");
 }
 
 void test_press_does_nothing_on_the_settings_tab_while_it_is_deferred() {
@@ -162,14 +162,14 @@ void test_rotate_moves_the_field_cursor_and_wraps() {
     Rig r;
     r.enterTab();
     r.ui.handle(UiController::EVENT_ROTATE, 1);
-    TEST_ASSERT_EQUAL(UiController::FIELD_MODE, r.ui.field());
+    TEST_ASSERT_EQUAL(UiController::FIELD_EDIT_ENTRY, r.ui.field());
     r.ui.handle(UiController::EVENT_ROTATE, -1);
-    TEST_ASSERT_EQUAL(UiController::FIELD_PATTERN, r.ui.field());
+    TEST_ASSERT_EQUAL(UiController::FIELD_MODE, r.ui.field());
     r.ui.handle(UiController::EVENT_ROTATE, -1);
     TEST_ASSERT_EQUAL(UiController::FIELD_CONFIG, r.ui.field());
     r.ui.handle(UiController::EVENT_ROTATE, 1);
-    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_PATTERN, r.ui.field(),
-        "la liste boucle sur son premier champ, qui est la grande valeur");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MODE, r.ui.field(),
+        "la liste boucle sur son premier champ, qui est MODE");
 }
 
 void test_press_opens_a_value_field_and_press_closes_it() {
@@ -931,27 +931,23 @@ void test_a_random_tab_puts_the_subdivision_on_the_second_line() {
     TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MOD, r.ui.fieldAt(2), "ligne 3");
 }
 
-// ⚠️ QUATRE POSITIONS DE CURSEUR, mais TOUJOURS TROIS LIGNES. La grande valeur
-// n est pas une ligne : c est le grand chiffre a gauche. La conformite a
-// l original porte sur les lignes, et elle est intacte.
+// TROIS POSITIONS ET TROIS LIGNES depuis PRD 5.0 amendement 1ter : la grande
+// valeur ne prend plus le curseur, le pattern se chargeant par SHIFT plus une
+// rotation.
 void test_a_seq_tab_takes_the_three_lines_of_the_original() {
     ModeRig r(flexseq::MODE_SEQ);
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(4, r.ui.fieldCount(),
-        "trois lignes, plus la grande valeur depuis le lot 16E etape 5a");
-    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_PATTERN, r.ui.fieldAt(0),
-        "la grande valeur vient en premier : on choisit avant d editer");
-    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MODE, r.ui.fieldAt(1),
-        "MODE est la ligne 1 dans les TROIS modes : sans lui, SEQ serait un aller simple");
-    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_EDIT_ENTRY, r.ui.fieldAt(2), "ligne 2 : EDIT");
-    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_CONFIG, r.ui.fieldAt(3), "ligne 3 : CONFIG");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(3, r.ui.fieldCount(), "trois lignes");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MODE, r.ui.fieldAt(0),
+        "MODE est la ligne 0 dans les TROIS modes : sans lui, SEQ serait un aller simple");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_EDIT_ENTRY, r.ui.fieldAt(1), "ligne 1 : EDIT");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_CONFIG, r.ui.fieldAt(2), "ligne 2 : CONFIG");
 }
 
 void test_the_published_field_indices_agree_with_fieldAt() {
     ModeRig r(flexseq::MODE_SEQ);
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, UiController::SEQ_FIELD_INDEX_PATTERN, "PATTERN vaut 0");
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, UiController::SEQ_FIELD_INDEX_MODE, "MODE vaut 1");
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(2, UiController::SEQ_FIELD_INDEX_EDIT_ENTRY, "EDIT vaut 2");
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(3, UiController::SEQ_FIELD_INDEX_CONFIG, "CONFIG vaut 3");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, UiController::SEQ_FIELD_INDEX_MODE, "MODE vaut 0");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, UiController::SEQ_FIELD_INDEX_EDIT_ENTRY, "EDIT vaut 1");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(2, UiController::SEQ_FIELD_INDEX_CONFIG, "CONFIG vaut 2");
     TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MODE,
         r.ui.fieldAt(UiController::SEQ_FIELD_INDEX_MODE), "index et fieldAt : MODE");
     TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_EDIT_ENTRY,
@@ -1070,8 +1066,8 @@ void test_the_config_page_is_left_behind_when_a_tab_is_entered_again() {
     r.ui.handle(UiController::EVENT_PRESS);
     TEST_ASSERT_FALSE_MESSAGE(r.ui.isOnConfigPage(),
         "entrer dans un onglet part de ses propres champs, jamais de CONFIG");
-    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_PATTERN, r.ui.field(),
-        "donc sur son premier champ, la grande valeur");
+    TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MODE, r.ui.field(),
+        "donc sur son premier champ, qui est MODE");
 }
 
 void test_the_length_is_edited_on_the_config_page() {
@@ -1088,9 +1084,8 @@ void test_the_length_is_edited_on_the_config_page() {
 
 void test_the_mode_can_always_be_changed_back_out_of_seq() {
     ModeRig r(flexseq::MODE_SEQ);
-    r.ui.handle(UiController::EVENT_ROTATE, 1);
     TEST_ASSERT_EQUAL_MESSAGE(UiController::FIELD_MODE, r.ui.field(),
-        "MODE reste atteignable, a un cran de la grande valeur");
+        "MODE est la premiere position dans les trois modes");
     r.ui.handle(UiController::EVENT_PRESS);
     r.ui.handle(UiController::EVENT_ROTATE, -1);
     TEST_ASSERT_EQUAL_MESSAGE(flexseq::MODE_RANDOM, r.engine.getChannelMode(0),
@@ -1238,29 +1233,27 @@ void test_the_controller_and_the_format_agree_on_the_frozen_count() {
 }
 
 /*
- * La grande valeur, premiere position du curseur — lot 16E etape 5a
+ * Le curseur d un onglet en SEQ — PRD 5.0 amendement 1ter
  *
- * PRD 5.0 amendement 1bis : c est la premiere valeur a choisir avant d editer
- * un pattern. MODE, EDIT et CONFIG passent de 0-1-2 a 1-2-3.
+ * La grande valeur ne prend plus le curseur. MODE, EDIT et CONFIG reviennent de
+ * 1-2-3 a 0-1-2.
  */
 
-void test_a_seq_channel_puts_the_big_value_first() {
+void test_a_seq_channel_puts_mode_first() {
     Rig r;
     r.gotoTab(UiController::TAB_FIRST_CHANNEL);
     r.engine.setChannelMode(0, flexseq::MODE_SEQ);
     r.enterTab();
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(4, r.ui.fieldCount(), "quatre positions");
-    TEST_ASSERT_EQUAL(UiController::FIELD_PATTERN, r.ui.fieldAt(0));
-    TEST_ASSERT_EQUAL(UiController::FIELD_MODE, r.ui.fieldAt(1));
-    TEST_ASSERT_EQUAL(UiController::FIELD_EDIT_ENTRY, r.ui.fieldAt(2));
-    TEST_ASSERT_EQUAL(UiController::FIELD_CONFIG, r.ui.fieldAt(3));
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(3, r.ui.fieldCount(), "trois positions");
+    TEST_ASSERT_EQUAL(UiController::FIELD_MODE, r.ui.fieldAt(0));
+    TEST_ASSERT_EQUAL(UiController::FIELD_EDIT_ENTRY, r.ui.fieldAt(1));
+    TEST_ASSERT_EQUAL(UiController::FIELD_CONFIG, r.ui.fieldAt(2));
 }
 
-void test_the_published_seq_indices_are_zero_to_three() {
-    TEST_ASSERT_EQUAL_UINT8(0, UiController::SEQ_FIELD_INDEX_PATTERN);
-    TEST_ASSERT_EQUAL_UINT8(1, UiController::SEQ_FIELD_INDEX_MODE);
-    TEST_ASSERT_EQUAL_UINT8(2, UiController::SEQ_FIELD_INDEX_EDIT_ENTRY);
-    TEST_ASSERT_EQUAL_UINT8(3, UiController::SEQ_FIELD_INDEX_CONFIG);
+void test_the_published_seq_indices_are_zero_to_two() {
+    TEST_ASSERT_EQUAL_UINT8(0, UiController::SEQ_FIELD_INDEX_MODE);
+    TEST_ASSERT_EQUAL_UINT8(1, UiController::SEQ_FIELD_INDEX_EDIT_ENTRY);
+    TEST_ASSERT_EQUAL_UINT8(2, UiController::SEQ_FIELD_INDEX_CONFIG);
 }
 
 // Les deux autres modes ne lisent aucun pattern : la position n existe pas.
@@ -1355,176 +1348,229 @@ void test_closing_the_template_editor_changes_the_frame_choice_with_no_gesture()
 }
 
 /*
- * Lot 16E etape 5c — le champ de la grande valeur s ouvre et nomme l action.
- * PRD 5.0 amendement 1bis : un appui court ouvre, une rotation deplace entre
- * LOAD et SAVE, et SAVE n existe que si la copie du canal a change.
+ * PRD 5.0 amendement 1ter — SHIFT plus une rotation nomme le template ET le
+ * charge. Le champ d action a quitte l onglet de canal.
+ *
+ * Le geste vit sur la BARRE d onglets : ces tests n entrent donc jamais dans
+ * l onglet.
  */
 
 namespace {
 
-// Ouvre le champ de la grande valeur sur le canal 0, en SEQ.
-void openPatternField(Rig& r) {
-    r.enterTab();
-    r.gotoField(UiController::FIELD_PATTERN);
-    r.ui.handle(UiController::EVENT_PRESS);
+// Un canal 0 en SEQ, sur la barre d onglets, avec un tampon cable et une copie
+// propre. Les six copies partent CHANGEES, donc l ardoise se nettoie ici.
+void cleanSeqChannel(Rig& r, flexseq::ModulatedPatternState& state) {
+    r.gotoTab(UiController::TAB_FIRST_CHANNEL);
+    r.engine.setChannelMode(0, flexseq::MODE_SEQ);
+    r.engine.setModulatedPatterns(&state);
+    for (uint8_t ch = 0; ch < flexseq::SequencerEngine::CHANNEL_COUNT; ++ch) {
+        state.clearDirty(ch);
+    }
+}
+
+bool tookLoad(Rig& r, uint8_t& channel) {
+    uint8_t action = 0xAA;
+    channel = 0xAA;
+    if (!r.ui.takePatternAction(action, channel)) {
+        return false;
+    }
+    TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_LOAD, action);
+    return true;
 }
 
 }  // namespace
 
-void test_a_clean_copy_offers_load_alone() {
+void test_a_clean_copy_moves_and_loads_on_one_detent() {
     Rig r;
     flexseq::ModulatedPatternState state;
-    r.engine.setModulatedPatterns(&state);
-
-    openPatternField(r);
-    TEST_ASSERT_TRUE_MESSAGE(r.ui.fieldOpen(), "le champ s ouvre");
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, r.ui.patternActionCount(),
-        "une copie propre n a rien a publier");
-    TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_LOAD, r.ui.patternAction());
-
-    r.ui.handle(UiController::EVENT_ROTATE, 1);
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(flexseq::PATTERN_ACTION_LOAD,
-        r.ui.patternAction(), "la rotation ne trouve pas de seconde valeur");
-}
-
-void test_a_changed_copy_offers_save_as_well() {
-    Rig r;
-    flexseq::ModulatedPatternState state;
-    r.engine.setModulatedPatterns(&state);
-    state.markDirty(0);
-
-    openPatternField(r);
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(2, r.ui.patternActionCount(),
-        "une copie changee peut etre publiee");
-    r.ui.handle(UiController::EVENT_ROTATE, 1);
-    TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_SAVE, r.ui.patternAction());
-    r.ui.handle(UiController::EVENT_ROTATE, -1);
-    TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_LOAD, r.ui.patternAction());
-}
-
-void test_the_action_clamps_at_both_ends() {
-    Rig r;
-    flexseq::ModulatedPatternState state;
-    r.engine.setModulatedPatterns(&state);
-    state.markDirty(0);
-
-    openPatternField(r);
-    for (uint8_t i = 0; i < 5; ++i) {
-        r.ui.handle(UiController::EVENT_ROTATE, 1);
-    }
-    TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_SAVE, r.ui.patternAction());
-    for (uint8_t i = 0; i < 5; ++i) {
-        r.ui.handle(UiController::EVENT_ROTATE, -1);
-    }
-    TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_LOAD, r.ui.patternAction());
-}
-
-// ⚠️ La rotation dans le champ ouvert nommait le template avant cette etape.
-// Elle choisit desormais une ACTION, et le numero ne bouge plus.
-void test_the_open_field_no_longer_names_the_template() {
-    Rig r;
-    flexseq::ModulatedPatternState state;
-    r.engine.setModulatedPatterns(&state);
-    state.markDirty(0);
-
-    openPatternField(r);
+    cleanSeqChannel(r, state);
     const int8_t before = r.engine.getSelectedPattern(0);
-    r.ui.handle(UiController::EVENT_ROTATE, 1);
-    TEST_ASSERT_EQUAL_INT8_MESSAGE(before, r.engine.getSelectedPattern(0),
-        "une rotation dans le champ ouvert ne change pas le numero");
-}
 
-// Le geste qui nomme le template ne change pas : SHIFT plus rotation.
-void test_shift_rotate_still_names_the_template_while_the_field_is_open() {
-    Rig r;
-    flexseq::ModulatedPatternState state;
-    r.engine.setModulatedPatterns(&state);
-
-    openPatternField(r);
-    const int8_t before = r.engine.getSelectedPattern(0);
     r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+
+    TEST_ASSERT_EQUAL_INT8_MESSAGE(before + 1, r.engine.getSelectedPattern(0),
+        "le numero avance d un cran");
+    TEST_ASSERT_FALSE_MESSAGE(r.ui.patternAskPending(),
+        "une copie propre ne pose aucune question");
+    uint8_t channel = 0xAA;
+    TEST_ASSERT_TRUE_MESSAGE(tookLoad(r, channel), "et le chargement est demande");
+    TEST_ASSERT_EQUAL_UINT8(0, channel);
+}
+
+void test_a_changed_copy_eats_the_first_detent() {
+    Rig r;
+    flexseq::ModulatedPatternState state;
+    cleanSeqChannel(r, state);
+    state.markDirty(0);
+    const int8_t before = r.engine.getSelectedPattern(0);
+
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+
+    TEST_ASSERT_TRUE_MESSAGE(r.ui.patternAskPending(), "la question est posee");
+    TEST_ASSERT_EQUAL_INT8_MESSAGE(before, r.engine.getSelectedPattern(0),
+        "et le numero ne bouge pas : l ecran nomme ce que le canal joue");
+    uint8_t channel = 0;
+    TEST_ASSERT_FALSE_MESSAGE(tookLoad(r, channel), "rien n est charge");
+}
+
+void test_the_detent_after_the_question_moves_and_loads() {
+    Rig r;
+    flexseq::ModulatedPatternState state;
+    cleanSeqChannel(r, state);
+    state.markDirty(0);
+    const int8_t before = r.engine.getSelectedPattern(0);
+
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+
+    TEST_ASSERT_FALSE(r.ui.patternAskPending());
+    TEST_ASSERT_EQUAL_INT8(before + 1, r.engine.getSelectedPattern(0));
+    uint8_t channel = 0xAA;
+    TEST_ASSERT_TRUE(tookLoad(r, channel));
+}
+
+// ⚠️ Le SENS du second cran est le sien, et non celui du premier. Une question
+// posee vers l avant puis repondue vers l arriere descend d un cran.
+void test_the_answer_follows_its_own_direction() {
+    Rig r;
+    flexseq::ModulatedPatternState state;
+    cleanSeqChannel(r, state);
+    state.markDirty(0);
+    r.engine.setSelectedPattern(0, 5);
+
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, -1);
+
+    TEST_ASSERT_EQUAL_INT8_MESSAGE(4, r.engine.getSelectedPattern(0),
+        "le second cran decide seul du sens");
+}
+
+// Un chargement remet la copie a l identique du template, donc les crans qui
+// suivent ne posent plus de question. Le drapeau tombe dans le service, mais le
+// controleur doit deja avoir relache la sienne.
+void test_the_question_is_asked_once_per_change() {
+    Rig r;
+    flexseq::ModulatedPatternState state;
+    cleanSeqChannel(r, state);
+    state.markDirty(0);
+
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+    state.clearDirty(0);
+    const int8_t before = r.engine.getSelectedPattern(0);
+
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+    TEST_ASSERT_FALSE(r.ui.patternAskPending());
     TEST_ASSERT_EQUAL_INT8(before + 1, r.engine.getSelectedPattern(0));
 }
 
-// Fermer le champ n execute rien : ni chargement, ni ecriture. Le drapeau du
-// canal reste leve, et le contenu reste celui qu il etait.
-void test_closing_the_field_runs_nothing() {
-    Rig r;
-    flexseq::ModulatedPatternState state;
-    r.engine.setModulatedPatterns(&state);
-    state.markDirty(0);
-    r.engine.instanceForChannel(0)->writeStep(5, true);
-
-    openPatternField(r);
-    r.ui.handle(UiController::EVENT_ROTATE, 1);
-    TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_SAVE, r.ui.patternAction());
-    r.ui.handle(UiController::EVENT_PRESS);
-
-    TEST_ASSERT_FALSE_MESSAGE(r.ui.fieldOpen(), "le champ se ferme");
-    TEST_ASSERT_TRUE_MESSAGE(state.isDirty(0), "le drapeau du canal est intact");
-    bool active = false;
-    r.engine.instanceForChannel(0)->readStep(5, active);
-    TEST_ASSERT_TRUE_MESSAGE(active, "le contenu de la copie est intact");
-}
-
-void test_opening_the_field_again_starts_on_load() {
-    Rig r;
-    flexseq::ModulatedPatternState state;
-    r.engine.setModulatedPatterns(&state);
-    state.markDirty(0);
-
-    openPatternField(r);
-    r.ui.handle(UiController::EVENT_ROTATE, 1);
-    TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_SAVE, r.ui.patternAction());
-    r.ui.handle(UiController::EVENT_PRESS);
-    r.ui.handle(UiController::EVENT_PRESS);
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(flexseq::PATTERN_ACTION_LOAD,
-        r.ui.patternAction(), "le champ s ouvre toujours sur LOAD");
-}
-
-// Un moteur non cable n a pas de drapeau : le champ ne propose alors que LOAD,
-// et il ne lit jamais un pointeur nul.
-void test_an_engine_without_the_buffer_offers_load_alone() {
-    Rig r;
-    openPatternField(r);
-    TEST_ASSERT_EQUAL_UINT8(1, r.ui.patternActionCount());
-    TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_LOAD, r.ui.patternAction());
-}
-
 /*
- * Lot 16E etape 5d — un appui court sur LOAD POSE une demande. Le controleur ne
- * lit jamais l EEPROM, ADR 0002 : c est un service qui execute.
+ * L annulation. PRD 5.0 amendement 1ter : tout ce qui n est pas SHIFT plus une
+ * rotation annule. Le garde vit en UN seul endroit, donc les quatre gestes
+ * ci-dessous exercent la meme ligne — c est voulu : ce qui est teste est la
+ * REGLE, et un garde par branche la ferait diverger.
  */
 
-void test_validating_load_posts_a_request() {
+namespace {
+
+void askThenCancel(UiController::Event event, const char* why) {
     Rig r;
     flexseq::ModulatedPatternState state;
-    r.engine.setModulatedPatterns(&state);
+    cleanSeqChannel(r, state);
+    state.markDirty(0);
 
-    openPatternField(r);
-    r.ui.handle(UiController::EVENT_PRESS);
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+    TEST_ASSERT_TRUE(r.ui.patternAskPending());
 
-    uint8_t action = 0xAA;
+    r.ui.handle(event, 1);
+    TEST_ASSERT_FALSE_MESSAGE(r.ui.patternAskPending(), why);
+    uint8_t channel = 0;
+    TEST_ASSERT_FALSE_MESSAGE(tookLoad(r, channel), "et rien n est charge");
+}
+
+}  // namespace
+
+// ⚠️ CE TEST VIENT DES BROCHES, et aucun test natif ne l aurait demande.
+// `onShiftPress()` part a CHAQUE relachement de SHIFT, et la rotation ne le
+// supprime pas : le relachement fait partie du geste. Sans cette exclusion, la
+// question etait annulee a chaque cran et aucun cran ne confirmait.
+void test_releasing_shift_does_not_cancel_the_question() {
+    Rig r;
+    flexseq::ModulatedPatternState state;
+    cleanSeqChannel(r, state);
+    state.markDirty(0);
+
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+    TEST_ASSERT_TRUE(r.ui.patternAskPending());
+    r.ui.handle(UiController::EVENT_SHIFT_PRESS, 0);
+    TEST_ASSERT_TRUE_MESSAGE(r.ui.patternAskPending(),
+        "relacher SHIFT fait partie du geste, il n annule pas");
+
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
     uint8_t channel = 0xAA;
-    TEST_ASSERT_TRUE_MESSAGE(r.ui.takePatternAction(action, channel),
-        "l appui court sur LOAD pose une demande");
-    TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_LOAD, action);
-    TEST_ASSERT_EQUAL_UINT8(0, channel);
-    TEST_ASSERT_FALSE_MESSAGE(r.ui.fieldOpen(), "et le champ se ferme");
+    TEST_ASSERT_TRUE_MESSAGE(tookLoad(r, channel),
+        "le cran suivant confirme donc bien");
+}
+
+void test_a_plain_rotation_cancels_the_question() {
+    askThenCancel(UiController::EVENT_ROTATE, "changer d onglet annule");
+}
+
+void test_a_short_press_cancels_the_question() {
+    askThenCancel(UiController::EVENT_PRESS, "un appui court annule");
+}
+
+void test_a_long_press_cancels_the_question() {
+    askThenCancel(UiController::EVENT_LONG_PRESS, "un appui long annule");
+}
+
+void test_a_play_press_cancels_the_question() {
+    askThenCancel(UiController::EVENT_PLAY_PRESS, "un appui sur PLAY annule");
+}
+
+// Un moteur sans tampon n a pas de drapeau : il ne pose jamais la question, et
+// il ne lit jamais un pointeur nul.
+void test_an_engine_without_the_buffer_never_asks() {
+    Rig r;
+    r.gotoTab(UiController::TAB_FIRST_CHANNEL);
+    r.engine.setChannelMode(0, flexseq::MODE_SEQ);
+    const int8_t before = r.engine.getSelectedPattern(0);
+
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+
+    TEST_ASSERT_FALSE(r.ui.patternAskPending());
+    TEST_ASSERT_EQUAL_INT8(before + 1, r.engine.getSelectedPattern(0));
+    uint8_t channel = 0xAA;
+    TEST_ASSERT_TRUE(tookLoad(r, channel));
+}
+
+// Les deux autres modes ne lisent aucun pattern : le geste y regle le champ
+// principal du mode, et il ne demande aucun chargement.
+void test_a_clock_channel_loads_nothing() {
+    Rig r;
+    flexseq::ModulatedPatternState state;
+    cleanSeqChannel(r, state);
+    r.engine.setChannelMode(0, flexseq::MODE_CLOCK);
+    const int8_t before = r.engine.getSelectedPattern(0);
+
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+
+    TEST_ASSERT_EQUAL_INT8_MESSAGE(before, r.engine.getSelectedPattern(0),
+        "le numero du template ne bouge pas hors SEQ");
+    uint8_t channel = 0;
+    TEST_ASSERT_FALSE(tookLoad(r, channel));
 }
 
 void test_a_demand_is_served_once() {
     Rig r;
     flexseq::ModulatedPatternState state;
-    r.engine.setModulatedPatterns(&state);
+    cleanSeqChannel(r, state);
 
-    openPatternField(r);
-    r.ui.handle(UiController::EVENT_PRESS);
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
 
-    uint8_t action = 0;
     uint8_t channel = 0;
-    TEST_ASSERT_TRUE(r.ui.takePatternAction(action, channel));
-    TEST_ASSERT_FALSE_MESSAGE(r.ui.takePatternAction(action, channel),
+    TEST_ASSERT_TRUE(tookLoad(r, channel));
+    TEST_ASSERT_FALSE_MESSAGE(tookLoad(r, channel),
         "la demande est consommee, et une seule fois");
 }
 
@@ -1538,160 +1584,36 @@ void test_no_gesture_posts_no_demand() {
         "entrer dans un onglet ne demande rien");
 }
 
-/*
- * Lot 16E etape 5f — la confirmation, qui n est PAS une fenetre. PRD 5.0
- * amendement 1bis : un appui court sur une action destructrice remplace
- * l etiquette par SURE?, un second appui court execute, une rotation ou un appui
- * long annule.
- */
-
-void test_a_changed_copy_asks_before_it_loads() {
+// La grande valeur ne prend plus le curseur : un appui court entre sur MODE.
+void test_the_cursor_never_reaches_the_big_value() {
     Rig r;
-    flexseq::ModulatedPatternState state;
-    r.engine.setModulatedPatterns(&state);
-    state.markDirty(0);
-
-    openPatternField(r);
-    r.ui.handle(UiController::EVENT_PRESS);
-
-    uint8_t action = 0;
-    uint8_t channel = 0;
-    TEST_ASSERT_FALSE_MESSAGE(r.ui.takePatternAction(action, channel),
-        "le premier appui court ne charge rien");
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(flexseq::PATTERN_ACTION_ASK,
-        r.ui.patternLabelCode(), "l etiquette demande confirmation");
-    TEST_ASSERT_TRUE_MESSAGE(r.ui.fieldOpen(), "et le champ reste ouvert");
-}
-
-void test_a_second_press_confirms_and_loads() {
-    Rig r;
-    flexseq::ModulatedPatternState state;
-    r.engine.setModulatedPatterns(&state);
-    state.markDirty(0);
-
-    openPatternField(r);
-    r.ui.handle(UiController::EVENT_PRESS);
-    r.ui.handle(UiController::EVENT_PRESS);
-
-    uint8_t action = 0;
-    uint8_t channel = 0;
-    TEST_ASSERT_TRUE_MESSAGE(r.ui.takePatternAction(action, channel),
-        "le second appui court execute");
-    TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_LOAD, action);
-    TEST_ASSERT_FALSE_MESSAGE(r.ui.fieldOpen(), "et le champ se ferme");
-}
-
-void test_a_rotation_cancels_the_question() {
-    Rig r;
-    flexseq::ModulatedPatternState state;
-    r.engine.setModulatedPatterns(&state);
-    state.markDirty(0);
-
-    openPatternField(r);
-    r.ui.handle(UiController::EVENT_PRESS);
-    TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_ASK, r.ui.patternLabelCode());
-
-    // ⚠️ LA ROTATION EST EN ARRIERE, ET C EST CE QUI DISCRIMINE. Vers l avant,
-    // l ecretage ramene la question sur SAVE qu elle soit annulee ou non : le
-    // test ne prouverait rien. En arriere, une question annulee part de LOAD et
-    // y reste, tandis qu une question laissee en place atterrit sur SAVE.
-    r.ui.handle(UiController::EVENT_ROTATE, -1);
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(flexseq::PATTERN_ACTION_LOAD,
-        r.ui.patternLabelCode(), "une rotation annule la question");
-
-    uint8_t action = 0;
-    uint8_t channel = 0;
-    r.ui.handle(UiController::EVENT_PRESS);
-    TEST_ASSERT_FALSE_MESSAGE(r.ui.takePatternAction(action, channel),
-        "et l appui qui suit ne charge pas : la question est repartie de zero");
-}
-
-void test_a_long_press_cancels_the_question() {
-    Rig r;
-    flexseq::ModulatedPatternState state;
-    r.engine.setModulatedPatterns(&state);
-    state.markDirty(0);
-
-    openPatternField(r);
-    r.ui.handle(UiController::EVENT_PRESS);
-    r.ui.handle(UiController::EVENT_LONG_PRESS);
-
-    uint8_t action = 0;
-    uint8_t channel = 0;
-    TEST_ASSERT_FALSE_MESSAGE(r.ui.takePatternAction(action, channel),
-        "un appui long annule sans charger");
-    TEST_ASSERT_FALSE(r.ui.fieldOpen());
-    TEST_ASSERT_NOT_EQUAL(flexseq::PATTERN_ACTION_ASK, r.ui.patternLabelCode());
-}
-
-// Une copie PROPRE ne pose aucune question : PRD 5.0 amendement 1bis.
-void test_a_clean_copy_is_never_asked() {
-    Rig r;
-    flexseq::ModulatedPatternState state;
-    r.engine.setModulatedPatterns(&state);
-
-    openPatternField(r);
-    r.ui.handle(UiController::EVENT_PRESS);
-
-    uint8_t action = 0;
-    uint8_t channel = 0;
-    TEST_ASSERT_TRUE_MESSAGE(r.ui.takePatternAction(action, channel),
-        "une copie propre charge sans question");
-    TEST_ASSERT_NOT_EQUAL(flexseq::PATTERN_ACTION_ASK, r.ui.patternLabelCode());
-}
-
-// Rouvrir le champ repart de LOAD, jamais d une question restee armee.
-void test_reopening_the_field_clears_the_question() {
-    Rig r;
-    flexseq::ModulatedPatternState state;
-    r.engine.setModulatedPatterns(&state);
-    state.markDirty(0);
-
-    openPatternField(r);
-    r.ui.handle(UiController::EVENT_PRESS);
-    TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_ASK, r.ui.patternLabelCode());
-    r.ui.handle(UiController::EVENT_LONG_PRESS);
-    r.ui.handle(UiController::EVENT_PRESS);
-    TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_LOAD, r.ui.patternLabelCode());
-}
-
-// Un appui court sur SAVE ne demande rien : l ecriture arrive au 5e.
-void test_validating_save_posts_no_demand_yet() {
-    Rig r;
-    flexseq::ModulatedPatternState state;
-    r.engine.setModulatedPatterns(&state);
-    state.markDirty(0);
-
-    openPatternField(r);
-    r.ui.handle(UiController::EVENT_ROTATE, 1);
-    TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_SAVE, r.ui.patternAction());
-    r.ui.handle(UiController::EVENT_PRESS);
-
-    uint8_t action = 0;
-    uint8_t channel = 0;
-    TEST_ASSERT_FALSE(r.ui.takePatternAction(action, channel));
+    r.gotoTab(UiController::TAB_FIRST_CHANNEL);
+    r.engine.setChannelMode(0, flexseq::MODE_SEQ);
+    r.enterTab();
+    for (uint8_t guard = 0; guard < 2 * UiController::SEQ_CHANNEL_TAB_FIELDS; ++guard) {
+        TEST_ASSERT_NOT_EQUAL_MESSAGE(UiController::FIELD_PATTERN, r.ui.field(),
+            "aucune position du curseur ne designe la grande valeur");
+        r.ui.handle(UiController::EVENT_ROTATE, 1);
+    }
 }
 
 int main(int, char**) {
     UNITY_BEGIN();
-    RUN_TEST(test_validating_load_posts_a_request);
+    RUN_TEST(test_a_clean_copy_moves_and_loads_on_one_detent);
+    RUN_TEST(test_a_changed_copy_eats_the_first_detent);
+    RUN_TEST(test_the_detent_after_the_question_moves_and_loads);
+    RUN_TEST(test_the_answer_follows_its_own_direction);
+    RUN_TEST(test_the_question_is_asked_once_per_change);
+    RUN_TEST(test_releasing_shift_does_not_cancel_the_question);
+    RUN_TEST(test_a_plain_rotation_cancels_the_question);
+    RUN_TEST(test_a_short_press_cancels_the_question);
+    RUN_TEST(test_a_long_press_cancels_the_question);
+    RUN_TEST(test_a_play_press_cancels_the_question);
+    RUN_TEST(test_an_engine_without_the_buffer_never_asks);
+    RUN_TEST(test_a_clock_channel_loads_nothing);
     RUN_TEST(test_a_demand_is_served_once);
     RUN_TEST(test_no_gesture_posts_no_demand);
-    RUN_TEST(test_a_changed_copy_asks_before_it_loads);
-    RUN_TEST(test_a_second_press_confirms_and_loads);
-    RUN_TEST(test_a_rotation_cancels_the_question);
-    RUN_TEST(test_a_long_press_cancels_the_question);
-    RUN_TEST(test_a_clean_copy_is_never_asked);
-    RUN_TEST(test_reopening_the_field_clears_the_question);
-    RUN_TEST(test_validating_save_posts_no_demand_yet);
-    RUN_TEST(test_a_clean_copy_offers_load_alone);
-    RUN_TEST(test_a_changed_copy_offers_save_as_well);
-    RUN_TEST(test_the_action_clamps_at_both_ends);
-    RUN_TEST(test_the_open_field_no_longer_names_the_template);
-    RUN_TEST(test_shift_rotate_still_names_the_template_while_the_field_is_open);
-    RUN_TEST(test_closing_the_field_runs_nothing);
-    RUN_TEST(test_opening_the_field_again_starts_on_load);
-    RUN_TEST(test_an_engine_without_the_buffer_offers_load_alone);
+    RUN_TEST(test_the_cursor_never_reaches_the_big_value);
     RUN_TEST(test_a_clock_tab_holds_the_three_lines_of_the_original);
     RUN_TEST(test_a_random_tab_puts_the_subdivision_on_the_second_line);
     RUN_TEST(test_a_seq_tab_takes_the_three_lines_of_the_original);
@@ -1782,8 +1704,8 @@ int main(int, char**) {
     RUN_TEST(test_the_slot_cursor_never_reaches_a_factory_template);
     RUN_TEST(test_the_slot_cursor_stops_on_the_last_template);
     RUN_TEST(test_the_controller_and_the_format_agree_on_the_frozen_count);
-    RUN_TEST(test_a_seq_channel_puts_the_big_value_first);
-    RUN_TEST(test_the_published_seq_indices_are_zero_to_three);
+    RUN_TEST(test_a_seq_channel_puts_mode_first);
+    RUN_TEST(test_the_published_seq_indices_are_zero_to_two);
     RUN_TEST(test_a_clock_channel_keeps_three_positions_and_mode_first);
     RUN_TEST(test_turning_a_channel_to_seq_puts_the_cursor_back_on_mode);
     RUN_TEST(test_turning_a_channel_back_to_clock_keeps_the_cursor_on_mode);

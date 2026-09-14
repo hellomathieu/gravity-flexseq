@@ -47,7 +47,7 @@ MainScreenModel mainScreenModelOf(const UiController& ui, const SequencerEngine&
     model.cv2Target = onChannel
         ? static_cast<uint8_t>(engine.getCvDestination(ch, CV_SOURCE_2))
         : static_cast<uint8_t>(CV_DEST_NONE);
-    model.patternAction = ui.patternLabelCode();
+    model.patternAsk = ui.patternAskPending();
     model.configPage = ui.isOnConfigPage();
     model.tempo = ui.tempo();
     model.clockSource = ui.clockSource();

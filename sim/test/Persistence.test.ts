@@ -1450,6 +1450,30 @@ describe("les defauts de la version 3 (B4b.6.5)", () => {
  * Lot 16E etape 5d — LOAD charge. Le controleur POSE la demande, ce service
  * l execute : ADR 0002 interdit au domaine de lire l EEPROM.
  */
+/*
+ * PRD 5.0 amendement 1ter — les six copies comptent comme CHANGEES a chaque
+ * demarrage. Le drapeau vit en RAM et aucun record de 11.1 ne le porte, donc une
+ * coupure laisse le module incapable de distinguer une copie editee d une copie
+ * propre.
+ *
+ * ⚠️ CE TEST MANQUAIT, et la passe de mutation l a dit : le C++ le portait, le
+ * TypeScript non, donc la valeur de demarrage n etait tenue que d un cote.
+ */
+describe("ModulatedPatternState — la valeur de demarrage du drapeau", () => {
+  it("les six canaux partent changes", () => {
+    const state = new ModulatedPatternState();
+    for (let ch = 0; ch < CHANNEL_COUNT; ++ch) {
+      expect(state.isDirty(ch)).toBe(true);
+    }
+  });
+
+  it("et rien au-dela des six", () => {
+    const state = new ModulatedPatternState();
+    expect(state.isDirty(CHANNEL_COUNT)).toBe(false);
+    expect(state.isDirty(-1)).toBe(false);
+  });
+});
+
 describe("servicePatternAction — LOAD charge, lot 16E etape 5d", () => {
   class BusyEeprom extends FakeEeprom {
     busyFlag = false;
@@ -1489,17 +1513,20 @@ describe("servicePatternAction — LOAD charge, lot 16E etape 5d", () => {
     return copy;
   }
 
-  // Ouvre la grande valeur du channel 0 et valide l action affichee.
-  function validateBigValue(r: ReturnType<typeof rigV3>): void {
+  // PRD 5.0 amendement 1ter : SHIFT plus une rotation nomme le template ET le
+  // charge. Le curseur ne stationne plus sur la grande valeur, donc le geste
+  // part de la barre d onglets.
+  //
+  // ⚠️ Le second cran n est PAS systematique : une copie changee mange le
+  // premier, et un rig sans ModulatedPatternState n a pas de copie changee du
+  // tout. Le helper lit donc la question au lieu de supposer le nombre de crans.
+  function loadByRotation(r: ReturnType<typeof rigV3>, target: number): void {
     r.engine.setChannelMode(0, ChannelMode.SEQ);
-    r.ui.handle(UiEvent.Press);
-    for (let guard = 0; guard < 4; guard += 1) {
-      if (r.ui.field === UiField.Pattern) break;
-      r.ui.handle(UiEvent.Rotate, 1);
-    }
-    expect(r.ui.field).toBe(UiField.Pattern);
-    r.ui.handle(UiEvent.Press);
-    r.ui.handle(UiEvent.Press);
+    r.engine.setSelectedPattern(0, target - 1);
+    r.ui.handle(UiEvent.ShiftRotate, 1);
+    if (r.ui.patternAskPending) r.ui.handle(UiEvent.ShiftRotate, 1);
+    expect(r.ui.patternAskPending).toBe(false);
+    expect(r.engine.getSelectedPattern(0)).toBe(target);
   }
 
   it("un LOAD valide copie le template dans le channel", () => {
@@ -1507,9 +1534,8 @@ describe("servicePatternAction — LOAD charge, lot 16E etape 5d", () => {
     const r = rigV3();
     const wanted = distinctContent(7);
     seedTemplate(ee, 11, wanted, 21);
-    r.engine.setSelectedPattern(0, 11);
 
-    validateBigValue(r);
+    loadByRotation(r, 11);
     servicePatternAction(ee, r.image, r.engine, r.ui);
 
     expect(sameContent(wanted, r.engine.instanceForChannel(0)!)).toBe(true);
@@ -1532,9 +1558,8 @@ describe("servicePatternAction — LOAD charge, lot 16E etape 5d", () => {
     const r = rigV3();
     const first = distinctContent(7);
     seedTemplate(ee, 11, first, 21);
-    r.engine.setSelectedPattern(0, 11);
 
-    validateBigValue(r);
+    loadByRotation(r, 11);
     servicePatternAction(ee, r.image, r.engine, r.ui);
     expect(sameContent(first, r.engine.instanceForChannel(0)!)).toBe(true);
 
@@ -1550,9 +1575,8 @@ describe("servicePatternAction — LOAD charge, lot 16E etape 5d", () => {
     const r = rigV3();
     const wanted = distinctContent(2);
     seedTemplate(ee, 3, wanted, 18);
-    r.engine.setSelectedPattern(0, 3);
 
-    validateBigValue(r);
+    loadByRotation(r, 3);
     servicePatternAction(ee, r.image, r.engine, r.ui);
     expect(sameContent(wanted, r.engine.instanceForChannel(0)!)).toBe(true);
   });
@@ -1562,10 +1586,9 @@ describe("servicePatternAction — LOAD charge, lot 16E etape 5d", () => {
     const r = rigV3();
     const wanted = distinctContent(4);
     seedTemplate(ee, 12, wanted, 19);
-    r.engine.setSelectedPattern(0, 12);
     const before = snapshot(r.engine.instanceForChannel(0)!);
 
-    validateBigValue(r);
+    loadByRotation(r, 12);
     ee.busyFlag = true;
     servicePatternAction(ee, r.image, r.engine, r.ui);
     expect(sameContent(before, r.engine.instanceForChannel(0)!)).toBe(true);
@@ -1581,9 +1604,8 @@ describe("servicePatternAction — LOAD charge, lot 16E etape 5d", () => {
     const state = new ModulatedPatternState();
     r.engine.setModulatedPatterns(state);
     seedTemplate(ee, 11, distinctContent(7), 21);
-    r.engine.setSelectedPattern(0, 11);
 
-    validateBigValue(r);
+    loadByRotation(r, 11);
     servicePatternAction(ee, r.image, r.engine, r.ui);
     expect(state.isDirty(0)).toBe(false);
   });

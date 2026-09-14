@@ -93,7 +93,7 @@ UiController::UiController(SequencerEngine& engine, Transport& transport)
       onHeader_(false),
       onConfigPage_(false),
       fieldOpen_(false),
-      patternAction_(PATTERN_ACTION_LOAD),
+      patternAsk_(false),
       pendingAction_(PATTERN_ACTION_NONE),
       pendingChannel_(0),
       tempo_(DEFAULT_TEMPO),
@@ -133,10 +133,6 @@ bool UiController::channelCopyHasChanged() const {
     return modulated->isDirty(static_cast<uint8_t>(channel));
 }
 
-uint8_t UiController::patternActionCount() const {
-    return channelCopyHasChanged() ? PATTERN_ACTION_COUNT : 1;
-}
-
 bool UiController::takePatternAction(uint8_t& action, uint8_t& channel) {
     if (pendingAction_ == PATTERN_ACTION_NONE) {
         return false;
@@ -147,29 +143,26 @@ bool UiController::takePatternAction(uint8_t& action, uint8_t& channel) {
     return true;
 }
 
-// Un appui court dans le champ de la grande valeur. Rend true quand le champ
-// doit RESTER ouvert, ce qui n arrive que lorsque la question vient de s armer.
+// PRD 5.0 amendement 1ter : SHIFT plus une rotation nomme le template ET le
+// charge. Une copie propre charge tout de suite. Une copie modifiee mange son
+// premier cran : le numero ne bouge pas, l etiquette devient SURE, et le cran
+// suivant avance dans SON sens puis charge.
 //
-// PRD 5.0 amendement 1bis : une copie propre charge sans question ; une copie
-// modifiee voit son etiquette devenir SURE?, et c est le second appui court qui
-// execute. ⚠️ L ecriture appartient au lot 5e, hors perimetre : SAVE ne pose
-// aucune demande.
-bool UiController::pressInPatternField() {
-    if (patternAction_ == PATTERN_ACTION_ASK) {
-        patternAction_ = PATTERN_ACTION_LOAD;
-    } else if (patternAction_ != PATTERN_ACTION_LOAD) {
-        return false;
-    } else if (channelCopyHasChanged()) {
-        patternAction_ = PATTERN_ACTION_ASK;
-        return true;
+// Le numero ne bouge JAMAIS tant que la question est posee, donc l ecran nomme
+// toujours le template que le canal joue.
+void UiController::rotatePatternSlot(int8_t delta) {
+    if (!patternAsk_ && channelCopyHasChanged()) {
+        patternAsk_ = true;
+        return;
     }
+    patternAsk_ = false;
     const int8_t channel = selectedChannel();
     if (channel < 0) {
-        return false;
+        return;
     }
+    adjustFieldValue(FIELD_PATTERN, delta);
     pendingAction_ = PATTERN_ACTION_LOAD;
     pendingChannel_ = static_cast<uint8_t>(channel);
-    return false;
 }
 
 uint8_t UiController::fieldCount() const {
@@ -220,7 +213,6 @@ UiController::Field UiController::fieldAt(uint8_t index) const {
         }
     }
     switch (index) {
-        case SEQ_FIELD_INDEX_PATTERN: return FIELD_PATTERN;
         case SEQ_FIELD_INDEX_MODE: return FIELD_MODE;
         case SEQ_FIELD_INDEX_EDIT_ENTRY: return FIELD_EDIT_ENTRY;
         default: return FIELD_CONFIG;
@@ -244,6 +236,21 @@ Pattern* UiController::currentPattern() const {
 
 void UiController::handle(Event event, int8_t delta) {
     ++revision_;
+    // PRD 5.0 amendement 1ter : seul le geste qui pose la question y repond.
+    // Le garde vit ICI, et non dans chaque branche : trois sites finiraient par
+    // diverger, et une question resterait posee sur un ecran qui ne la montre
+    // plus.
+    //
+    // ⚠️ LES DEUX EVENEMENTS DE SHIFT SONT EXCLUS, et la sonde de gestes a
+    // trouve pourquoi. `onShiftPress()` part a CHAQUE relachement de SHIFT, et
+    // la rotation ne le supprime pas — seul l appui long l est. Le relachement
+    // fait donc partie du geste, et il annulait la question a chaque cran :
+    // aucun cran ne confirmait jamais. Les deux evenements ne changent rien
+    // dans ce controleur, donc ils ne doivent rien annuler.
+    if (event != EVENT_SHIFT_ROTATE && event != EVENT_SHIFT_PRESS
+        && event != EVENT_SHIFT_PLAY_PRESS) {
+        patternAsk_ = false;
+    }
     if (event == EVENT_PLAY_PRESS) {
         togglePlay();
         return;
@@ -266,7 +273,11 @@ void UiController::handleTabBar(Event event, int8_t delta) {
             fieldOpen_ = false;
             break;
         case EVENT_SHIFT_ROTATE:
-            adjustFieldValue(mainField(), delta);
+            if (mainField() == FIELD_PATTERN) {
+                rotatePatternSlot(delta);
+            } else {
+                adjustFieldValue(mainField(), delta);
+            }
             break;
         case EVENT_PRESS:
             if (fieldCount() > 0) {
@@ -283,15 +294,7 @@ void UiController::handleTabBar(Event event, int8_t delta) {
 void UiController::handleTab(Event event, int8_t delta) {
     switch (event) {
         case EVENT_ROTATE:
-            if (fieldOpen_ && field() == FIELD_PATTERN) {
-                // Le champ ouvert choisit une ACTION. Le NUMERO du template se
-                // nomme par SHIFT plus rotation, et ce geste ne change pas.
-                if (patternAction_ == PATTERN_ACTION_ASK) {
-                    patternAction_ = PATTERN_ACTION_LOAD;
-                }
-                patternAction_ = clampIndex(patternAction_, oneStep(delta),
-                                            patternActionCount());
-            } else if (fieldOpen_) {
+            if (fieldOpen_) {
                 adjustField(delta);
             } else {
                 cursor_ = wrapIndex(cursor_, oneStep(delta), fieldCount());
@@ -302,9 +305,6 @@ void UiController::handleTab(Event event, int8_t delta) {
             break;
         case EVENT_PRESS:
             if (fieldOpen_) {
-                if (field() == FIELD_PATTERN && pressInPatternField()) {
-                    break;
-                }
                 fieldOpen_ = false;
             } else if (field() == FIELD_EDIT_ENTRY) {
                 level_ = LEVEL_EDIT;
@@ -315,14 +315,10 @@ void UiController::handleTab(Event event, int8_t delta) {
                 cursor_ = CONFIG_FIELD_INDEX_LENGTH;
             } else if (field() != FIELD_NONE) {
                 fieldOpen_ = true;
-                patternAction_ = PATTERN_ACTION_LOAD;
             }
             break;
         case EVENT_LONG_PRESS:
             if (fieldOpen_) {
-                if (patternAction_ == PATTERN_ACTION_ASK) {
-                    patternAction_ = PATTERN_ACTION_LOAD;
-                }
                 fieldOpen_ = false;
             } else if (onConfigPage_) {
                 onConfigPage_ = false;
@@ -489,12 +485,12 @@ void UiController::adjustFieldValue(Field target, int8_t raw) {
                 static_cast<uint8_t>(engine_.getChannelMode(ch)), delta,
                 CHANNEL_MODE_COUNT);
             engine_.setChannelMode(ch, static_cast<ChannelMode>(next));
-            // ⚠️ La position 0 change de sens avec le mode : elle porte MODE
-            // hors SEQ et la grande valeur en SEQ. Sans ce recalage le curseur
-            // resterait immobile pendant que le champ sous lui changerait, et un
-            // appui court ouvrirait LOAD au lieu de MODE. C est le seul endroit
-            // du firmware ou un geste deplace ce que le curseur designe.
-            cursor_ = isLegacyModeTab() ? 0 : SEQ_FIELD_INDEX_MODE;
+            // ⚠️ AUCUN RECALAGE DU CURSEUR ICI, et c est une propriete, pas un
+            // oubli. Le mode ne change que par le champ sous le curseur —
+            // mainField() ne nomme jamais MODE — donc le curseur est DEJA sur
+            // MODE, qui est la position 0 dans les trois modes. PRD 5.0
+            // amendement 1ter porte la preuve, et la sonde de mutation l a
+            // etablie : deux mutants de la ligne retiree etaient equivalents.
             break;
         }
         case FIELD_MOD: {

@@ -620,6 +620,11 @@ export class PersistentImageV3 implements ScannedImage {
     return v3TemplateByte(instance, this.engine.getBaseLength(channel), offset);
   }
 
+  // Miroir de `clearChannelChangeFlag` du C++ — `include/flexseq/Persistence.h`.
+  private clearChannelChangeFlag(channel: number): void {
+    this.engine.modulatedPatterns()?.clearDirty(channel);
+  }
+
   saveTemplate(storage: Storage, channel: number, index: number): boolean {
     if (!Number.isInteger(index)) return false;
     if (index < V3_FROZEN_TEMPLATE_COUNT || index >= V3_TEMPLATE_COUNT) return false;
@@ -629,6 +634,8 @@ export class PersistentImageV3 implements ScannedImage {
     for (let offset = 0; offset < V3_TEMPLATE_RECORD; ++offset) {
       storage.write(v3TemplateAddress(index, offset), v3TemplateByte(instance, length, offset));
     }
+    // Le canal adopte l emplacement, PRD 12.9 point 6.
+    this.clearChannelChangeFlag(channel);
     return true;
   }
 
@@ -645,6 +652,8 @@ export class PersistentImageV3 implements ScannedImage {
       storage.read(v3TemplateAddress(index, V3_RECORD_LENGTH_AT)),
     );
     this.engine.setSelectedPattern(channel, index);
+    // La copie est de nouveau le template : PRD 5.0 amendement 1ter.
+    this.clearChannelChangeFlag(channel);
     return true;
   }
 

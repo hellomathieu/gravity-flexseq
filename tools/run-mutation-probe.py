@@ -233,7 +233,7 @@ MUTANTS = [
      "ts-main-screen"),
     ("ts: the three lines of the original are kept for the clock tab only",
      "sim/src/sim/MainScreenPixels.ts",
-     "  const legacy = (model.tab >= TAB_FIRST_CHANNEL && model.tab <= TAB_LAST_CHANNEL)\n    || model.tab === TAB_PATTERNS;",
+     "  const legacy = isChannelTab(model)\n    || model.tab === TAB_PATTERNS;",
      "  const legacy = model.tab === 0;",
      "ts-main-screen"),
     ("cpp: the screen model derives the main field instead of carrying it",
@@ -761,7 +761,13 @@ MUTANTS = [
      "        case MODE_CLOCK:  return FIELD_PATTERN;", "cpp-ui"),
     ("cpp: SHIFT plus a rotation does nothing on the tab bar again",
      "src/domain/UiController.cpp",
-     "        case EVENT_SHIFT_ROTATE:\n            adjustFieldValue(mainField(), delta);\n            break;\n",
+     "        case EVENT_SHIFT_ROTATE:\n"
+     "            if (mainField() == FIELD_PATTERN) {\n"
+     "                rotatePatternSlot(delta);\n"
+     "            } else {\n"
+     "                adjustFieldValue(mainField(), delta);\n"
+     "            }\n"
+     "            break;\n",
      "", "cpp-ui"),
     ("cpp: the ratchet no longer needs an active step",
      "src/domain/UiController.cpp",
@@ -782,7 +788,14 @@ MUTANTS = [
      "      case ChannelMode.CLOCK:\n        return UiField.Pattern;", "ts-ui"),
     ("ts: SHIFT plus a rotation does nothing on the tab bar again",
      "sim/src/domain/UiController.ts",
-     "    if (event === UiEvent.ShiftRotate) {\n      this.adjustFieldValue(this.mainField, delta);\n      return;\n    }\n",
+     "    if (event === UiEvent.ShiftRotate) {\n"
+     "      if (this.mainField === UiField.Pattern) {\n"
+     "        this.rotatePatternSlot(delta);\n"
+     "      } else {\n"
+     "        this.adjustFieldValue(this.mainField, delta);\n"
+     "      }\n"
+     "      return;\n"
+     "    }\n",
      "", "ts-ui"),
     ("ts: the ratchet no longer needs an active step",
      "sim/src/domain/UiController.ts",
@@ -1751,209 +1764,152 @@ MUTANTS = [
      "include/flexseq/SequencerEngine.h",
      "        return editorTemplate == NO_EDITOR || channel == EDITOR_CHANNEL;",
      "        return true;", "cpp"),
-    # Lot 16E etape 5a : la grande valeur, premiere position du curseur.
-    ("cpp: the big value is not the first cursor position",
+    # PRD 5.0 amendement 1ter : SHIFT plus une rotation charge le pattern, et le
+    # champ d action a quitte l onglet de canal.
+    ("cpp: the rotation names the template without loading it",
      "src/domain/UiController.cpp",
-     "        case SEQ_FIELD_INDEX_PATTERN: return FIELD_PATTERN;\n",
-     "",
+     "    pendingAction_ = PATTERN_ACTION_LOAD;\n"
+     "    pendingChannel_ = static_cast<uint8_t>(channel);\n}",
+     "}",
      "cpp-ui"),
-    ("ts: the big value is not the first cursor position",
+    ("ts: the rotation names the template without loading it",
      "sim/src/domain/UiController.ts",
-     "      case SEQ_FIELD_INDEX_PATTERN:\n        return UiField.Pattern;\n",
-     "",
-     "ts-ui"),
-    ("cpp: a change of mode leaves the cursor where it was",
-     "src/domain/UiController.cpp",
-     "            cursor_ = isLegacyModeTab() ? 0 : SEQ_FIELD_INDEX_MODE;\n",
-     "",
-     "cpp-ui"),
-    ("ts: a change of mode leaves the cursor where it was",
-     "sim/src/domain/UiController.ts",
-     "        this.fieldCursor = this.isLegacyModeTab ? 0 : SEQ_FIELD_INDEX_MODE;\n",
-     "",
-     "ts-ui"),
-    ("cpp: the cursor on the big value is invisible",
-     "include/flexseq/MainScreen.h",
-     "        if (bigValueTakesCursor(model) && model.insideTab && model.cursor == 0) {",
-     "        if (false) {",
-     "cpp-main-screen"),
-    ("ts: the cursor on the big value is invisible",
-     "sim/src/sim/MainScreenPixels.ts",
-     "  if (bigValueTakesCursor(model) && model.insideTab && model.cursor === 0) {",
-     "  if (false) {",
-     "ts-main-screen"),
-    # Lot 16E etape 5a-bis : la surbrillance suit le CHAMP, pas le numero de
-    # ligne. Le premier mutant reproduit le defaut trouve le 2026-09-14 : les
-    # trois lignes decalees d un rang, et deux surbrillances a la fois.
-    ("cpp: the three lines do not follow the big value",
-     "include/flexseq/MainScreen.h",
-     "    return static_cast<uint8_t>(line + (bigValueTakesCursor(model) ? 1 : 0));",
-     "    return line;",
-     "cpp-main-screen"),
-    ("ts: the three lines do not follow the big value",
-     "sim/src/sim/MainScreenPixels.ts",
-     "  return line + (bigValueTakesCursor(model) ? 1 : 0);",
-     "  return line;",
-     "ts-main-screen"),
-    ("cpp: a channel outside SEQ shifts its lines too",
-     "include/flexseq/MainScreen.h",
-     "    return isChannelTab(model) && !model.configPage\n"
-     "        && model.mode == static_cast<uint8_t>(MODE_SEQ);",
-     "    return true;",
-     "cpp-main-screen"),
-    ("ts: a channel outside SEQ shifts its lines too",
-     "sim/src/sim/MainScreenPixels.ts",
-     "  return model.tab >= TAB_FIRST_CHANNEL && model.tab <= TAB_LAST_CHANNEL\n"
-     "    && !model.configPage && model.mode === ChannelMode.SEQ;",
-     "  return true;",
-     "ts-main-screen"),
-    # Lot 16E etape 5c : le champ de la grande valeur nomme une action.
-    ("cpp: SAVE appears on a clean copy",
-     "src/domain/UiController.cpp",
-     "    return channelCopyHasChanged() ? PATTERN_ACTION_COUNT : 1;",
-     "    return PATTERN_ACTION_COUNT;",
-     "cpp-ui"),
-    ("ts: SAVE appears on a clean copy",
-     "sim/src/domain/UiController.ts",
-     "    return this.channelCopyHasChanged() ? PATTERN_ACTION_COUNT : 1;",
-     "    return PATTERN_ACTION_COUNT;",
-     "ts-ui"),
-    ("cpp: the open field still names the template",
-     "src/domain/UiController.cpp",
-     "            if (fieldOpen_ && field() == FIELD_PATTERN) {",
-     "            if (false) {",
-     "cpp-ui"),
-    ("ts: the open field still names the template",
-     "sim/src/domain/UiController.ts",
-     "        if (this.open && this.field === UiField.Pattern) {",
-     "        if (false) {",
-     "ts-ui"),
-    ("cpp: the field does not open on LOAD",
-     "src/domain/UiController.cpp",
-     "                fieldOpen_ = true;\n"
-     "                patternAction_ = PATTERN_ACTION_LOAD;",
-     "                fieldOpen_ = true;",
-     "cpp-ui"),
-    ("ts: the field does not open on LOAD",
-     "sim/src/domain/UiController.ts",
-     "          this.open = true;\n          this.action = PatternAction.Load;",
-     "          this.open = true;",
-     "ts-ui"),
-    ("cpp: the open field keeps naming the parameter",
-     "include/flexseq/MainScreen.h",
-     "        if (patternActionIsOpen(model)) {\n"
-     "            if (model.patternAction == PATTERN_ACTION_ASK) {\n"
-     "                return LBL_SURE;\n"
-     "            }\n"
-     "            return model.patternAction == PATTERN_ACTION_SAVE\n"
-     "                ? LBL_SAVE : LBL_LOAD;\n"
-     "        }\n",
-     "",
-     "cpp-main-screen"),
-    ("ts: the open field keeps naming the parameter",
-     "sim/src/sim/MainScreenPixels.ts",
-     "    if (patternActionIsOpen(model)) {\n"
-     "      if (model.patternAction === PatternAction.Ask) return LBL_SURE;\n"
-     "      return model.patternAction === PatternAction.Save ? LBL_SAVE : LBL_LOAD;\n"
-     "    }\n",
-     "",
-     "ts-main-screen"),
-    ("cpp: the screen never names the question",
-     "include/flexseq/MainScreen.h",
-     "            if (model.patternAction == PATTERN_ACTION_ASK) {\n"
-     "                return LBL_SURE;\n"
-     "            }\n",
-     "",
-     "cpp-main-screen"),
-    ("ts: the screen never names the question",
-     "sim/src/sim/MainScreenPixels.ts",
-     "      if (model.patternAction === PatternAction.Ask) return LBL_SURE;\n",
-     "",
-     "ts-main-screen"),
-    # Lot 16E etape 5d : LOAD charge, par une demande qu un service consomme.
-    ("cpp: validating the action posts no demand",
-     "src/domain/UiController.cpp",
-     "                if (field() == FIELD_PATTERN && pressInPatternField()) {\n"
-     "                    break;\n"
-     "                }\n",
-     "",
-     "cpp-ui"),
-    ("ts: validating the action posts no demand",
-     "sim/src/domain/UiController.ts",
-     "          if (this.field === UiField.Pattern && this.pressInPatternField()) break;\n",
-     "",
-     "ts-ui"),
-    ("cpp: the demand is never consumed",
-     "src/domain/UiController.cpp",
-     "    pendingAction_ = PATTERN_ACTION_NONE;\n    return true;",
-     "    return true;",
-     "cpp-ui"),
-    ("ts: the demand is never consumed",
-     "sim/src/domain/UiController.ts",
-     "    this.pending = PatternAction.None;\n    return taken;",
-     "    return taken;",
+     "    this.pending = PatternAction.Load;\n    this.pendingChannel = channel;\n  }",
+     "  }",
      "ts-ui"),
     ("cpp: a changed copy loads without asking",
      "src/domain/UiController.cpp",
-     "    } else if (channelCopyHasChanged()) {\n"
-     "        patternAction_ = PATTERN_ACTION_ASK;\n"
-     "        return true;\n",
+     "    if (!patternAsk_ && channelCopyHasChanged()) {\n"
+     "        patternAsk_ = true;\n"
+     "        return;\n"
+     "    }\n",
      "",
      "cpp-ui"),
     ("ts: a changed copy loads without asking",
      "sim/src/domain/UiController.ts",
-     "    } else if (this.channelCopyHasChanged()) {\n"
-     "      this.action = PatternAction.Ask;\n"
-     "      return true;\n",
+     "    if (!this.ask && this.channelCopyHasChanged()) {\n"
+     "      this.ask = true;\n"
+     "      return;\n"
+     "    }\n",
      "",
      "ts-ui"),
-    # Lot 16E etape 5f : la confirmation, et les deux gestes qui l annulent.
-    ("cpp: the second press never runs the action",
+    # ⚠️ Le cran de la question ne doit RIEN faire d autre que poser la question.
+    # Sans le retour, il poserait la question ET chargerait.
+    ("cpp: the question does not eat its detent",
      "src/domain/UiController.cpp",
-     "    if (patternAction_ == PATTERN_ACTION_ASK) {\n"
-     "        patternAction_ = PATTERN_ACTION_LOAD;\n"
-     "    } else if (patternAction_ != PATTERN_ACTION_LOAD) {",
-     "    if (patternAction_ == PATTERN_ACTION_ASK) {\n"
-     "        return true;\n"
-     "    } else if (patternAction_ != PATTERN_ACTION_LOAD) {",
+     "        patternAsk_ = true;\n        return;",
+     "        patternAsk_ = true;",
      "cpp-ui"),
-    ("ts: the second press never runs the action",
+    ("ts: the question does not eat its detent",
      "sim/src/domain/UiController.ts",
-     "    if (this.action === PatternAction.Ask) {\n"
-     "      this.action = PatternAction.Load;\n"
-     "    } else if (this.action !== PatternAction.Load) {",
-     "    if (this.action === PatternAction.Ask) {\n"
-     "      return true;\n"
-     "    } else if (this.action !== PatternAction.Load) {",
+     "      this.ask = true;\n      return;",
+     "      this.ask = true;",
      "ts-ui"),
-    ("cpp: a rotation does not cancel the question",
+    ("cpp: nothing cancels the question",
      "src/domain/UiController.cpp",
-     "                if (patternAction_ == PATTERN_ACTION_ASK) {\n"
-     "                    patternAction_ = PATTERN_ACTION_LOAD;\n"
-     "                }\n"
-     "                patternAction_ = clampIndex(",
-     "                patternAction_ = clampIndex(",
+     "    if (event != EVENT_SHIFT_ROTATE && event != EVENT_SHIFT_PRESS\n"
+     "        && event != EVENT_SHIFT_PLAY_PRESS) {\n"
+     "        patternAsk_ = false;\n    }\n",
+     "",
      "cpp-ui"),
-    ("ts: a rotation does not cancel the question",
+    ("ts: nothing cancels the question",
      "sim/src/domain/UiController.ts",
-     "          if (this.action === PatternAction.Ask) this.action = PatternAction.Load;\n"
-     "          this.action = clampIndex(",
-     "          this.action = clampIndex(",
+     "    if (event !== UiEvent.ShiftRotate && event !== UiEvent.ShiftPress\n"
+     "        && event !== UiEvent.ShiftPlayPress) {\n      this.ask = false;\n    }\n",
+     "",
      "ts-ui"),
-    ("cpp: a long press does not cancel the question",
+    # ⚠️ LE MUTANT QUI REPRODUIT LE DEFAUT TROUVE SUR LES BROCHES : le
+    # relachement de SHIFT annule la question, donc aucun cran ne confirme.
+    ("cpp: releasing SHIFT cancels the question",
      "src/domain/UiController.cpp",
-     "                if (patternAction_ == PATTERN_ACTION_ASK) {\n"
-     "                    patternAction_ = PATTERN_ACTION_LOAD;\n"
-     "                }\n"
-     "                fieldOpen_ = false;",
-     "                fieldOpen_ = false;",
+     "    if (event != EVENT_SHIFT_ROTATE && event != EVENT_SHIFT_PRESS\n"
+     "        && event != EVENT_SHIFT_PLAY_PRESS) {",
+     "    if (event != EVENT_SHIFT_ROTATE) {",
      "cpp-ui"),
-    ("ts: a long press does not cancel the question",
+    ("ts: releasing SHIFT cancels the question",
      "sim/src/domain/UiController.ts",
-     "          if (this.action === PatternAction.Ask) this.action = PatternAction.Load;\n"
-     "          this.open = false;",
-     "          this.open = false;",
+     "    if (event !== UiEvent.ShiftRotate && event !== UiEvent.ShiftPress\n"
+     "        && event !== UiEvent.ShiftPlayPress) {",
+     "    if (event !== UiEvent.ShiftRotate) {",
      "ts-ui"),
+    ("cpp: the gesture loads outside SEQ too",
+     "src/domain/UiController.cpp",
+     "            if (mainField() == FIELD_PATTERN) {",
+     "            if (true) {",
+     "cpp-ui"),
+    ("ts: the gesture loads outside SEQ too",
+     "sim/src/domain/UiController.ts",
+     "      if (this.mainField === UiField.Pattern) {",
+     "      if (true) {",
+     "ts-ui"),
+    # ⚠️ LES DEUX MUTANTS DU RECALAGE DU CURSEUR SONT RETIRES, et ils etaient
+    # EQUIVALENTS. Le mode ne change que par le champ sous le curseur, et
+    # mainField() ne nomme jamais MODE : le curseur est donc deja sur MODE, qui
+    # est la position 0 dans les trois modes. La ligne ecrivait la valeur qu elle
+    # lisait. La passe complete du 2026-09-14 les a vus survivre, et c est elle
+    # qui a etabli la preuve. PRD 5.0 amendement 1ter la porte.
+    # La grande valeur a rendu sa position : un onglet en SEQ porte TROIS champs.
+    ("cpp: a seq tab takes back a fourth cursor position",
+     "include/flexseq/UiController.h",
+     "    static constexpr uint8_t SEQ_CHANNEL_TAB_FIELDS = 3;",
+     "    static constexpr uint8_t SEQ_CHANNEL_TAB_FIELDS = 4;",
+     "cpp-ui"),
+    ("ts: a seq tab takes back a fourth cursor position",
+     "sim/src/domain/UiController.ts",
+     "export const SEQ_CHANNEL_TAB_FIELDS = 3;",
+     "export const SEQ_CHANNEL_TAB_FIELDS = 4;",
+     "ts-ui"),
+    ("cpp: the screen never names the question",
+     "include/flexseq/MainScreen.h",
+     "        if (model.patternAsk && !model.configPage && isChannelTab(model)) {\n"
+     "            return LBL_SURE;\n"
+     "        }\n",
+     "",
+     "cpp-main-screen"),
+    ("ts: the screen never names the question",
+     "sim/src/sim/MainScreenPixels.ts",
+     "    if (model.patternAsk && !model.configPage && isChannelTab(model)) return LBL_SURE;\n",
+     "",
+     "ts-main-screen"),
+    # ⚠️ Les deux gardes sont mutes SEPAREMENT : c est le miroir TypeScript qui a
+    # trouve le defaut de l onglet PATTERNS, un garde manquant a la premiere
+    # redaction de 1ter.
+    ("cpp: the question shows on the patterns tab",
+     "include/flexseq/MainScreen.h",
+     "        if (model.patternAsk && !model.configPage && isChannelTab(model)) {",
+     "        if (model.patternAsk && !model.configPage) {",
+     "cpp-main-screen"),
+    ("ts: the question shows on the patterns tab",
+     "sim/src/sim/MainScreenPixels.ts",
+     "    if (model.patternAsk && !model.configPage && isChannelTab(model)) return LBL_SURE;",
+     "    if (model.patternAsk && isChannelTab(model)) return LBL_SURE;",
+     "ts-main-screen"),
+    # Les six copies partent CHANGEES : le drapeau vit en RAM, donc une coupure
+    # efface ce que le module savait.
+    ("cpp: the six copies start clean at boot",
+     "include/flexseq/SequencerEngine.h",
+     "          dirty(ALL_CHANNELS_DIRTY) {",
+     "          dirty(0) {",
+     "cpp"),
+    ("ts: the six copies start clean at boot",
+     "sim/src/domain/ModulatedPatternState.ts",
+     "  private dirty = ALL_CHANNELS_DIRTY;",
+     "  private dirty = 0;",
+     "ts"),
+    # ⚠️ Ce mutant existait en C++ et PAS en TypeScript, et le miroir ne faisait
+    # rien : la valeur de demarrage a revele le trou.
+    ("cpp: a load no longer clears the change flag",
+     "include/flexseq/Persistence.h",
+     "        // La copie est de nouveau le template : PRD 5.0 amendement 1bis.\n"
+     "        clearChannelChangeFlag(channel);\n",
+     "",
+     "cpp"),
+    ("ts: a load no longer clears the change flag",
+     "sim/src/domain/Persistence.ts",
+     "    // La copie est de nouveau le template : PRD 5.0 amendement 1ter.\n"
+     "    this.clearChannelChangeFlag(channel);\n",
+     "",
+     "ts"),
     ("cpp: a busy storage loses the demand",
      "include/flexseq/Persistence.h",
      "    if (storage.busy()) {\n        return;\n    }\n"
