@@ -144,6 +144,7 @@ Each row below carries the original's line, so the reading can be checked.
 | Mode change | **clears** both CV targets (`Interactions.ino:249-250`) | the routing survives | **assumed divergence**, PRD §10 validated |
 | Saving | `saveState()` on **every** change | after a 3 s quiet delay | **assumed divergence**, PRD §11.1, with its reason |
 | Fonts | two: `stkL` for the main value, `velvetscreen` for the rest | the same two, byte for byte, since 2026-09-04 | **conform** — lot 11. u8g2's own font left the production image; `env:bringup` keeps it |
+| Character set of `velvetscreen` | the space, `%`, the two parentheses, `+`, `,`, `-`, `.`, `/`, the ten digits, `:`, the 26 capitals, and `p`, `q`, `r`, `t`, `w`, `x` | the same set, byte for byte | **conform**, and it CONSTRAINS what the screen can write. ⚠️ **There is NO question mark**, and no lower case beyond those six letters. Established 2026-09-14 by reading the decoded atlas, after the panel drew `SURE` followed by a blank where `SURE?` was asked. A label that uses an absent character draws nothing and still takes its advance, so the word looks right in the source and wrong on the module. **Read this row before you write a new label**; PRD §5.0 amendment 1bis carries the decision that followed |
 
 ## The six decisions — ANSWERED by the owner, 2026-08-23
 
