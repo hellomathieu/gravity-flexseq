@@ -1019,18 +1019,36 @@ static void backToBar(avr_t* avr)
 // PRD 12.1. Le champ MODE ecrete sur CHANNEL_MODE_COUNT, donc tourner de ce
 // nombre de crans depuis n'importe quel mode arrive sur SEQ, et le geste est
 // idempotent sur un canal deja en SEQ.
+// Le nombre de crans qu il peut falloir pour atteindre MODE depuis l entree
+// dans un onglet : quatre positions au plus, donc trois crans suffisent.
+static constexpr int CURSOR_SEARCH_LIMIT = 4;
+
+// ⚠️ LA POSITION 0 NE DESIGNE PLUS TOUJOURS MODE. Depuis le lot 16E etape 5a,
+// elle porte MODE hors SEQ et la GRANDE VALEUR en SEQ. Un harnais qui presse
+// deux fois a l aveugle ouvre donc la grande valeur sur un canal deja en SEQ,
+// la rotation y choisit une ACTION au lieu de deplacer le curseur, et l appui
+// suivant EXECUTE un chargement qui efface la copie du canal.
+//
+// Le harnais ne suppose plus : il TOURNE JUSQU A ce que la ligne surlignee soit
+// celle de MODE, qui est la ligne 0 dans les deux dispositions.
 static void setChannelModeToSeq(avr_t* avr, int tab)
 {
     backToBar(avr);
     alignTab(avr, tab);
     const uint32_t avant = screenSignature();
     pressFor(avr, (double)PRESS_MS);
+    int crans = 0;
+    while (highlightedLine() != 0 && crans < CURSOR_SEARCH_LIMIT) {
+        rotate(avr, 1, 1);
+        ++crans;
+    }
+    const int ligne = highlightedLine();
     pressFor(avr, (double)PRESS_MS);
     rotate(avr, (int)flexseq::CHANNEL_MODE_COUNT, 1);
     pressFor(avr, (double)PRESS_MS);
     backToBar(avr);
-    printf("mode_seq           onglet %d signature %08x %08x\n",
-           tab, avant, screenSignature());
+    printf("mode_seq           onglet %d signature %08x %08x crans %d ligne %d\n",
+           tab, avant, screenSignature(), crans, ligne);
 }
 
 static void gotoConfigField(avr_t* avr, uint8_t index)
