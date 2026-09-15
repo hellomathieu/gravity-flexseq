@@ -165,6 +165,15 @@ void setup() {
     // jamais, et env:wokwi qui rend EDIT n'instancie pas de TriggerSequencer.
     // On entre donc dans EDIT par les GESTES publics, sans rien exposer de plus
     // dans le domaine. L'onglet par defaut est deja un channel.
+    //
+    // ⚠️ LE CANAL PASSE EN SEQ D'ABORD, et sans cela le drapeau ne mesure RIEN.
+    // EDIT n'existe que sur un canal en SEQ — decision du proprietaire du
+    // 2026-09-05 — et le mode d'usine est CLOCK. La navigation ci-dessous ne
+    // trouvait donc jamais FIELD_EDIT_ENTRY : le firmware restait sur l'ecran
+    // principal, qui ne redessine presque jamais, et la sonde rendait zero
+    // echantillon. Le mode se pose ici plutot que par un geste, parce qu'un
+    // diagnostic n'a pas a rejouer la salve qui atteint SEQ.
+    engine.setChannelMode(0, flexseq::MODE_SEQ);
     ui.handle(flexseq::UiController::EVENT_PRESS);
     for (uint8_t i = 0; i < ui.fieldCount(); ++i) {
         if (ui.field() == flexseq::UiController::FIELD_EDIT_ENTRY) {
