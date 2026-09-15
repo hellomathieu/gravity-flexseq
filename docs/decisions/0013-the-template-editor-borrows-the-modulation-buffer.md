@@ -19,6 +19,10 @@
 > **What the removal does NOT touch:** ADR 0006 and the template / instance
 > model, the modulation buffer itself, and its round-robin service. They stay,
 > and ADR 0011 stays with them.
+>
+> ⚠️ **AND THEY LEFT ON 2026-09-15, by ADR 0014.** The patterns are shared
+> again: the modulation buffer, its service, ADR 0006 and ADR 0011 are all
+> superseded. The paragraph above is the state of 2026-09-14.
 
 ## Context
 

@@ -1,9 +1,19 @@
 # 0011 — The writer of the modulation buffer invalidates the timing cache
 
-- **Status:** accepted
+- **Status:** superseded
 - **Date:** 2026-09-03
 - **Supersedes:** —
-- **Superseded by:** —
+- **Superseded by:** ADR 0014
+
+> ⚠️ **SUPERSEDED ON 2026-09-15 by ADR 0014, and the subject of this decision
+> is REMOVED.** The patterns are shared again, so no writer fills a
+> modulation buffer under the reader: the `PATTERN` modulation is a change of
+> index, derived at the step boundary, where `refreshStepTiming()` reads the
+> ratchet of the new pattern with its content. **The general rule of the
+> Consequences survives and lives in ADR 0014**: no pattern data may become
+> observable with a timing cache from another provenance. Property P35 of
+> PRD §10.3 does not move. Read this ADR as the record of the violation the
+> pins found, and of how it was proved.
 
 ## Context
 

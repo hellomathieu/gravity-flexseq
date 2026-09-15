@@ -141,6 +141,7 @@ The settings screen of the original firmware (`Interactions.ino`, `displayScreen
 ### 5.0 REVIEW OF THE REFERENCE VERSION — DECIDED on 2026-08-23
 > **This section supersedes five earlier decisions.** They stay written where they were, and they are marked, so that the reasoning stays readable.
 **The behavioural reference is `main` @ `40d4aac`** (2026-03-10, "clean up and going public"), the public firmware. The branch **`1.2-dev` @ `f7b2150acf`** (2025-03-11) is **older and never merged**. It serves as a **catalogue of candidate features**, with no normative value. `docs/original-1.2-dev-features.md` holds the inventory, verified line by line.
+⚠️ **POINT 1 IS SUPERSEDED on 2026-09-15**, by the amendment of that day below: the patterns are **shared** again, in one bank in RAM. The text below is the state from 2026-08-23 to 2026-09-15.
 **1. Patterns: a template / instance model.** The 16 patterns are **templates stored in the EEPROM**. A channel in `SEQ` loads a template, and it then works on a **local copy in RAM**. To edit that copy affects neither the template nor the other channels. To load the template again overwrites the copy.
 - **A1–A8 are frozen**: factory content, and the rule `index < 8` refuses an edit, with no extra byte.
 - **B1–B8 are free**: empty at the start, and editable.
@@ -340,6 +341,7 @@ The gesture that names a template does not change: `SHIFT` plus a rotation moves
 - a short press LOADS the displayed template into the channel, and closes the field;
 - a long press closes the field and restores the name of the template that the channel plays.
 
+⚠️ **THE QUESTION `SURE` IS REMOVED since 2026-09-15**, by the amendment of that day: a load destroys nothing when nothing is copied. The four paragraphs below describe the state of 2026-09-14.
 **A load that would destroy an edited copy asks first, and the answer is a choice.** The label of the big value becomes `SURE: NO`, and the big value keeps showing the template that would be loaded, so the question names what it is about. A rotation switches the word to `SURE: YES`, and a short press runs the word that is shown. **`NO` comes first**, by a decision of the owner: one short press too many must destroy nothing. A short press on `SURE: YES` loads. A short press on `SURE: NO` closes the field and restores the name of the template that the channel plays.
 
 ⚠️ **ONE WORD AT A TIME, AND THAT IS A MEASUREMENT.** A first wording of this amendment showed both words, `SURE: YES / NO`, with the selected one inverted. It needed a drawing in four pieces, and it measured **372 bytes of Flash against 64**. The image reached 99.8 %, with 76 bytes before the linker refuses, which is not shippable. The owner chose the single word on 2026-09-14, with the two figures in view. **The gesture does not change**: turn to change the answer, press to run it, and `NO` comes first.
@@ -350,7 +352,7 @@ The gesture that names a template does not change: `SHIFT` plus a rotation moves
 
 ⚠️ **THE STRING CARRIES NO QUESTION MARK**, for the reason already recorded on 2026-09-14: `velvetscreen` has none. `SURE: YES / NO` is the exact string.
 
-**The six copies count as CLEAN at each boot**, by a decision of the owner of 2026-09-14. The change flag lives in RAM, and no record of §11.1 carries it. ⚠️ **The accepted consequence is named**: after a power cut, the first load of a channel destroys an edited copy without asking. The owner weighed the other route — to count the six copies as changed at each boot, so one question per channel per power-up — and refused it.
+⚠️ **WITHOUT SUBJECT since 2026-09-15**: there is no copy and no change flag any more. **The six copies count as CLEAN at each boot**, by a decision of the owner of 2026-09-14. The change flag lives in RAM, and no record of §11.1 carries it. ⚠️ **The accepted consequence is named**: after a power cut, the first load of a channel destroys an edited copy without asking. The owner weighed the other route — to count the six copies as changed at each boot, so one question per channel per power-up — and refused it.
 
 **`selectedPattern` never names a template that the channel does not play.** The candidate lives in the controller while the field is open, and it reaches `selectedPattern` only on a confirmed load. This is what lets `NO` restore the name, and it keeps the base of the `PATTERN` modulation stable while the user looks around.
 
@@ -364,15 +366,37 @@ The gesture that names a template does not change: `SHIFT` plus a rotation moves
 
 **What leaves the scope with this amendment:** lot **R**, the RECORDING function, and lot **H**, the gesture that would arm it — a gesture that triggers nothing has no purpose. Lot **17b**, the second half of the `BPM` tab. And the **mute** per channel, which the amendment of 2026-09-07 had deferred: the owner set it aside on 2026-09-14. ⚠️ **`SWING` and `GATE` were already out of the specification** since 2026-09-07, so this amendment adds nothing there.
 
-⚠️ **THE ACCEPTED CONSEQUENCE, AND IT IS NAMED: the sixteen slots become READ ONLY.** The editor was the only production writer of a template — `Persistence.h`, the deferred write of `serviceTemplateEditor`. After the removal, `A1` to `B8` keep the factory content that `bootstrap()` seeds, for ever. **A channel's copy stays editable and stays persisted**, so the user authors **six** patterns instead of sixteen. ⚠️ **The original authors sixteen**, its patterns being shared: on this point FlexSeq moves AWAY from its reference, and that is the price of the four lots.
+⚠️ **SUPERSEDED on 2026-09-15**: the sixteen patterns are editable again, `A1` to `A8` included, see the amendment of that day below. ⚠️ **THE ACCEPTED CONSEQUENCE, AND IT IS NAMED: the sixteen slots become READ ONLY.** The editor was the only production writer of a template — `Persistence.h`, the deferred write of `serviceTemplateEditor`. After the removal, `A1` to `B8` keep the factory content that `bootstrap()` seeds, for ever. **A channel's copy stays editable and stays persisted**, so the user authors **six** patterns instead of sixteen. ⚠️ **The original authors sixteen**, its patterns being shared: on this point FlexSeq moves AWAY from its reference, and that is the price of the four lots.
 
 **`SAVE` is NOT wired, and its price is measured.** A counter-build gave `saveTemplate` a production caller and the whole thing cost **158 bytes**, so the net gain would have been 738 instead of 896. The owner refused it on 2026-09-14. ⚠️ **The estimate of 200 to 250 bytes that this file carried was pessimistic**: calibration C measured three primitives at once, and `loadTemplate` already has a caller.
 
+⚠️ **FOUR ITEMS OF THIS LIST MOVE on 2026-09-15**: ADR 0006, `loadTemplate`, the question `SURE`, and the format of §11.1. See the amendment of that day below.
 **What STAYS, and none of it moves:** ADR 0006 and the template / instance model · `loadTemplate` and the gesture of `1quater` · the question `SURE: NO` / `SURE: YES` · the `EDIT` screen of a channel · the `PATTERN` modulation by CV and its buffer · the format of §11.1, its version and its 588 bytes. **The tab bar returns to eight slots**, which is the count of the original.
 
-⚠️ **AN OPEN QUESTION, DELIBERATELY SEPARATED FROM THIS AMENDMENT — AND IT IS NOW MEASURED.** The owner proposes on 2026-09-14 to return to the **shared** patterns of the original, so that to edit a pattern edits it for every channel that plays it, and to make `A1` to `A8` editable again. **That reverses ADR 0006 and ADR 0013**, it rewrites the model of this section, and it changes the EEPROM format of §11.1 — the image would carry no instance, so the version would move. ⚠️ **IT IS STILL NOT DECIDED.**
+**AMENDMENT OF 2026-09-15 — the patterns are SHARED again, as in the original. DECIDED by the owner.** It supersedes point 1 above, the question `SURE` of amendment `1quater`, and the read-only consequence of the amendment of 2026-09-14. It restores §5.1 in a new form. **ADR 0014** records the architecture, and it supersedes ADR 0006. The question that this paragraph carried as open from 2026-09-14 is closed by this decision.
 
-✅ **MEASURED ON 2026-09-15, on a throwaway branch, and the estimate of this paragraph was WRONG in the project's favour.** A prototype that links and runs gives:
+**The model.** The sixteen patterns `A1` to `B8` live in **one bank in RAM**, 16 × 23 = 368 bytes, and the EEPROM persists that bank. A channel in `SEQ` holds a **selector**, `selectedPattern`, from 0 to 15, and it plays the pattern the selector names. **To edit a pattern edits it for every channel that plays it.** There is no template, no instance and no copy. `A1` to `A8` carry the factory content, and **they are editable**: the rule `index < 8` disappears everywhere. This is the model of the original firmware, `seqA1..seqB8` plus `channel.seqPattern`.
+
+**The length stays with the channel** — decided on 2026-09-15. ADR 0009 does not move: `baseLength` and `effectiveLength` belong to the channel, and a bank record carries the **content alone**, 23 bytes. Two channels can play one pattern on 16 steps and on 12. Point 3 above loses its template: no record stores a length any more, and the deduction of a length from the content disappears with it. The `LENGTH` field of a channel keeps its function.
+
+**The `PATTERN` modulation becomes a change of index.** A channel routed to `PATTERN` plays `bank[clamp(selectedPattern + Σ zones, 0, 15)]`, the index derived at the step boundary, and it reads no EEPROM. The modulation buffer, its round-robin service, the deferred load request and ADR 0011 lose their subject. §10.2 carries the rule.
+
+**The load gesture of `1quater` stays, and the question `SURE` disappears.** A short press in the open `PATTERN` field loads: `selectedPattern` takes the displayed index, the timing of the channel refreshes, and the field closes. Nothing is copied, so nothing is destroyed, and **no confirmation exists anywhere**. `SURE: NO`, `SURE: YES`, the change flag and the deferred load request leave the firmware. A rotation still changes only what the screen shows, a long press still closes and restores the name of the played pattern, and `SHIFT` plus a rotation keeps the gesture of the original.
+
+**The `EDIT` screen shows the pattern the channel PLAYS, and it is read only under a `PATTERN` routing** — decided on 2026-09-15. When a CV source of the channel is routed to `PATTERN`:
+
+- the title reads **`CV PATTERN B3`** instead of `EDIT PATTERN B3`, and the name is the name of the **played** pattern, the derived index;
+- the **step cursor is not drawn**;
+- the three gestures that change the content — a step, a ratchet, a clear — **do nothing**;
+- `SEP` stays adjustable: it belongs to the channel, not to the pattern.
+
+Without a `PATTERN` routing the screen shows and edits the selected pattern, which is the played one. The rule follows the **routing**, never the zone: a rule that depends on a voltage would appear and disappear in the middle of an edit. The owner weighed that variant on 2026-09-15 and refused it.
+
+**No factory reset in this lot** — decided on 2026-09-15. The factory content is seeded when the image is invalid, and only then. An edited factory pattern stays edited. The settings page, lot 14, carries the factory reset in its estimate. The original offers no factory reset either.
+
+**What it costs, and it is named.** The format moves to **version 4**, §11.1: the image holds **434 bytes** and the whole image is scanned. There is no migration, so **the patterns edited on the module are lost at the first boot of the new firmware**. The per-channel variant of a pattern, the whole point of ADR 0006, disappears. The user authors **sixteen** patterns, as the original does, instead of six.
+
+**What it returns — MEASURED ON 2026-09-15 on a throwaway prototype**, before the read-only marker existed:
 
 ```text
 Flash   28992 -> 27868   RETURNS 1124 bytes
@@ -382,19 +406,20 @@ loop     p90 6.62 -> 6.63 ms   no measurable cost, budget 12 ms
 image     588 ->   434 bytes, and the WHOLE image is scanned
 ```
 
-⚠️ **The estimate of three terms that this paragraph carried — +368, −138, −138, so +92 against 140 — was wrong on two counts.** The modulation buffer weighs **152 bytes** and not 138, read on the ELF with `avr-nm`; and the allowed growth is **151** and not 140, the removal of the `PATTERNS` tab having returned 11 bytes of RAM. The measured **+69** is the same arithmetic with the right terms, plus five bytes that the deferred load demand and the deferred template write return.
+⚠️ **The estimate of three terms that this paragraph carried before the measurement — +368, −138, −138, so +92 against 140 — was wrong on two counts.** The modulation buffer weighs **152 bytes** and not 138, read on the ELF with `avr-nm`; and the allowed growth is **151** and not 140, the removal of the `PATTERNS` tab having returned 11 bytes of RAM. The measured **+69** is the same arithmetic with the right terms, plus five bytes that the deferred load request and the deferred template write return.
 
-**Where the Flash goes**: the six instances, the whole modulation buffer and its round-robin service, `loadTemplate`, `saveTemplate`, `isTemplateEmpty`, the deferred template write, the deferred load demand, and the 384-byte template zone. A load becomes a change of index, so it reads no EEPROM.
+**Where the Flash goes**: the six instances, the whole modulation buffer and its round-robin service, `loadTemplate`, `saveTemplate`, `isTemplateEmpty`, the deferred template write, the deferred load request, the question `SURE` and its two labels, and the 384-byte template zone. A load becomes a change of index, so it reads no EEPROM.
 
-⚠️ **WHAT THE PROTOTYPE DOES NOT ESTABLISH.** Its C++ tests are not green — `test_ui_controller` and `test_persistence` do not compile against it — so it is representative in size, not proven correct. It has **no TypeScript mirror**, so the parity rule of the project is not met and it cannot reach `main` as it stands. And `patternForChannel()` can return `nullptr` for a valid channel when no bank is wired, a state the per-channel model could not reach; the two readers of the engine already guard it, the tests did not.
+⚠️ **What the prototype did NOT establish, and the lot measures.** Its C++ tests were not green and it had no TypeScript mirror: it is representative in size, not proven correct. The read-only marker and its guard were not in it: **30 to 60 bytes** estimated, so the lot expects **1040 to 1090 bytes returned**, and the figure is a measurement only at the acceptance. `patternForChannel()` can return a null pointer when no bank is wired, a state the per-channel model could not reach; the two readers of the engine already guard it.
 
-**The shape the owner described on 2026-09-15, and it is NOT decided either.** Two channels on `B4` both hear an edit made by either one; only the modulation can differ between them. The confirmation `SURE` is **abandoned everywhere**: a shared edit reaches every channel that plays the pattern, and the owner accepted that. ⚠️ **A first wording put `SURE` on the `EDIT` entry, and it was withdrawn**: the guard it needed — a channel that is *not up to date* — cannot exist when there is no copy.
+**What stays**: ADR 0009 and the two lengths of the channel · the `EDIT` screen and its grid of 36 · the `LENGTH`, `RESET` and `STEP` destinations of the CV · the `PATTERN` field and its gesture, without the question · the record of a channel, nine bytes, unchanged.
 
-**The price that is not in bytes**: the format changes version, so the patterns the user has edited are lost at the first boot; and the per-channel variant, which is the whole point of ADR 0006, disappears. The user then authors sixteen patterns instead of six, as the original does.
+**§12.9 has no subject any more**: a channel edits no copy, so there is nothing to publish, and lot E is not owed.
 
 ---
 
 ### 5.1 Shared pattern bank — SUPERSEDED by §5.0
+⚠️ **RESTORED IN A NEW FORM on 2026-09-15**, by the amendment of §5.0 of that day: the patterns are shared again, in one bank in RAM, and `A1` to `A8` are editable. The sharing model is stated in that amendment now, and the two facts below keep their value.
 > **A validated decision.** A single bank holds **16 shared patterns** (A1–A8, B1–B8). Each channel holds a **selector**, `selectedPattern`, from 0 to 15. ⚠️ **SUPERSEDED on 2026-08-23, see §5.0.** The model becomes **template and instance**: the 16 patterns are **templates stored in the EEPROM**, and each channel works on a **local copy in RAM**. To edit the pattern of a channel therefore affects **no** other channel.
 **This subsection keeps two facts that no other section carries.** Its current content moved to §5.0, and this block stays for its history and for those two facts.
 **The original shares its patterns the same way.** The Sitka firmware holds 16 shared arrays, `seqA1..seqB8`, plus one selector per channel, `channel.seqPattern`. §2 and §4.1 give the EEPROM layout of those arrays; the sharing model itself is stated here alone.
@@ -626,7 +651,7 @@ Destinations: `none / PATTERN / LENGTH / RESET / STEP`. The choice is **explicit
 ⚠️ **The mechanism does NOT exist yet, and lot 11 does not build it.** Lot 11 draws the `MOD:` line, and it reads `OFF`, which is true: no channel can be in any other state until the modulation of the subdivision and of the skip chance is implemented. That belongs to the CV routing lot, 13. The storage question — which code carries "the main parameter of the mode" in bytes 7 and 8 of the channel record — is settled there and not here. `NONE` staying 0 means any earlier image still reads without migration.
 
 ⚠️ **The contradiction this closes** was line 88 of `docs/open-risks.md`, opened 2026-09-04: §12.1 gave a CLOCK tab a `MOD:` line while §10.2 offered no destination it could point at.
-- **PATTERN** — the channel plays `template[clamp(selectedPattern + f(cv), 0, 15)]`, the derived index, at the step boundary. The selected pattern that the user sets and the persistence stores does not move. The channel plays a separate copy of the template at the derived index. Its own instance keeps its edits, and the edit always goes into the instance, so a modulation destroys nothing (§5.0).
+- **PATTERN** — the channel plays `template[clamp(selectedPattern + f(cv), 0, 15)]`, the derived index, at the step boundary. The selected pattern that the user sets and the persistence stores does not move. The channel plays a separate copy of the template at the derived index. Its own instance keeps its edits, and the edit always goes into the instance, so a modulation destroys nothing (§5.0). ⚠️ **SUPERSEDED on 2026-09-15**: there is no copy any more. The channel plays `bank[clamp(selectedPattern + f(cv), 0, 15)]`, the derived index, at the step boundary, from the **shared bank in RAM**. No EEPROM read, no buffer. The `EDIT` screen shows the **played** pattern, and it is **read only** while a source of the channel is routed to `PATTERN` — §5.0, amendment of 2026-09-15.
 - **LENGTH** — `effectiveLength = clamp(base + f(cv), 1, MAX_LENGTH)`, at the step boundary. `MAX_LENGTH` is **36 since lot SF3**, 2026-08-30.
 - **STEP** — a **read shift**: `readStep = positiveModulo(localStep + f(cv), effectiveLength)`. The clock keeps driving `localStep`, and **nothing is mutated**, so a return of the CV to zero puts the read exactly where it would be. §9 stays intact. ⚠️ **The result always holds `0 ≤ readStep < effectiveLength`**, for every valid input. §10.4 carries the range of `f(cv)`.
 - **RESET** — per channel: `localStep = 0` and the accumulator of ticks to 0. It applies **at once** (§10.3).
@@ -864,6 +889,52 @@ The measurement drove the decision, in two steps. The CV was read once per pass 
 **The instances are persisted** (decided on 2026-08-26). A power cut therefore does not lose the work of the user. See ADR 0006 and its amendments.
 **The content of a pattern occupies 23 bytes** — 5 of steps, and 18 of ratchets. The **bits 36 to 39** of the fifth byte belong to no step: they are **canonically zero**. The codec forces them to zero on the write, and it masks them on the read. See ADR 0007 and its amendment.
 **The length of a template runs from 1 to 36.** The upper bound is the capacity of the `Pattern`, and **not** the interface cap `MAX_LENGTH`. The two quantities stay distinct, and they hold the same value of **36 since lot SF3**, 2026-08-30. On the write, a length out of range is **clamped**. On the load, it is **refused**, and the content already read is not lost.
+**⚠️ THE FORMAT MOVES TO VERSION 4 — decided on 2026-09-15, §5.0 amendment of that day.** The patterns are shared again, so the image carries **one bank of sixteen** and no template, no instance and no length byte. The whole image is **scanned**: the bank is live content, and an edit writes one byte after the quiet delay, as an instance did under version 3. The version byte goes from 3 to **4**, and it stays the last logical index, so the last write of a scan. **There is no migration**: a valid version 3 image is refused and the defaults are taken, which seeds the sixteen factory patterns once. The version 3 code leaves the firmware and the tests; the version 2 class stays as it is, as the witness that another version is refused, and a test guards the refusal of a version 3 image.
+<table header-row="true">
+<tr>
+<td>Zone</td>
+<td>Size</td>
+<td>Offset</td>
+<td>Address</td>
+</tr>
+<tr>
+<td>Header — the version byte, **4**</td>
+<td>1 B</td>
+<td>0</td>
+<td>384</td>
+</tr>
+<tr>
+<td>**Bank** — 16 × **23 B**: 5 of steps, 18 of ratchets, **no length**</td>
+<td>**368 B**</td>
+<td>1</td>
+<td>385 – 752</td>
+</tr>
+<tr>
+<td>Per channel — 6 × 9 B, unchanged</td>
+<td>54 B</td>
+<td>369</td>
+<td>753 – 806</td>
+</tr>
+<tr>
+<td>Global — the tempo (2), the source (1), `MOD` (1), `RANGE` (1), unchanged</td>
+<td>5 B</td>
+<td>423</td>
+<td>807 – 811</td>
+</tr>
+<tr>
+<td>Preferences — unchanged</td>
+<td>6 B</td>
+<td>428</td>
+<td>812 – 817</td>
+</tr>
+<tr>
+<td>**Total, from the address 384**</td>
+<td>**434 B**</td>
+<td></td>
+<td>**384 – 817**</td>
+</tr>
+</table>
+**205 bytes stay free, from 818 to 1022.** The address 1023 carries the `memCode` of the original firmware, and FlexSeq never writes it. The rule of the canonical bits 36 to 39 holds for a bank record as it held for an instance. **The length of a pattern is no longer stored anywhere but in the channel record**, byte 1, from 1 to 36.
 **A requirement on an earlier format.** The behaviour of the firmware in front of an image of a different version must be **explicit, deterministic and tested**. It is not left to the chance of a partial load.
 ---
 ## 12. UI
@@ -1197,6 +1268,7 @@ The footer was **aligned left** at x = 4, like the header rule: to centre it wou
 >
 > No step number, and **no added position**. The previous render, a "note legend plus marks" with glyphs from the whole note to the demisemiquaver in the header, is **abandoned**: the note value is no longer a notion of the model. A step is a unit of time, and the SUBDIV makes the tempo.
 ### 12.9 To save a pattern — the `SAVE` flow, decided on 2026-08-26
+⚠️ **WITHOUT SUBJECT since 2026-09-15.** The patterns are shared (§5.0, amendment of 2026-09-15): a channel edits no copy, so there is nothing to publish. The seven points below describe a flow that the model no longer allows. The section stays for its history, and **lot E is not owed**.
 The instance a channel edits lives in RAM, and the firmware persists it. `SAVE` exists to **publish** that instance into a template, so that the other channels can load it.
 1. the edited instance is a **local copy** of the loaded template;
 2. the firmware can save it into **any slot `B1` to `B8`**;
@@ -1402,6 +1474,7 @@ The figures of 2026-08-22 they replace: RAM 1699 (83.0 %), Flash 28228 (91.9 %),
 ## 16. Decisions — validated against open
 ⚠️ **The review of the reference version of 2026-08-23 (§5.0) supersedes five entries of this list**: the resident shared bank · the 24 steps · the LENGTH as a property of the channel alone · the three modes · `SHIFT` plus `PLAY` reserved for RECORDING. The decisions in force are the decisions of §5.0.
 ⚠️ **Two entries of the list below are SET ASIDE since 2026-09-07, and a third is DEFERRED**, by the amendment of §5.0. Set aside, and out of the specification: the four modes with **GATE** · **SWING** as a parameter of `SEQ`. Deferred, and still a requirement: the **mute** on `SHIFT` plus `PLAY` — only its delivery waits. All three keep their room reserved in the record of a channel. Nothing else in the list moves.
+⚠️ **THE TEMPLATE AND INSTANCE MODEL IS SUPERSEDED since 2026-09-15**, by the amendment of §5.0 of that day: the patterns are a **shared bank in RAM**, `A1` to `A8` are editable, the `SURE` question is gone, and the format moves to **version 4**. ADR 0014 supersedes ADR 0006. The entry "patterns as a template in the EEPROM" and the entry "A1–A8 frozen" below are therefore stale.
 **Added on 2026-08-23:** `main` @ `40d4aac` is the reference and `1.2-dev` is a catalogue · patterns as a **template in the EEPROM, with an instance per channel** · **36 steps** and **one nibble per ratchet** (ADR 0007) · LENGTH **deduced at the load** and then owned by the channel — ⚠️ a stale wording, because the template STORES it (§5.0 point 3) · **A1–A8 frozen** · four modes with **GATE** · **SWING as a parameter of SEQ**, 0–49 %, capped · **mute** on `SHIFT` plus `PLAY` · **RECORDING** on `SHIFT` plus a short press · a bar of **9 tabs** plus a **fixed** transport indicator · a cogwheel for CONF and a small grid for PATTERNS · tempo **20–200** and a pulse of **5 ms** · a grid of **3 rows of 12** with no footer · a PATTERNS tab that reuses `LEVEL_EDIT` · the **7th channel set aside**
 **Validated:** a bank of 16 shared patterns · LENGTH per channel · `masterPhase` (96 PPQN, `uint32`, a smoothed local phase) · **SUBDIV to ticksPerStep per channel** (the libGravity convention, `/N` and `xN`, with the default `/1`) · **a change of SUBDIV takes effect on the next beat** (§6.1.1, decided on 2026-08-23, ADR 0004) · Transport, the mapping of the 96 PPQN clock to the engine · the trigger generation, verified in simavr · **one step is one unit of time** · **a purely graphical measure separation** (none/2/3/4/6, per channel) · **RATCHETS per step** (2/3/4/6 plus the TRIPLET ▲ that stretches over 2 units) · the geometry and the legend of EDIT PATTERN, from the Wokwi POC · **the complete CV mapping** (§10: the destinations PATTERN / LENGTH / RESET / STEP per channel, an application at the step boundary except for RESET, the Schmitt thresholds +1 V / +0.5 V, and a routing that survives a change of mode) · **the ratchet 5 set aside** · **the edit while the transport plays, kept** · **the EDIT spacing `20 / 38`** · **the OLED render spread over its 8 bands** (ADR 0001) · **the RAM reserve threshold brought from 512 to 256 B** on the strength of a stack measurement (§15) · **the CV sampled under interrupt, with a guarantee of 1 ms** (§10.6) · **the header kept explicit** and **the skip of the unchanged band** (§12) · **a memory drift guard** with a versioned record (§15) · **the EEPROM persistence format v2** (§11.1, implemented on 2026-08-23: 304 B, 9 B per channel, and two CV target bytes reserved for §10.2) · **the offset on ONE byte**, faithful to the `uint8_t offset` of the original, with the limit kept as it is.
 **The six decisions of the conformity audit, settled on 2026-08-23:**

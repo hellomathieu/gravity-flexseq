@@ -1,9 +1,20 @@
 # 0006 — Patterns are templates in EEPROM, instances in RAM
 
-- **Status:** accepted
+- **Status:** superseded
 - **Date:** 2026-08-23
 - **Supersedes:** —
-- **Superseded by:** —
+- **Superseded by:** ADR 0014
+
+> ⚠️ **SUPERSEDED ON 2026-09-15 by ADR 0014.** The owner returned to the
+> **shared** patterns of the original: one bank of sixteen in RAM, persisted
+> as such, no template, no instance, no copy. The decision of this ADR bought
+> a per-channel variant of a pattern at the price of a template zone, six
+> instances, a modulation buffer and a confirmation question, and the Flash
+> budget of 2026-09-14 made that price visible: a prototype measured the
+> shared model at **1124 bytes of Flash returned** for 69 of RAM. PRD §5.0,
+> amendment of 2026-09-15, is the normative source. **The length stays with
+> the channel**, so ADR 0009 does not move. Read this ADR as the record of
+> why the model was tried, and of the facts it measured on the way.
 
 ## Context
 
