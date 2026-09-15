@@ -74,19 +74,13 @@ characterization of the former order is deleted. The boundary of the mirror
 does not move: the model still holds no buffer, and this section still says
 so.
 
-⚠️ **THE TEMPLATE EDITOR BORROWS THAT SAME BUFFER, so it has no mirror either —
-lot 16E step 4, 2026-09-13.** The editor of the `PATTERNS` tab edits the buffer
-of channel 1, which is also what that channel plays while the editor is open
-(ADR 0013). The model holds no buffer, so it cannot express the load, the hold,
-the release, or the restore of the mode and the length. That half of the step is
-held on the C++ side alone, by `test_persistence`.
-
-**What IS mirrored of that step, and it is the screen.** The `PATTERNS` tab
-carries two fields, the slot and the entry into the editor, and
-`UiController.ts` holds both. `MainScreenPixels.ts` renders the tab, and against
-the model that `env:mainscreen` freezes with `-DFLEXSEQ_DEMO_TAB_PATTERNS=1` it
-renders **589** pixels of ink, with the same count on every row as the panel —
-zero divergent row.
+✅ **THE PARAGRAPH THAT STOOD HERE IS GONE WITH ITS SUBJECT, on 2026-09-14.** It
+said that the template editor borrowed the modulation buffer, so it had no mirror
+either, and that the screen of the `PATTERNS` tab was mirrored at 589 pixels of
+ink. **The `PATTERNS` tab and its template editor are REMOVED** — PRD §5.0, third
+amendment of 2026-09-14 — so neither half exists to mirror. **The gap this
+section describes therefore narrows**: what TypeScript still lacks is the
+modulation buffer and its round-robin service, and nothing else.
 
 ## What a green model proves, and what it does not
 

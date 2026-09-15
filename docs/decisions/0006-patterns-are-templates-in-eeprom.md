@@ -123,6 +123,17 @@ is deliberately replaced, and PRD §5.0 says so.
 the eight plus the ninth are taken. The PATTERNS tab carries them, in its own
 context, which is what makes them possible without a tenth gesture.
 
+⚠️ **THE PATTERNS TAB IS REMOVED SINCE 2026-09-14**, and this decision stays
+`accepted`. PRD §5.0, third amendment of that day, removes the tab for the Flash
+budget. **The template and instance model does not move**, and the paragraph
+above keeps the reasoning of 2026-08-23.
+
+**What changes is who writes a template.** The load of a template into a channel
+lives on the channel tab, as a short press in the `PATTERN` field — PRD §5.0
+amendment `1quater`. **No production code writes a template any more**, so the
+sixteen slots are read only and keep their factory content. That consequence is
+named in the PRD, and the owner accepted it.
+
 ## Amendment — 2026-08-26
 
 The 36-step foundation (commit `58e238a`) changed the pattern representation
