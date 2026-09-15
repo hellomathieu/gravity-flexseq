@@ -2,6 +2,7 @@
 #include <unity.h>
 
 #include <flexseq/Pattern.h>
+#include <flexseq/PatternBank.h>
 #include <flexseq/SequencerEngine.h>
 #include <flexseq/Subdiv.h>
 #include <flexseq/Transport.h>
@@ -21,11 +22,13 @@ void tearDown() {}
 namespace {
 
 struct Rig {
+    flexseq::PatternBank bank;
     SequencerEngine engine;
     Transport transport;
     UiController ui;
 
     Rig() : engine(), transport(engine), ui(engine, transport) {
+        engine.setPatternBank(&bank);
         for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
             engine.setChannelMode(ch, flexseq::MODE_SEQ);
         }
@@ -469,21 +472,21 @@ void test_press_toggles_the_step_under_the_cursor() {
         r.ui.handle(UiController::EVENT_ROTATE, 1);
     }
     bool active = true;
-    r.engine.instanceForChannel(0)->readStep(7, active);
+    r.engine.patternForChannel(0)->readStep(7, active);
     TEST_ASSERT_FALSE(active);
     r.ui.handle(UiController::EVENT_PRESS);
-    r.engine.instanceForChannel(0)->readStep(7, active);
+    r.engine.patternForChannel(0)->readStep(7, active);
     TEST_ASSERT_TRUE(active);
     r.ui.handle(UiController::EVENT_PRESS);
-    r.engine.instanceForChannel(0)->readStep(7, active);
+    r.engine.patternForChannel(0)->readStep(7, active);
     TEST_ASSERT_FALSE(active);
 }
 
-void test_the_editor_writes_into_the_instance_and_never_into_the_buffer() {
+void test_an_edit_on_one_channel_reaches_every_channel_on_the_same_pattern() {
     Rig r;
-    flexseq::ModulatedPatternState state;
-    r.engine.setModulatedPatterns(&state);
-    state.loaded[0] = 5;
+    TEST_ASSERT_TRUE(r.engine.setSelectedPattern(0, 2));
+    TEST_ASSERT_TRUE(r.engine.setSelectedPattern(1, 2));
+    TEST_ASSERT_TRUE(r.engine.setSelectedPattern(2, 3));
 
     r.enterEdit();
     for (uint8_t i = 0; i < 7; ++i) {
@@ -492,28 +495,32 @@ void test_the_editor_writes_into_the_instance_and_never_into_the_buffer() {
     r.ui.handle(UiController::EVENT_PRESS);
 
     bool active = false;
-    r.engine.instanceForChannel(0)->readStep(7, active);
+    r.engine.patternForChannel(0)->readStep(7, active);
     TEST_ASSERT_TRUE(active);
-    state.pattern[0].readStep(7, active);
-    TEST_ASSERT_FALSE(active);
+    r.engine.patternForChannel(1)->readStep(7, active);
+    TEST_ASSERT_TRUE_MESSAGE(active, "channel 1 plays the same pattern, so it hears the edit");
+    r.engine.patternForChannel(2)->readStep(7, active);
+    TEST_ASSERT_FALSE_MESSAGE(active, "channel 2 plays another pattern, so it does not");
 }
 
-void test_clearing_a_pattern_clears_the_instance_and_never_the_buffer() {
+void test_clearing_a_pattern_clears_it_for_every_channel_that_plays_it() {
     Rig r;
-    flexseq::ModulatedPatternState state;
-    r.engine.setModulatedPatterns(&state);
-    state.loaded[0] = 5;
-    r.engine.instanceForChannel(0)->writeStep(3, true);
-    state.pattern[0].writeStep(3, true);
+    TEST_ASSERT_TRUE(r.engine.setSelectedPattern(0, 2));
+    TEST_ASSERT_TRUE(r.engine.setSelectedPattern(1, 2));
+    TEST_ASSERT_TRUE(r.engine.setSelectedPattern(2, 3));
+    r.engine.patternForChannel(0)->writeStep(3, true);
+    r.engine.patternForChannel(2)->writeStep(3, true);
 
     r.enterEdit();
     r.ui.handle(UiController::EVENT_SHIFT_LONG_PRESS);
 
     bool active = true;
-    r.engine.instanceForChannel(0)->readStep(3, active);
+    r.engine.patternForChannel(0)->readStep(3, active);
     TEST_ASSERT_FALSE(active);
-    state.pattern[0].readStep(3, active);
-    TEST_ASSERT_TRUE(active);
+    r.engine.patternForChannel(1)->readStep(3, active);
+    TEST_ASSERT_FALSE_MESSAGE(active, "the clear reaches channel 1, which plays the same pattern");
+    r.engine.patternForChannel(2)->readStep(3, active);
+    TEST_ASSERT_TRUE_MESSAGE(active, "the clear leaves the pattern of channel 2 alone");
 }
 
 void test_shift_rotate_sets_the_ratchet_of_an_active_step_and_clamps() {
@@ -521,17 +528,17 @@ void test_shift_rotate_sets_the_ratchet_of_an_active_step_and_clamps() {
     r.enterEdit();
     r.ui.handle(UiController::EVENT_PRESS);  // le pas 0 devient actif
     r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
-    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_2, r.engine.instanceForChannel(0)->getRatchet(0));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_2, r.engine.patternForChannel(0)->getRatchet(0));
     r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
-    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_3, r.engine.instanceForChannel(0)->getRatchet(0));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_3, r.engine.patternForChannel(0)->getRatchet(0));
     for (uint8_t i = 0; i < UiController::RATCHET_CHOICE_COUNT + 3; ++i) {
         r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
     }
-    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_TRIPLET, r.engine.instanceForChannel(0)->getRatchet(0));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_TRIPLET, r.engine.patternForChannel(0)->getRatchet(0));
     for (uint8_t i = 0; i < UiController::RATCHET_CHOICE_COUNT + 3; ++i) {
         r.ui.handle(UiController::EVENT_SHIFT_ROTATE, -1);
     }
-    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, r.engine.instanceForChannel(0)->getRatchet(0));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, r.engine.patternForChannel(0)->getRatchet(0));
 }
 
 void test_a_ratchet_edit_takes_effect_on_the_current_step_immediately() {
@@ -543,7 +550,7 @@ void test_a_ratchet_edit_takes_effect_on_the_current_step_immediately() {
     for (uint8_t i = 0; i < 5; ++i) {
         r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 5);
     }
-    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_TRIPLET, r.engine.instanceForChannel(0)->getRatchet(0));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_TRIPLET, r.engine.patternForChannel(0)->getRatchet(0));
     TEST_ASSERT_EQUAL_UINT16(2 * SequencerEngine::PPQN, r.engine.currentStepTicks(0));
 }
 
@@ -555,17 +562,17 @@ void test_shift_rotate_in_edit_no_longer_changes_channel() {
     TEST_ASSERT_EQUAL_INT8_MESSAGE(0, r.ui.selectedChannel(),
         "rien dans l original ne change de channel depuis l editeur");
     TEST_ASSERT_EQUAL(UiController::LEVEL_EDIT, r.ui.level());
-    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_2, r.engine.instanceForChannel(0)->getRatchet(0));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_2, r.engine.patternForChannel(0)->getRatchet(0));
 }
 
 void test_shift_rotate_on_an_inactive_step_does_nothing() {
     Rig r;
     r.enterEdit();
     bool active = true;
-    r.engine.instanceForChannel(0)->readStep(0, active);
+    r.engine.patternForChannel(0)->readStep(0, active);
     TEST_ASSERT_FALSE(active);
     r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(flexseq::RATCHET_NONE, r.engine.instanceForChannel(0)->getRatchet(0),
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(flexseq::RATCHET_NONE, r.engine.patternForChannel(0)->getRatchet(0),
         "le geste ne regle le ratchet que sur un pas actif");
 }
 
@@ -576,9 +583,9 @@ void test_the_grid_follows_the_pattern_of_the_channel_selected_in_edit() {
     r.enterEdit();
     r.ui.handle(UiController::EVENT_PRESS);
     bool active = false;
-    r.engine.instanceForChannel(1)->readStep(0, active);
+    r.engine.patternForChannel(1)->readStep(0, active);
     TEST_ASSERT_TRUE(active);
-    r.engine.instanceForChannel(0)->readStep(0, active);
+    r.engine.patternForChannel(0)->readStep(0, active);
     TEST_ASSERT_FALSE(active);
 }
 
@@ -592,9 +599,9 @@ void test_shift_long_press_clears_the_pattern_steps_and_ratchets() {
     r.ui.handle(UiController::EVENT_SHIFT_LONG_PRESS);
     for (uint8_t step = 0; step < UiController::STEP_COUNT; ++step) {
         bool active = true;
-        r.engine.instanceForChannel(0)->readStep(step, active);
+        r.engine.patternForChannel(0)->readStep(step, active);
         TEST_ASSERT_FALSE(active);
-        TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, r.engine.instanceForChannel(0)->getRatchet(step));
+        TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, r.engine.patternForChannel(0)->getRatchet(step));
     }
 }
 
@@ -658,7 +665,7 @@ void test_a_long_press_on_the_header_returns_to_the_first_step() {
 void test_a_press_on_the_header_does_not_toggle_a_step() {
     Rig r;
     r.enterEdit();
-    flexseq::Pattern* p = r.engine.instanceForChannel(0);
+    flexseq::Pattern* p = r.engine.patternForChannel(0);
     bool before = false;
     p->readStep(0, before);
     r.ui.handle(UiController::EVENT_ROTATE, -1);
@@ -671,7 +678,7 @@ void test_a_press_on_the_header_does_not_toggle_a_step() {
 void test_shift_rotate_on_the_header_changes_no_ratchet() {
     Rig r;
     r.enterEdit();
-    flexseq::Pattern* p = r.engine.instanceForChannel(0);
+    flexseq::Pattern* p = r.engine.patternForChannel(0);
     p->writeStep(0, true);
     const uint8_t before = p->getRatchet(0);
     r.ui.handle(UiController::EVENT_ROTATE, -1);
@@ -795,7 +802,7 @@ void test_shift_press_is_deliberately_free_and_changes_nothing() {
     TEST_ASSERT_EQUAL(UiController::LEVEL_EDIT, r.ui.level());
     TEST_ASSERT_EQUAL_UINT8(3, r.ui.stepCursor());
     bool active = true;
-    r.engine.instanceForChannel(0)->readStep(3, active);
+    r.engine.patternForChannel(0)->readStep(3, active);
     TEST_ASSERT_FALSE(active);
 }
 
@@ -894,12 +901,14 @@ void test_shift_play_is_reserved_and_does_not_toggle_the_transport() {
 namespace {
 
 struct ModeRig {
+    flexseq::PatternBank bank;
     SequencerEngine engine;
     Transport transport;
     UiController ui;
 
     explicit ModeRig(flexseq::ChannelMode mode)
         : engine(), transport(engine), ui(engine, transport) {
+        engine.setPatternBank(&bank);
         for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
             engine.setChannelMode(ch, mode);
         }
@@ -1609,8 +1618,8 @@ int main(int, char**) {
     RUN_TEST(test_press_on_the_edit_entry_enters_the_grid);
     RUN_TEST(test_rotate_moves_the_step_cursor_and_wraps_at_thirty_six);
     RUN_TEST(test_press_toggles_the_step_under_the_cursor);
-    RUN_TEST(test_the_editor_writes_into_the_instance_and_never_into_the_buffer);
-    RUN_TEST(test_clearing_a_pattern_clears_the_instance_and_never_the_buffer);
+    RUN_TEST(test_an_edit_on_one_channel_reaches_every_channel_on_the_same_pattern);
+    RUN_TEST(test_clearing_a_pattern_clears_it_for_every_channel_that_plays_it);
     RUN_TEST(test_shift_rotate_sets_the_ratchet_of_an_active_step_and_clamps);
     RUN_TEST(test_a_ratchet_edit_takes_effect_on_the_current_step_immediately);
     RUN_TEST(test_shift_rotate_in_edit_no_longer_changes_channel);

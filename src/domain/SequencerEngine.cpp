@@ -1,8 +1,8 @@
 #include <flexseq/SequencerEngine.h>
 
 #include <flexseq/LengthCv.h>
-
 #include <flexseq/Pattern.h>
+#include <flexseq/PatternBank.h>
 
 namespace flexseq {
 
@@ -13,6 +13,7 @@ SequencerEngine::SequencerEngine()
       running_(false),
       stepped_(0),
       armed_(0),
+      bank_(nullptr),
       modulated_(nullptr) {
     for (uint8_t s = 0; s < CV_SOURCE_COUNT; ++s) {
         cvInput_[s] = 0;
@@ -192,40 +193,26 @@ void SequencerEngine::advance(uint16_t ticks) {
     }
 }
 
-Pattern* SequencerEngine::instanceForChannel(uint8_t channel) {
-    if (!validChannel(channel)) {
-        return nullptr;
-    }
-    return &instances_[channel];
+void SequencerEngine::setPatternBank(PatternBank* bank) {
+    bank_ = bank;
 }
 
-const Pattern* SequencerEngine::instanceForChannel(uint8_t channel) const {
-    if (!validChannel(channel)) {
-        return nullptr;
-    }
-    return &instances_[channel];
+PatternBank* SequencerEngine::patternBank() const {
+    return bank_;
 }
 
 Pattern* SequencerEngine::patternForChannel(uint8_t channel) {
-    if (!validChannel(channel)) {
+    if (!validChannel(channel) || bank_ == nullptr) {
         return nullptr;
     }
-    if (modulated_ != nullptr
-        && modulated_->loaded[channel] != ModulatedPatternState::NOT_MODULATED) {
-        return &modulated_->pattern[channel];
-    }
-    return instanceForChannel(channel);
+    return bank_->getPattern(static_cast<uint8_t>(patternCvIndex(channel)));
 }
 
 const Pattern* SequencerEngine::patternForChannel(uint8_t channel) const {
-    if (!validChannel(channel)) {
+    if (!validChannel(channel) || bank_ == nullptr) {
         return nullptr;
     }
-    if (modulated_ != nullptr
-        && modulated_->loaded[channel] != ModulatedPatternState::NOT_MODULATED) {
-        return &modulated_->pattern[channel];
-    }
-    return instanceForChannel(channel);
+    return bank_->getPattern(static_cast<uint8_t>(patternCvIndex(channel)));
 }
 
 int8_t SequencerEngine::getSelectedPattern(uint8_t channel) const {

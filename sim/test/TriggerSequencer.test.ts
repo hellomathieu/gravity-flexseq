@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { PatternBank } from "../src/domain/PatternBank.js";
 import { SequencerEngine, PPQN, ChannelMode, CHANNEL_COUNT } from "../src/domain/SequencerEngine.js";
 import { Prng } from "../src/domain/Prng.js";
 import { TriggerSequencer } from "../src/domain/TriggerSequencer.js";
@@ -11,13 +12,14 @@ const STEP = PPQN; // 96 = default ticksPerStep (/1)
 describe("TriggerSequencer", () => {
   it("triggers only on the onset of an active step", () => {
     const engine = new SequencerEngine();
+    engine.setPatternBank(new PatternBank());
     const trig = new TriggerSequencer(engine);
     for (let ch = 0; ch < CHANNEL_COUNT; ++ch) engine.setChannelMode(ch, ChannelMode.SEQ);
 
     engine.setSelectedPattern(0, 0);
     engine.setBaseLength(0, 4);
-    engine.instanceForChannel(0)!.writeStep(1, true);
-    engine.instanceForChannel(0)!.writeStep(3, true);
+    engine.patternForChannel(0)!.writeStep(1, true);
+    engine.patternForChannel(0)!.writeStep(3, true);
     engine.start();
 
     engine.advance(STEP); // onto step 1 (active)
@@ -43,10 +45,11 @@ describe("TriggerSequencer", () => {
 
   it("does not trigger without a step onset", () => {
     const engine = new SequencerEngine();
+    engine.setPatternBank(new PatternBank());
     const trig = new TriggerSequencer(engine);
     for (let ch = 0; ch < CHANNEL_COUNT; ++ch) engine.setChannelMode(ch, ChannelMode.SEQ);
 
-    engine.instanceForChannel(0)!.writeStep(1, true);
+    engine.patternForChannel(0)!.writeStep(1, true);
     engine.setBaseLength(0, 4);
     engine.start();
 
@@ -58,6 +61,7 @@ describe("TriggerSequencer", () => {
 
   it("keeps channels with different patterns independent", () => {
     const engine = new SequencerEngine();
+    engine.setPatternBank(new PatternBank());
     const trig = new TriggerSequencer(engine);
     for (let ch = 0; ch < CHANNEL_COUNT; ++ch) engine.setChannelMode(ch, ChannelMode.SEQ);
 
@@ -65,7 +69,7 @@ describe("TriggerSequencer", () => {
     engine.setSelectedPattern(1, 1);
     engine.setBaseLength(0, 4);
     engine.setBaseLength(1, 4);
-    engine.instanceForChannel(0)!.writeStep(1, true);
+    engine.patternForChannel(0)!.writeStep(1, true);
     engine.start();
 
     engine.advance(STEP);
@@ -94,6 +98,7 @@ describe("TriggerSequencer — modes (PRD 4.2)", () => {
 
   function rig(mode: ChannelMode, skipChance = 0) {
     const engine = new SequencerEngine();
+    engine.setPatternBank(new PatternBank());
     const trig = new TriggerSequencer(engine);
     engine.setChannelMode(0, mode);
     engine.setSkipChance(0, skipChance);
@@ -215,13 +220,14 @@ describe("Prng", () => {
 describe("la dette d onsets", () => {
   it("garde l onset que la sortie n a pas pu emettre", () => {
     const engine = new SequencerEngine();
+    engine.setPatternBank(new PatternBank());
     const trig = new TriggerSequencer(engine);
     for (let ch = 0; ch < CHANNEL_COUNT; ++ch) {
       engine.setChannelMode(ch, ChannelMode.SEQ);
     }
     engine.setSelectedPattern(0, 0);
-    engine.instanceForChannel(0)!.writeStep(0, true);
-    engine.instanceForChannel(0)!.setRatchet(0, RATCHET_6);
+    engine.patternForChannel(0)!.writeStep(0, true);
+    engine.patternForChannel(0)!.setRatchet(0, RATCHET_6);
     engine.setSubdiv(0, -8);
     engine.start();
 
@@ -242,6 +248,7 @@ describe("la dette d onsets", () => {
 
   it("plafonne la dette a un pas entier", () => {
     const engine = new SequencerEngine();
+    engine.setPatternBank(new PatternBank());
     const trig = new TriggerSequencer(engine);
     for (let ch = 0; ch < CHANNEL_COUNT; ++ch) {
       engine.setChannelMode(ch, ChannelMode.SEQ);
@@ -250,8 +257,8 @@ describe("la dette d onsets", () => {
     // TOUS les pas actifs : l onset de frontiere appartient au pas SUIVANT,
     // donc un motif a un seul pas actif tarit apres le premier pas.
     for (let i = 0; i < TOTAL_STEPS; ++i) {
-      engine.instanceForChannel(0)!.writeStep(i, true);
-      engine.instanceForChannel(0)!.setRatchet(i, RATCHET_6);
+      engine.patternForChannel(0)!.writeStep(i, true);
+      engine.patternForChannel(0)!.setRatchet(i, RATCHET_6);
     }
     engine.setSubdiv(0, -8);
     engine.start();

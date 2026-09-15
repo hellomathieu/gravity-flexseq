@@ -30,10 +30,11 @@ const ACTIVE_STEPS = [0, 5, 9];
 function rig(activeSteps: readonly number[] = ACTIVE_STEPS) {
   const bank = new PatternBank();
   const engine = new SequencerEngine();
+  engine.setPatternBank(new PatternBank());
   for (let ch = 0; ch < engine.channelCount(); ++ch) {
     engine.setChannelMode(ch, ChannelMode.SEQ);
   }
-  const pattern = engine.instanceForChannel(0)!;
+  const pattern = engine.patternForChannel(0)!;
   for (const step of activeSteps) pattern.writeStep(step, true);
   const transport = new Transport(engine);
   const ui = new UiController(engine, transport);

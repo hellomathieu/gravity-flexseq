@@ -2,6 +2,7 @@
 #include <unity.h>
 
 #include <flexseq/CvDestination.h>
+#include <flexseq/PatternBank.h>
 #include <flexseq/SequencerEngine.h>
 #include <flexseq/TriggerSequencer.h>
 
@@ -630,9 +631,11 @@ void test_two_sources_on_the_step_add_before_the_modulo() {
 
 void test_a_triplet_on_the_read_step_stretches_the_step() {
     SequencerEngine e;
+    flexseq::PatternBank eBank;
+    e.setPatternBank(&eBank);
     e.setChannelMode(0, MODE_SEQ);
     e.setBaseLength(0, 12);
-    e.instanceForChannel(0)->setRatchet(4, flexseq::RATCHET_TRIPLET);
+    e.patternForChannel(0)->setRatchet(4, flexseq::RATCHET_TRIPLET);
     routeStep(e, 0, CV_SOURCE_1);
     e.setCvInput(CV_SOURCE_1, 99); // zone +3
     e.start();
@@ -645,9 +648,11 @@ void test_a_triplet_on_the_read_step_stretches_the_step() {
 
 void test_a_triplet_on_the_local_step_alone_does_not_stretch_the_step() {
     SequencerEngine e;
+    flexseq::PatternBank eBank;
+    e.setPatternBank(&eBank);
     e.setChannelMode(0, MODE_SEQ);
     e.setBaseLength(0, 12);
-    e.instanceForChannel(0)->setRatchet(1, flexseq::RATCHET_TRIPLET);
+    e.patternForChannel(0)->setRatchet(1, flexseq::RATCHET_TRIPLET);
     routeStep(e, 0, CV_SOURCE_1);
     e.setCvInput(CV_SOURCE_1, 99); // zone +3
     e.start();
@@ -680,16 +685,20 @@ static void advanceToLocalStepTwoUnderStepOffsetThree(SequencerEngine& e,
 
 void test_the_trigger_fires_on_a_step_active_at_the_read_step_only() {
     SequencerEngine e;
+    flexseq::PatternBank eBank;
+    e.setPatternBank(&eBank);
     flexseq::TriggerSequencer t(e);
-    e.instanceForChannel(0)->writeStep(5, true);
+    e.patternForChannel(0)->writeStep(5, true);
     advanceToLocalStepTwoUnderStepOffsetThree(e, t);
     TEST_ASSERT_EQUAL_UINT8(1, t.triggerCount(0));
 }
 
 void test_the_trigger_stays_silent_on_a_step_active_at_the_local_step_only() {
     SequencerEngine e;
+    flexseq::PatternBank eBank;
+    e.setPatternBank(&eBank);
     flexseq::TriggerSequencer t(e);
-    e.instanceForChannel(0)->writeStep(2, true);
+    e.patternForChannel(0)->writeStep(2, true);
     advanceToLocalStepTwoUnderStepOffsetThree(e, t);
     TEST_ASSERT_EQUAL_UINT8(0, t.triggerCount(0));
 }
@@ -702,11 +711,13 @@ void test_the_trigger_stays_silent_on_a_step_active_at_the_local_step_only() {
 // and 9 are inactive with no ratchet.
 void test_a_length_change_at_the_boundary_reads_the_content_and_the_ratchet_at_the_new_read_step() {
     SequencerEngine e;
+    flexseq::PatternBank eBank;
+    e.setPatternBank(&eBank);
     flexseq::TriggerSequencer t(e);
     e.setChannelMode(0, MODE_SEQ);
     e.setBaseLength(0, 12);
-    e.instanceForChannel(0)->writeStep(1, true);
-    e.instanceForChannel(0)->setRatchet(1, flexseq::RATCHET_TRIPLET);
+    e.patternForChannel(0)->writeStep(1, true);
+    e.patternForChannel(0)->setRatchet(1, flexseq::RATCHET_TRIPLET);
     routeLength(e, 0, CV_SOURCE_1);
     routeStep(e, 0, CV_SOURCE_2);
     e.setCvInput(CV_SOURCE_2, 99); // zone +3
@@ -738,10 +749,12 @@ void test_a_length_change_at_the_boundary_reads_the_content_and_the_ratchet_at_t
 // reads one step further.
 void test_a_cv_reset_keeps_the_step_zone_and_reads_from_the_offset() {
     SequencerEngine e;
+    flexseq::PatternBank eBank;
+    e.setPatternBank(&eBank);
     flexseq::TriggerSequencer t(e);
     e.setChannelMode(0, MODE_SEQ);
     e.setBaseLength(0, 12);
-    e.instanceForChannel(0)->writeStep(3, true);
+    e.patternForChannel(0)->writeStep(3, true);
     TEST_ASSERT_TRUE(e.setCvDestination(0, CV_SOURCE_1, CV_DEST_RESET));
     routeStep(e, 0, CV_SOURCE_2);
     e.setCvInput(CV_SOURCE_2, 99); // zone +3
@@ -863,9 +876,11 @@ void test_a_change_of_mode_resets_the_step_zone_and_the_return_to_seq_reapplies_
 // matrix of test_ratchet_matrix): a miss here is the coordinate, never the rate.
 void test_a_ratchet_six_on_the_read_step_gives_six_triggers() {
     SequencerEngine e;
+    flexseq::PatternBank eBank;
+    e.setPatternBank(&eBank);
     e.setChannelMode(0, MODE_SEQ);
     e.setBaseLength(0, 12);
-    e.instanceForChannel(0)->setRatchet(4, flexseq::RATCHET_6);
+    e.patternForChannel(0)->setRatchet(4, flexseq::RATCHET_6);
     routeStep(e, 0, CV_SOURCE_1);
     e.setCvInput(CV_SOURCE_1, 99); // zone +3
     e.start();
@@ -878,9 +893,11 @@ void test_a_ratchet_six_on_the_read_step_gives_six_triggers() {
 
 void test_a_ratchet_six_on_the_local_step_alone_gives_one_trigger() {
     SequencerEngine e;
+    flexseq::PatternBank eBank;
+    e.setPatternBank(&eBank);
     e.setChannelMode(0, MODE_SEQ);
     e.setBaseLength(0, 12);
-    e.instanceForChannel(0)->setRatchet(1, flexseq::RATCHET_6);
+    e.patternForChannel(0)->setRatchet(1, flexseq::RATCHET_6);
     routeStep(e, 0, CV_SOURCE_1);
     e.setCvInput(CV_SOURCE_1, 99); // zone +3
     e.start();

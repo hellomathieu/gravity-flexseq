@@ -3,6 +3,7 @@
 
 #include <flexseq/CvDestination.h>
 #include <flexseq/Pattern.h>
+#include <flexseq/PatternBank.h>
 #include <flexseq/SequencerEngine.h>
 #include <flexseq/TriggerSequencer.h>
 
@@ -156,10 +157,12 @@ void test_an_inactive_step_zero_gives_an_onset_and_no_trigger() {
 
 void test_an_active_step_zero_gives_a_trigger() {
     SequencerEngine e;
+    flexseq::PatternBank eBank;
+    e.setPatternBank(&eBank);
     TriggerSequencer t(e);
     seqChannel(e, 0);
     routeReset(e, 0, CV_SOURCE_1);
-    TEST_ASSERT_TRUE(e.instanceForChannel(0)->writeStep(0, true));
+    TEST_ASSERT_TRUE(e.patternForChannel(0)->writeStep(0, true));
     e.start();
     e.advance(2 * STEP);
     t.update();
@@ -200,9 +203,11 @@ void test_both_bits_in_one_mask_give_one_onset() {
 
 void test_a_reset_leaves_the_pattern_and_the_selection_intact() {
     SequencerEngine e;
+    flexseq::PatternBank eBank;
+    e.setPatternBank(&eBank);
     seqChannel(e, 0);
     routeReset(e, 0, CV_SOURCE_1);
-    Pattern* p = e.instanceForChannel(0);
+    Pattern* p = e.patternForChannel(0);
     TEST_ASSERT_TRUE(p->writeStep(0, true));
     TEST_ASSERT_TRUE(p->writeStep(5, true));
     TEST_ASSERT_TRUE(p->setRatchet(3, RATCHET_4));
@@ -453,9 +458,11 @@ void test_a_global_armament_survives_a_change_of_mode_to_random() {
 
 void test_a_reset_in_the_middle_of_a_ratchet_abandons_the_remaining_sub_onsets() {
     SequencerEngine e;
+    flexseq::PatternBank eBank;
+    e.setPatternBank(&eBank);
     seqChannel(e, 0);
     routeReset(e, 0, CV_SOURCE_1);
-    TEST_ASSERT_TRUE(e.instanceForChannel(0)->setRatchet(2, RATCHET_4));
+    TEST_ASSERT_TRUE(e.patternForChannel(0)->setRatchet(2, RATCHET_4));
     e.start();
     e.advance(2 * STEP);
     e.advance(24);
@@ -471,9 +478,11 @@ void test_a_reset_in_the_middle_of_a_ratchet_abandons_the_remaining_sub_onsets()
 
 void test_a_triplet_on_step_zero_doubles_the_recached_step_ticks() {
     SequencerEngine e;
+    flexseq::PatternBank eBank;
+    e.setPatternBank(&eBank);
     seqChannel(e, 0);
     routeReset(e, 0, CV_SOURCE_1);
-    TEST_ASSERT_TRUE(e.instanceForChannel(0)->setRatchet(0, RATCHET_TRIPLET));
+    TEST_ASSERT_TRUE(e.patternForChannel(0)->setRatchet(0, RATCHET_TRIPLET));
     e.refreshTiming(0);
     e.start();
     e.advance(192);

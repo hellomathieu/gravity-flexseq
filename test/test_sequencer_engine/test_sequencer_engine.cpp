@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <unity.h>
 
+#include <flexseq/PatternBank.h>
 #include <flexseq/SequencerEngine.h>
 
 using flexseq::SequencerEngine;
@@ -298,9 +299,11 @@ void test_plain_step_fires_one_onset_per_step() {
 
 void test_ratchet_fires_n_onsets_inside_one_step_duration() {
     SequencerEngine e;
+    flexseq::PatternBank eBank;
+    e.setPatternBank(&eBank);
     allSeq(e);
     e.setSelectedPattern(0, 0);
-    e.instanceForChannel(0)->setRatchet(1, RATCHET_3);
+    e.patternForChannel(0)->setRatchet(1, RATCHET_3);
     e.start();
 
     e.advance(96); // -> step 1, the ratchet step
@@ -320,10 +323,12 @@ void test_ratchet_fires_n_onsets_inside_one_step_duration() {
 
 void test_ratchet_step_keeps_the_pattern_duration() {
     SequencerEngine e;
+    flexseq::PatternBank eBank;
+    e.setPatternBank(&eBank);
     allSeq(e);
     e.setSelectedPattern(0, 0);
     e.setBaseLength(0, 4);
-    e.instanceForChannel(0)->setRatchet(0, RATCHET_6);
+    e.patternForChannel(0)->setRatchet(0, RATCHET_6);
     e.start();
     e.advance(96 * 4); // four plain step durations
     TEST_ASSERT_EQUAL_INT8(0, e.effectiveStep(0)); // full loop, back to start
@@ -331,9 +336,11 @@ void test_ratchet_step_keeps_the_pattern_duration() {
 
 void test_ratchet_counts_all_onsets_in_a_batched_advance() {
     SequencerEngine e;
+    flexseq::PatternBank eBank;
+    e.setPatternBank(&eBank);
     allSeq(e);
     e.setSelectedPattern(0, 0);
-    e.instanceForChannel(0)->setRatchet(1, RATCHET_4);
+    e.patternForChannel(0)->setRatchet(1, RATCHET_4);
     e.start();
     e.advance(96);       // -> step 1 (ratchet 4)
     e.advance(96);       // whole ratchet step in one drain: 3 sub + 1 step onset
@@ -342,9 +349,11 @@ void test_ratchet_counts_all_onsets_in_a_batched_advance() {
 
 void test_triplet_stretches_the_step_to_two_units() {
     SequencerEngine e;
+    flexseq::PatternBank eBank;
+    e.setPatternBank(&eBank);
     allSeq(e);
     e.setSelectedPattern(0, 0);
-    e.instanceForChannel(0)->setRatchet(1, RATCHET_TRIPLET);
+    e.patternForChannel(0)->setRatchet(1, RATCHET_TRIPLET);
     e.start();
 
     e.advance(96); // -> step 1, the triplet
@@ -362,11 +371,15 @@ void test_triplet_stretches_the_step_to_two_units() {
 
 void test_triplet_pushes_the_rest_of_the_pattern_later() {
     SequencerEngine plain;
+    flexseq::PatternBank plainBank;
+    plain.setPatternBank(&plainBank);
     SequencerEngine withTriplet;
+    flexseq::PatternBank withTripletBank;
+    withTriplet.setPatternBank(&withTripletBank);
     allSeq(plain);
     allSeq(withTriplet);
 
-    withTriplet.instanceForChannel(0)->setRatchet(0, RATCHET_TRIPLET);
+    withTriplet.patternForChannel(0)->setRatchet(0, RATCHET_TRIPLET);
     withTriplet.refreshTiming();
 
     plain.start();
@@ -383,9 +396,11 @@ void test_triplet_pushes_the_rest_of_the_pattern_later() {
 // joue, et ses positions sont arrondies a moins d'un tick.
 void test_a_ratchet_plays_when_its_slot_is_not_a_whole_tick() {
     SequencerEngine e;
+    flexseq::PatternBank eBank;
+    e.setPatternBank(&eBank);
     allSeq(e);
     e.setSelectedPattern(0, 0);
-    e.instanceForChannel(0)->setRatchet(0, RATCHET_3);
+    e.patternForChannel(0)->setRatchet(0, RATCHET_3);
     TEST_ASSERT_TRUE(e.setSubdiv(0, -3));
     TEST_ASSERT_EQUAL_UINT8(3, e.currentStepTriggers(0));
 }
@@ -394,9 +409,11 @@ void test_a_ratchet_plays_when_its_slot_is_not_a_whole_tick() {
 // vaudrait 1 tick.
 void test_a_ratchet_is_refused_when_its_slot_falls_under_two_ticks() {
     SequencerEngine e;
+    flexseq::PatternBank eBank;
+    e.setPatternBank(&eBank);
     allSeq(e);
     e.setSelectedPattern(0, 0);
-    e.instanceForChannel(0)->setRatchet(0, RATCHET_6);
+    e.patternForChannel(0)->setRatchet(0, RATCHET_6);
     TEST_ASSERT_TRUE(e.setSubdiv(0, -12));
     TEST_ASSERT_EQUAL_UINT8(1, e.currentStepTriggers(0));
 }
@@ -412,8 +429,10 @@ void test_a_new_engine_plays_plain_steps() {
 
 void test_ratchets_do_not_shift_masterphase() {
     SequencerEngine e;
+    flexseq::PatternBank eBank;
+    e.setPatternBank(&eBank);
     allSeq(e);
-    e.instanceForChannel(0)->setRatchet(0, RATCHET_TRIPLET);
+    e.patternForChannel(0)->setRatchet(0, RATCHET_TRIPLET);
     e.start();
     e.advance(192);
     TEST_ASSERT_EQUAL_UINT32(192, e.masterPhase());
@@ -524,8 +543,10 @@ void test_clock_counts_every_offset_crossing_in_a_batched_advance() {
 
 void test_clock_and_random_ignore_ratchets() {
     SequencerEngine e;
-    e.instanceForChannel(0)->setRatchet(0, RATCHET_4);
-    e.instanceForChannel(0)->setRatchet(1, RATCHET_TRIPLET);
+    flexseq::PatternBank eBank;
+    e.setPatternBank(&eBank);
+    e.patternForChannel(0)->setRatchet(0, RATCHET_4);
+    e.patternForChannel(0)->setRatchet(1, RATCHET_TRIPLET);
     e.setChannelMode(1, MODE_RANDOM);
     e.start();
 
@@ -587,7 +608,9 @@ void test_skip_chance_is_bounded_to_ten_tenths() {
 
 void test_switching_to_seq_starts_reading_the_pattern_again() {
     SequencerEngine e;
-    e.instanceForChannel(0)->setRatchet(0, RATCHET_4);
+    flexseq::PatternBank eBank;
+    e.setPatternBank(&eBank);
+    e.patternForChannel(0)->setRatchet(0, RATCHET_4);
     TEST_ASSERT_EQUAL_UINT8(1, e.currentStepTriggers(0));
     e.setChannelMode(0, MODE_SEQ);
     TEST_ASSERT_EQUAL_UINT8(4, e.currentStepTriggers(0));
@@ -595,90 +618,160 @@ void test_switching_to_seq_starts_reading_the_pattern_again() {
     TEST_ASSERT_EQUAL_UINT8(1, e.currentStepTriggers(0));
 }
 
-void test_every_channel_owns_an_instance() {
-    SequencerEngine engine;
+struct Bench {
+    flexseq::PatternBank bank;
+    SequencerEngine e;
+    Bench() { e.setPatternBank(&bank); }
+};
+
+static bool stepIsActive(const flexseq::Pattern* p, uint8_t step) {
+    bool active = false;
+    return p != nullptr && p->readStep(step, active) && active;
+}
+
+void test_a_fresh_engine_has_no_bank_and_plays_no_pattern() {
+    SequencerEngine e;
+    TEST_ASSERT_NULL(e.patternBank());
     for (uint8_t ch = 0; ch < 6; ++ch) {
-        TEST_ASSERT_NOT_NULL(engine.instanceForChannel(ch));
+        TEST_ASSERT_NULL(e.patternForChannel(ch));
+    }
+    const SequencerEngine& frozen = e;
+    TEST_ASSERT_NULL(frozen.patternForChannel(0));
+}
+
+void test_the_engine_keeps_the_bank_it_is_given() {
+    flexseq::PatternBank bank;
+    SequencerEngine e;
+    e.setPatternBank(&bank);
+    TEST_ASSERT_EQUAL_PTR(&bank, e.patternBank());
+    e.setPatternBank(nullptr);
+    TEST_ASSERT_NULL(e.patternBank());
+    TEST_ASSERT_NULL(e.patternForChannel(0));
+}
+
+void test_the_channel_plays_the_pattern_its_selector_names() {
+    Bench b;
+    for (uint8_t ch = 0; ch < 6; ++ch) {
+        TEST_ASSERT_TRUE(b.e.setSelectedPattern(ch, static_cast<uint8_t>(ch + 3)));
+        TEST_ASSERT_EQUAL_PTR(b.bank.getPattern(static_cast<uint8_t>(ch + 3)),
+                              b.e.patternForChannel(ch));
     }
     TEST_ASSERT_EQUAL_UINT8(6, SequencerEngine::CHANNEL_COUNT);
 }
 
-void test_an_invalid_channel_has_no_instance() {
-    SequencerEngine engine;
-    TEST_ASSERT_NULL(engine.instanceForChannel(6));
-    TEST_ASSERT_NULL(engine.instanceForChannel(255));
-    const SequencerEngine& frozen = engine;
-    TEST_ASSERT_NULL(frozen.instanceForChannel(6));
+void test_an_invalid_channel_has_no_pattern_even_with_a_bank() {
+    Bench b;
+    TEST_ASSERT_NULL(b.e.patternForChannel(6));
+    TEST_ASSERT_NULL(b.e.patternForChannel(255));
+    const SequencerEngine& frozen = b.e;
+    TEST_ASSERT_NULL(frozen.patternForChannel(6));
 }
 
-void test_the_six_instances_are_distinct_objects() {
-    SequencerEngine engine;
-    for (uint8_t a = 0; a < 6; ++a) {
-        for (uint8_t b = 0; b < 6; ++b) {
-            if (a == b) {
-                continue;
-            }
-            TEST_ASSERT_FALSE(engine.instanceForChannel(a) == engine.instanceForChannel(b));
-        }
-    }
-}
-
-void test_the_const_overload_names_the_same_instance() {
-    SequencerEngine engine;
-    const SequencerEngine& frozen = engine;
+void test_the_const_overload_names_the_same_pattern() {
+    Bench b;
+    const SequencerEngine& frozen = b.e;
     for (uint8_t ch = 0; ch < 6; ++ch) {
-        TEST_ASSERT_TRUE(engine.instanceForChannel(ch) == frozen.instanceForChannel(ch));
+        TEST_ASSERT_TRUE(b.e.setSelectedPattern(ch, static_cast<uint8_t>(15 - ch)));
+        TEST_ASSERT_TRUE(b.e.patternForChannel(ch) == frozen.patternForChannel(ch));
     }
 }
 
-void test_writing_one_instance_leaves_the_five_others_untouched() {
-    SequencerEngine engine;
-    TEST_ASSERT_TRUE(engine.instanceForChannel(0)->writeStep(3, true));
-    TEST_ASSERT_TRUE(engine.instanceForChannel(0)->setRatchet(3, RATCHET_3));
+void test_two_channels_on_one_pattern_share_it() {
+    Bench b;
+    TEST_ASSERT_TRUE(b.e.setSelectedPattern(0, 2));
+    TEST_ASSERT_TRUE(b.e.setSelectedPattern(1, 2));
+    TEST_ASSERT_EQUAL_PTR(b.e.patternForChannel(0), b.e.patternForChannel(1));
+
+    TEST_ASSERT_TRUE(b.e.patternForChannel(0)->writeStep(5, true));
+    TEST_ASSERT_TRUE_MESSAGE(stepIsActive(b.e.patternForChannel(1), 5),
+                             "an edit on one channel must reach the other channel on the same pattern");
+}
+
+void test_an_edit_reaches_no_channel_on_another_pattern() {
+    Bench b;
+    for (uint8_t ch = 0; ch < 6; ++ch) {
+        TEST_ASSERT_TRUE(b.e.setSelectedPattern(ch, ch));
+    }
+    TEST_ASSERT_TRUE(b.e.patternForChannel(0)->writeStep(3, true));
+    TEST_ASSERT_TRUE(b.e.patternForChannel(0)->setRatchet(3, RATCHET_3));
     for (uint8_t ch = 1; ch < 6; ++ch) {
-        const flexseq::Pattern* other = engine.instanceForChannel(ch);
+        const flexseq::Pattern* other = b.e.patternForChannel(ch);
         for (uint8_t step = 0; step < 36; ++step) {
-            bool active = true;
-            TEST_ASSERT_TRUE(other->readStep(step, active));
-            TEST_ASSERT_FALSE(active);
+            TEST_ASSERT_FALSE(stepIsActive(other, step));
             TEST_ASSERT_EQUAL_UINT8(0, other->getRatchet(step));
         }
     }
 }
 
-void test_every_instance_can_carry_its_own_content() {
-    SequencerEngine engine;
-    for (uint8_t ch = 0; ch < 6; ++ch) {
-        TEST_ASSERT_TRUE(engine.instanceForChannel(ch)->writeStep(ch, true));
-    }
-    for (uint8_t ch = 0; ch < 6; ++ch) {
-        for (uint8_t step = 0; step < 6; ++step) {
-            bool active = false;
-            TEST_ASSERT_TRUE(engine.instanceForChannel(ch)->readStep(step, active));
-            TEST_ASSERT_EQUAL_MESSAGE(step == ch, active, "un step a fuite d une instance a l autre");
-        }
-    }
+void test_a_load_is_a_change_of_selector_and_copies_nothing() {
+    Bench b;
+    TEST_ASSERT_TRUE(b.bank.getPattern(7)->writeStep(4, true));
+    TEST_ASSERT_TRUE(b.e.setSelectedPattern(0, 7));
+    TEST_ASSERT_TRUE(stepIsActive(b.e.patternForChannel(0), 4));
+
+    TEST_ASSERT_TRUE(b.e.setSelectedPattern(0, 9));
+    TEST_ASSERT_FALSE(stepIsActive(b.e.patternForChannel(0), 4));
+    TEST_ASSERT_TRUE_MESSAGE(stepIsActive(b.bank.getPattern(7), 4),
+                             "leaving a pattern must not alter it");
+    TEST_ASSERT_FALSE_MESSAGE(stepIsActive(b.bank.getPattern(9), 4),
+                              "arriving on a pattern must not copy the previous one into it");
 }
 
-void test_two_channels_on_one_template_keep_separate_instances() {
-    SequencerEngine engine;
-    TEST_ASSERT_TRUE(engine.setSelectedPattern(0, 2));
-    TEST_ASSERT_TRUE(engine.setSelectedPattern(1, 2));
+static const int16_t CV_ZONE_PLUS_TEN = 330;
 
-    TEST_ASSERT_TRUE(engine.instanceForChannel(0)->writeStep(5, true));
-    bool onOne = true;
-    TEST_ASSERT_TRUE(engine.instanceForChannel(1)->readStep(5, onOne));
-    TEST_ASSERT_FALSE(onOne);
+void test_without_a_pattern_routing_the_played_pattern_is_the_selected_one() {
+    Bench b;
+    b.e.setChannelMode(0, MODE_SEQ);
+    TEST_ASSERT_TRUE(b.e.setSelectedPattern(0, 4));
+    TEST_ASSERT_TRUE(b.e.setCvInput(flexseq::CV_SOURCE_1, CV_ZONE_PLUS_TEN));
+    b.e.start();
+    b.e.advance(STEP);
+    TEST_ASSERT_EQUAL_INT8(4, b.e.patternCvIndex(0));
+    TEST_ASSERT_EQUAL_PTR(b.bank.getPattern(4), b.e.patternForChannel(0));
 }
 
-void test_the_channel_plays_its_own_instance() {
-    SequencerEngine engine;
-    for (uint8_t ch = 0; ch < 6; ++ch) {
-        TEST_ASSERT_TRUE(engine.setSelectedPattern(ch, 0));
-        TEST_ASSERT_TRUE(engine.patternForChannel(ch) == engine.instanceForChannel(ch));
-    }
+void test_the_played_pattern_follows_the_cv_index_and_the_selector_does_not_move() {
+    Bench b;
+    b.e.setChannelMode(0, MODE_SEQ);
+    TEST_ASSERT_TRUE(b.e.setSelectedPattern(0, 4));
+    TEST_ASSERT_TRUE(b.e.setCvDestination(0, flexseq::CV_SOURCE_1, flexseq::CV_DEST_PATTERN));
+    TEST_ASSERT_TRUE(b.e.setCvInput(flexseq::CV_SOURCE_1, CV_ZONE_PLUS_TEN));
+    b.e.start();
+    TEST_ASSERT_EQUAL_PTR(b.bank.getPattern(4), b.e.patternForChannel(0));
+
+    b.e.advance(STEP);
+    TEST_ASSERT_EQUAL_INT8(14, b.e.patternCvIndex(0));
+    TEST_ASSERT_EQUAL_PTR(b.bank.getPattern(14), b.e.patternForChannel(0));
+    TEST_ASSERT_EQUAL_INT8(4, b.e.getSelectedPattern(0));
 }
 
+void test_the_ratchet_cached_at_the_boundary_comes_from_the_played_pattern() {
+    Bench b;
+    b.e.setChannelMode(0, MODE_SEQ);
+    TEST_ASSERT_TRUE(b.e.setSelectedPattern(0, 4));
+    TEST_ASSERT_TRUE(b.bank.getPattern(4)->setRatchet(1, RATCHET_TRIPLET));
+    TEST_ASSERT_TRUE(b.bank.getPattern(14)->setRatchet(1, RATCHET_3));
+    TEST_ASSERT_TRUE(b.e.setCvDestination(0, flexseq::CV_SOURCE_1, flexseq::CV_DEST_PATTERN));
+    TEST_ASSERT_TRUE(b.e.setCvInput(flexseq::CV_SOURCE_1, CV_ZONE_PLUS_TEN));
+    b.e.start();
+
+    b.e.advance(STEP);
+    TEST_ASSERT_EQUAL_INT8(1, b.e.effectiveStep(0));
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(3, b.e.currentStepTriggers(0),
+                                    "the cache must read the ratchet of the pattern the index now names");
+    TEST_ASSERT_EQUAL_UINT16(STEP, b.e.currentStepTicks(0));
+}
+
+void test_the_pattern_modulation_reads_no_pattern_outside_seq() {
+    Bench b;
+    TEST_ASSERT_TRUE(b.e.setSelectedPattern(0, 4));
+    TEST_ASSERT_TRUE(b.e.setCvDestination(0, flexseq::CV_SOURCE_1, flexseq::CV_DEST_PATTERN));
+    TEST_ASSERT_TRUE(b.e.setCvInput(flexseq::CV_SOURCE_1, CV_ZONE_PLUS_TEN));
+    b.e.start();
+    b.e.advance(STEP);
+    TEST_ASSERT_EQUAL_INT8(4, b.e.patternCvIndex(0));
+    TEST_ASSERT_EQUAL_PTR(b.bank.getPattern(4), b.e.patternForChannel(0));
+}
 
 void test_the_manual_entry_point_stops_at_the_interface_ceiling() {
     SequencerEngine e;
@@ -727,11 +820,6 @@ void test_an_invalid_channel_refuses_both_entry_points() {
     TEST_ASSERT_EQUAL_UINT8(0, e.getBaseLength(6));
 }
 
-// ---------------------------------------------------------------------------
-// O1 : le stockage de modulation vit HORS du moteur, qui n'en garde qu'un
-// pointeur. Un moteur non cable se comporte exactement comme avant.
-// ---------------------------------------------------------------------------
-
 void test_a_fresh_engine_carries_no_modulation_state() {
     SequencerEngine e;
     TEST_ASSERT_NULL(e.modulatedPatterns());
@@ -746,122 +834,18 @@ void test_the_engine_keeps_the_state_it_is_given() {
     TEST_ASSERT_NULL(e.modulatedPatterns());
 }
 
-void test_the_state_holds_one_pattern_and_one_length_per_channel() {
-    TEST_ASSERT_EQUAL_UINT8(6, SequencerEngine::CHANNEL_COUNT);
-    TEST_ASSERT_EQUAL_size_t(23 * 6, sizeof(flexseq::ModulatedPatternState().pattern));
-    TEST_ASSERT_EQUAL_size_t(6, sizeof(flexseq::ModulatedPatternState().length));
-    TEST_ASSERT_EQUAL_size_t(6, sizeof(flexseq::ModulatedPatternState().loaded));
-}
-
-void test_a_fresh_state_carries_no_loaded_template() {
+void test_the_change_flag_starts_clean_and_marks_one_channel() {
     flexseq::ModulatedPatternState state;
-    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-        TEST_ASSERT_EQUAL_UINT8(255, state.loaded[ch]);
+    for (uint8_t ch = 0; ch < 6; ++ch) {
+        TEST_ASSERT_FALSE(state.isDirty(ch));
     }
-}
-
-void test_a_fresh_state_starts_the_round_robin_on_the_first_channel() {
-    flexseq::ModulatedPatternState state;
-    TEST_ASSERT_EQUAL_UINT8(0, state.cursor);
-}
-
-void test_a_fresh_state_carries_no_length() {
-    flexseq::ModulatedPatternState state;
-    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-        TEST_ASSERT_EQUAL_UINT8(0, state.length[ch]);
-    }
-}
-
-void test_the_sentinel_names_no_pattern_of_the_bank() {
-    TEST_ASSERT_EQUAL_UINT8(255, flexseq::ModulatedPatternState::NOT_MODULATED);
-    TEST_ASSERT_EQUAL_UINT8(16, SequencerEngine::PATTERN_COUNT);
-    TEST_ASSERT_TRUE(flexseq::ModulatedPatternState::NOT_MODULATED
-                     > SequencerEngine::PATTERN_COUNT - 1);
-}
-
-void test_an_unwired_engine_still_plays_its_instance() {
-    SequencerEngine e;
-    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-        TEST_ASSERT_EQUAL_PTR(e.instanceForChannel(ch), e.patternForChannel(ch));
-    }
-}
-
-void test_a_wired_engine_still_plays_its_instance() {
-    SequencerEngine e;
-    flexseq::ModulatedPatternState state;
-    e.setModulatedPatterns(&state);
-    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-        TEST_ASSERT_EQUAL_PTR(e.instanceForChannel(ch), e.patternForChannel(ch));
-    }
-}
-
-void test_a_loaded_channel_plays_its_modulation_buffer() {
-    SequencerEngine e;
-    flexseq::ModulatedPatternState state;
-    e.setModulatedPatterns(&state);
-    state.loaded[2] = 5;
-
-    TEST_ASSERT_EQUAL_PTR(&state.pattern[2], e.patternForChannel(2));
-    TEST_ASSERT_TRUE(e.patternForChannel(2) != e.instanceForChannel(2));
-}
-
-void test_only_the_loaded_channels_leave_their_instance() {
-    SequencerEngine e;
-    flexseq::ModulatedPatternState state;
-    e.setModulatedPatterns(&state);
-    state.loaded[2] = 5;
-    state.loaded[4] = 0;
-
-    TEST_ASSERT_EQUAL_PTR(&state.pattern[2], e.patternForChannel(2));
-    TEST_ASSERT_EQUAL_PTR(&state.pattern[4], e.patternForChannel(4));
-    TEST_ASSERT_EQUAL_PTR(e.instanceForChannel(0), e.patternForChannel(0));
-    TEST_ASSERT_EQUAL_PTR(e.instanceForChannel(3), e.patternForChannel(3));
-    TEST_ASSERT_EQUAL_PTR(e.instanceForChannel(5), e.patternForChannel(5));
-}
-
-void test_releasing_a_channel_returns_it_to_its_instance() {
-    SequencerEngine e;
-    flexseq::ModulatedPatternState state;
-    e.setModulatedPatterns(&state);
-    state.loaded[2] = 5;
-    TEST_ASSERT_EQUAL_PTR(&state.pattern[2], e.patternForChannel(2));
-
-    state.loaded[2] = flexseq::ModulatedPatternState::NOT_MODULATED;
-    TEST_ASSERT_EQUAL_PTR(e.instanceForChannel(2), e.patternForChannel(2));
-}
-
-void test_an_invalid_channel_stays_null_even_with_a_loaded_state() {
-    SequencerEngine e;
-    flexseq::ModulatedPatternState state;
-    e.setModulatedPatterns(&state);
-    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-        state.loaded[ch] = 1;
-    }
-    TEST_ASSERT_NULL(e.patternForChannel(SequencerEngine::CHANNEL_COUNT));
-    TEST_ASSERT_NULL(e.patternForChannel(200));
-}
-
-void test_the_const_overload_selects_the_same_source() {
-    SequencerEngine e;
-    flexseq::ModulatedPatternState state;
-    e.setModulatedPatterns(&state);
-    state.loaded[2] = 5;
-    const SequencerEngine& c = e;
-
-    TEST_ASSERT_EQUAL_PTR(&state.pattern[2], c.patternForChannel(2));
-    TEST_ASSERT_EQUAL_PTR(c.instanceForChannel(0), c.patternForChannel(0));
-    TEST_ASSERT_NULL(c.patternForChannel(SequencerEngine::CHANNEL_COUNT));
-}
-
-void test_an_unwired_engine_ignores_a_loaded_state_it_was_never_given() {
-    SequencerEngine e;
-    flexseq::ModulatedPatternState state;
-    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-        state.loaded[ch] = 1;
-    }
-    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-        TEST_ASSERT_EQUAL_PTR(e.instanceForChannel(ch), e.patternForChannel(ch));
-    }
+    state.markDirty(2);
+    TEST_ASSERT_TRUE(state.isDirty(2));
+    TEST_ASSERT_FALSE(state.isDirty(1));
+    state.clearDirty(2);
+    TEST_ASSERT_FALSE(state.isDirty(2));
+    state.markDirty(6);
+    TEST_ASSERT_EQUAL_UINT8(0, state.dirty);
 }
 
 int main() {
@@ -869,19 +853,7 @@ int main() {
 
     RUN_TEST(test_a_fresh_engine_carries_no_modulation_state);
     RUN_TEST(test_the_engine_keeps_the_state_it_is_given);
-    RUN_TEST(test_the_state_holds_one_pattern_and_one_length_per_channel);
-    RUN_TEST(test_a_fresh_state_carries_no_loaded_template);
-    RUN_TEST(test_a_fresh_state_starts_the_round_robin_on_the_first_channel);
-    RUN_TEST(test_a_fresh_state_carries_no_length);
-    RUN_TEST(test_the_sentinel_names_no_pattern_of_the_bank);
-    RUN_TEST(test_a_loaded_channel_plays_its_modulation_buffer);
-    RUN_TEST(test_only_the_loaded_channels_leave_their_instance);
-    RUN_TEST(test_releasing_a_channel_returns_it_to_its_instance);
-    RUN_TEST(test_an_invalid_channel_stays_null_even_with_a_loaded_state);
-    RUN_TEST(test_the_const_overload_selects_the_same_source);
-    RUN_TEST(test_an_unwired_engine_ignores_a_loaded_state_it_was_never_given);
-    RUN_TEST(test_an_unwired_engine_still_plays_its_instance);
-    RUN_TEST(test_a_wired_engine_still_plays_its_instance);
+    RUN_TEST(test_the_change_flag_starts_clean_and_marks_one_channel);
     RUN_TEST(test_starts_stopped_at_phase_zero_with_defaults);
     RUN_TEST(test_does_not_advance_while_stopped);
     RUN_TEST(test_advances_by_ticks_only_while_running);
@@ -939,14 +911,18 @@ int main() {
     RUN_TEST(test_an_offset_equal_to_the_step_is_pulled_back_inside_it);
     RUN_TEST(test_skip_chance_is_bounded_to_ten_tenths);
     RUN_TEST(test_switching_to_seq_starts_reading_the_pattern_again);
-    RUN_TEST(test_every_channel_owns_an_instance);
-    RUN_TEST(test_an_invalid_channel_has_no_instance);
-    RUN_TEST(test_the_six_instances_are_distinct_objects);
-    RUN_TEST(test_the_const_overload_names_the_same_instance);
-    RUN_TEST(test_writing_one_instance_leaves_the_five_others_untouched);
-    RUN_TEST(test_every_instance_can_carry_its_own_content);
-    RUN_TEST(test_two_channels_on_one_template_keep_separate_instances);
-    RUN_TEST(test_the_channel_plays_its_own_instance);
+    RUN_TEST(test_a_fresh_engine_has_no_bank_and_plays_no_pattern);
+    RUN_TEST(test_the_engine_keeps_the_bank_it_is_given);
+    RUN_TEST(test_the_channel_plays_the_pattern_its_selector_names);
+    RUN_TEST(test_an_invalid_channel_has_no_pattern_even_with_a_bank);
+    RUN_TEST(test_the_const_overload_names_the_same_pattern);
+    RUN_TEST(test_two_channels_on_one_pattern_share_it);
+    RUN_TEST(test_an_edit_reaches_no_channel_on_another_pattern);
+    RUN_TEST(test_a_load_is_a_change_of_selector_and_copies_nothing);
+    RUN_TEST(test_without_a_pattern_routing_the_played_pattern_is_the_selected_one);
+    RUN_TEST(test_the_played_pattern_follows_the_cv_index_and_the_selector_does_not_move);
+    RUN_TEST(test_the_ratchet_cached_at_the_boundary_comes_from_the_played_pattern);
+    RUN_TEST(test_the_pattern_modulation_reads_no_pattern_outside_seq);
     RUN_TEST(test_the_manual_entry_point_stops_at_the_interface_ceiling);
     RUN_TEST(test_the_manual_entry_point_stops_at_one);
     RUN_TEST(test_the_storage_entry_point_accepts_the_pattern_capacity);

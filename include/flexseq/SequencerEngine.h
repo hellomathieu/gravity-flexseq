@@ -25,6 +25,7 @@ namespace flexseq {
 //    durations (it stretches time and pushes the rest of the pattern later).
 //
 // Out of scope (deferred): Transport (clock->progression), CV modulation.
+class PatternBank;
 struct ModulatedPatternState;
 
 class SequencerEngine {
@@ -44,11 +45,11 @@ public:
 
     SequencerEngine();
 
+    void setPatternBank(PatternBank* bank);
+    PatternBank* patternBank() const;
+
     Pattern* patternForChannel(uint8_t channel);
     const Pattern* patternForChannel(uint8_t channel) const;
-
-    Pattern* instanceForChannel(uint8_t channel);
-    const Pattern* instanceForChannel(uint8_t channel) const;
 
     // Transport
     uint32_t masterPhase() const;
@@ -200,31 +201,13 @@ private:
     uint8_t onsets_[CHANNEL_COUNT];
     int16_t cvInput_[CV_SOURCE_COUNT];
     ChannelState channels_[CHANNEL_COUNT];
-    Pattern instances_[CHANNEL_COUNT];
+    PatternBank* bank_;
     ModulatedPatternState* modulated_;
 };
 
 struct ModulatedPatternState {
-    static constexpr uint8_t NOT_MODULATED = 0xFF;
+    ModulatedPatternState() : dirty(0) {}
 
-    ModulatedPatternState()
-        : pattern(), length{}, loaded{}, cursor(0), dirty(0) {
-        for (uint8_t c = 0; c < SequencerEngine::CHANNEL_COUNT; ++c) {
-            loaded[c] = NOT_MODULATED;
-        }
-    }
-
-    // PRD 5.0 amendement 1quater : un bit par canal, la copie du canal differe
-    // du template qu il a charge. Il garde le chargement : une copie changee
-    // fait poser la question SURE: YES / NO.
-    //
-    // ⚠️ Il n est JAMAIS persiste, et les six bits partent a ZERO — decision du
-    // proprietaire du 2026-09-14. Consequence acceptee et nommee : apres une
-    // coupure, le premier chargement d un canal ecrase une copie editee sans
-    // rien demander.
-    //
-    // Le garde de borne n est pas decoratif : les six bits vivent dans un octet,
-    // donc un index hors des six deborderait sur un voisin.
     bool isDirty(uint8_t channel) const {
         return channel < SequencerEngine::CHANNEL_COUNT
                && (dirty & static_cast<uint8_t>(1u << channel)) != 0;
@@ -242,19 +225,11 @@ struct ModulatedPatternState {
         }
     }
 
-    Pattern pattern[SequencerEngine::CHANNEL_COUNT];
-    uint8_t length[SequencerEngine::CHANNEL_COUNT];
-    uint8_t loaded[SequencerEngine::CHANNEL_COUNT];
-    uint8_t cursor;
     uint8_t dirty;
 };
 
 static_assert(SequencerEngine::CHANNEL_COUNT <= 8,
               "the change flag holds one bit per channel in a single byte");
-
-static_assert(ModulatedPatternState::NOT_MODULATED
-                  > SequencerEngine::PATTERN_COUNT - 1,
-              "the sentinel must never name a pattern of the bank");
 
 }  // namespace flexseq
 

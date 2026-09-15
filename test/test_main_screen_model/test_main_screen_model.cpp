@@ -1,6 +1,7 @@
 #include <unity.h>
 
 #include <flexseq/MainScreenModel.h>
+#include <flexseq/PatternBank.h>
 #include <flexseq/SequencerEngine.h>
 #include <flexseq/Transport.h>
 #include <flexseq/UiController.h>
@@ -16,11 +17,14 @@ void tearDown() {}
 namespace {
 
 struct Rig {
+    flexseq::PatternBank bank;
     SequencerEngine engine;
     Transport transport;
     UiController ui;
 
-    Rig() : engine(), transport(engine), ui(engine, transport) {}
+    Rig() : engine(), transport(engine), ui(engine, transport) {
+        engine.setPatternBank(&bank);
+    }
 
     // Entre dans l'onglet du channel demande, depuis la barre.
     void enterChannel(uint8_t channel) {

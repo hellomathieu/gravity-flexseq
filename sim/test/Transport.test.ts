@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { PatternBank } from "../src/domain/PatternBank.js";
 import { SequencerEngine, ChannelMode } from "../src/domain/SequencerEngine";
 import { Transport } from "../src/domain/Transport";
 
@@ -7,6 +8,7 @@ const STEP = 96;
 describe("le transport — D79", () => {
   it("start() arme et le premier tick sonne le step 0", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     const t = new Transport(e);
     for (let ch = 0; ch < 6; ++ch) e.setChannelMode(ch, ChannelMode.SEQ);
     t.resume();
@@ -22,6 +24,7 @@ describe("le transport — D79", () => {
 
   it("resume() n'arme pas", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     const t = new Transport(e);
     e.setChannelMode(0, ChannelMode.SEQ);
     t.start();

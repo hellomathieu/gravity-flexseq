@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <libGravity.h>
 
+#include <flexseq/PatternBank.h>
 #include <flexseq/SequencerEngine.h>
 #include <flexseq/Transport.h>
 #include <flexseq/TriggerSequencer.h>
@@ -26,6 +27,7 @@
 namespace {
 
 flexseq::SequencerEngine engine;
+flexseq::PatternBank patternBank;
 flexseq::Transport transport(engine);
 flexseq::TriggerSequencer triggers(engine);
 
@@ -38,10 +40,11 @@ constexpr uint16_t STEP_MS = 10; // duration of one 1/16 step (=> 40 ms per 4 st
 
 void setup() {
     gravity.Init();
+    engine.setPatternBank(&patternBank);
     gravity.outputs[TEST_CHANNEL].Low();
 
     // Preload a deterministic pattern: active steps 0, 4, 8, 12 (length 16).
-    flexseq::Pattern* pattern = engine.instanceForChannel(TEST_CHANNEL);
+    flexseq::Pattern* pattern = engine.patternForChannel(TEST_CHANNEL);
     pattern->writeStep(0, true);
     pattern->writeStep(4, true);
     pattern->writeStep(8, true);

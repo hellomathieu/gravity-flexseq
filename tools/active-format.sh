@@ -42,20 +42,20 @@ flexseq_resolve_active_format() {
     flexseq_format_die "avr-nm n'a pas pu lire $fmt_elf. Le format actif n'est pas indecidable : il n'a pas ete cherche."
     return 1
   }
-  fmt_v3="$(printf '%s\n' "$fmt_symbols" | grep -c 'flexseq::PersistentImageV3::')"
+  fmt_v4="$(printf '%s\n' "$fmt_symbols" | grep -c 'flexseq::PersistentImageV4::')"
   fmt_v2="$(printf '%s\n' "$fmt_symbols" | grep -c 'flexseq::PersistentImage::')"
-  case "$fmt_v3:$fmt_v2" in
+  case "$fmt_v4:$fmt_v2" in
     0:0) flexseq_format_die "format actif INDECIDABLE : le binaire ne porte aucun symbole d'image de persistance. Ne pas rendre de verdict sur une supposition."; return 1 ;;
     0:*) fmt_major=2 ;;
-    *:0) fmt_major=3 ;;
-    *)   flexseq_format_die "format actif AMBIGU : le binaire lie les deux images (v3 $fmt_v3 symboles, v2 $fmt_v2). Ne pas rendre de verdict."; return 1 ;;
+    *:0) fmt_major=4 ;;
+    *)   flexseq_format_die "format actif AMBIGU : le binaire lie les deux images (v4 $fmt_v4 symboles, v2 $fmt_v2). Ne pas rendre de verdict."; return 1 ;;
   esac
   FLEXSEQ_FORMAT_DETECTED="$fmt_major"
 
   if [ -n "${FLEXSEQ_FORMAT_FORCE:-}" ]; then
     case "$FLEXSEQ_FORMAT_FORCE" in
-      2|3) ;;
-      *) flexseq_format_die "FLEXSEQ_FORMAT_FORCE accepte 2 ou 3, lu \"$FLEXSEQ_FORMAT_FORCE\""; return 1 ;;
+      2|4) ;;
+      *) flexseq_format_die "FLEXSEQ_FORMAT_FORCE accepte 2 ou 4, lu \"$FLEXSEQ_FORMAT_FORCE\""; return 1 ;;
     esac
     fmt_major="$FLEXSEQ_FORMAT_FORCE"
   fi

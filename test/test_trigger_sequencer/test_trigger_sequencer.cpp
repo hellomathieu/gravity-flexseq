@@ -2,6 +2,7 @@
 #include <unity.h>
 
 #include <flexseq/Prng.h>
+#include <flexseq/PatternBank.h>
 #include <flexseq/SequencerEngine.h>
 #include <flexseq/TriggerSequencer.h>
 
@@ -26,14 +27,16 @@ static const uint16_t STEP = SequencerEngine::PPQN; // 96 = default ticksPerStep
 
 void test_triggers_only_on_active_step_onset() {
     SequencerEngine engine;
+    flexseq::PatternBank engineBank;
+    engine.setPatternBank(&engineBank);
     TriggerSequencer trig(engine);
     seqMode(engine);
 
     // Channel 0 plays pattern 0 with steps 1 and 3 active, length 4.
     engine.setSelectedPattern(0, 0);
     engine.setBaseLength(0, 4);
-    engine.instanceForChannel(0)->writeStep(1, true);
-    engine.instanceForChannel(0)->writeStep(3, true);
+    engine.patternForChannel(0)->writeStep(1, true);
+    engine.patternForChannel(0)->writeStep(3, true);
 
     engine.start();
 
@@ -56,10 +59,12 @@ void test_triggers_only_on_active_step_onset() {
 
 void test_no_trigger_without_a_step_onset() {
     SequencerEngine engine;
+    flexseq::PatternBank engineBank;
+    engine.setPatternBank(&engineBank);
     TriggerSequencer trig(engine);
     seqMode(engine);
 
-    engine.instanceForChannel(0)->writeStep(1, true);
+    engine.patternForChannel(0)->writeStep(1, true);
     engine.setBaseLength(0, 4);
     engine.start();
 
@@ -70,6 +75,8 @@ void test_no_trigger_without_a_step_onset() {
 
 void test_channels_with_different_patterns_are_independent() {
     SequencerEngine engine;
+    flexseq::PatternBank engineBank;
+    engine.setPatternBank(&engineBank);
     TriggerSequencer trig(engine);
     seqMode(engine);
 
@@ -77,7 +84,7 @@ void test_channels_with_different_patterns_are_independent() {
     engine.setSelectedPattern(1, 1);
     engine.setBaseLength(0, 4);
     engine.setBaseLength(1, 4);
-    engine.instanceForChannel(0)->writeStep(1, true);
+    engine.patternForChannel(0)->writeStep(1, true);
 
     engine.start();
     engine.advance(STEP); // both onto step 1
@@ -227,12 +234,14 @@ void test_counts_hold_still_until_the_next_update() {
 // output can only be re-armed once per pass: the surplus must WAIT, not vanish.
 void test_an_onset_the_output_could_not_emit_is_not_lost() {
     SequencerEngine engine;
+    flexseq::PatternBank engineBank;
+    engine.setPatternBank(&engineBank);
     TriggerSequencer trig(engine);
     seqMode(engine);
 
     engine.setSelectedPattern(0, 0);
-    engine.instanceForChannel(0)->writeStep(0, true);
-    engine.instanceForChannel(0)->setRatchet(0, flexseq::RATCHET_6);
+    engine.patternForChannel(0)->writeStep(0, true);
+    engine.patternForChannel(0)->setRatchet(0, flexseq::RATCHET_6);
     engine.setSubdiv(0, -8);
     engine.start();
 
@@ -258,13 +267,15 @@ void test_an_onset_the_output_could_not_emit_is_not_lost() {
 // dries up after the first one.
 void test_the_debt_stops_at_one_whole_step() {
     SequencerEngine engine;
+    flexseq::PatternBank engineBank;
+    engine.setPatternBank(&engineBank);
     TriggerSequencer trig(engine);
     seqMode(engine);
 
     engine.setSelectedPattern(0, 0);
     for (uint8_t i = 0; i < Pattern::DEFAULT_TOTAL_STEPS; ++i) {
-        engine.instanceForChannel(0)->writeStep(i, true);
-        engine.instanceForChannel(0)->setRatchet(i, flexseq::RATCHET_6);
+        engine.patternForChannel(0)->writeStep(i, true);
+        engine.patternForChannel(0)->setRatchet(i, flexseq::RATCHET_6);
     }
     engine.setSubdiv(0, -8);
     engine.start();

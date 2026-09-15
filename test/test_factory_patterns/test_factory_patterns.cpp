@@ -75,11 +75,8 @@ uint16_t expectedMask(uint8_t index) {
 }
 
 uint8_t expectedRecordByte(uint8_t index, uint8_t offset) {
-    if (index >= flexseq::PATTERN_COUNT || offset >= 24) {
+    if (index >= flexseq::PATTERN_COUNT || offset >= 23) {
         return 0;
-    }
-    if (offset == 23) {
-        return 16;
     }
     if (offset >= 2) {
         return 0;
@@ -182,42 +179,41 @@ void test_the_factory_constants_hold_their_values() {
     TEST_ASSERT_EQUAL_UINT8(8, FACTORY_PATTERN_COUNT);
     TEST_ASSERT_EQUAL_UINT8(16, FACTORY_STEP_COUNT);
     TEST_ASSERT_EQUAL_UINT8(2, FACTORY_MASK_BYTES);
-    TEST_ASSERT_EQUAL_UINT8(16, flexseq::persist::v3::FACTORY_TEMPLATE_LENGTH);
 }
 
-void test_the_whole_factory_template_zone_matches_the_contract() {
-    uint8_t expected[384];
-    uint8_t produced[384];
+void test_the_whole_factory_bank_matches_the_contract() {
+    uint8_t expected[368];
+    uint8_t produced[368];
     uint16_t cursor = 0;
     for (uint8_t index = 0; index < flexseq::PATTERN_COUNT; ++index) {
-        for (uint8_t offset = 0; offset < 24; ++offset) {
+        for (uint8_t offset = 0; offset < 23; ++offset) {
             expected[cursor] = expectedRecordByte(index, offset);
-            produced[cursor] = flexseq::persist::v3::factoryTemplateByte(index, offset);
+            produced[cursor] = flexseq::persist::v4::factoryPatternByte(index, offset);
             ++cursor;
         }
     }
-    TEST_ASSERT_EQUAL_UINT16(384, cursor);
-    TEST_ASSERT_EQUAL_UINT16(384, flexseq::PATTERN_COUNT * flexseq::persist::v3::TEMPLATE_RECORD);
-    TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, produced, 384);
+    TEST_ASSERT_EQUAL_UINT16(368, cursor);
+    TEST_ASSERT_EQUAL_UINT16(368, flexseq::PATTERN_COUNT * flexseq::persist::v4::BANK_RECORD);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, produced, 368);
 }
 
 void test_a_factory_record_is_little_endian() {
     for (uint8_t index = 0; index < FACTORY_PATTERN_COUNT; ++index) {
         const uint16_t mask = expectedMask(index);
         TEST_ASSERT_EQUAL_UINT8(mask & 0xFF,
-                                flexseq::persist::v3::factoryTemplateByte(index, 0));
+                                flexseq::persist::v4::factoryPatternByte(index, 0));
         TEST_ASSERT_EQUAL_UINT8((mask >> 8) & 0xFF,
-                                flexseq::persist::v3::factoryTemplateByte(index, 1));
+                                flexseq::persist::v4::factoryPatternByte(index, 1));
     }
-    TEST_ASSERT_EQUAL_UINT8(0x11, flexseq::persist::v3::factoryTemplateByte(0, 0));
-    TEST_ASSERT_EQUAL_UINT8(0x91, flexseq::persist::v3::factoryTemplateByte(0, 1));
+    TEST_ASSERT_EQUAL_UINT8(0x11, flexseq::persist::v4::factoryPatternByte(0, 0));
+    TEST_ASSERT_EQUAL_UINT8(0x91, flexseq::persist::v4::factoryPatternByte(0, 1));
 }
 
 void test_a_factory_record_carries_no_step_above_fifteen() {
     for (uint8_t index = 0; index < flexseq::PATTERN_COUNT; ++index) {
         for (uint8_t offset = 2; offset < 5; ++offset) {
             TEST_ASSERT_EQUAL_UINT8(0,
-                                    flexseq::persist::v3::factoryTemplateByte(index, offset));
+                                    flexseq::persist::v4::factoryPatternByte(index, offset));
         }
     }
 }
@@ -226,14 +222,8 @@ void test_a_factory_record_carries_no_ratchet() {
     for (uint8_t index = 0; index < flexseq::PATTERN_COUNT; ++index) {
         for (uint8_t offset = 5; offset < 23; ++offset) {
             TEST_ASSERT_EQUAL_UINT8(0,
-                                    flexseq::persist::v3::factoryTemplateByte(index, offset));
+                                    flexseq::persist::v4::factoryPatternByte(index, offset));
         }
-    }
-}
-
-void test_every_factory_record_declares_sixteen_steps() {
-    for (uint8_t index = 0; index < flexseq::PATTERN_COUNT; ++index) {
-        TEST_ASSERT_EQUAL_UINT8(16, flexseq::persist::v3::factoryTemplateByte(index, 23));
     }
 }
 
@@ -241,23 +231,23 @@ void test_the_b_slots_carry_content_free_records() {
     for (uint8_t index = FACTORY_PATTERN_COUNT; index < flexseq::PATTERN_COUNT; ++index) {
         for (uint8_t offset = 0; offset < 23; ++offset) {
             TEST_ASSERT_EQUAL_UINT8(0,
-                                    flexseq::persist::v3::factoryTemplateByte(index, offset));
+                                    flexseq::persist::v4::factoryPatternByte(index, offset));
         }
-        TEST_ASSERT_EQUAL_UINT8(16, flexseq::persist::v3::factoryTemplateByte(index, 23));
     }
 }
 
 void test_a_factory_record_refuses_an_offset_out_of_range() {
     for (uint8_t index = 0; index < flexseq::PATTERN_COUNT; ++index) {
-        TEST_ASSERT_EQUAL_UINT8(0, flexseq::persist::v3::factoryTemplateByte(index, 24));
-        TEST_ASSERT_EQUAL_UINT8(0, flexseq::persist::v3::factoryTemplateByte(index, 255));
+        TEST_ASSERT_EQUAL_UINT8(0, flexseq::persist::v4::factoryPatternByte(index, 23));
+        TEST_ASSERT_EQUAL_UINT8(0, flexseq::persist::v4::factoryPatternByte(index, 24));
+        TEST_ASSERT_EQUAL_UINT8(0, flexseq::persist::v4::factoryPatternByte(index, 255));
     }
 }
 
 void test_a_factory_record_refuses_an_index_out_of_range() {
-    for (uint8_t offset = 0; offset < 24; ++offset) {
-        TEST_ASSERT_EQUAL_UINT8(0, flexseq::persist::v3::factoryTemplateByte(16, offset));
-        TEST_ASSERT_EQUAL_UINT8(0, flexseq::persist::v3::factoryTemplateByte(255, offset));
+    for (uint8_t offset = 0; offset < 23; ++offset) {
+        TEST_ASSERT_EQUAL_UINT8(0, flexseq::persist::v4::factoryPatternByte(16, offset));
+        TEST_ASSERT_EQUAL_UINT8(0, flexseq::persist::v4::factoryPatternByte(255, offset));
     }
 }
 
@@ -273,11 +263,10 @@ int main(int, char**) {
     RUN_TEST(test_the_b_slots_have_no_factory_mask);
     RUN_TEST(test_the_factory_mask_refuses_an_index_out_of_range);
     RUN_TEST(test_the_factory_constants_hold_their_values);
-    RUN_TEST(test_the_whole_factory_template_zone_matches_the_contract);
+    RUN_TEST(test_the_whole_factory_bank_matches_the_contract);
     RUN_TEST(test_a_factory_record_is_little_endian);
     RUN_TEST(test_a_factory_record_carries_no_step_above_fifteen);
     RUN_TEST(test_a_factory_record_carries_no_ratchet);
-    RUN_TEST(test_every_factory_record_declares_sixteen_steps);
     RUN_TEST(test_the_b_slots_carry_content_free_records);
     RUN_TEST(test_a_factory_record_refuses_an_offset_out_of_range);
     RUN_TEST(test_a_factory_record_refuses_an_index_out_of_range);

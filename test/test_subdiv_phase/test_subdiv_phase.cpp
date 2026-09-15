@@ -2,6 +2,7 @@
 #include <unity.h>
 
 #include <flexseq/Pattern.h>
+#include <flexseq/PatternBank.h>
 #include <flexseq/SequencerEngine.h>
 #include <flexseq/Subdiv.h>
 
@@ -187,9 +188,11 @@ void test_a_drained_burst_of_ticks_does_not_lose_the_pending_rate() {
 namespace {
 
 struct DriftRig {
+    flexseq::PatternBank bank;
     SequencerEngine engine;
 
     DriftRig() {
+        engine.setPatternBank(&bank);
         for (uint8_t ch = 0; ch < 2; ++ch) {
             engine.setChannelMode(ch, flexseq::MODE_SEQ);
         }
@@ -252,14 +255,14 @@ void test_editing_the_ratchet_of_the_current_step_does_not_shift_the_channel() {
     {
         DriftRig r;
         const int8_t step = r.engine.effectiveStep(0);
-        r.engine.instanceForChannel(0)->setRatchet(static_cast<uint8_t>(step), flexseq::RATCHET_TRIPLET);
+        r.engine.patternForChannel(0)->setRatchet(static_cast<uint8_t>(step), flexseq::RATCHET_TRIPLET);
         r.engine.refreshTiming(0);
         TEST_ASSERT_EQUAL_INT32(0, r.drift());
     }
     {
         DriftRig r;
         const int8_t step = r.engine.effectiveStep(0);
-        r.engine.instanceForChannel(0)->setRatchet(static_cast<uint8_t>(step), flexseq::RATCHET_NONE);
+        r.engine.patternForChannel(0)->setRatchet(static_cast<uint8_t>(step), flexseq::RATCHET_NONE);
         r.engine.refreshTiming(0);
         TEST_ASSERT_EQUAL_INT32(0, r.drift());
     }

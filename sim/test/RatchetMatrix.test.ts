@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { PatternBank } from "../src/domain/PatternBank.js";
 import {
   ChannelMode,
   SequencerEngine,
@@ -61,9 +62,10 @@ const TRIGGERS: number[][] = [
 
 function rig(subdiv: number, code: number, activeSteps: number[], length = 4) {
   const engine = new SequencerEngine();
+  engine.setPatternBank(new PatternBank());
   const seq = new TriggerSequencer(engine);
   engine.setChannelMode(0, ChannelMode.SEQ);
-  const pattern = engine.instanceForChannel(0)!;
+  const pattern = engine.patternForChannel(0)!;
   for (const step of activeSteps) pattern.writeStep(step, true);
   if (code !== RATCHET_NONE) pattern.setRatchet(0, code);
   engine.setBaseLength(0, length);
@@ -200,12 +202,13 @@ describe("Le train de declenchements", () => {
 describe("Le refus a la saisie", () => {
   function editRig(subdiv: number) {
     const engine = new SequencerEngine();
+    engine.setPatternBank(new PatternBank());
     const transport = new Transport(engine);
     const ui = new UiController(engine, transport);
     for (let ch = 0; ch < 6; ++ch) engine.setChannelMode(ch, ChannelMode.SEQ);
     engine.setSubdiv(0, subdiv);
     engine.refreshTiming();
-    const pattern = engine.instanceForChannel(0)!;
+    const pattern = engine.patternForChannel(0)!;
     pattern.writeStep(0, true);
 
     ui.handle(UiEvent.Press);

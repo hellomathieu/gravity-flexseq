@@ -2,9 +2,9 @@
 
 #include <flexseq/Persistence.h>
 
-#if defined(ACTIVE_FORMAT_V3)
-namespace active = flexseq::persist::v3;
-static constexpr unsigned kScanSize = flexseq::persist::v3::IMAGE_SIZE;
+#if defined(ACTIVE_FORMAT_V4)
+namespace active = flexseq::persist::v4;
+static constexpr unsigned kScanSize = flexseq::persist::v4::IMAGE_SIZE;
 #elif defined(ACTIVE_FORMAT_V2)
 namespace active = flexseq::persist;
 static constexpr unsigned kScanSize = flexseq::persist::TOTAL_SIZE;

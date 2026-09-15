@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { PatternBank } from "../src/domain/PatternBank.js";
 import { SequencerEngine, ChannelMode } from "../src/domain/SequencerEngine";
 import { TriggerSequencer } from "../src/domain/TriggerSequencer";
 import { RATCHET_6, RATCHET_TRIPLET } from "../src/domain/Pattern";
@@ -14,6 +15,7 @@ const STEP = 96; // DEFAULT_SUBDIV = /1
 
 function routed(base: number, source = CV_SOURCE_1): SequencerEngine {
   const e = new SequencerEngine();
+  e.setPatternBank(new PatternBank());
   e.setChannelMode(0, ChannelMode.SEQ);
   e.setBaseLength(0, base);
   e.setCvDestination(0, source, CvDestination.LENGTH);
@@ -33,6 +35,7 @@ describe("Routage CV — destinations", () => {
 
   it("ne route rien sur un moteur neuf", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     for (let ch = 0; ch < e.channelCount(); ++ch) {
       expect(e.getCvDestination(ch, CV_SOURCE_1)).toBe(CvDestination.NONE);
       expect(e.getCvDestination(ch, CV_SOURCE_2)).toBe(CvDestination.NONE);
@@ -50,6 +53,7 @@ describe("Routage CV — destinations", () => {
 
   it("refuse une source hors plage", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     expect(e.setCvInput(CV_SOURCE_1, 330)).toBe(true);
     expect(e.setCvInput(2, 330)).toBe(false);
     expect(e.getCvInput(CV_SOURCE_1)).toBe(330);
@@ -93,6 +97,7 @@ describe("Length CV — application", () => {
 
   it("garde un etat d'hysteresis par channel", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.setChannelMode(0, ChannelMode.SEQ);
     e.setChannelMode(1, ChannelMode.SEQ);
     e.setBaseLength(0, 18);
@@ -117,6 +122,7 @@ describe("Length CV — application", () => {
 describe("Length CV — CV1 et CV2", () => {
   it("laisse chaque source piloter seule", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.setChannelMode(0, ChannelMode.SEQ);
     e.setChannelMode(1, ChannelMode.SEQ);
     e.setBaseLength(0, 18);
@@ -166,6 +172,7 @@ describe("Length CV — CV1 et CV2", () => {
 
   it("laisse un channel non route sur sa base", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.setChannelMode(0, ChannelMode.SEQ);
     e.setBaseLength(0, 18);
     e.setCvDestination(0, CV_SOURCE_1, CvDestination.PATTERN);
@@ -259,6 +266,7 @@ describe("Length CV — invariants", () => {
 describe("PATTERN CV — l'index effectif", () => {
   function routedPattern(selected: number, source = CV_SOURCE_1): SequencerEngine {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.setChannelMode(0, ChannelMode.SEQ);
     e.setSelectedPattern(0, selected);
     e.setCvDestination(0, source, CvDestination.PATTERN);
@@ -267,6 +275,7 @@ describe("PATTERN CV — l'index effectif", () => {
 
   it("rend le pattern selectionne quand rien n'est route", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     for (let ch = 0; ch < 6; ++ch) expect(e.patternCvIndex(ch)).toBe(0);
     e.setSelectedPattern(2, 9);
     expect(e.patternCvIndex(2)).toBe(9);
@@ -308,6 +317,7 @@ describe("PATTERN CV — l'index effectif", () => {
 
   it("ignore une source routee vers la longueur", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.setChannelMode(0, ChannelMode.SEQ);
     e.setSelectedPattern(0, 3);
     e.setBaseLength(0, 18);
@@ -347,6 +357,7 @@ describe("Changement de mode — ce qu'il laisse intact", () => {
 
   it("conserve le routage", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.setCvDestination(0, CV_SOURCE_1, CvDestination.LENGTH);
     e.setCvDestination(0, CV_SOURCE_2, CvDestination.PATTERN);
     for (const mode of COURSE) {
@@ -359,6 +370,7 @@ describe("Changement de mode — ce qu'il laisse intact", () => {
 
   it("conserve les bases", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.setBaseLength(0, 18);
     e.setSelectedPattern(0, 7);
     for (const mode of COURSE) {
@@ -374,6 +386,7 @@ describe("Gating par mode (E3.7-F2)", () => {
   it("laisse la base a un routage LENGTH hors SEQ", () => {
     for (const outside of [ChannelMode.CLOCK, ChannelMode.RANDOM]) {
       const e = new SequencerEngine();
+      e.setPatternBank(new PatternBank());
       e.setBaseLength(0, 18);
       e.setChannelMode(0, outside);
       e.setCvDestination(0, CV_SOURCE_1, CvDestination.LENGTH);
@@ -387,6 +400,7 @@ describe("Gating par mode (E3.7-F2)", () => {
 
   it("remet la zone CV a zero au changement de mode", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.setBaseLength(0, 18);
     e.setCvDestination(0, CV_SOURCE_1, CvDestination.LENGTH);
     e.setChannelMode(0, ChannelMode.SEQ);
@@ -406,6 +420,7 @@ describe("Gating par mode (E3.7-F2)", () => {
 
   it("reapplique le CV a la premiere frontiere apres le retour en SEQ", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.setBaseLength(0, 18);
     e.setCvDestination(0, CV_SOURCE_1, CvDestination.LENGTH);
     e.setChannelMode(0, ChannelMode.SEQ);
@@ -431,6 +446,7 @@ describe("Gating par mode (E3.7-F2)", () => {
 describe("Changement de base — ce qu'il laisse intact", () => {
   it("conserve l'offset de longueur", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.setChannelMode(0, ChannelMode.SEQ);
     e.setBaseLength(0, 18);
     e.setCvDestination(0, CV_SOURCE_1, CvDestination.LENGTH);
@@ -451,6 +467,7 @@ describe("Changement de base — ce qu'il laisse intact", () => {
   // que la zone n'a pas bouge. Les bases 3 et 4 gardent de la marge sous 15.
   it("fait suivre l'index derive du pattern sans perdre l'offset", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.setChannelMode(0, ChannelMode.SEQ);
     e.setSelectedPattern(0, 3);
     e.setCvDestination(0, CV_SOURCE_1, CvDestination.PATTERN);
@@ -468,6 +485,7 @@ describe("Changement de base — ce qu'il laisse intact", () => {
 describe("STEP CV — lecture decalee (lot STEP, etape 4d)", () => {
   function routedStep(base: number): SequencerEngine {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.setChannelMode(0, ChannelMode.SEQ);
     e.setBaseLength(0, base);
     e.setCvDestination(0, CV_SOURCE_1, CvDestination.STEP);
@@ -517,7 +535,7 @@ describe("STEP CV — lecture decalee (lot STEP, etape 4d)", () => {
 
   it("un triolet sur le step LU allonge le step", () => {
     const e = routedStep(12);
-    e.instanceForChannel(0)!.setRatchet(4, RATCHET_TRIPLET);
+    e.patternForChannel(0)!.setRatchet(4, RATCHET_TRIPLET);
     e.setCvInput(CV_SOURCE_1, 99);
     e.start();
     e.advance(STEP);
@@ -529,7 +547,7 @@ describe("STEP CV — lecture decalee (lot STEP, etape 4d)", () => {
 
   it("un triolet sur le step LOCAL seul n'allonge pas le step", () => {
     const e = routedStep(12);
-    e.instanceForChannel(0)!.setRatchet(1, RATCHET_TRIPLET);
+    e.patternForChannel(0)!.setRatchet(1, RATCHET_TRIPLET);
     e.setCvInput(CV_SOURCE_1, 99);
     e.start();
     e.advance(STEP);
@@ -556,7 +574,7 @@ describe("STEP CV — lecture decalee (lot STEP, etape 4d)", () => {
   it("le trigger part sur un step actif au step LU seulement", () => {
     const e = routedStep(12);
     const t = new TriggerSequencer(e);
-    e.instanceForChannel(0)!.writeStep(5, true);
+    e.patternForChannel(0)!.writeStep(5, true);
     advanceToLocalStepTwoUnderStepOffsetThree(e, t);
     expect(t.triggerCount(0)).toBe(1);
   });
@@ -564,7 +582,7 @@ describe("STEP CV — lecture decalee (lot STEP, etape 4d)", () => {
   it("le trigger reste muet sur un step actif au step LOCAL seulement", () => {
     const e = routedStep(12);
     const t = new TriggerSequencer(e);
-    e.instanceForChannel(0)!.writeStep(2, true);
+    e.patternForChannel(0)!.writeStep(2, true);
     advanceToLocalStepTwoUnderStepOffsetThree(e, t);
     expect(t.triggerCount(0)).toBe(0);
   });
@@ -575,11 +593,12 @@ describe("STEP CV — lecture decalee (lot STEP, etape 4d)", () => {
   // contenu comme le ratchet sont lus au step lu de la NOUVELLE longueur.
   it("un changement de longueur a la frontiere lit le contenu et le ratchet au nouveau step lu", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     const t = new TriggerSequencer(e);
     e.setChannelMode(0, ChannelMode.SEQ);
     e.setBaseLength(0, 12);
-    e.instanceForChannel(0)!.writeStep(1, true);
-    e.instanceForChannel(0)!.setRatchet(1, RATCHET_TRIPLET);
+    e.patternForChannel(0)!.writeStep(1, true);
+    e.patternForChannel(0)!.setRatchet(1, RATCHET_TRIPLET);
     e.setCvDestination(0, CV_SOURCE_1, CvDestination.LENGTH);
     e.setCvDestination(0, CV_SOURCE_2, CvDestination.STEP);
     e.setCvInput(CV_SOURCE_2, 99);
@@ -608,10 +627,11 @@ describe("STEP CV — lecture decalee (lot STEP, etape 4d)", () => {
   // STEP-9.3 G1 : un reset CV remet localStep a 0 et garde la zone STEP.
   it("un reset CV garde la zone STEP et lit depuis l'offset", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     const t = new TriggerSequencer(e);
     e.setChannelMode(0, ChannelMode.SEQ);
     e.setBaseLength(0, 12);
-    e.instanceForChannel(0)!.writeStep(3, true);
+    e.patternForChannel(0)!.writeStep(3, true);
     expect(e.setCvDestination(0, CV_SOURCE_1, CvDestination.RESET)).toBe(true);
     e.setCvDestination(0, CV_SOURCE_2, CvDestination.STEP);
     e.setCvInput(CV_SOURCE_2, 99);
@@ -645,6 +665,7 @@ describe("STEP CV — lecture decalee (lot STEP, etape 4d)", () => {
   // de miroir, la decision musicale sur le nouveau template est prouvee en C++.
   it("l'index PATTERN et l'offset STEP changent a la meme frontiere (valeurs derivees)", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.setChannelMode(0, ChannelMode.SEQ);
     e.setBaseLength(0, 12);
     e.setSelectedPattern(0, 5);
@@ -741,7 +762,7 @@ describe("STEP CV — lecture decalee (lot STEP, etape 4d)", () => {
   // R6 est admis par la matrice : un ecart ici est la coordonnee, pas la cadence.
   it("un ratchet 6 sur le step LU donne six triggers", () => {
     const e = routedStep(12);
-    e.instanceForChannel(0)!.setRatchet(4, RATCHET_6);
+    e.patternForChannel(0)!.setRatchet(4, RATCHET_6);
     e.setCvInput(CV_SOURCE_1, 99);
     e.start();
     e.advance(STEP);
@@ -753,7 +774,7 @@ describe("STEP CV — lecture decalee (lot STEP, etape 4d)", () => {
 
   it("un ratchet 6 sur le step LOCAL seul donne un trigger", () => {
     const e = routedStep(12);
-    e.instanceForChannel(0)!.setRatchet(1, RATCHET_6);
+    e.patternForChannel(0)!.setRatchet(1, RATCHET_6);
     e.setCvInput(CV_SOURCE_1, 99);
     e.start();
     e.advance(STEP);
@@ -780,6 +801,7 @@ describe("STEP CV — lecture decalee (lot STEP, etape 4d)", () => {
   // STEP-9.3 G11 : en CLOCK un routage STEP reste inerte.
   it("un routage STEP en CLOCK garde une zone nulle et un trigger par step", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     const t = new TriggerSequencer(e);
     e.setChannelMode(0, ChannelMode.CLOCK);
     e.setBaseLength(0, 12);

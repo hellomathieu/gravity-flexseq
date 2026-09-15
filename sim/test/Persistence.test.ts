@@ -10,12 +10,12 @@ import {
   PATTERN_STEP_BYTES,
   PersistenceScheduler,
   PersistentImage,
-  PersistentImageV3,
+  PersistentImageV4,
   bootstrap,
   PREFS_OFFSET,
   QUIET_MS,
   TOTAL_SIZE,
-  v3,
+  v4,
   defaultPreferences,
   type Preferences,
   type Storage,
@@ -27,13 +27,10 @@ import {
   ChannelMode,
   DEFAULT_CHANNEL_MODE,
   DEFAULT_LENGTH,
-  MAX_LENGTH,
   SequencerEngine,
 } from "../src/domain/SequencerEngine.js";
 import { Transport } from "../src/domain/Transport.js";
-import { DEFAULT_TEMPO, UiController, UiEvent, UiField } from "../src/domain/UiController.js";
-import { ModulatedPatternState } from "../src/domain/ModulatedPatternState.js";
-import { PatternAction } from "../src/domain/PatternAction.js";
+import { DEFAULT_TEMPO, UiController } from "../src/domain/UiController.js";
 import {
   Pattern,
   RATCHET_3,
@@ -43,7 +40,6 @@ import {
   RATCHET_TRIPLET,
 } from "../src/domain/Pattern.js";
 import { subdivAt } from "./helpers/subdivAt.js";
-import { servicePatternAction } from "../src/domain/Persistence.js";
 
 const SENTINEL = 0x5a;
 
@@ -79,17 +75,70 @@ class JournalEeprom implements Storage {
   }
 }
 
-function rigV3() {
+function rigV4() {
+  const bank = new PatternBank();
   const engine = new SequencerEngine();
+  engine.setPatternBank(bank);
   const transport = new Transport(engine);
   const ui = new UiController(engine, transport);
   const prefs: Preferences = defaultPreferences();
-  const image = new PersistentImageV3(engine, ui, prefs);
+  const image = new PersistentImageV4(engine, ui, prefs);
   const scheduler = new PersistenceScheduler();
-  return { engine, transport, ui, prefs, image, scheduler };
+  return { bank, engine, transport, ui, prefs, image, scheduler };
 }
 
-function scanEverything(r: ReturnType<typeof rigV3>): JournalEeprom {
+type RigV4 = ReturnType<typeof rigV4>;
+
+function finishWriteV4(r: RigV4, eeprom: FakeEeprom, nowMs: number): number {
+  let calls = 0;
+  while (r.scheduler.advance(eeprom, r.image, nowMs)) ++calls;
+  return calls;
+}
+
+function bankStepMask(pattern: Pattern): bigint {
+  let mask = 0n;
+  for (let step = 0; step < 36; ++step) {
+    if (pattern.readStep(step) === true) mask |= 1n << BigInt(step);
+  }
+  return mask;
+}
+
+function fillDistinctStateV4(r: RigV4): void {
+  for (let index = 0; index < 16; ++index) {
+    const p = r.bank.getPattern(index)!;
+    p.writeStep(index % 36, true);
+    p.writeStep((index * 7 + 3) % 36, true);
+    p.writeStep(35, index % 2 === 0);
+    p.setRatchet(index % 36, RATCHET_3);
+    p.setRatchet((index * 5 + 1) % 36, RATCHET_TRIPLET);
+  }
+  for (let ch = 0; ch < CHANNEL_COUNT; ++ch) {
+    r.engine.setSelectedPattern(ch, 15 - ch);
+    r.engine.setBaseLength(ch, 36 - ch * 3);
+    r.engine.setSubdiv(ch, subdivAt(ch * 3));
+    r.engine.setBarLength(ch, ch % 2 === 0 ? 3 : 6);
+    r.engine.setChannelMode(ch, (ch % 3) as ChannelMode);
+    r.engine.setOffset(ch, ch * 2 + 1);
+    r.engine.setSkipChance(ch, ch + 2);
+    r.engine.setCvDestination(ch, CV_SOURCE_1, (ch + 1) % 5);
+    r.engine.setCvDestination(ch, CV_SOURCE_2, (ch + 3) % 5);
+  }
+  r.ui.setTempo(287);
+  r.ui.setClockSource(4);
+  r.prefs.rotateScreen = 0;
+  r.prefs.reverseEncoder = 0;
+  r.prefs.cvCalibration[0] = -26;
+  r.prefs.cvCalibration[1] = 300;
+}
+
+function sameStateV4(a: RigV4, b: RigV4): boolean {
+  for (let index = 0; index < a.image.size; ++index) {
+    if (a.image.byteAt(index) !== b.image.byteAt(index)) return false;
+  }
+  return true;
+}
+
+function scanEverything(r: RigV4): JournalEeprom {
   const ee = new JournalEeprom();
   for (let index = 0; index < r.image.size; ++index) {
     ee.cell[r.image.addressAt(index)] = r.image.byteAt(index) ^ 0xff;
@@ -174,56 +223,6 @@ describe("Persistence — the layout fixed by PRD 11.1", () => {
   });
 });
 
-describe("Persistence — the version 3 layout, declared but not in service", () => {
-  it("keeps the zones where PRD 11.1 puts them", () => {
-    expect(v3.HEADER_SIZE).toBe(1);
-    expect(v3.TEMPLATES_OFFSET).toBe(1);
-    expect(v3.TEMPLATES_SIZE).toBe(384);
-    expect(v3.INSTANCES_OFFSET).toBe(385);
-    expect(v3.INSTANCES_SIZE).toBe(138);
-    expect(v3.CHANNELS_OFFSET).toBe(523);
-    expect(v3.CHANNELS_SIZE).toBe(54);
-    expect(v3.GLOBAL_OFFSET).toBe(577);
-    expect(v3.GLOBAL_SIZE).toBe(5);
-    expect(v3.PREFS_OFFSET).toBe(582);
-    expect(v3.PREFS_SIZE).toBe(6);
-    expect(v3.TOTAL_SIZE).toBe(588);
-    expect(v3.LAST_ADDRESS).toBe(971);
-  });
-
-  it("is version 3, and leaves version 2 alone", () => {
-    expect(v3.FORMAT_VERSION).toBe(3);
-    expect(FORMAT_VERSION).toBe(2);
-  });
-
-  it("carries thirty-six steps in each record", () => {
-    expect(v3.STEP_BYTES).toBe(5);
-    expect(v3.RATCHET_BYTES).toBe(18);
-    expect(v3.CONTENT_BYTES).toBe(23);
-    expect(v3.LENGTH_BYTES).toBe(1);
-    expect(v3.TEMPLATE_RECORD).toBe(24);
-    expect(v3.INSTANCE_RECORD).toBe(23);
-    expect(v3.TEMPLATE_COUNT).toBe(16);
-    expect(v3.INSTANCE_COUNT).toBe(6);
-    expect(v3.CHANNEL_RECORD).toBe(9);
-    expect(v3.RECORD_STEPS_AT).toBe(0);
-    expect(v3.RECORD_RATCHETS_AT).toBe(5);
-    expect(v3.RECORD_LENGTH_AT).toBe(23);
-  });
-
-  it("reserves MOD and RANGE in the global zone", () => {
-    expect(v3.GLOBAL_TEMPO_LO_AT).toBe(0);
-    expect(v3.GLOBAL_TEMPO_HI_AT).toBe(1);
-    expect(v3.GLOBAL_CLOCK_SOURCE_AT).toBe(2);
-    expect(v3.GLOBAL_MOD_AT).toBe(3);
-    expect(v3.GLOBAL_RANGE_AT).toBe(4);
-  });
-
-  it("leaves the original firmware's memCode alone", () => {
-    expect(BASE_ADDRESS + v3.TOTAL_SIZE).toBeLessThanOrEqual(1023);
-    expect(1022 - v3.LAST_ADDRESS).toBe(51);
-  });
-});
 
 function fillDistinctPattern(pattern: Pattern): void {
   for (const step of [0, 7, 8, 23, 31, 32, 35]) pattern.writeStep(step, true);
@@ -233,30 +232,30 @@ function fillDistinctPattern(pattern: Pattern): void {
   pattern.setRatchet(35, RATCHET_4);
 }
 
-describe("Persistence — the version 3 content codec", () => {
+describe("Persistence — the version 4 content codec", () => {
   it("round trips the twenty-three bytes", () => {
     const source = new Pattern();
     fillDistinctPattern(source);
 
-    const image = Array.from({ length: 23 }, (_, offset) => v3.contentByte(source, offset));
+    const image = Array.from({ length: 23 }, (_, offset) => v4.contentByte(source, offset));
 
     const loaded = new Pattern();
-    for (let offset = 0; offset < 23; ++offset) v3.applyContentByte(loaded, offset, image[offset] ?? 0);
+    for (let offset = 0; offset < 23; ++offset) v4.applyContentByte(loaded, offset, image[offset] ?? 0);
 
     for (let step = 0; step < Pattern.DEFAULT_TOTAL_STEPS; ++step) {
       expect(loaded.readStep(step)).toBe(source.readStep(step));
       expect(loaded.getRatchet(step)).toBe(source.getRatchet(step));
     }
     for (let offset = 0; offset < 23; ++offset) {
-      expect(v3.contentByte(loaded, offset)).toBe(image[offset]);
+      expect(v4.contentByte(loaded, offset)).toBe(image[offset]);
     }
   });
 
   it("drops the four bits above the last step on load", () => {
     const pattern = new Pattern();
-    v3.applyContentByte(pattern, 4, 0xff);
+    v4.applyContentByte(pattern, 4, 0xff);
 
-    expect(v3.contentByte(pattern, 4)).toBe(0x0f);
+    expect(v4.contentByte(pattern, 4)).toBe(0x0f);
     for (let step = 32; step < Pattern.DEFAULT_TOTAL_STEPS; ++step) {
       expect(pattern.readStep(step)).toBe(true);
     }
@@ -266,166 +265,58 @@ describe("Persistence — the version 3 content codec", () => {
     const pattern = new Pattern();
     for (let step = 0; step < Pattern.DEFAULT_TOTAL_STEPS; ++step) pattern.writeStep(step, true);
 
-    expect(v3.contentByte(pattern, 4)).toBe(0x0f);
+    expect(v4.contentByte(pattern, 4)).toBe(0x0f);
     expect(pattern.writeStep(36, true)).toBe(false);
     expect(pattern.readStep(36)).toBe(null);
-    expect(v3.contentByte(pattern, 4)).toBe(0x0f);
+    expect(v4.contentByte(pattern, 4)).toBe(0x0f);
   });
 
   it("leaves the other step bytes whole", () => {
     const pattern = new Pattern();
     for (let offset = 0; offset < 4; ++offset) {
-      v3.applyContentByte(pattern, offset, 0xff);
-      expect(v3.contentByte(pattern, offset)).toBe(0xff);
+      v4.applyContentByte(pattern, offset, 0xff);
+      expect(v4.contentByte(pattern, offset)).toBe(0xff);
     }
   });
 
   it("normalises an invalid ratchet nibble", () => {
     const pattern = new Pattern();
-    v3.applyContentByte(pattern, 5, 0x53);
+    v4.applyContentByte(pattern, 5, 0x53);
 
     expect(pattern.getRatchet(0)).toBe(RATCHET_3);
     expect(pattern.getRatchet(1)).toBe(RATCHET_NONE);
-    expect(v3.contentByte(pattern, 5)).toBe(0x03);
+    expect(v4.contentByte(pattern, 5)).toBe(0x03);
   });
 
   it("replaces a previous ratchet when the stored nibble is invalid", () => {
     const pattern = new Pattern();
-    v3.applyContentByte(pattern, 5, 0x36);
+    v4.applyContentByte(pattern, 5, 0x36);
     expect(pattern.getRatchet(0)).toBe(RATCHET_6);
     expect(pattern.getRatchet(1)).toBe(RATCHET_3);
 
-    v3.applyContentByte(pattern, 5, 0x51);
+    v4.applyContentByte(pattern, 5, 0x51);
     expect(pattern.getRatchet(0)).toBe(RATCHET_NONE);
     expect(pattern.getRatchet(1)).toBe(RATCHET_NONE);
-    expect(v3.contentByte(pattern, 5)).toBe(0);
+    expect(v4.contentByte(pattern, 5)).toBe(0);
   });
 
   it("ignores an offset past the record", () => {
     const pattern = new Pattern();
-    for (let offset = 0; offset < 23; ++offset) v3.applyContentByte(pattern, offset, (0x11 * offset) & 0xff);
+    for (let offset = 0; offset < 23; ++offset) v4.applyContentByte(pattern, offset, (0x11 * offset) & 0xff);
 
-    const before = Array.from({ length: 23 }, (_, offset) => v3.contentByte(pattern, offset));
+    const before = Array.from({ length: 23 }, (_, offset) => v4.contentByte(pattern, offset));
 
-    v3.applyContentByte(pattern, 23, 0xff);
-    v3.applyContentByte(pattern, 200, 0xff);
+    v4.applyContentByte(pattern, 23, 0xff);
+    v4.applyContentByte(pattern, 200, 0xff);
 
     for (let offset = 0; offset < 23; ++offset) {
-      expect(v3.contentByte(pattern, offset)).toBe(before[offset]);
+      expect(v4.contentByte(pattern, offset)).toBe(before[offset]);
     }
-    expect(v3.contentByte(pattern, 23)).toBe(0);
-    expect(v3.contentByte(pattern, 200)).toBe(0);
+    expect(v4.contentByte(pattern, 23)).toBe(0);
+    expect(v4.contentByte(pattern, 200)).toBe(0);
   });
 });
 
-describe("Persistence — the version 3 template record", () => {
-  it("round trips its twenty-four bytes", () => {
-    const source = new Pattern();
-    fillDistinctPattern(source);
-
-    const image = Array.from({ length: 24 }, (_, offset) => v3.templateByte(source, 20, offset));
-
-    const loaded = new Pattern();
-    const length = { value: 1 };
-    for (let offset = 0; offset < 24; ++offset) {
-      expect(v3.applyTemplateByte(loaded, length, offset, image[offset] ?? 0)).toBe(true);
-    }
-
-    expect(length.value).toBe(20);
-    for (let step = 0; step < Pattern.DEFAULT_TOTAL_STEPS; ++step) {
-      expect(loaded.readStep(step)).toBe(source.readStep(step));
-      expect(loaded.getRatchet(step)).toBe(source.getRatchet(step));
-    }
-    for (let offset = 0; offset < 24; ++offset) {
-      expect(v3.templateByte(loaded, length.value, offset)).toBe(image[offset]);
-    }
-  });
-
-  it("accepts every length in range", () => {
-    for (const wanted of [1, 16, 24, 35, 36]) {
-      const pattern = new Pattern();
-      const length = { value: 8 };
-      expect(v3.applyTemplateByte(pattern, length, 23, wanted)).toBe(true);
-      expect(length.value).toBe(wanted);
-      expect(v3.templateByte(pattern, length.value, 23)).toBe(wanted);
-    }
-  });
-
-  it("refuses a length out of range", () => {
-    for (const refused of [0, 37, 255]) {
-      const pattern = new Pattern();
-      const length = { value: 12 };
-      expect(v3.applyTemplateByte(pattern, length, 23, refused)).toBe(false);
-      expect(length.value).toBe(12);
-    }
-  });
-
-  it("keeps the loaded content when the length is refused", () => {
-    const source = new Pattern();
-    fillDistinctPattern(source);
-
-    const loaded = new Pattern();
-    const length = { value: 12 };
-    for (let offset = 0; offset < 23; ++offset) {
-      expect(v3.applyTemplateByte(loaded, length, offset, v3.contentByte(source, offset))).toBe(true);
-    }
-
-    expect(v3.applyTemplateByte(loaded, length, 23, 0)).toBe(false);
-    expect(length.value).toBe(12);
-
-    for (let offset = 0; offset < 23; ++offset) {
-      expect(v3.contentByte(loaded, offset)).toBe(v3.contentByte(source, offset));
-    }
-  });
-
-  it("clamps the length it emits", () => {
-    const pattern = new Pattern();
-    expect(v3.templateByte(pattern, 0, 23)).toBe(1);
-    expect(v3.templateByte(pattern, 37, 23)).toBe(36);
-    expect(v3.templateByte(pattern, 255, 23)).toBe(36);
-    expect(v3.templateByte(pattern, 1, 23)).toBe(1);
-    expect(v3.templateByte(pattern, 36, 23)).toBe(36);
-    expect(v3.templateByte(pattern, 20, 23)).toBe(20);
-  });
-
-  it("lets the length byte touch no content byte", () => {
-    const pattern = new Pattern();
-    fillDistinctPattern(pattern);
-
-    for (let offset = 0; offset < 23; ++offset) {
-      expect(v3.templateByte(pattern, 4, offset)).toBe(v3.templateByte(pattern, 33, offset));
-      expect(v3.templateByte(pattern, 4, offset)).toBe(v3.contentByte(pattern, offset));
-    }
-    expect(v3.templateByte(pattern, 4, 23)).toBe(4);
-    expect(v3.templateByte(pattern, 33, 23)).toBe(33);
-  });
-
-  it("carries no length in the instance record", () => {
-    const source = new Pattern();
-    fillDistinctPattern(source);
-
-    const loaded = new Pattern();
-    for (let offset = 0; offset < 23; ++offset) {
-      v3.applyContentByte(loaded, offset, v3.contentByte(source, offset));
-    }
-
-    for (let step = 0; step < Pattern.DEFAULT_TOTAL_STEPS; ++step) {
-      expect(loaded.readStep(step)).toBe(source.readStep(step));
-      expect(loaded.getRatchet(step)).toBe(source.getRatchet(step));
-    }
-  });
-
-  it("bounds the length by the pattern capacity, never by the engine cap", () => {
-    expect(v3.MIN_TEMPLATE_LENGTH).toBe(1);
-    expect(v3.MAX_TEMPLATE_LENGTH).toBe(36);
-    expect(MAX_LENGTH).toBe(36);
-
-    const pattern = new Pattern();
-    const length = { value: 1 };
-    expect(v3.applyTemplateByte(pattern, length, 23, 36)).toBe(true);
-    expect(length.value).toBe(36);
-  });
-});
 
 describe("Persistence — round trip", () => {
   it("restores the state byte for byte", () => {
@@ -801,820 +692,316 @@ function instanceStepMask(pattern: Pattern): number {
   return mask;
 }
 
-describe("le demarrage v3", () => {
-  it("seme les templates et remplit les six instances depuis A1", () => {
-    const ee = new JournalEeprom();
-    const r = rigV3();
-    const restored = bootstrap(ee, r.image, r.scheduler, 0);
 
-    expect(restored).toBe(false);
-    expect(ee.cell[385]).toBe(0x11);
-    expect(ee.cell[386]).toBe(0x91);
-    expect(ee.cell[385 + 23]).toBe(16);
-    expect(ee.order.length).toBe(384);
-    for (let channel = 0; channel < CHANNEL_COUNT; ++channel) {
-      expect(r.engine.getSelectedPattern(channel)).toBe(0);
-      expect(instanceStepMask(r.engine.instanceForChannel(channel)!)).toBe(0x9111);
-    }
+describe("Persistence — the version 4 layout, PRD 11.1 and ADR 0014", () => {
+  it("keeps the zones where PRD 11.1 puts them", () => {
+    expect(v4.FORMAT_VERSION).toBe(4);
+    expect(FORMAT_VERSION).toBe(2);
+    expect(v4.HEADER_SIZE).toBe(1);
+    expect(v4.BANK_OFFSET).toBe(1);
+    expect(v4.BANK_SIZE).toBe(368);
+    expect(v4.BANK_RECORD).toBe(23);
+    expect(v4.BANK_COUNT).toBe(16);
+    expect(v4.CHANNELS_OFFSET).toBe(369);
+    expect(v4.CHANNELS_SIZE).toBe(54);
+    expect(v4.GLOBAL_OFFSET).toBe(423);
+    expect(v4.GLOBAL_SIZE).toBe(5);
+    expect(v4.PREFS_OFFSET).toBe(428);
+    expect(v4.PREFS_SIZE).toBe(6);
+    expect(v4.TOTAL_SIZE).toBe(434);
+    expect(v4.LAST_ADDRESS).toBe(817);
   });
 
-  it("restaure les instances et ne les ecrase JAMAIS au demarrage nominal", () => {
-    const ee = new FakeEeprom();
-    const saved = rigV3();
-    for (let channel = 0; channel < CHANNEL_COUNT; ++channel) {
-      saved.engine.instanceForChannel(channel)!.writeStep(30 + channel, true);
-    }
-    saved.scheduler.markDirty(0);
-    while (saved.scheduler.advance(ee, saved.image, QUIET_MS)) {
-      // draine le parcours complet
-    }
-
-    const loaded = rigV3();
-    expect(bootstrap(ee, loaded.image, loaded.scheduler, 0)).toBe(true);
-    for (let channel = 0; channel < CHANNEL_COUNT; ++channel) {
-      expect(instanceStepMask(loaded.engine.instanceForChannel(channel)!)).toBe(
-        1 << (30 + channel),
-      );
-    }
+  it("carries thirty-six steps in each record, and no length", () => {
+    expect(v4.STEP_BYTES).toBe(5);
+    expect(v4.RATCHET_BYTES).toBe(18);
+    expect(v4.CONTENT_BYTES).toBe(23);
+    expect(v4.RECORD_STEPS_AT).toBe(0);
+    expect(v4.RECORD_RATCHETS_AT).toBe(5);
+    expect(v4.LAST_STEP_BYTE_MASK).toBe(0x0f);
   });
 
-  it("refuse une image v2 valide, sans migration", () => {
-    const ee = new FakeEeprom();
-    const legacy = rig();
-    legacy.scheduler.markDirty(0);
-    while (legacy.scheduler.advance(ee, legacy.image, QUIET_MS)) {
-      // draine le parcours complet
-    }
-    expect(ee.cell[384]).toBe(2);
-
-    const r = rigV3();
-    expect(bootstrap(ee, r.image, r.scheduler, 0)).toBe(false);
-    for (let channel = 0; channel < CHANNEL_COUNT; ++channel) {
-      expect(instanceStepMask(r.engine.instanceForChannel(channel)!)).toBe(0x9111);
-    }
+  it("scans the whole image and ends on its version", () => {
+    expect(PersistentImageV4.SIZE).toBe(434);
+    expect(PersistentImageV4.VERSION_INDEX).toBe(433);
+    expect(v4.IMAGE_BANK_AT).toBe(0);
+    expect(v4.IMAGE_CHANNELS_AT).toBe(368);
+    expect(v4.IMAGE_GLOBAL_AT).toBe(422);
+    expect(v4.IMAGE_PREFS_AT).toBe(427);
+    expect(v4.IMAGE_VERSION_AT).toBe(433);
   });
 
-  it("retombe sur les defauts pour toute version inconnue", () => {
-    for (const version of [0xff, 1, 4]) {
-      const ee = new FakeEeprom();
-      ee.cell[384] = version;
-      const r = rigV3();
-      expect(bootstrap(ee, r.image, r.scheduler, 0)).toBe(false);
-      expect(instanceStepMask(r.engine.instanceForChannel(0)!)).toBe(0x9111);
-    }
-  });
-});
-
-describe("l'image balayee v3", () => {
-  it("expose 204 octets logiques et la version au dernier index", () => {
-    const r = rigV3();
-    expect(r.image.size).toBe(204);
-    expect(r.image.versionIndex).toBe(203);
-    expect(r.image.size).toBe(PersistentImageV3.SIZE);
-    expect(r.image.versionIndex).toBe(PersistentImageV3.VERSION_INDEX);
+  it("reserves MOD and RANGE in the global zone", () => {
+    expect(v4.GLOBAL_TEMPO_LO_AT).toBe(0);
+    expect(v4.GLOBAL_TEMPO_HI_AT).toBe(1);
+    expect(v4.GLOBAL_CLOCK_SOURCE_AT).toBe(2);
+    expect(v4.GLOBAL_MOD_AT).toBe(3);
+    expect(v4.GLOBAL_RANGE_AT).toBe(4);
   });
 
-  it("place la version a la premiere adresse et la lit comme 3", () => {
-    const r = rigV3();
-    expect(r.image.addressAt(203)).toBe(384);
-    expect(r.image.byteAt(203)).toBe(3);
+  it("leaves the original firmware's memCode alone", () => {
+    expect(BASE_ADDRESS + v4.TOTAL_SIZE).toBeLessThanOrEqual(1023);
+    expect(1022 - v4.LAST_ADDRESS).toBe(205);
   });
 
-  it("ne mappe jamais un octet logique dans la zone des templates", () => {
-    const r = rigV3();
-    for (let index = 0; index < r.image.size; ++index) {
-      const address = r.image.addressAt(index);
-      expect(address < 385 || address > 768).toBe(true);
-    }
+  it("holds the version at the last logical index and the first address", () => {
+    const r = rigV4();
+    expect(r.image.addressAt(433)).toBe(384);
+    expect(r.image.byteAt(433)).toBe(4);
+    expect(r.image.addressAt(0)).toBe(385);
+    expect(r.image.addressAt(432)).toBe(817);
   });
 
-  it("couvre la version et la zone de donnees, une adresse par index", () => {
-    const r = rigV3();
+  it("maps every address of the format exactly once", () => {
+    const r = rigV4();
     const seen = new Set<number>();
     for (let index = 0; index < r.image.size; ++index) {
       const address = r.image.addressAt(index);
       expect(seen.has(address)).toBe(false);
       seen.add(address);
     }
-    expect(seen.has(384)).toBe(true);
-    for (let address = 385; address <= 768; ++address) expect(seen.has(address)).toBe(false);
-    for (let address = 769; address <= 971; ++address) expect(seen.has(address)).toBe(true);
-    expect(seen.has(972)).toBe(false);
+    for (let address = 384; address <= 817; ++address) expect(seen.has(address)).toBe(true);
+    expect(seen.has(383)).toBe(false);
+    expect(seen.has(818)).toBe(false);
   });
 
-  it("lit MOD et RANGE comme zero", () => {
-    const r = rigV3();
-    expect(r.image.byteAt(192 + 3)).toBe(0);
-    expect(r.image.byteAt(192 + 4)).toBe(0);
+  it("factory bytes carry the content alone", () => {
+    expect(v4.factoryPatternByte(0, 0)).toBe(0x11);
+    expect(v4.factoryPatternByte(0, 1)).toBe(0x91);
+    for (let offset = 2; offset < 23; ++offset) expect(v4.factoryPatternByte(0, offset)).toBe(0);
+    expect(v4.factoryPatternByte(0, 23)).toBe(0);
+    expect(v4.factoryPatternByte(8, 0)).toBe(0);
+    expect(v4.factoryPatternByte(16, 0)).toBe(0);
+  });
+});
+
+describe("Persistence — the version 4 scan and boot", () => {
+  it("writes the 434 bytes when all differ, and the version last", () => {
+    const r = rigV4();
+    const ee = scanEverything(r);
+    expect(ee.order.length).toBe(434);
+    expect(ee.order[ee.order.length - 1]).toBe(384);
+    for (let i = 0; i + 1 < ee.order.length; ++i) {
+      expect(ee.order[i]! >= 385 && ee.order[i]! <= 817).toBe(true);
+    }
   });
 
-  it("ramene a zero une valeur stockee dans MOD ou RANGE", () => {
-    const r = rigV3();
-    r.image.applyByte(192 + 3, 0x5a);
-    r.image.applyByte(192 + 4, 0xa5);
-    expect(r.image.byteAt(192 + 3)).toBe(0);
-    expect(r.image.byteAt(192 + 4)).toBe(0);
+  it("reads MOD and RANGE as zero and normalises a stored value", () => {
+    const r = rigV4();
+    expect(r.image.byteAt(422 + 3)).toBe(0);
+    expect(r.image.byteAt(422 + 4)).toBe(0);
+    r.image.applyByte(422 + 3, 0x5a);
+    r.image.applyByte(422 + 4, 0xa5);
+    expect(r.image.byteAt(422 + 3)).toBe(0);
+    expect(r.image.byteAt(422 + 4)).toBe(0);
     expect(r.ui.tempo).toBe(DEFAULT_TEMPO);
     expect(r.ui.clockSource).toBe(0);
   });
 
-  it("fait un tour complet sur les six instances", () => {
-    const saved = rigV3();
-    for (let channel = 0; channel < CHANNEL_COUNT; ++channel) {
-      const instance = saved.engine.instanceForChannel(channel)!;
-      instance.writeStep(channel, true);
-      instance.setRatchet(channel, RATCHET_3);
-    }
-    saved.ui.setTempo(143);
-    const ee = scanEverything(saved);
+  it("round trips the bank and the channels byte for byte", () => {
+    const eeprom = new FakeEeprom();
+    const saved = rigV4();
+    fillDistinctStateV4(saved);
+    saved.scheduler.markDirty(0);
+    finishWriteV4(saved, eeprom, QUIET_MS);
 
-    const loaded = rigV3();
-    expect(loaded.scheduler.load(ee, loaded.image)).toBe(true);
-    expect(loaded.ui.tempo).toBe(143);
-    for (let channel = 0; channel < CHANNEL_COUNT; ++channel) {
-      const instance = loaded.engine.instanceForChannel(channel)!;
-      expect(instance.readStep(channel)).toBe(true);
-      expect(instance.getRatchet(channel)).toBe(RATCHET_3);
+    const loaded = rigV4();
+    expect(loaded.scheduler.load(eeprom, loaded.image)).toBe(true);
+    expect(sameStateV4(saved, loaded)).toBe(true);
+    for (let index = 0; index < 16; ++index) {
+      expect(bankStepMask(loaded.bank.getPattern(index)!)).toBe(
+        bankStepMask(saved.bank.getPattern(index)!),
+      );
+      expect(loaded.bank.getPattern(index)!.getRatchet(index % 36)).toBe(RATCHET_3);
     }
+    for (let ch = 0; ch < CHANNEL_COUNT; ++ch) {
+      expect(loaded.engine.getSelectedPattern(ch)).toBe(15 - ch);
+      expect(loaded.engine.getBaseLength(ch)).toBe(36 - ch * 3);
+      expect(loaded.engine.getCvDestination(ch, CV_SOURCE_1)).toBe((ch + 1) % 5);
+      expect(loaded.engine.getCvDestination(ch, CV_SOURCE_2)).toBe((ch + 3) % 5);
+    }
+    expect(loaded.ui.tempo).toBe(287);
+    expect(loaded.prefs.cvCalibration[0]).toBe(-26);
   });
 
-  it("vide les six instances sans banque", () => {
-    const r = rigV3();
-    for (let channel = 0; channel < CHANNEL_COUNT; ++channel) {
-      r.engine.instanceForChannel(channel)!.writeStep(0, true);
-    }
+  it("the defaults seed the factory bank and clear the free slots", () => {
+    const r = rigV4();
+    r.bank.getPattern(9)!.writeStep(2, true);
+    r.bank.getPattern(0)!.writeStep(1, true);
+    r.bank.getPattern(0)!.setRatchet(0, RATCHET_6);
     r.image.resetToDefaults();
-    for (let channel = 0; channel < CHANNEL_COUNT; ++channel) {
-      expect(r.engine.instanceForChannel(channel)!.readStep(0)).toBe(false);
-    }
+    expect(bankStepMask(r.bank.getPattern(0)!)).toBe(0x9111n);
+    expect(bankStepMask(r.bank.getPattern(1)!)).toBe(0x0810n);
+    expect(bankStepMask(r.bank.getPattern(7)!)).toBe(0xb733n);
+    expect(r.bank.getPattern(0)!.getRatchet(0)).toBe(RATCHET_NONE);
+    for (let index = 8; index < 16; ++index) expect(bankStepMask(r.bank.getPattern(index)!)).toBe(0n);
+    for (let ch = 0; ch < CHANNEL_COUNT; ++ch) expect(r.engine.getSelectedPattern(ch)).toBe(0);
     expect(r.ui.tempo).toBe(DEFAULT_TEMPO);
   });
-});
 
-describe("l'ordre des ecritures", () => {
-  it("ecrit les 204 octets logiques quand tous different", () => {
-    const ee = scanEverything(rigV3());
-    expect(ee.order.length).toBe(204);
-  });
-
-  it("ne touche que la version et la zone de donnees", () => {
-    const ee = scanEverything(rigV3());
-    for (const address of ee.order) {
-      expect(address === 384 || (address >= 769 && address <= 971)).toBe(true);
-      expect(address < 385 || address > 768).toBe(true);
-      expect(address).toBeLessThan(972);
-    }
-  });
-
-  it("ecrit la version en DERNIER en v3", () => {
-    const ee = scanEverything(rigV3());
-    expect(ee.order[ee.order.length - 1]).toBe(384);
-    for (let i = 0; i + 1 < ee.order.length; ++i) {
-      expect(ee.order[i]).toBeGreaterThanOrEqual(769);
-    }
-  });
-
-  it("ecrit la version en PREMIER en v2, et ce contrat ne change pas", () => {
-    const ee = new JournalEeprom();
-    const r = rig();
-    for (let index = 0; index < r.image.size; ++index) {
-      ee.cell[r.image.addressAt(index)] = r.image.byteAt(index) ^ 0xff;
-    }
-    ee.order = [];
-    r.scheduler.markDirty(0);
-    while (r.scheduler.advance(ee, r.image, QUIET_MS)) {
-      // draine le parcours complet
-    }
-    expect(ee.order.length).toBe(304);
-    expect(ee.order[0]).toBe(384);
-  });
-});
-
-describe("la disposition de l'image balayee v3", () => {
-  it("compte 204 octets logiques et place la version en dernier", () => {
-    expect(v3.IMAGE_SIZE).toBe(204);
-    expect(v3.IMAGE_VERSION_AT).toBe(203);
-    expect(v3.TOTAL_SIZE).toBe(588);
-    expect(v3.TEMPLATES_SIZE).toBe(384);
-  });
-
-  it("couvre le format entier avec la zone des templates", () => {
-    expect(v3.IMAGE_SIZE + v3.TEMPLATES_SIZE).toBe(v3.TOTAL_SIZE);
-  });
-
-  it("donne a la version le dernier index logique", () => {
-    expect(v3.IMAGE_VERSION_AT).toBe(v3.IMAGE_SIZE - 1);
-  });
-
-  it("enchaine les zones sans trou ni recouvrement", () => {
-    expect(v3.IMAGE_INSTANCES_AT).toBe(0);
-    expect(v3.IMAGE_CHANNELS_AT).toBe(138);
-    expect(v3.IMAGE_GLOBAL_AT).toBe(192);
-    expect(v3.IMAGE_PREFS_AT).toBe(197);
-    expect(v3.IMAGE_CHANNELS_AT - v3.IMAGE_INSTANCES_AT).toBe(v3.INSTANCES_SIZE);
-    expect(v3.IMAGE_GLOBAL_AT - v3.IMAGE_CHANNELS_AT).toBe(v3.CHANNELS_SIZE);
-    expect(v3.IMAGE_PREFS_AT - v3.IMAGE_GLOBAL_AT).toBe(v3.GLOBAL_SIZE);
-    expect(v3.IMAGE_VERSION_AT - v3.IMAGE_PREFS_AT).toBe(v3.PREFS_SIZE);
-  });
-});
-
-describe("le contrat d'image partage par le scheduler", () => {
-  it("expose les metadonnees d'instance derivees des constantes statiques", () => {
-    const r = rig();
-    expect(r.image.size).toBe(PersistentImage.SIZE);
-    expect(r.image.versionIndex).toBe(PersistentImage.VERSION_INDEX);
-    expect(r.image.size).toBe(304);
-    expect(r.image.versionIndex).toBe(0);
-  });
-
-  it("mappe l'index logique v2 sur l'identite que le scheduler inlinait", () => {
-    const r = rig();
-    for (let index = 0; index < r.image.size; ++index) {
-      expect(r.image.addressAt(index)).toBe(384 + index);
-    }
-    expect(r.image.byteAt(r.image.versionIndex)).toBe(2);
-  });
-
-  it("fait lire au scheduler la taille de l'instance et non celle de la classe", () => {
+  it("the defaults reset the mode, the offset and the skip chance", () => {
     const eeprom = new FakeEeprom();
-    const r = rig();
-    const shortened = {
-      size: 4,
-      versionIndex: r.image.versionIndex,
-      addressAt: (index: number) => r.image.addressAt(index),
-      byteAt: (index: number) => r.image.byteAt(index),
-      applyByte: (index: number, value: number) => r.image.applyByte(index, value),
-      resetToDefaults: () => r.image.resetToDefaults(),
-      templateRecordSize: r.image.templateRecordSize,
-      canWriteTemplate: () => false,
-      templateAddressAt: () => 0,
-      templateByteAt: () => 0,
-    };
-    r.scheduler.markDirty(0);
-    let calls = 0;
-    while (r.scheduler.advance(eeprom, shortened, QUIET_MS)) {
-      ++calls;
-    }
-    expect(calls).toBe(4);
-    expect(eeprom.writes).toBe(4);
-    expect(eeprom.highestWrite).toBe(384 + 3);
-  });
-});
-
-describe("loadTemplate — template EEPROM vers instance (ADR 0009)", () => {
-  function seedTemplate(ee: FakeEeprom, index: number, content: Pattern, length: number): void {
-    for (let offset = 0; offset < v3.TEMPLATE_RECORD; ++offset) {
-      ee.write(v3.templateAddress(index, offset), v3.templateByte(content, length, offset));
-    }
-  }
-
-  function distinctContent(seed: number): Pattern {
-    const p = new Pattern();
-    p.writeStep(seed % Pattern.DEFAULT_TOTAL_STEPS, true);
-    p.writeStep((seed + 7) % Pattern.DEFAULT_TOTAL_STEPS, true);
-    p.setRatchet(seed % Pattern.DEFAULT_TOTAL_STEPS, RATCHET_3);
-    return p;
-  }
-
-  function sameContent(a: Pattern, b: Pattern): boolean {
-    for (let i = 0; i < Pattern.DEFAULT_TOTAL_STEPS; ++i) {
-      if (a.readStep(i) !== b.readStep(i)) return false;
-      if (a.getRatchet(i) !== b.getRatchet(i)) return false;
-    }
-    return true;
-  }
-
-  it("copie le contenu dans l'instance du channel vise", () => {
-    const ee = new FakeEeprom();
-    const r = rigV3();
-    const wanted = distinctContent(5);
-    seedTemplate(ee, 5, wanted, 12);
-    expect(r.image.loadTemplate(ee, 2, 5)).toBe(true);
-    expect(sameContent(wanted, r.engine.instanceForChannel(2)!)).toBe(true);
-  });
-
-  it("laisse les cinq autres instances intactes", () => {
-    const ee = new FakeEeprom();
-    const r = rigV3();
-    seedTemplate(ee, 5, distinctContent(5), 12);
-    const before = new Pattern();
-    expect(r.image.loadTemplate(ee, 2, 5)).toBe(true);
-    for (let ch = 0; ch < 6; ++ch) {
-      if (ch === 2) continue;
-      expect(sameContent(before, r.engine.instanceForChannel(ch)!)).toBe(true);
-    }
-  });
-
-  it("garde une longueur de trente-six dans la base", () => {
-    const ee = new FakeEeprom();
-    const r = rigV3();
-    seedTemplate(ee, 9, distinctContent(3), 36);
-    expect(r.image.loadTemplate(ee, 0, 9)).toBe(true);
-    expect(r.engine.getBaseLength(0)).toBe(36);
-    expect(r.engine.getEffectiveLength(0)).toBe(36);
-    expect(r.engine.getSelectedPattern(0)).toBe(9);
-  });
-
-  it("n'ecrete pas une longueur sous le plafond", () => {
-    const ee = new FakeEeprom();
-    const r = rigV3();
-    seedTemplate(ee, 4, distinctContent(1), 12);
-    expect(r.image.loadTemplate(ee, 1, 4)).toBe(true);
-    expect(r.engine.getBaseLength(1)).toBe(12);
-    expect(r.engine.getEffectiveLength(1)).toBe(12);
-  });
-
-  it("refuse une longueur invalide sans perdre le contenu", () => {
-    const ee = new FakeEeprom();
-    const r = rigV3();
-    const wanted = distinctContent(2);
-    seedTemplate(ee, 6, wanted, 20);
-    ee.write(v3.templateAddress(6, v3.RECORD_LENGTH_AT), 37);
-    expect(r.engine.setBaseLength(3, 8)).toBe(true);
-    expect(r.image.loadTemplate(ee, 3, 6)).toBe(true);
-    expect(sameContent(wanted, r.engine.instanceForChannel(3)!)).toBe(true);
-    expect(r.engine.getBaseLength(3)).toBe(8);
-  });
-
-  it("accepte un slot d'usine gele", () => {
-    const ee = new FakeEeprom();
-    const r = rigV3();
-    const wanted = distinctContent(8);
-    seedTemplate(ee, 0, wanted, 16);
-    expect(r.image.loadTemplate(ee, 4, 0)).toBe(true);
-    expect(sameContent(wanted, r.engine.instanceForChannel(4)!)).toBe(true);
-    expect(r.engine.getSelectedPattern(4)).toBe(0);
-  });
-
-  it("refuse un channel ou un index invalide", () => {
-    const ee = new FakeEeprom();
-    const r = rigV3();
-    seedTemplate(ee, 1, distinctContent(4), 10);
-    expect(r.image.loadTemplate(ee, 6, 1)).toBe(false);
-    expect(r.image.loadTemplate(ee, 0, 16)).toBe(false);
-    const before = new Pattern();
-    for (let ch = 0; ch < 6; ++ch) {
-      expect(sameContent(before, r.engine.instanceForChannel(ch)!)).toBe(true);
-    }
-  });
-
-  it("n'ecrit rien dans l'EEPROM", () => {
-    const ee = new FakeEeprom();
-    const r = rigV3();
-    seedTemplate(ee, 7, distinctContent(6), 18);
-    const before = ee.writes;
-    expect(r.image.loadTemplate(ee, 5, 7)).toBe(true);
-    expect(ee.writes).toBe(before);
-  });
-});
-
-describe("saveTemplate — instance vers template EEPROM (ADR 0009)", () => {
-  function distinctContent(seed: number): Pattern {
-    const p = new Pattern();
-    p.writeStep(seed % Pattern.DEFAULT_TOTAL_STEPS, true);
-    p.writeStep((seed + 7) % Pattern.DEFAULT_TOTAL_STEPS, true);
-    p.setRatchet(seed % Pattern.DEFAULT_TOTAL_STEPS, RATCHET_3);
-    return p;
-  }
-
-  function copyInto(target: Pattern, source: Pattern): void {
-    for (let i = 0; i < Pattern.DEFAULT_TOTAL_STEPS; ++i) {
-      target.writeStep(i, source.readStep(i) === true);
-      target.setRatchet(i, source.getRatchet(i));
-    }
-  }
-
-  it("ecrit le contenu de l'instance dans le record", () => {
-    const ee = new FakeEeprom();
-    const r = rigV3();
-    const wanted = distinctContent(3);
-    copyInto(r.engine.instanceForChannel(1)!, wanted);
-    expect(r.image.saveTemplate(ee, 1, 9)).toBe(true);
-    for (let offset = 0; offset < v3.CONTENT_BYTES; ++offset) {
-      expect(ee.read(v3.templateAddress(9, offset))).toBe(v3.contentByte(wanted, offset));
-    }
-  });
-
-  it("ecrit la base et non la longueur modulee par le CV", () => {
-    const ee = new FakeEeprom();
-    const r = rigV3();
-    expect(r.engine.setChannelMode(1, ChannelMode.SEQ)).toBe(true);
-    expect(r.engine.setBaseLength(1, 18)).toBe(true);
-    expect(r.engine.setCvDestination(1, CV_SOURCE_1, CvDestination.LENGTH)).toBe(true);
-    r.engine.setCvInput(CV_SOURCE_1, 330);
-    r.engine.start();
-    r.engine.advance(96);
-    expect(r.engine.getBaseLength(1)).toBe(18);
-    expect(r.engine.getEffectiveLength(1)).toBe(28);
-
-    expect(r.image.saveTemplate(ee, 1, 9)).toBe(true);
-    expect(ee.read(v3.templateAddress(9, v3.RECORD_LENGTH_AT))).toBe(18);
-  });
-
-  it("ecrit la longueur du canal dans l'enregistrement", () => {
-    const ee = new FakeEeprom();
-    const r = rigV3();
-    expect(r.engine.setBaseLengthFromStorage(1, 36)).toBe(true);
-    expect(r.engine.getEffectiveLength(1)).toBe(36);
-    expect(r.image.saveTemplate(ee, 1, 9)).toBe(true);
-    expect(ee.read(v3.templateAddress(9, v3.RECORD_LENGTH_AT))).toBe(36);
-  });
-
-  it("refuse les huit slots geles sans ecrire", () => {
-    const ee = new FakeEeprom();
-    const r = rigV3();
-    for (let index = 0; index < 8; ++index) {
-      const before = ee.writes;
-      expect(r.image.saveTemplate(ee, 0, index)).toBe(false);
-      expect(ee.writes).toBe(before);
-    }
-  });
-
-  it("accepte les huit slots inscriptibles", () => {
-    const ee = new FakeEeprom();
-    const r = rigV3();
-    for (let index = 8; index < 16; ++index) {
-      expect(r.image.saveTemplate(ee, 0, index)).toBe(true);
-    }
-  });
-
-  it("refuse un channel ou un index invalide sans ecrire", () => {
-    const ee = new FakeEeprom();
-    const r = rigV3();
-    const before = ee.writes;
-    expect(r.image.saveTemplate(ee, 6, 9)).toBe(false);
-    expect(r.image.saveTemplate(ee, 0, 16)).toBe(false);
-    expect(ee.writes).toBe(before);
-  });
-
-  it("un aller-retour save puis load rend le meme pattern et la meme longueur", () => {
-    const ee = new FakeEeprom();
-    const r = rigV3();
-    const wanted = distinctContent(6);
-    copyInto(r.engine.instanceForChannel(2)!, wanted);
-    expect(r.engine.setBaseLengthFromStorage(2, 30)).toBe(true);
-    expect(r.image.saveTemplate(ee, 2, 12)).toBe(true);
-    expect(r.image.loadTemplate(ee, 5, 12)).toBe(true);
-    for (let i = 0; i < Pattern.DEFAULT_TOTAL_STEPS; ++i) {
-      expect(r.engine.instanceForChannel(5)!.readStep(i)).toBe(wanted.readStep(i));
-      expect(r.engine.instanceForChannel(5)!.getRatchet(i)).toBe(wanted.getRatchet(i));
-    }
-    expect(r.engine.getBaseLength(5)).toBe(30);
-    expect(r.engine.getEffectiveLength(5)).toBe(30);
-  });
-});
-
-describe("ecriture differee d'un template par l'ordonnanceur (B4b.6.2b)", () => {
-  function distinctContent(seed: number): Pattern {
-    const p = new Pattern();
-    p.writeStep(seed % Pattern.DEFAULT_TOTAL_STEPS, true);
-    p.setRatchet(seed % Pattern.DEFAULT_TOTAL_STEPS, RATCHET_3);
-    return p;
-  }
-
-  it("une demande valide s'arme et se declare", () => {
-    const r = rigV3();
-    expect(r.scheduler.isWritingTemplate).toBe(false);
-    expect(r.scheduler.requestTemplateWrite(r.image, 0, 9)).toBe(true);
-    expect(r.scheduler.isWritingTemplate).toBe(true);
-  });
-
-  it("ecrit un octet par appel a advance", () => {
-    const ee = new FakeEeprom();
-    const r = rigV3();
-    expect(r.scheduler.requestTemplateWrite(r.image, 0, 9)).toBe(true);
-    for (let written = 0; written < v3.TEMPLATE_RECORD; ++written) {
-      const before = ee.writes;
-      expect(r.scheduler.advance(ee, r.image, 0)).toBe(true);
-      expect(ee.writes).toBe(before + 1);
-    }
-  });
-
-  it("se termine apres son record et laisse le bon contenu", () => {
-    const ee = new FakeEeprom();
-    const r = rigV3();
-    const wanted = distinctContent(4);
-    for (let i = 0; i < Pattern.DEFAULT_TOTAL_STEPS; ++i) {
-      r.engine.instanceForChannel(0)!.writeStep(i, wanted.readStep(i) === true);
-      r.engine.instanceForChannel(0)!.setRatchet(i, wanted.getRatchet(i));
-    }
-    expect(r.engine.setBaseLengthFromStorage(0, 21)).toBe(true);
-    expect(r.scheduler.requestTemplateWrite(r.image, 0, 11)).toBe(true);
-    for (let i = 0; i < v3.TEMPLATE_RECORD; ++i) r.scheduler.advance(ee, r.image, 0);
-    expect(r.scheduler.isWritingTemplate).toBe(false);
-    for (let offset = 0; offset < v3.CONTENT_BYTES; ++offset) {
-      expect(ee.read(v3.templateAddress(11, offset))).toBe(v3.contentByte(wanted, offset));
-    }
-    expect(ee.read(v3.templateAddress(11, v3.RECORD_LENGTH_AT))).toBe(21);
-  });
-
-  it("une demande sur un slot gele n'arme rien", () => {
-    const r = rigV3();
-    for (let index = 0; index < 8; ++index) {
-      expect(r.scheduler.requestTemplateWrite(r.image, 0, index)).toBe(false);
-    }
-    expect(r.scheduler.isWritingTemplate).toBe(false);
-  });
-
-  it("une seconde demande est refusee pendant une ecriture en vol", () => {
-    const ee = new FakeEeprom();
-    const r = rigV3();
-    expect(r.scheduler.requestTemplateWrite(r.image, 0, 9)).toBe(true);
-    expect(r.scheduler.advance(ee, r.image, 0)).toBe(true);
-    expect(r.scheduler.requestTemplateWrite(r.image, 1, 10)).toBe(false);
-  });
-
-  it("le template passe avant le balayage de l'image", () => {
-    const ee = new FakeEeprom();
-    const r = rigV3();
-    r.scheduler.markDirty(0);
-    expect(r.scheduler.requestTemplateWrite(r.image, 0, 9)).toBe(true);
-    expect(r.scheduler.advance(ee, r.image, QUIET_MS)).toBe(true);
-    expect(ee.lowestWrite).toBeGreaterThanOrEqual(v3.templateAddress(9, 0));
-    expect(r.scheduler.isDirty).toBe(true);
-  });
-
-  it("le balayage reprend apres le template", () => {
-    const ee = new FakeEeprom();
-    const r = rigV3();
-    r.scheduler.markDirty(0);
-    expect(r.scheduler.requestTemplateWrite(r.image, 0, 9)).toBe(true);
-    for (let i = 0; i < v3.TEMPLATE_RECORD; ++i) r.scheduler.advance(ee, r.image, QUIET_MS);
-    expect(r.scheduler.isWritingTemplate).toBe(false);
-    expect(r.scheduler.advance(ee, r.image, QUIET_MS)).toBe(true);
-    expect(ee.highestWrite).toBeGreaterThanOrEqual(769);
-    expect(r.scheduler.isDirty).toBe(true);
-  });
-
-  it("aucun appel a advance n'ecrit plus d'un octet", () => {
-    const ee = new FakeEeprom();
-    const r = rigV3();
-    r.scheduler.markDirty(0);
-    expect(r.scheduler.requestTemplateWrite(r.image, 0, 13)).toBe(true);
-    for (let pass = 0; pass < 400; ++pass) {
-      const before = ee.writes;
-      if (!r.scheduler.advance(ee, r.image, QUIET_MS)) break;
-      expect(ee.writes).toBe(before + 1);
-    }
-  });
-});
-
-describe("isTemplateEmpty — les 36 cases inactives (B4b.6.4)", () => {
-  function seedTemplate(ee: FakeEeprom, index: number, content: Pattern, length: number): void {
-    for (let offset = 0; offset < v3.TEMPLATE_RECORD; ++offset) {
-      ee.write(v3.templateAddress(index, offset), v3.templateByte(content, length, offset));
-    }
-  }
-
-  it("un template a zero est vide", () => {
-    const ee = new FakeEeprom();
-    const r = rigV3();
-    seedTemplate(ee, 10, new Pattern(), 16);
-    expect(r.image.isTemplateEmpty(ee, 10)).toBe(true);
-  });
-
-  it("un seul pas actif rend le template occupe", () => {
-    const ee = new FakeEeprom();
-    const r = rigV3();
-    for (let step = 0; step < Pattern.DEFAULT_TOTAL_STEPS; ++step) {
-      const one = new Pattern();
-      one.writeStep(step, true);
-      seedTemplate(ee, 10, one, 16);
-      expect(r.image.isTemplateEmpty(ee, 10)).toBe(false);
-    }
-  });
-
-  it("le trente-sixieme pas seul rend le template occupe", () => {
-    const ee = new FakeEeprom();
-    const r = rigV3();
-    const last = new Pattern();
-    last.writeStep(35, true);
-    seedTemplate(ee, 10, last, 16);
-    expect(r.image.isTemplateEmpty(ee, 10)).toBe(false);
-  });
-
-  it("des ratchets seuls laissent le template vide", () => {
-    const ee = new FakeEeprom();
-    const r = rigV3();
-    seedTemplate(ee, 10, new Pattern(), 16);
-    for (let offset = 0; offset < v3.RATCHET_BYTES; ++offset) {
-      ee.write(v3.templateAddress(10, v3.RECORD_RATCHETS_AT + offset), 0x66);
-    }
-    expect(r.image.isTemplateEmpty(ee, 10)).toBe(true);
-  });
-
-  it("les quatre bits au-dela du dernier pas n'occupent pas le template", () => {
-    const ee = new FakeEeprom();
-    const r = rigV3();
-    seedTemplate(ee, 10, new Pattern(), 16);
-    ee.write(v3.templateAddress(10, v3.RECORD_STEPS_AT + v3.STEP_BYTES - 1), 0xf0);
-    expect(r.image.isTemplateEmpty(ee, 10)).toBe(true);
-  });
-
-  it("la requete n'ecrit rien", () => {
-    const ee = new FakeEeprom();
-    const r = rigV3();
-    seedTemplate(ee, 10, new Pattern(), 16);
-    const before = ee.writes;
-    expect(r.image.isTemplateEmpty(ee, 10)).toBe(true);
-    expect(ee.writes).toBe(before);
-  });
-
-  it("un index hors plage n'est pas vide", () => {
-    const ee = new FakeEeprom();
-    const r = rigV3();
-    expect(r.image.isTemplateEmpty(ee, 16)).toBe(false);
-  });
-});
-
-describe("les defauts de la version 3 (B4b.6.5)", () => {
-  it("remettent le mode, l'offset et le skip chance", () => {
-    const ee = new FakeEeprom();
-    ee.write(384, 0xff);
-    const r = rigV3();
-    for (let ch = 0; ch < 6; ++ch) {
+    eeprom.cell[384] = 0xff;
+    const r = rigV4();
+    for (let ch = 0; ch < CHANNEL_COUNT; ++ch) {
       expect(r.engine.setChannelMode(ch, ChannelMode.RANDOM)).toBe(true);
       expect(r.engine.setOffset(ch, 7)).toBe(true);
       expect(r.engine.setSkipChance(ch, 9)).toBe(true);
     }
-    expect(bootstrap(ee, r.image, r.scheduler, 0)).toBe(false);
-    for (let ch = 0; ch < 6; ++ch) {
-      expect(r.engine.getChannelMode(ch)).toBe(ChannelMode.CLOCK);
+    expect(bootstrap(eeprom, r.image, r.scheduler, 0)).toBe(false);
+    for (let ch = 0; ch < CHANNEL_COUNT; ++ch) {
+      expect(r.engine.getChannelMode(ch)).toBe(DEFAULT_CHANNEL_MODE);
       expect(r.engine.getOffset(ch)).toBe(0);
       expect(r.engine.getSkipChance(ch)).toBe(0);
     }
   });
-});
 
-/*
- * Lot 16E etape 5d — LOAD charge. Le controleur POSE la demande, ce service
- * l execute : ADR 0002 interdit au domaine de lire l EEPROM.
- */
-/*
- * PRD 5.0 amendement 1quater — les six copies partent PROPRES, decision du
- * proprietaire. Consequence acceptee et nommee : apres une coupure, le premier
- * chargement d un canal ecrase une copie editee sans rien demander.
- *
- * ⚠️ CE TEST MANQUAIT cote TypeScript, et la passe de mutation l a dit.
- */
-describe("ModulatedPatternState — la valeur de demarrage du drapeau", () => {
-  it("aucun canal ne part change", () => {
-    const state = new ModulatedPatternState();
-    for (let ch = 0; ch < CHANNEL_COUNT; ++ch) {
-      expect(state.isDirty(ch)).toBe(false);
+  it("the first boot seeds the bank in RAM and writes the EEPROM after the quiet delay", () => {
+    const ee = new JournalEeprom();
+    const r = rigV4();
+    expect(bootstrap(ee, r.image, r.scheduler, 0)).toBe(false);
+    expect(ee.order.length).toBe(0);
+    expect(r.scheduler.isDirty).toBe(true);
+    expect(bankStepMask(r.engine.patternForChannel(0)!)).toBe(0x9111n);
+    for (let ch = 0; ch < CHANNEL_COUNT; ++ch) expect(r.engine.getSelectedPattern(ch)).toBe(0);
+
+    expect(r.scheduler.advance(ee, r.image, QUIET_MS - 1)).toBe(false);
+    expect(ee.order.length).toBe(0);
+    while (r.scheduler.advance(ee, r.image, QUIET_MS)) {
+      // drains the scan
+    }
+    expect(ee.order.length).toBe(434);
+    expect(ee.cell[384]).toBe(4);
+    expect(ee.cell[385]).toBe(0x11);
+    expect(ee.cell[386]).toBe(0x91);
+    expect(ee.cell[385 + 8 * 23]).toBe(0);
+    expect(ee.order[ee.order.length - 1]).toBe(384);
+  });
+
+  it("a nominal boot restores the bank and writes nothing", () => {
+    const eeprom = new FakeEeprom();
+    const saved = rigV4();
+    saved.image.resetToDefaults();
+    saved.bank.getPattern(3)!.writeStep(30, true);
+    saved.bank.getPattern(0)!.writeStep(2, true);
+    saved.engine.setSelectedPattern(2, 3);
+    saved.scheduler.markDirty(0);
+    finishWriteV4(saved, eeprom, QUIET_MS);
+    const written = eeprom.writes;
+
+    const loaded = rigV4();
+    expect(bootstrap(eeprom, loaded.image, loaded.scheduler, 0)).toBe(true);
+    expect(loaded.scheduler.isDirty).toBe(false);
+    expect(eeprom.writes).toBe(written);
+    expect(bankStepMask(loaded.bank.getPattern(0)!)).toBe(0x9111n | (1n << 2n));
+    expect(bankStepMask(loaded.bank.getPattern(3)!)).toBe(0xccccn | (1n << 30n));
+    expect(loaded.engine.getSelectedPattern(2)).toBe(3);
+    expect(loaded.engine.patternForChannel(2)).toBe(loaded.bank.getPattern(3));
+  });
+
+  it("refuses a valid version 2 image without migration", () => {
+    const eeprom = new FakeEeprom();
+    const legacy = rig();
+    legacy.scheduler.markDirty(0);
+    finishWrite(legacy, eeprom, QUIET_MS);
+    expect(eeprom.cell[384]).toBe(2);
+
+    const r = rigV4();
+    expect(bootstrap(eeprom, r.image, r.scheduler, 0)).toBe(false);
+    expect(bankStepMask(r.bank.getPattern(0)!)).toBe(0x9111n);
+  });
+
+  it("refuses a valid version 3 image without migration", () => {
+    const eeprom = new FakeEeprom();
+    for (let address = 384; address <= 971; ++address) eeprom.cell[address] = 0;
+    eeprom.cell[384] = 3;
+    eeprom.cell[385] = 0x11;
+    eeprom.cell[386] = 0x91;
+
+    const r = rigV4();
+    r.bank.getPattern(0)!.writeStep(20, true);
+    expect(bootstrap(eeprom, r.image, r.scheduler, 0)).toBe(false);
+    expect(bankStepMask(r.bank.getPattern(0)!)).toBe(0x9111n);
+    expect(r.scheduler.isDirty).toBe(true);
+  });
+
+  it("falls back to the defaults for every unknown version byte", () => {
+    for (const version of [0xff, 1, 5]) {
+      const eeprom = new FakeEeprom();
+      eeprom.cell[384] = version;
+      const r = rigV4();
+      r.bank.getPattern(0)!.writeStep(20, true);
+      expect(bootstrap(eeprom, r.image, r.scheduler, 0)).toBe(false);
+      expect(bankStepMask(r.bank.getPattern(0)!)).toBe(0x9111n);
     }
   });
 
-  it("et rien au-dela des six", () => {
-    const state = new ModulatedPatternState();
-    expect(state.isDirty(CHANNEL_COUNT)).toBe(false);
-    expect(state.isDirty(-1)).toBe(false);
-  });
-});
-
-describe("servicePatternAction — LOAD charge, lot 16E etape 5d", () => {
-  class BusyEeprom extends FakeEeprom {
-    busyFlag = false;
-    busy(): boolean {
-      return this.busyFlag;
-    }
-  }
-
-  function seedTemplate(ee: Storage, index: number, content: Pattern, length: number): void {
-    for (let offset = 0; offset < v3.TEMPLATE_RECORD; ++offset) {
-      ee.write(v3.templateAddress(index, offset), v3.templateByte(content, length, offset));
-    }
-  }
-
-  function distinctContent(seed: number): Pattern {
-    const p = new Pattern();
-    p.writeStep(seed % Pattern.DEFAULT_TOTAL_STEPS, true);
-    p.writeStep((seed + 7) % Pattern.DEFAULT_TOTAL_STEPS, true);
-    p.setRatchet(seed % Pattern.DEFAULT_TOTAL_STEPS, RATCHET_3);
-    return p;
-  }
-
-  function sameContent(a: Pattern, b: Pattern): boolean {
-    for (let i = 0; i < Pattern.DEFAULT_TOTAL_STEPS; ++i) {
-      if (a.readStep(i) !== b.readStep(i)) return false;
-      if (a.getRatchet(i) !== b.getRatchet(i)) return false;
-    }
-    return true;
-  }
-
-  function snapshot(p: Pattern): Pattern {
-    const copy = new Pattern();
-    for (let i = 0; i < Pattern.DEFAULT_TOTAL_STEPS; ++i) {
-      copy.writeStep(i, p.readStep(i) === true);
-      copy.setRatchet(i, p.getRatchet(i) ?? 0);
-    }
-    return copy;
-  }
-
-  // PRD 5.0 amendement 1quater : le curseur s arrete sur la grande valeur, un
-  // appui court ouvre le champ, une rotation choisit le nom, et un appui court
-  // charge. Une copie changee fait poser la question, et YES la confirme.
-  function loadByField(r: ReturnType<typeof rigV3>, target: number): void {
-    r.engine.setChannelMode(0, ChannelMode.SEQ);
-    r.engine.setSelectedPattern(0, target - 1);
-    r.ui.handle(UiEvent.Press);
-    expect(r.ui.field).toBe(UiField.Pattern);
-    r.ui.handle(UiEvent.Press);
-    r.ui.handle(UiEvent.Rotate, 1);
-    expect(r.ui.displayedPattern).toBe(target);
-    r.ui.handle(UiEvent.Press);
-    if (r.ui.patternAskPending) {
-      r.ui.handle(UiEvent.Rotate, 1);
-      r.ui.handle(UiEvent.Press);
-    }
-    expect(r.ui.patternAskPending).toBe(false);
-    expect(r.engine.getSelectedPattern(0)).toBe(target);
-  }
-
-  it("un LOAD valide copie le template dans le channel", () => {
-    const ee = new BusyEeprom();
-    const r = rigV3();
-    const wanted = distinctContent(7);
-    seedTemplate(ee, 11, wanted, 21);
-
-    loadByField(r, 11);
-    servicePatternAction(ee, r.image, r.engine, r.ui);
-
-    expect(sameContent(wanted, r.engine.instanceForChannel(0)!)).toBe(true);
-    expect(r.engine.getBaseLength(0)).toBe(21);
+  it("one edited step of a shared pattern costs one write", () => {
+    const eeprom = new FakeEeprom();
+    const r = rigV4();
+    r.image.resetToDefaults();
+    r.scheduler.markDirty(0);
+    finishWriteV4(r, eeprom, QUIET_MS);
+    const before = eeprom.writes;
+    r.bank.getPattern(9)!.writeStep(3, true);
+    r.scheduler.markDirty(1000);
+    finishWriteV4(r, eeprom, 1000 + QUIET_MS);
+    expect(eeprom.writes - before).toBe(1);
+    expect(eeprom.cell[385 + 9 * 23]).toBe(0x08);
   });
 
-  it("sans demande, le service ne touche a rien", () => {
-    const ee = new BusyEeprom();
-    const r = rigV3();
-    seedTemplate(ee, 11, distinctContent(7), 21);
-    r.engine.setSelectedPattern(0, 11);
-    const before = snapshot(r.engine.instanceForChannel(0)!);
-
-    servicePatternAction(ee, r.image, r.engine, r.ui);
-    expect(sameContent(before, r.engine.instanceForChannel(0)!)).toBe(true);
+  it("never leaves its zone", () => {
+    const eeprom = new FakeEeprom();
+    const r = rigV4();
+    fillDistinctStateV4(r);
+    r.scheduler.markDirty(0);
+    finishWriteV4(r, eeprom, QUIET_MS);
+    expect(eeprom.lowestWrite).toBeGreaterThanOrEqual(384);
+    expect(eeprom.highestWrite).toBeLessThanOrEqual(817);
+    for (let address = 0; address < 384; ++address) expect(eeprom.cell[address]).toBe(SENTINEL);
+    for (let address = 818; address < EEPROM_SIZE; ++address) expect(eeprom.cell[address]).toBe(SENTINEL);
   });
 
-  it("la demande est consommee : le second passage ne recharge rien", () => {
-    const ee = new BusyEeprom();
-    const r = rigV3();
-    const first = distinctContent(7);
-    seedTemplate(ee, 11, first, 21);
+  it("a power cut in the middle of a write is caught by the version byte", () => {
+    const eeprom = new FakeEeprom();
+    const r = rigV4();
+    fillDistinctStateV4(r);
+    r.scheduler.markDirty(0);
+    for (let i = 0; i < 100; ++i) expect(r.scheduler.advance(eeprom, r.image, QUIET_MS)).toBe(true);
+    expect(eeprom.cell[384]).not.toBe(4);
 
-    loadByField(r, 11);
-    servicePatternAction(ee, r.image, r.engine, r.ui);
-    expect(sameContent(first, r.engine.instanceForChannel(0)!)).toBe(true);
-
-    seedTemplate(ee, 11, distinctContent(2), 19);
-    servicePatternAction(ee, r.image, r.engine, r.ui);
-    expect(sameContent(first, r.engine.instanceForChannel(0)!)).toBe(true);
-    expect(r.engine.getBaseLength(0)).toBe(21);
+    const loaded = rigV4();
+    expect(loaded.scheduler.load(eeprom, loaded.image)).toBe(false);
+    expect(bankStepMask(loaded.bank.getPattern(0)!)).toBe(0x9111n);
   });
 
-  // Le gel de A1 a A8 porte sur l ECRITURE, jamais sur la lecture.
-  it("un emplacement gele se charge", () => {
-    const ee = new BusyEeprom();
-    const r = rigV3();
-    const wanted = distinctContent(2);
-    seedTemplate(ee, 3, wanted, 18);
-
-    loadByField(r, 3);
-    servicePatternAction(ee, r.image, r.engine, r.ui);
-    expect(sameContent(wanted, r.engine.instanceForChannel(0)!)).toBe(true);
+  it("an image without a bank reads zero and applies nothing", () => {
+    const engine = new SequencerEngine();
+    const ui = new UiController(engine, new Transport(engine));
+    const image = new PersistentImageV4(engine, ui, defaultPreferences());
+    for (let index = 0; index < 368; ++index) expect(image.byteAt(index)).toBe(0);
+    image.applyByte(0, 0xff);
+    image.resetToDefaults();
+    expect(image.byteAt(0)).toBe(0);
+    expect(image.byteAt(433)).toBe(4);
   });
 
-  it("une EEPROM occupee GARDE la demande", () => {
-    const ee = new BusyEeprom();
-    const r = rigV3();
-    const wanted = distinctContent(4);
-    seedTemplate(ee, 12, wanted, 19);
-    const before = snapshot(r.engine.instanceForChannel(0)!);
+  it("never restores a hysteresis zone", () => {
+    const eeprom = new FakeEeprom();
+    const saved = rigV4();
+    saved.engine.setChannelMode(0, ChannelMode.SEQ);
+    saved.engine.setCvDestination(0, CV_SOURCE_1, CvDestination.LENGTH);
+    saved.engine.setCvInput(CV_SOURCE_1, 330);
+    saved.engine.start();
+    saved.engine.advance(96);
+    expect(saved.engine.getEffectiveLength(0)).toBe(26);
+    saved.scheduler.markDirty(0);
+    finishWriteV4(saved, eeprom, QUIET_MS);
 
-    loadByField(r, 12);
-    ee.busyFlag = true;
-    servicePatternAction(ee, r.image, r.engine, r.ui);
-    expect(sameContent(before, r.engine.instanceForChannel(0)!)).toBe(true);
-
-    ee.busyFlag = false;
-    servicePatternAction(ee, r.image, r.engine, r.ui);
-    expect(sameContent(wanted, r.engine.instanceForChannel(0)!)).toBe(true);
-  });
-
-  // ⚠️ LE DRAPEAU DOIT ETRE LEVE D ABORD. Sous PRD 5.0 amendement 1quater les
-  // six copies partent PROPRES, donc un test qui charge sans avoir edite verifie
-  // que faux est faux : il passait sans rien prouver, et la passe de mutation
-  // l a dit.
-  it("un chargement fait tomber le drapeau de changement", () => {
-    const ee = new BusyEeprom();
-    const r = rigV3();
-    const state = new ModulatedPatternState();
-    r.engine.setModulatedPatterns(state);
-    seedTemplate(ee, 11, distinctContent(7), 21);
-    state.markDirty(0);
-    expect(state.isDirty(0), "le drapeau est leve avant le chargement").toBe(true);
-
-    loadByField(r, 11);
-    servicePatternAction(ee, r.image, r.engine, r.ui);
-    expect(state.isDirty(0)).toBe(false);
+    const loaded = rigV4();
+    expect(loaded.scheduler.load(eeprom, loaded.image)).toBe(true);
+    expect(loaded.engine.getCvDestination(0, CV_SOURCE_1)).toBe(CvDestination.LENGTH);
+    expect(loaded.engine.getBaseLength(0)).toBe(16);
+    expect(loaded.engine.getEffectiveLength(0)).toBe(16);
   });
 });

@@ -9,7 +9,7 @@ using flexseq::PatternBank;
 using flexseq::Pattern;
 using flexseq::PersistenceScheduler;
 using flexseq::PersistentImage;
-using flexseq::PersistentImageV3;
+using flexseq::PersistentImageV4;
 using flexseq::Preferences;
 using flexseq::SequencerEngine;
 using flexseq::Transport;
@@ -140,58 +140,6 @@ void test_the_image_ends_below_the_original_memcode() {
     TEST_ASSERT_TRUE(persist::BASE_ADDRESS + persist::TOTAL_SIZE <= 1023);
 }
 
-/*
- * Le format cible, version 3 — declare, pas encore en service
- */
-
-void test_the_v3_layout_is_the_one_the_prd_fixed() {
-    TEST_ASSERT_EQUAL_UINT16(1, persist::v3::HEADER_SIZE);
-    TEST_ASSERT_EQUAL_UINT16(1, persist::v3::TEMPLATES_OFFSET);
-    TEST_ASSERT_EQUAL_UINT16(384, persist::v3::TEMPLATES_SIZE);
-    TEST_ASSERT_EQUAL_UINT16(385, persist::v3::INSTANCES_OFFSET);
-    TEST_ASSERT_EQUAL_UINT16(138, persist::v3::INSTANCES_SIZE);
-    TEST_ASSERT_EQUAL_UINT16(523, persist::v3::CHANNELS_OFFSET);
-    TEST_ASSERT_EQUAL_UINT16(54, persist::v3::CHANNELS_SIZE);
-    TEST_ASSERT_EQUAL_UINT16(577, persist::v3::GLOBAL_OFFSET);
-    TEST_ASSERT_EQUAL_UINT16(5, persist::v3::GLOBAL_SIZE);
-    TEST_ASSERT_EQUAL_UINT16(582, persist::v3::PREFS_OFFSET);
-    TEST_ASSERT_EQUAL_UINT16(6, persist::v3::PREFS_SIZE);
-    TEST_ASSERT_EQUAL_UINT16(588, persist::v3::TOTAL_SIZE);
-    TEST_ASSERT_EQUAL_UINT16(971, persist::v3::LAST_ADDRESS);
-}
-
-void test_the_v3_format_version_is_three() {
-    TEST_ASSERT_EQUAL_UINT8(3, persist::v3::FORMAT_VERSION);
-    TEST_ASSERT_EQUAL_UINT8(2, persist::FORMAT_VERSION);
-}
-
-void test_the_v3_records_carry_thirty_six_steps() {
-    TEST_ASSERT_EQUAL_UINT8(5, persist::v3::STEP_BYTES);
-    TEST_ASSERT_EQUAL_UINT8(18, persist::v3::RATCHET_BYTES);
-    TEST_ASSERT_EQUAL_UINT8(23, persist::v3::CONTENT_BYTES);
-    TEST_ASSERT_EQUAL_UINT8(1, persist::v3::LENGTH_BYTES);
-    TEST_ASSERT_EQUAL_UINT8(24, persist::v3::TEMPLATE_RECORD);
-    TEST_ASSERT_EQUAL_UINT8(23, persist::v3::INSTANCE_RECORD);
-    TEST_ASSERT_EQUAL_UINT8(16, persist::v3::TEMPLATE_COUNT);
-    TEST_ASSERT_EQUAL_UINT8(6, persist::v3::INSTANCE_COUNT);
-    TEST_ASSERT_EQUAL_UINT8(9, persist::v3::CHANNEL_RECORD);
-    TEST_ASSERT_EQUAL_UINT8(0, persist::v3::RECORD_STEPS_AT);
-    TEST_ASSERT_EQUAL_UINT8(5, persist::v3::RECORD_RATCHETS_AT);
-    TEST_ASSERT_EQUAL_UINT8(23, persist::v3::RECORD_LENGTH_AT);
-}
-
-void test_the_v3_global_zone_reserves_mod_and_range() {
-    TEST_ASSERT_EQUAL_UINT8(0, persist::v3::GLOBAL_TEMPO_LO_AT);
-    TEST_ASSERT_EQUAL_UINT8(1, persist::v3::GLOBAL_TEMPO_HI_AT);
-    TEST_ASSERT_EQUAL_UINT8(2, persist::v3::GLOBAL_CLOCK_SOURCE_AT);
-    TEST_ASSERT_EQUAL_UINT8(3, persist::v3::GLOBAL_MOD_AT);
-    TEST_ASSERT_EQUAL_UINT8(4, persist::v3::GLOBAL_RANGE_AT);
-}
-
-void test_the_v3_image_leaves_the_original_memcode_alone() {
-    TEST_ASSERT_TRUE(persist::BASE_ADDRESS + persist::v3::TOTAL_SIZE <= 1023);
-    TEST_ASSERT_EQUAL_UINT16(51, 1022 - persist::v3::LAST_ADDRESS);
-}
 
 /*
  * Les accesseurs octet bruts de Pattern
@@ -229,11 +177,7 @@ void test_a_raw_step_byte_stores_what_it_is_given_without_canonicalising() {
     TEST_ASSERT_EQUAL_UINT8(0xF0, pattern.stepByte(4));
 }
 
-/*
- * Le codec de contenu de la version 3
- */
-
-void test_the_v3_content_codec_round_trips_the_twenty_three_bytes() {
+void test_the_v4_content_codec_round_trips_the_twenty_three_bytes() {
     Pattern source;
     const uint8_t activeSteps[] = {0, 7, 8, 23, 31, 32, 35};
     for (uint8_t i = 0; i < sizeof(activeSteps); ++i) {
@@ -244,14 +188,14 @@ void test_the_v3_content_codec_round_trips_the_twenty_three_bytes() {
     source.setRatchet(34, flexseq::RATCHET_TRIPLET);
     source.setRatchet(35, flexseq::RATCHET_4);
 
-    uint8_t image[persist::v3::CONTENT_BYTES];
-    for (uint8_t offset = 0; offset < persist::v3::CONTENT_BYTES; ++offset) {
-        image[offset] = persist::v3::contentByte(source, offset);
+    uint8_t image[persist::v4::CONTENT_BYTES];
+    for (uint8_t offset = 0; offset < persist::v4::CONTENT_BYTES; ++offset) {
+        image[offset] = persist::v4::contentByte(source, offset);
     }
 
     Pattern loaded;
-    for (uint8_t offset = 0; offset < persist::v3::CONTENT_BYTES; ++offset) {
-        persist::v3::applyContentByte(loaded, offset, image[offset]);
+    for (uint8_t offset = 0; offset < persist::v4::CONTENT_BYTES; ++offset) {
+        persist::v4::applyContentByte(loaded, offset, image[offset]);
     }
 
     for (uint8_t step = 0; step < Pattern::DEFAULT_TOTAL_STEPS; ++step) {
@@ -263,14 +207,14 @@ void test_the_v3_content_codec_round_trips_the_twenty_three_bytes() {
         TEST_ASSERT_EQUAL_UINT8(source.getRatchet(step), loaded.getRatchet(step));
     }
 
-    for (uint8_t offset = 0; offset < persist::v3::CONTENT_BYTES; ++offset) {
-        TEST_ASSERT_EQUAL_UINT8(image[offset], persist::v3::contentByte(loaded, offset));
+    for (uint8_t offset = 0; offset < persist::v4::CONTENT_BYTES; ++offset) {
+        TEST_ASSERT_EQUAL_UINT8(image[offset], persist::v4::contentByte(loaded, offset));
     }
 }
 
-void test_the_v3_codec_drops_the_four_bits_above_the_last_step_on_load() {
+void test_the_v4_codec_drops_the_four_bits_above_the_last_step_on_load() {
     Pattern pattern;
-    persist::v3::applyContentByte(pattern, 4, 0xFF);
+    persist::v4::applyContentByte(pattern, 4, 0xFF);
 
     TEST_ASSERT_EQUAL_UINT8(0x0F, pattern.stepByte(4));
 
@@ -281,70 +225,66 @@ void test_the_v3_codec_drops_the_four_bits_above_the_last_step_on_load() {
     }
 }
 
-void test_the_v3_codec_drops_the_four_bits_above_the_last_step_on_emit() {
+void test_the_v4_codec_drops_the_four_bits_above_the_last_step_on_emit() {
     Pattern pattern;
     pattern.setStepByte(4, 0xF0);
-    TEST_ASSERT_EQUAL_UINT8(0, persist::v3::contentByte(pattern, 4));
+    TEST_ASSERT_EQUAL_UINT8(0, persist::v4::contentByte(pattern, 4));
 
     pattern.setStepByte(4, 0xF5);
-    TEST_ASSERT_EQUAL_UINT8(0x05, persist::v3::contentByte(pattern, 4));
+    TEST_ASSERT_EQUAL_UINT8(0x05, persist::v4::contentByte(pattern, 4));
 }
 
-void test_the_v3_codec_leaves_the_other_step_bytes_whole() {
+void test_the_v4_codec_leaves_the_other_step_bytes_whole() {
     Pattern pattern;
     for (uint8_t offset = 0; offset < 4; ++offset) {
-        persist::v3::applyContentByte(pattern, offset, 0xFF);
+        persist::v4::applyContentByte(pattern, offset, 0xFF);
         TEST_ASSERT_EQUAL_UINT8(0xFF, pattern.stepByte(offset));
-        TEST_ASSERT_EQUAL_UINT8(0xFF, persist::v3::contentByte(pattern, offset));
+        TEST_ASSERT_EQUAL_UINT8(0xFF, persist::v4::contentByte(pattern, offset));
     }
 }
 
-void test_the_v3_codec_normalises_an_invalid_ratchet_nibble() {
+void test_the_v4_codec_normalises_an_invalid_ratchet_nibble() {
     Pattern pattern;
-    persist::v3::applyContentByte(pattern, 5, 0x53);
+    persist::v4::applyContentByte(pattern, 5, 0x53);
 
     TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_3, pattern.getRatchet(0));
     TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, pattern.getRatchet(1));
-    TEST_ASSERT_EQUAL_UINT8(0x03, persist::v3::contentByte(pattern, 5));
+    TEST_ASSERT_EQUAL_UINT8(0x03, persist::v4::contentByte(pattern, 5));
 }
 
-void test_an_invalid_v3_nibble_replaces_a_previous_ratchet_instead_of_keeping_it() {
+void test_an_invalid_v4_nibble_replaces_a_previous_ratchet_instead_of_keeping_it() {
     Pattern pattern;
-    persist::v3::applyContentByte(pattern, 5, 0x36);
+    persist::v4::applyContentByte(pattern, 5, 0x36);
     TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_6, pattern.getRatchet(0));
     TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_3, pattern.getRatchet(1));
 
-    persist::v3::applyContentByte(pattern, 5, 0x51);
+    persist::v4::applyContentByte(pattern, 5, 0x51);
     TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, pattern.getRatchet(0));
     TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, pattern.getRatchet(1));
-    TEST_ASSERT_EQUAL_UINT8(0, persist::v3::contentByte(pattern, 5));
+    TEST_ASSERT_EQUAL_UINT8(0, persist::v4::contentByte(pattern, 5));
 }
 
-void test_the_v3_codec_ignores_an_offset_past_the_record() {
+void test_the_v4_codec_ignores_an_offset_past_the_record() {
     Pattern pattern;
-    for (uint8_t offset = 0; offset < persist::v3::CONTENT_BYTES; ++offset) {
-        persist::v3::applyContentByte(pattern, offset, static_cast<uint8_t>(0x11 * offset));
+    for (uint8_t offset = 0; offset < persist::v4::CONTENT_BYTES; ++offset) {
+        persist::v4::applyContentByte(pattern, offset, static_cast<uint8_t>(0x11 * offset));
     }
 
-    uint8_t before[persist::v3::CONTENT_BYTES];
-    for (uint8_t offset = 0; offset < persist::v3::CONTENT_BYTES; ++offset) {
-        before[offset] = persist::v3::contentByte(pattern, offset);
+    uint8_t before[persist::v4::CONTENT_BYTES];
+    for (uint8_t offset = 0; offset < persist::v4::CONTENT_BYTES; ++offset) {
+        before[offset] = persist::v4::contentByte(pattern, offset);
     }
 
-    persist::v3::applyContentByte(pattern, persist::v3::CONTENT_BYTES, 0xFF);
-    persist::v3::applyContentByte(pattern, 200, 0xFF);
+    persist::v4::applyContentByte(pattern, persist::v4::CONTENT_BYTES, 0xFF);
+    persist::v4::applyContentByte(pattern, 200, 0xFF);
 
-    for (uint8_t offset = 0; offset < persist::v3::CONTENT_BYTES; ++offset) {
-        TEST_ASSERT_EQUAL_UINT8(before[offset], persist::v3::contentByte(pattern, offset));
+    for (uint8_t offset = 0; offset < persist::v4::CONTENT_BYTES; ++offset) {
+        TEST_ASSERT_EQUAL_UINT8(before[offset], persist::v4::contentByte(pattern, offset));
     }
 
-    TEST_ASSERT_EQUAL_UINT8(0, persist::v3::contentByte(pattern, persist::v3::CONTENT_BYTES));
-    TEST_ASSERT_EQUAL_UINT8(0, persist::v3::contentByte(pattern, 200));
+    TEST_ASSERT_EQUAL_UINT8(0, persist::v4::contentByte(pattern, persist::v4::CONTENT_BYTES));
+    TEST_ASSERT_EQUAL_UINT8(0, persist::v4::contentByte(pattern, 200));
 }
-
-/*
- * Le record de modele de la version 3 — 23 octets de contenu, plus la longueur
- */
 
 namespace {
 
@@ -361,132 +301,6 @@ void fillDistinctPattern(Pattern& pattern) {
 
 }  // namespace
 
-void test_the_v3_template_record_round_trips_its_twenty_four_bytes() {
-    Pattern source;
-    fillDistinctPattern(source);
-    const uint8_t sourceLength = 20;
-
-    uint8_t image[persist::v3::TEMPLATE_RECORD];
-    for (uint8_t offset = 0; offset < persist::v3::TEMPLATE_RECORD; ++offset) {
-        image[offset] = persist::v3::templateByte(source, sourceLength, offset);
-    }
-
-    Pattern loaded;
-    uint8_t loadedLength = 1;
-    for (uint8_t offset = 0; offset < persist::v3::TEMPLATE_RECORD; ++offset) {
-        TEST_ASSERT_TRUE(persist::v3::applyTemplateByte(loaded, loadedLength, offset,
-                                                        image[offset]));
-    }
-
-    TEST_ASSERT_EQUAL_UINT8(20, loadedLength);
-    for (uint8_t step = 0; step < Pattern::DEFAULT_TOTAL_STEPS; ++step) {
-        bool wanted = false;
-        bool got = false;
-        TEST_ASSERT_TRUE(source.readStep(step, wanted));
-        TEST_ASSERT_TRUE(loaded.readStep(step, got));
-        TEST_ASSERT_EQUAL_INT(wanted, got);
-        TEST_ASSERT_EQUAL_UINT8(source.getRatchet(step), loaded.getRatchet(step));
-    }
-    for (uint8_t offset = 0; offset < persist::v3::TEMPLATE_RECORD; ++offset) {
-        TEST_ASSERT_EQUAL_UINT8(image[offset],
-                                persist::v3::templateByte(loaded, loadedLength, offset));
-    }
-}
-
-void test_the_v3_template_record_accepts_every_length_in_range() {
-    const uint8_t wanted[] = {1, 16, 24, 35, 36};
-    for (uint8_t i = 0; i < sizeof(wanted); ++i) {
-        Pattern pattern;
-        uint8_t length = 8;
-        TEST_ASSERT_TRUE(persist::v3::applyTemplateByte(pattern, length, 23, wanted[i]));
-        TEST_ASSERT_EQUAL_UINT8(wanted[i], length);
-        TEST_ASSERT_EQUAL_UINT8(wanted[i], persist::v3::templateByte(pattern, length, 23));
-    }
-}
-
-void test_the_v3_template_record_refuses_a_length_out_of_range() {
-    const uint8_t refused[] = {0, 37, 255};
-    for (uint8_t i = 0; i < sizeof(refused); ++i) {
-        Pattern pattern;
-        uint8_t length = 12;
-        TEST_ASSERT_FALSE(persist::v3::applyTemplateByte(pattern, length, 23, refused[i]));
-        TEST_ASSERT_EQUAL_UINT8(12, length);
-    }
-}
-
-void test_a_refused_length_leaves_the_loaded_content_intact() {
-    Pattern source;
-    fillDistinctPattern(source);
-
-    Pattern loaded;
-    uint8_t length = 12;
-    for (uint8_t offset = 0; offset < persist::v3::CONTENT_BYTES; ++offset) {
-        TEST_ASSERT_TRUE(persist::v3::applyTemplateByte(
-            loaded, length, offset, persist::v3::contentByte(source, offset)));
-    }
-
-    TEST_ASSERT_FALSE(persist::v3::applyTemplateByte(loaded, length, 23, 0));
-    TEST_ASSERT_EQUAL_UINT8(12, length);
-
-    for (uint8_t offset = 0; offset < persist::v3::CONTENT_BYTES; ++offset) {
-        TEST_ASSERT_EQUAL_UINT8(persist::v3::contentByte(source, offset),
-                                persist::v3::contentByte(loaded, offset));
-    }
-}
-
-void test_the_v3_template_record_clamps_the_length_it_emits() {
-    Pattern pattern;
-    TEST_ASSERT_EQUAL_UINT8(1, persist::v3::templateByte(pattern, 0, 23));
-    TEST_ASSERT_EQUAL_UINT8(36, persist::v3::templateByte(pattern, 37, 23));
-    TEST_ASSERT_EQUAL_UINT8(36, persist::v3::templateByte(pattern, 255, 23));
-    TEST_ASSERT_EQUAL_UINT8(1, persist::v3::templateByte(pattern, 1, 23));
-    TEST_ASSERT_EQUAL_UINT8(36, persist::v3::templateByte(pattern, 36, 23));
-    TEST_ASSERT_EQUAL_UINT8(20, persist::v3::templateByte(pattern, 20, 23));
-}
-
-void test_the_length_byte_touches_no_content_byte() {
-    Pattern pattern;
-    fillDistinctPattern(pattern);
-
-    for (uint8_t offset = 0; offset < persist::v3::CONTENT_BYTES; ++offset) {
-        TEST_ASSERT_EQUAL_UINT8(persist::v3::templateByte(pattern, 4, offset),
-                                persist::v3::templateByte(pattern, 33, offset));
-        TEST_ASSERT_EQUAL_UINT8(persist::v3::contentByte(pattern, offset),
-                                persist::v3::templateByte(pattern, 4, offset));
-    }
-    TEST_ASSERT_EQUAL_UINT8(4, persist::v3::templateByte(pattern, 4, 23));
-    TEST_ASSERT_EQUAL_UINT8(33, persist::v3::templateByte(pattern, 33, 23));
-}
-
-void test_the_v3_instance_record_carries_no_length() {
-    Pattern source;
-    fillDistinctPattern(source);
-
-    Pattern loaded;
-    for (uint8_t offset = 0; offset < persist::v3::INSTANCE_RECORD; ++offset) {
-        persist::v3::applyContentByte(loaded, offset, persist::v3::contentByte(source, offset));
-    }
-
-    for (uint8_t step = 0; step < Pattern::DEFAULT_TOTAL_STEPS; ++step) {
-        bool wanted = false;
-        bool got = false;
-        TEST_ASSERT_TRUE(source.readStep(step, wanted));
-        TEST_ASSERT_TRUE(loaded.readStep(step, got));
-        TEST_ASSERT_EQUAL_INT(wanted, got);
-        TEST_ASSERT_EQUAL_UINT8(source.getRatchet(step), loaded.getRatchet(step));
-    }
-}
-
-void test_the_v3_length_bound_is_the_pattern_capacity_not_the_engine_cap() {
-    TEST_ASSERT_EQUAL_UINT8(1, persist::v3::MIN_TEMPLATE_LENGTH);
-    TEST_ASSERT_EQUAL_UINT8(36, persist::v3::MAX_TEMPLATE_LENGTH);
-    TEST_ASSERT_EQUAL_UINT8(36, SequencerEngine::MAX_LENGTH);
-
-    Pattern pattern;
-    uint8_t length = 1;
-    TEST_ASSERT_TRUE(persist::v3::applyTemplateByte(pattern, length, 23, 36));
-    TEST_ASSERT_EQUAL_UINT8(36, length);
-}
 
 /*
  * Aller-retour
@@ -971,382 +785,6 @@ void test_a_stored_cv_target_is_ignored_without_disturbing_the_record() {
     TEST_ASSERT_EQUAL_UINT8(0, loaded.image.byteAt(persist::CHANNELS_OFFSET + 7));
 }
 
-struct RigV3 {
-    SequencerEngine engine;
-    Transport transport;
-    UiController ui;
-    Preferences prefs;
-    PersistentImageV3 image;
-    PersistenceScheduler scheduler;
-
-    RigV3() : engine(), transport(engine), ui(engine, transport), prefs(),
-              image(engine, ui, prefs) {}
-};
-
-uint16_t finishWriteV3(RigV3& r, FakeEeprom& ee, uint32_t nowMs) {
-    uint16_t calls = 0;
-    while (r.scheduler.advance(ee, r.image, nowMs)) {
-        ++calls;
-    }
-    return calls;
-}
-
-void writeTemplateRecord(FakeEeprom& ee, uint8_t index, const Pattern& content,
-                         uint8_t length) {
-    for (uint8_t offset = 0; offset < persist::v3::TEMPLATE_RECORD; ++offset) {
-        ee.write(persist::v3::templateAddress(index, offset),
-                 persist::v3::templateByte(content, length, offset));
-    }
-}
-
-Pattern distinctContent(uint8_t seed) {
-    Pattern p;
-    p.writeStep(seed % Pattern::DEFAULT_TOTAL_STEPS, true);
-    p.writeStep((seed + 7) % Pattern::DEFAULT_TOTAL_STEPS, true);
-    p.setRatchet(seed % Pattern::DEFAULT_TOTAL_STEPS, flexseq::RATCHET_3);
-    return p;
-}
-
-bool sameContent(const Pattern& a, const Pattern& b) {
-    for (uint8_t i = 0; i < Pattern::DEFAULT_TOTAL_STEPS; ++i) {
-        bool left = false;
-        bool right = false;
-        a.readStep(i, left);
-        b.readStep(i, right);
-        if (left != right) return false;
-        if (a.getRatchet(i) != b.getRatchet(i)) return false;
-    }
-    return true;
-}
-
-void test_an_all_zero_template_is_empty() {
-    FakeEeprom ee;
-    RigV3 r;
-    Pattern silent;
-    writeTemplateRecord(ee, 10, silent, 16);
-    TEST_ASSERT_TRUE(r.image.isTemplateEmpty(ee, 10));
-}
-
-void test_one_active_step_makes_a_template_occupied() {
-    FakeEeprom ee;
-    RigV3 r;
-    for (uint8_t step = 0; step < Pattern::DEFAULT_TOTAL_STEPS; ++step) {
-        Pattern one;
-        one.writeStep(step, true);
-        writeTemplateRecord(ee, 10, one, 16);
-        TEST_ASSERT_FALSE(r.image.isTemplateEmpty(ee, 10));
-    }
-}
-
-void test_the_thirty_sixth_step_alone_makes_a_template_occupied() {
-    FakeEeprom ee;
-    RigV3 r;
-    Pattern last;
-    last.writeStep(35, true);
-    writeTemplateRecord(ee, 10, last, 16);
-    TEST_ASSERT_FALSE(r.image.isTemplateEmpty(ee, 10));
-}
-
-void test_ratchets_alone_leave_a_template_empty() {
-    FakeEeprom ee;
-    RigV3 r;
-    Pattern silent;
-    writeTemplateRecord(ee, 10, silent, 16);
-    for (uint8_t offset = 0; offset < persist::v3::RATCHET_BYTES; ++offset) {
-        ee.write(persist::v3::templateAddress(
-                     10, static_cast<uint8_t>(persist::v3::RECORD_RATCHETS_AT + offset)),
-                 0x66);
-    }
-    TEST_ASSERT_TRUE(r.image.isTemplateEmpty(ee, 10));
-}
-
-void test_the_four_bits_above_the_last_step_do_not_occupy_a_template() {
-    FakeEeprom ee;
-    RigV3 r;
-    Pattern silent;
-    writeTemplateRecord(ee, 10, silent, 16);
-    ee.write(persist::v3::templateAddress(
-                 10, static_cast<uint8_t>(persist::v3::RECORD_STEPS_AT
-                                          + persist::v3::STEP_BYTES - 1)),
-             0xF0);
-    TEST_ASSERT_TRUE(r.image.isTemplateEmpty(ee, 10));
-}
-
-void test_an_empty_query_reads_five_bytes_and_writes_none() {
-    FakeEeprom ee;
-    RigV3 r;
-    Pattern silent;
-    writeTemplateRecord(ee, 10, silent, 16);
-    const uint16_t before = ee.writes;
-    TEST_ASSERT_TRUE(r.image.isTemplateEmpty(ee, 10));
-    TEST_ASSERT_EQUAL_UINT16(before, ee.writes);
-}
-
-void test_an_out_of_range_index_is_not_empty() {
-    FakeEeprom ee;
-    RigV3 r;
-    TEST_ASSERT_FALSE(r.image.isTemplateEmpty(ee, 16));
-}
-
-void test_a_template_request_arms_and_reports_itself() {
-    FakeEeprom ee;
-    RigV3 r;
-    TEST_ASSERT_FALSE(r.scheduler.isWritingTemplate());
-    TEST_ASSERT_TRUE(r.scheduler.requestTemplateWrite(r.image, 0, 9));
-    TEST_ASSERT_TRUE(r.scheduler.isWritingTemplate());
-}
-
-void test_a_template_request_writes_one_byte_per_advance() {
-    FakeEeprom ee;
-    RigV3 r;
-    TEST_ASSERT_TRUE(r.scheduler.requestTemplateWrite(r.image, 0, 9));
-    for (uint8_t written = 0; written < persist::v3::TEMPLATE_RECORD; ++written) {
-        const uint16_t before = ee.writes;
-        TEST_ASSERT_TRUE(r.scheduler.advance(ee, r.image, 0));
-        TEST_ASSERT_EQUAL_UINT16(before + 1, ee.writes);
-    }
-}
-
-void test_a_template_request_ends_after_its_record() {
-    FakeEeprom ee;
-    RigV3 r;
-    const Pattern wanted = distinctContent(4);
-    *r.engine.instanceForChannel(0) = wanted;
-    TEST_ASSERT_TRUE(r.engine.setBaseLengthFromStorage(0, 21));
-    TEST_ASSERT_TRUE(r.scheduler.requestTemplateWrite(r.image, 0, 11));
-    for (uint8_t i = 0; i < persist::v3::TEMPLATE_RECORD; ++i) {
-        r.scheduler.advance(ee, r.image, 0);
-    }
-    TEST_ASSERT_FALSE(r.scheduler.isWritingTemplate());
-    for (uint8_t offset = 0; offset < persist::v3::CONTENT_BYTES; ++offset) {
-        TEST_ASSERT_EQUAL_UINT8(persist::v3::contentByte(wanted, offset),
-                                ee.read(persist::v3::templateAddress(11, offset)));
-    }
-    TEST_ASSERT_EQUAL_UINT8(
-        21, ee.read(persist::v3::templateAddress(11, persist::v3::RECORD_LENGTH_AT)));
-}
-
-void test_a_template_request_on_a_frozen_slot_arms_nothing() {
-    FakeEeprom ee;
-    RigV3 r;
-    for (uint8_t index = 0; index < 8; ++index) {
-        TEST_ASSERT_FALSE(r.scheduler.requestTemplateWrite(r.image, 0, index));
-    }
-    TEST_ASSERT_FALSE(r.scheduler.isWritingTemplate());
-}
-
-void test_a_second_template_request_is_refused_while_one_is_in_flight() {
-    FakeEeprom ee;
-    RigV3 r;
-    TEST_ASSERT_TRUE(r.scheduler.requestTemplateWrite(r.image, 0, 9));
-    TEST_ASSERT_TRUE(r.scheduler.advance(ee, r.image, 0));
-    TEST_ASSERT_FALSE(r.scheduler.requestTemplateWrite(r.image, 1, 10));
-}
-
-void test_the_template_request_goes_before_the_image_scan() {
-    FakeEeprom ee;
-    RigV3 r;
-    r.scheduler.markDirty(0);
-    TEST_ASSERT_TRUE(r.scheduler.requestTemplateWrite(r.image, 0, 9));
-    TEST_ASSERT_TRUE(r.scheduler.advance(ee, r.image, persist::QUIET_MS));
-    TEST_ASSERT_TRUE(ee.lowestWrite >= persist::v3::templateAddress(9, 0));
-    TEST_ASSERT_TRUE(r.scheduler.isDirty());
-}
-
-void test_the_image_scan_resumes_after_the_template() {
-    FakeEeprom ee;
-    RigV3 r;
-    r.scheduler.markDirty(0);
-    TEST_ASSERT_TRUE(r.scheduler.requestTemplateWrite(r.image, 0, 9));
-    for (uint8_t i = 0; i < persist::v3::TEMPLATE_RECORD; ++i) {
-        r.scheduler.advance(ee, r.image, persist::QUIET_MS);
-    }
-    TEST_ASSERT_FALSE(r.scheduler.isWritingTemplate());
-    TEST_ASSERT_TRUE(r.scheduler.advance(ee, r.image, persist::QUIET_MS));
-    // The template zone ends at 768; the scanned image starts at 769.
-    TEST_ASSERT_TRUE(ee.highestWrite >= 769);
-    TEST_ASSERT_TRUE(r.scheduler.isDirty());
-}
-
-void test_no_advance_ever_writes_more_than_one_byte() {
-    FakeEeprom ee;
-    RigV3 r;
-    r.scheduler.markDirty(0);
-    TEST_ASSERT_TRUE(r.scheduler.requestTemplateWrite(r.image, 0, 13));
-    for (uint16_t pass = 0; pass < 400; ++pass) {
-        const uint16_t before = ee.writes;
-        if (!r.scheduler.advance(ee, r.image, persist::QUIET_MS)) {
-            break;
-        }
-        TEST_ASSERT_EQUAL_UINT16(before + 1, ee.writes);
-    }
-}
-
-void test_save_template_writes_the_instance_content_into_the_record() {
-    FakeEeprom ee;
-    RigV3 r;
-    const Pattern wanted = distinctContent(3);
-    *r.engine.instanceForChannel(1) = wanted;
-    TEST_ASSERT_TRUE(r.image.saveTemplate(ee, 1, 9));
-    for (uint8_t offset = 0; offset < persist::v3::CONTENT_BYTES; ++offset) {
-        TEST_ASSERT_EQUAL_UINT8(persist::v3::contentByte(wanted, offset),
-                                ee.read(persist::v3::templateAddress(9, offset)));
-    }
-}
-
-void test_save_template_writes_the_base_not_the_modulated_length() {
-    FakeEeprom ee;
-    RigV3 r;
-    TEST_ASSERT_TRUE(r.engine.setChannelMode(1, flexseq::MODE_SEQ));
-    TEST_ASSERT_TRUE(r.engine.setBaseLength(1, 18));
-    TEST_ASSERT_TRUE(r.engine.setCvDestination(1, flexseq::CV_SOURCE_1,
-                                               flexseq::CV_DEST_LENGTH));
-    r.engine.setCvInput(flexseq::CV_SOURCE_1, 330);
-    r.engine.start();
-    r.engine.advance(96);
-    TEST_ASSERT_EQUAL_UINT8(18, r.engine.getBaseLength(1));
-    TEST_ASSERT_EQUAL_UINT8(28, r.engine.getEffectiveLength(1));
-
-    TEST_ASSERT_TRUE(r.image.saveTemplate(ee, 1, 9));
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(
-        18, ee.read(persist::v3::templateAddress(9, persist::v3::RECORD_LENGTH_AT)),
-        "ADR 0009 : SAVE ecrit la base, jamais la longueur modulee par le CV");
-}
-
-void test_save_template_writes_the_channel_length_into_the_record() {
-    FakeEeprom ee;
-    RigV3 r;
-    TEST_ASSERT_TRUE(r.engine.setBaseLengthFromStorage(1, 36));
-    TEST_ASSERT_EQUAL_UINT8(36, r.engine.getBaseLength(1));
-    TEST_ASSERT_EQUAL_UINT8(36, r.engine.getEffectiveLength(1));
-    TEST_ASSERT_TRUE(r.image.saveTemplate(ee, 1, 9));
-    TEST_ASSERT_EQUAL_UINT8(
-        36, ee.read(persist::v3::templateAddress(9, persist::v3::RECORD_LENGTH_AT)));
-}
-
-void test_save_template_refuses_the_eight_frozen_slots_without_writing() {
-    FakeEeprom ee;
-    RigV3 r;
-    for (uint8_t index = 0; index < 8; ++index) {
-        const uint16_t before = ee.writes;
-        TEST_ASSERT_FALSE(r.image.saveTemplate(ee, 0, index));
-        TEST_ASSERT_EQUAL_UINT16(before, ee.writes);
-    }
-}
-
-void test_save_template_accepts_the_eight_writable_slots() {
-    FakeEeprom ee;
-    RigV3 r;
-    for (uint8_t index = 8; index < 16; ++index) {
-        TEST_ASSERT_TRUE(r.image.saveTemplate(ee, 0, index));
-    }
-}
-
-void test_save_template_refuses_an_invalid_channel_or_index_without_writing() {
-    FakeEeprom ee;
-    RigV3 r;
-    const uint16_t before = ee.writes;
-    TEST_ASSERT_FALSE(r.image.saveTemplate(ee, 6, 9));
-    TEST_ASSERT_FALSE(r.image.saveTemplate(ee, 0, 16));
-    TEST_ASSERT_EQUAL_UINT16(before, ee.writes);
-}
-
-void test_save_then_load_returns_the_same_pattern_and_length() {
-    FakeEeprom ee;
-    RigV3 r;
-    const Pattern wanted = distinctContent(6);
-    *r.engine.instanceForChannel(2) = wanted;
-    TEST_ASSERT_TRUE(r.engine.setBaseLengthFromStorage(2, 30));
-    TEST_ASSERT_TRUE(r.image.saveTemplate(ee, 2, 12));
-
-    TEST_ASSERT_TRUE(r.image.loadTemplate(ee, 5, 12));
-    TEST_ASSERT_TRUE(sameContent(wanted, *r.engine.instanceForChannel(5)));
-    TEST_ASSERT_EQUAL_UINT8(30, r.engine.getBaseLength(5));
-    TEST_ASSERT_EQUAL_UINT8(30, r.engine.getEffectiveLength(5));
-}
-
-void test_load_template_copies_the_content_into_the_channel_instance() {
-    FakeEeprom ee;
-    RigV3 r;
-    const Pattern wanted = distinctContent(5);
-    writeTemplateRecord(ee, 5, wanted, 12);
-    TEST_ASSERT_TRUE(r.image.loadTemplate(ee, 2, 5));
-    TEST_ASSERT_TRUE(sameContent(wanted, *r.engine.instanceForChannel(2)));
-}
-
-void test_load_template_leaves_the_five_other_instances_untouched() {
-    FakeEeprom ee;
-    RigV3 r;
-    writeTemplateRecord(ee, 5, distinctContent(5), 12);
-    Pattern before;
-    TEST_ASSERT_TRUE(r.image.loadTemplate(ee, 2, 5));
-    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-        if (ch == 2) continue;
-        TEST_ASSERT_TRUE(sameContent(before, *r.engine.instanceForChannel(ch)));
-    }
-}
-
-void test_load_template_keeps_a_length_of_thirty_six_in_the_base() {
-    FakeEeprom ee;
-    RigV3 r;
-    writeTemplateRecord(ee, 9, distinctContent(3), 36);
-    TEST_ASSERT_TRUE(r.image.loadTemplate(ee, 0, 9));
-    TEST_ASSERT_EQUAL_UINT8(36, r.engine.getBaseLength(0));
-    TEST_ASSERT_EQUAL_UINT8(36, r.engine.getEffectiveLength(0));
-    TEST_ASSERT_EQUAL_INT8(9, r.engine.getSelectedPattern(0));
-}
-
-void test_load_template_needs_no_clamp_below_the_ceiling() {
-    FakeEeprom ee;
-    RigV3 r;
-    writeTemplateRecord(ee, 4, distinctContent(1), 12);
-    TEST_ASSERT_TRUE(r.image.loadTemplate(ee, 1, 4));
-    TEST_ASSERT_EQUAL_UINT8(12, r.engine.getBaseLength(1));
-    TEST_ASSERT_EQUAL_UINT8(12, r.engine.getEffectiveLength(1));
-}
-
-void test_load_template_refuses_an_invalid_length_without_losing_the_content() {
-    FakeEeprom ee;
-    RigV3 r;
-    const Pattern wanted = distinctContent(2);
-    writeTemplateRecord(ee, 6, wanted, 20);
-    ee.write(persist::v3::templateAddress(6, persist::v3::RECORD_LENGTH_AT), 37);
-    TEST_ASSERT_TRUE(r.engine.setBaseLength(3, 8));
-    TEST_ASSERT_TRUE(r.image.loadTemplate(ee, 3, 6));
-    TEST_ASSERT_TRUE(sameContent(wanted, *r.engine.instanceForChannel(3)));
-    TEST_ASSERT_EQUAL_UINT8(8, r.engine.getBaseLength(3));
-}
-
-void test_load_template_accepts_a_frozen_factory_slot() {
-    FakeEeprom ee;
-    RigV3 r;
-    const Pattern wanted = distinctContent(8);
-    writeTemplateRecord(ee, 0, wanted, 16);
-    TEST_ASSERT_TRUE(r.image.loadTemplate(ee, 4, 0));
-    TEST_ASSERT_TRUE(sameContent(wanted, *r.engine.instanceForChannel(4)));
-    TEST_ASSERT_EQUAL_INT8(0, r.engine.getSelectedPattern(4));
-}
-
-void test_load_template_refuses_an_invalid_channel_or_index() {
-    FakeEeprom ee;
-    RigV3 r;
-    writeTemplateRecord(ee, 1, distinctContent(4), 10);
-    TEST_ASSERT_FALSE(r.image.loadTemplate(ee, 6, 1));
-    TEST_ASSERT_FALSE(r.image.loadTemplate(ee, 0, 16));
-    Pattern before;
-    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-        TEST_ASSERT_TRUE(sameContent(before, *r.engine.instanceForChannel(ch)));
-    }
-}
-
-void test_load_template_writes_nothing_to_the_eeprom() {
-    FakeEeprom ee;
-    RigV3 r;
-    writeTemplateRecord(ee, 7, distinctContent(6), 18);
-    const uint16_t before = ee.writes;
-    TEST_ASSERT_TRUE(r.image.loadTemplate(ee, 5, 7));
-    TEST_ASSERT_EQUAL_UINT16(before, ee.writes);
-}
 
 struct JournalEeprom {
     uint8_t cell[persist::EEPROM_SIZE];
@@ -1376,62 +814,6 @@ struct JournalEeprom {
 
 JournalEeprom journal;
 
-void test_the_v3_scan_visits_and_writes_the_two_hundred_and_four_logical_bytes() {
-    journal.reset();
-    RigV3 r;
-    for (uint16_t index = 0; index < flexseq::PersistentImageV3::SIZE; ++index) {
-        journal.cell[r.image.addressAt(index)] = static_cast<uint8_t>(~r.image.byteAt(index));
-    }
-    journal.count = 0;
-    r.scheduler.markDirty(0);
-    while (r.scheduler.advance(journal, r.image, persist::QUIET_MS)) {
-    }
-    TEST_ASSERT_FALSE(journal.overflowed);
-    TEST_ASSERT_EQUAL_UINT16_MESSAGE(204, journal.count,
-        "le parcours doit ecrire les 204 octets logiques quand tous different");
-}
-
-void test_the_v3_scan_touches_only_the_version_and_the_data_zone() {
-    journal.reset();
-    RigV3 r;
-    for (uint16_t index = 0; index < flexseq::PersistentImageV3::SIZE; ++index) {
-        journal.cell[r.image.addressAt(index)] = static_cast<uint8_t>(~r.image.byteAt(index));
-    }
-    journal.count = 0;
-    r.scheduler.markDirty(0);
-    while (r.scheduler.advance(journal, r.image, persist::QUIET_MS)) {
-    }
-    for (uint16_t i = 0; i < journal.count; ++i) {
-        const uint16_t address = journal.order[i];
-        const bool isVersion = (address == 384);
-        const bool isData = (address >= 769 && address <= 971);
-        TEST_ASSERT_TRUE_MESSAGE(isVersion || isData,
-            "une ecriture est tombee hors de la version et de la zone de donnees");
-        TEST_ASSERT_TRUE_MESSAGE(address < 385 || address > 768,
-            "une ecriture est tombee dans la zone des templates");
-        TEST_ASSERT_TRUE_MESSAGE(address < 972,
-            "une ecriture a depasse la fin du format");
-    }
-}
-
-void test_the_v3_version_byte_is_the_last_address_written() {
-    journal.reset();
-    RigV3 r;
-    for (uint16_t index = 0; index < flexseq::PersistentImageV3::SIZE; ++index) {
-        journal.cell[r.image.addressAt(index)] = static_cast<uint8_t>(~r.image.byteAt(index));
-    }
-    journal.count = 0;
-    r.scheduler.markDirty(0);
-    while (r.scheduler.advance(journal, r.image, persist::QUIET_MS)) {
-    }
-    TEST_ASSERT_EQUAL_UINT16(204, journal.count);
-    TEST_ASSERT_EQUAL_UINT16_MESSAGE(384, journal.order[journal.count - 1],
-        "la version doit etre le dernier octet ecrit");
-    for (uint16_t i = 0; i + 1 < journal.count; ++i) {
-        TEST_ASSERT_TRUE_MESSAGE(journal.order[i] >= 769,
-            "un octet de donnees doit preceder la version");
-    }
-}
 
 void test_the_v2_scan_still_writes_the_version_first() {
     journal.reset();
@@ -1448,205 +830,6 @@ void test_the_v2_scan_still_writes_the_version_first() {
         "le contrat v2 ecrit la version en PREMIER, et il ne change pas");
 }
 
-uint32_t instanceStepMask(const Pattern& pattern) {
-    uint32_t mask = 0;
-    for (uint8_t step = 0; step < 36; ++step) {
-        bool active = false;
-        pattern.readStep(step, active);
-        if (active) {
-            mask |= (static_cast<uint32_t>(1) << step);
-        }
-    }
-    return mask;
-}
-
-void test_the_first_boot_seeds_the_templates_and_fills_the_instances_from_a1() {
-    journal.reset();
-    RigV3 r;
-    const bool restored = flexseq::bootstrap(journal, r.image, r.scheduler, 0);
-
-    TEST_ASSERT_FALSE_MESSAGE(restored, "une EEPROM vierge ne peut pas etre restauree");
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0x11, journal.cell[385],
-        "l octet bas du masque de A1 doit etre seme");
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0x91, journal.cell[386],
-        "l octet haut du masque de A1 doit etre seme");
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(16, journal.cell[385 + 23],
-        "la longueur du record de template d usine vaut 16");
-    TEST_ASSERT_EQUAL_UINT16_MESSAGE(384, journal.count,
-        "le semis ecrit les seize records de vingt-quatre octets");
-
-    for (uint8_t channel = 0; channel < SequencerEngine::CHANNEL_COUNT; ++channel) {
-        TEST_ASSERT_EQUAL_INT8(0, r.engine.getSelectedPattern(channel));
-        TEST_ASSERT_EQUAL_UINT32_MESSAGE(0x9111,
-            instanceStepMask(*r.engine.instanceForChannel(channel)),
-            "le CONTENU de l instance doit etre celui de A1, pas seulement son index");
-    }
-}
-
-void test_a_nominal_boot_restores_the_instances_and_never_overwrites_them() {
-    eeprom.reset();
-    RigV3 saved;
-    for (uint8_t channel = 0; channel < SequencerEngine::CHANNEL_COUNT; ++channel) {
-        saved.engine.instanceForChannel(channel)->writeStep(
-            static_cast<uint8_t>(30 + channel), true);
-    }
-    saved.scheduler.markDirty(0);
-    finishWriteV3(saved, eeprom, persist::QUIET_MS);
-
-    RigV3 loaded;
-    const bool restored = flexseq::bootstrap(eeprom, loaded.image, loaded.scheduler, 0);
-
-    TEST_ASSERT_TRUE_MESSAGE(restored, "une image v3 valide doit etre restauree");
-    for (uint8_t channel = 0; channel < SequencerEngine::CHANNEL_COUNT; ++channel) {
-        const uint32_t mask = instanceStepMask(*loaded.engine.instanceForChannel(channel));
-        TEST_ASSERT_EQUAL_UINT32_MESSAGE(
-            static_cast<uint32_t>(1) << (30 + channel), mask,
-            "l instance restauree ne doit JAMAIS etre ecrasee par un template");
-    }
-}
-
-void test_a_valid_version_two_image_is_refused_without_migration() {
-    eeprom.reset();
-    Rig legacy;
-    legacy.scheduler.markDirty(0);
-    finishWrite(legacy, eeprom, persist::QUIET_MS);
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(2, eeprom.cell[384],
-        "le rig v2 doit avoir ecrit une image valide");
-
-    RigV3 r;
-    const bool restored = flexseq::bootstrap(eeprom, r.image, r.scheduler, 0);
-    TEST_ASSERT_FALSE_MESSAGE(restored, "aucune migration de v2 vers v3 : QB2");
-    for (uint8_t channel = 0; channel < SequencerEngine::CHANNEL_COUNT; ++channel) {
-        TEST_ASSERT_EQUAL_UINT32(0x9111,
-            instanceStepMask(*r.engine.instanceForChannel(channel)));
-    }
-}
-
-void test_every_unknown_version_byte_falls_back_to_the_defaults() {
-    const uint8_t versions[3] = { 0xFF, 1, 4 };
-    for (uint8_t index = 0; index < 3; ++index) {
-        eeprom.reset();
-        eeprom.cell[384] = versions[index];
-        RigV3 r;
-        TEST_ASSERT_FALSE_MESSAGE(
-            flexseq::bootstrap(eeprom, r.image, r.scheduler, 0),
-            "une version inconnue doit etre refusee");
-        TEST_ASSERT_EQUAL_UINT32(0x9111,
-            instanceStepMask(*r.engine.instanceForChannel(0)));
-    }
-}
-
-void test_the_v3_defaults_reset_the_mode_the_offset_and_the_skip_chance() {
-    eeprom.reset();
-    eeprom.cell[384] = 0xFF;
-    RigV3 r;
-    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-        TEST_ASSERT_TRUE(r.engine.setChannelMode(ch, flexseq::MODE_RANDOM));
-        TEST_ASSERT_TRUE(r.engine.setOffset(ch, 7));
-        TEST_ASSERT_TRUE(r.engine.setSkipChance(ch, 9));
-    }
-    TEST_ASSERT_FALSE(flexseq::bootstrap(eeprom, r.image, r.scheduler, 0));
-    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-        TEST_ASSERT_EQUAL_UINT8(flexseq::MODE_CLOCK, r.engine.getChannelMode(ch));
-        TEST_ASSERT_EQUAL_UINT8(0, r.engine.getOffset(ch));
-        TEST_ASSERT_EQUAL_UINT8(0, r.engine.getSkipChance(ch));
-    }
-}
-
-void test_the_v3_logical_image_is_two_hundred_and_four_bytes() {
-    TEST_ASSERT_EQUAL_UINT16(204, flexseq::PersistentImageV3::SIZE);
-    TEST_ASSERT_EQUAL_UINT16(203, flexseq::PersistentImageV3::VERSION_INDEX);
-    TEST_ASSERT_EQUAL_UINT16(588, persist::v3::TOTAL_SIZE);
-    TEST_ASSERT_EQUAL_UINT16(384, persist::v3::TEMPLATES_SIZE);
-}
-
-void test_the_v3_version_holds_the_last_logical_index_at_the_first_address() {
-    RigV3 r;
-    TEST_ASSERT_EQUAL_UINT16(384, r.image.addressAt(203));
-    TEST_ASSERT_EQUAL_UINT8(3, r.image.byteAt(203));
-}
-
-void test_the_v3_mapping_never_lands_in_the_template_zone() {
-    RigV3 r;
-    for (uint16_t index = 0; index < flexseq::PersistentImageV3::SIZE; ++index) {
-        const uint16_t address = r.image.addressAt(index);
-        TEST_ASSERT_TRUE_MESSAGE(address < 385 || address > 768,
-            "un octet logique est mappe dans la zone des templates");
-    }
-}
-
-void test_the_v3_mapping_covers_the_version_and_the_data_zone_exactly() {
-    RigV3 r;
-    bool seen[1024];
-    memset(seen, 0, sizeof(seen));
-    for (uint16_t index = 0; index < flexseq::PersistentImageV3::SIZE; ++index) {
-        const uint16_t address = r.image.addressAt(index);
-        TEST_ASSERT_FALSE_MESSAGE(seen[address], "deux index logiques visent la meme adresse");
-        seen[address] = true;
-    }
-    TEST_ASSERT_TRUE(seen[384]);
-    for (uint16_t address = 385; address <= 768; ++address) {
-        TEST_ASSERT_FALSE(seen[address]);
-    }
-    for (uint16_t address = 769; address <= 971; ++address) {
-        TEST_ASSERT_TRUE(seen[address]);
-    }
-    TEST_ASSERT_FALSE(seen[972]);
-}
-
-void test_the_v3_global_zone_reads_mod_and_range_as_zero() {
-    RigV3 r;
-    TEST_ASSERT_EQUAL_UINT8(0, r.image.byteAt(192 + 3));
-    TEST_ASSERT_EQUAL_UINT8(0, r.image.byteAt(192 + 4));
-}
-
-void test_a_stored_mod_or_range_is_normalised_back_to_zero() {
-    RigV3 r;
-    r.image.applyByte(192 + 3, 0x5A);
-    r.image.applyByte(192 + 4, 0xA5);
-    TEST_ASSERT_EQUAL_UINT8(0, r.image.byteAt(192 + 3));
-    TEST_ASSERT_EQUAL_UINT8(0, r.image.byteAt(192 + 4));
-    TEST_ASSERT_EQUAL_UINT16(UiController::DEFAULT_TEMPO, r.ui.tempo());
-    TEST_ASSERT_EQUAL_UINT8(0, r.ui.clockSource());
-}
-
-void test_the_v3_image_round_trips_the_six_instances() {
-    eeprom.reset();
-    RigV3 saved;
-    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-        Pattern* instance = saved.engine.instanceForChannel(ch);
-        instance->writeStep(static_cast<uint8_t>(ch), true);
-        instance->setRatchet(static_cast<uint8_t>(ch), flexseq::RATCHET_3);
-    }
-    saved.ui.setTempo(143);
-    saved.scheduler.markDirty(0);
-    finishWriteV3(saved, eeprom, persist::QUIET_MS);
-
-    RigV3 loaded;
-    TEST_ASSERT_TRUE(loaded.scheduler.load(eeprom, loaded.image));
-    TEST_ASSERT_EQUAL_UINT16(143, loaded.ui.tempo());
-    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-        const Pattern* instance = loaded.engine.instanceForChannel(ch);
-        bool active = false;
-        instance->readStep(static_cast<uint8_t>(ch), active);
-        TEST_ASSERT_TRUE_MESSAGE(active, "un step d instance n a pas survecu au tour complet");
-        TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_3, instance->getRatchet(static_cast<uint8_t>(ch)));
-    }
-}
-
-void test_the_v3_reset_clears_the_six_instances_without_a_bank() {
-    RigV3 r;
-    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-        r.engine.instanceForChannel(ch)->writeStep(0, true);
-    }
-    r.image.resetToDefaults();
-    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-        bool active = true;
-        r.engine.instanceForChannel(ch)->readStep(0, active);
-        TEST_ASSERT_FALSE_MESSAGE(active, "une instance n a pas ete videe");
-    }
-    TEST_ASSERT_EQUAL_UINT16(UiController::DEFAULT_TEMPO, r.ui.tempo());
-}
 
 void test_the_v2_mapping_is_the_identity_the_scheduler_used_to_inline() {
     Rig r;
@@ -1662,600 +845,16 @@ void test_the_v2_version_sits_at_the_first_logical_index() {
     TEST_ASSERT_EQUAL_UINT8(2, r.image.byteAt(flexseq::PersistentImage::VERSION_INDEX));
 }
 
-// ---------------------------------------------------------------------------
-// E3.6.4.2 : le chargeur template -> tampon de modulation.
-// Il ne touche ni l'instance, ni baseLength, ni selectedPattern. Son bool dit
-// que le record a ete accepte, PAS que le remplacement fut atomique.
-// ---------------------------------------------------------------------------
-
-namespace {
-
-void writeTemplateRecord(FakeEeprom& ee, uint8_t index, const uint8_t* content,
-                         uint8_t length) {
-    for (uint8_t offset = 0; offset < persist::v3::CONTENT_BYTES; ++offset) {
-        ee.cell[persist::v3::templateAddress(index, offset)] = content[offset];
-    }
-    ee.cell[persist::v3::templateAddress(index, persist::v3::RECORD_LENGTH_AT)] = length;
-}
-
-}  // namespace
-
-void test_the_loader_refuses_a_channel_out_of_range() {
-    FakeEeprom ee;
-    flexseq::ModulatedPatternState state;
-    state.length[0] = 7;
-    TEST_ASSERT_FALSE(flexseq::loadTemplateIntoModulationBuffer(ee, state, 6, 0));
-    TEST_ASSERT_EQUAL_UINT8(7, state.length[0]);
-}
-
-void test_the_loader_refuses_a_template_out_of_range() {
-    FakeEeprom ee;
-    // Le garde d'index doit etre DISCRIMINANT. Sans cette preparation, retirer le
-    // garde faisait lire la sentinelle 0x5A, donc une longueur de 90, refusee par
-    // applyTemplateByte : la fonction rendait false pour la mauvaise raison et le
-    // test passait quand meme. On ecrit donc un record VALIDE a l'adresse que
-    // l'index 16 atteindrait.
-    //
-    // Cette adresse appartient normalement a une AUTRE zone de l'image, celle des
-    // instances. On ne l'ecrit ici que dans le FakeEeprom, et uniquement pour cette
-    // contre-epreuve. Le firmware n'ecrit jamais un record de template la.
-    uint8_t content[persist::v3::CONTENT_BYTES];
-    memset(content, 0x7F, sizeof(content));
-    writeTemplateRecord(ee, 16, content, 24);
-
-    flexseq::ModulatedPatternState state;
-    state.length[0] = 7;
-    state.pattern[0].setStepByte(0, 0x11);
-
-    TEST_ASSERT_FALSE(flexseq::loadTemplateIntoModulationBuffer(ee, state, 0, 16));
-    TEST_ASSERT_EQUAL_UINT8(7, state.length[0]);
-    TEST_ASSERT_EQUAL_UINT8(0x11, state.pattern[0].stepByte(0));
-}
-
-void test_the_loader_brings_the_content_and_the_length() {
-    FakeEeprom ee;
-    uint8_t content[persist::v3::CONTENT_BYTES];
-    memset(content, 0, sizeof(content));
-    content[0] = 0x81;   // steps 0 et 7
-    content[4] = 0x0F;   // steps 32 a 35
-    content[persist::v3::STEP_BYTES] = 0x23;  // ratchets des steps 0 et 1
-    writeTemplateRecord(ee, 9, content, 12);
-
-    flexseq::ModulatedPatternState state;
-    TEST_ASSERT_TRUE(flexseq::loadTemplateIntoModulationBuffer(ee, state, 3, 9));
-
-    TEST_ASSERT_EQUAL_UINT8(12, state.length[3]);
-    bool active = false;
-    TEST_ASSERT_TRUE(state.pattern[3].readStep(0, active));
-    TEST_ASSERT_TRUE(active);
-    TEST_ASSERT_TRUE(state.pattern[3].readStep(7, active));
-    TEST_ASSERT_TRUE(active);
-    TEST_ASSERT_TRUE(state.pattern[3].readStep(1, active));
-    TEST_ASSERT_FALSE(active);
-    TEST_ASSERT_TRUE(state.pattern[3].readStep(35, active));
-    TEST_ASSERT_TRUE(active);
-    TEST_ASSERT_EQUAL_UINT8(3, state.pattern[3].getRatchet(0));
-    TEST_ASSERT_EQUAL_UINT8(2, state.pattern[3].getRatchet(1));
-}
-
-void test_the_loader_masks_the_four_bits_above_the_last_step() {
-    FakeEeprom ee;
-    uint8_t content[persist::v3::CONTENT_BYTES];
-    memset(content, 0, sizeof(content));
-    content[4] = 0xFF;   // les bits 36 a 39 ne portent aucun step
-    writeTemplateRecord(ee, 8, content, 36);
-
-    flexseq::ModulatedPatternState state;
-    TEST_ASSERT_TRUE(flexseq::loadTemplateIntoModulationBuffer(ee, state, 0, 8));
-    TEST_ASSERT_EQUAL_UINT8(0x0F, state.pattern[0].stepByte(4));
-}
-
-void test_the_loader_refuses_a_length_out_of_range_without_touching_the_buffer() {
-    FakeEeprom ee;
-    uint8_t content[persist::v3::CONTENT_BYTES];
-    memset(content, 0xFF, sizeof(content));
-    writeTemplateRecord(ee, 10, content, 99);   // hors de [1, 36]
-
-    flexseq::ModulatedPatternState state;
-    state.length[1] = 20;
-    state.pattern[1].setStepByte(0, 0x05);
-    state.pattern[1].setRatchetByte(0, 0x30);
-
-    TEST_ASSERT_FALSE(flexseq::loadTemplateIntoModulationBuffer(ee, state, 1, 10));
-
-    TEST_ASSERT_EQUAL_UINT8(20, state.length[1]);
-    TEST_ASSERT_EQUAL_UINT8(0x05, state.pattern[1].stepByte(0));
-    TEST_ASSERT_EQUAL_UINT8(0x30, state.pattern[1].ratchetByte(0));
-    for (uint8_t offset = 1; offset < persist::v3::STEP_BYTES; ++offset) {
-        TEST_ASSERT_EQUAL_UINT8(0, state.pattern[1].stepByte(offset));
-    }
-}
-
-void test_the_loader_refuses_a_length_of_zero_the_same_way() {
-    FakeEeprom ee;
-    uint8_t content[persist::v3::CONTENT_BYTES];
-    memset(content, 0xFF, sizeof(content));
-    writeTemplateRecord(ee, 11, content, 0);
-
-    flexseq::ModulatedPatternState state;
-    state.length[0] = 12;
-    TEST_ASSERT_FALSE(flexseq::loadTemplateIntoModulationBuffer(ee, state, 0, 11));
-    TEST_ASSERT_EQUAL_UINT8(12, state.length[0]);
-    TEST_ASSERT_EQUAL_UINT8(0, state.pattern[0].stepByte(0));
-}
-
-void test_the_loader_accepts_the_two_bounds_of_the_stored_length() {
-    FakeEeprom ee;
-    uint8_t content[persist::v3::CONTENT_BYTES];
-    memset(content, 0, sizeof(content));
-    content[0] = 0x03;
-    writeTemplateRecord(ee, 12, content, 1);
-    writeTemplateRecord(ee, 13, content, 36);
-
-    flexseq::ModulatedPatternState state;
-    TEST_ASSERT_TRUE(flexseq::loadTemplateIntoModulationBuffer(ee, state, 0, 12));
-    TEST_ASSERT_EQUAL_UINT8(1, state.length[0]);
-    TEST_ASSERT_TRUE(flexseq::loadTemplateIntoModulationBuffer(ee, state, 1, 13));
-    TEST_ASSERT_EQUAL_UINT8(36, state.length[1]);
-}
-
-void test_the_loader_touches_one_channel_only() {
-    FakeEeprom ee;
-    uint8_t content[persist::v3::CONTENT_BYTES];
-    memset(content, 0xFF, sizeof(content));
-    writeTemplateRecord(ee, 11, content, 24);
-
-    flexseq::ModulatedPatternState state;
-    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-        state.length[ch] = 5;
-    }
-    TEST_ASSERT_TRUE(flexseq::loadTemplateIntoModulationBuffer(ee, state, 2, 11));
-    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-        if (ch == 2) {
-            TEST_ASSERT_EQUAL_UINT8(24, state.length[ch]);
-            continue;
-        }
-        TEST_ASSERT_EQUAL_UINT8(5, state.length[ch]);
-        TEST_ASSERT_EQUAL_UINT8(0, state.pattern[ch].stepByte(0));
-    }
-}
-
-void test_the_loader_writes_nothing_to_the_eeprom() {
-    FakeEeprom ee;
-    uint8_t content[persist::v3::CONTENT_BYTES];
-    memset(content, 0, sizeof(content));
-    writeTemplateRecord(ee, 12, content, 16);
-    ee.writes = 0;
-
-    flexseq::ModulatedPatternState state;
-    TEST_ASSERT_TRUE(flexseq::loadTemplateIntoModulationBuffer(ee, state, 0, 12));
-    TEST_ASSERT_EQUAL_UINT16(0, ee.writes);
-}
-
-void test_the_loader_leaves_the_instance_and_the_base_alone() {
-    FakeEeprom ee;
-    uint8_t content[persist::v3::CONTENT_BYTES];
-    memset(content, 0xAA, sizeof(content));
-    writeTemplateRecord(ee, 13, content, 30);
-
-    SequencerEngine engine;
-    engine.setBaseLength(4, 18);
-    engine.setSelectedPattern(4, 5);
-    engine.instanceForChannel(4)->writeStep(2, true);
-
-    flexseq::ModulatedPatternState state;
-    TEST_ASSERT_TRUE(flexseq::loadTemplateIntoModulationBuffer(ee, state, 4, 13));
-
-    TEST_ASSERT_EQUAL_UINT8(18, engine.getBaseLength(4));
-    TEST_ASSERT_EQUAL_INT8(5, engine.getSelectedPattern(4));
-    bool active = false;
-    TEST_ASSERT_TRUE(engine.instanceForChannel(4)->readStep(2, active));
-    TEST_ASSERT_TRUE(active);
-    TEST_ASSERT_EQUAL_UINT8(0x04, engine.instanceForChannel(4)->stepByte(0));
-}
-
-// ---------------------------------------------------------------------------
-// E3.6.4.3 : le garde de disponibilite EEPROM.
-// Storage::busy() est la seule verite materielle. Sous simavr EEPE est efface
-// tout de suite, donc le chemin rouge n'y est pas atteignable : il se prouve
-// ici, avec un FakeEeprom dont l'occupation est pilotable.
-// ---------------------------------------------------------------------------
-
-namespace {
-
-void writeGuardRecord(FakeEeprom& ee, uint8_t index, uint8_t length) {
-    uint8_t content[persist::v3::CONTENT_BYTES];
-    memset(content, 0, sizeof(content));
-    content[0] = 0x81;
-    content[persist::v3::STEP_BYTES] = 0x23;
-    writeTemplateRecord(ee, index, content, length);
-}
-
-}  // namespace
-
-void test_a_busy_storage_loads_nothing_into_the_modulation_buffer() {
-    FakeEeprom ee;
-    writeGuardRecord(ee, 9, 12);
-
-    flexseq::ModulatedPatternState state;
-    state.length[3] = 7;
-    state.pattern[3].setStepByte(0, 0x11);
-    state.pattern[3].setRatchetByte(0, 0x40);
-
-    ee.busyFlag = true;
-    TEST_ASSERT_FALSE(
-        flexseq::loadTemplateIntoModulationBufferIfStorageIsFree(ee, state, 3, 9));
-
-    TEST_ASSERT_EQUAL_UINT8(7, state.length[3]);
-    TEST_ASSERT_EQUAL_UINT8(0x11, state.pattern[3].stepByte(0));
-    TEST_ASSERT_EQUAL_UINT8(0x40, state.pattern[3].ratchetByte(0));
-    TEST_ASSERT_EQUAL_UINT16(0, ee.writes);
-}
-
-void test_a_free_storage_loads_the_template_into_the_modulation_buffer() {
-    FakeEeprom ee;
-    writeGuardRecord(ee, 9, 12);
-
-    flexseq::ModulatedPatternState state;
-    state.length[3] = 7;
-    state.pattern[3].setStepByte(0, 0x11);
-
-    ee.busyFlag = false;
-    TEST_ASSERT_TRUE(
-        flexseq::loadTemplateIntoModulationBufferIfStorageIsFree(ee, state, 3, 9));
-
-    TEST_ASSERT_EQUAL_UINT8(12, state.length[3]);
-    TEST_ASSERT_EQUAL_UINT8(0x81, state.pattern[3].stepByte(0));
-    TEST_ASSERT_EQUAL_UINT8(3, state.pattern[3].getRatchet(0));
-    TEST_ASSERT_EQUAL_UINT16(0, ee.writes);
-}
-
-void test_a_storage_that_becomes_free_loads_on_the_next_pass() {
-    FakeEeprom ee;
-    writeGuardRecord(ee, 9, 12);
-
-    flexseq::ModulatedPatternState state;
-    state.length[3] = 7;
-    state.pattern[3].setStepByte(0, 0x11);
-
-    ee.busyFlag = true;
-    TEST_ASSERT_FALSE(
-        flexseq::loadTemplateIntoModulationBufferIfStorageIsFree(ee, state, 3, 9));
-    TEST_ASSERT_EQUAL_UINT8(7, state.length[3]);
-    TEST_ASSERT_EQUAL_UINT8(0x11, state.pattern[3].stepByte(0));
-
-    ee.busyFlag = false;
-    TEST_ASSERT_TRUE(
-        flexseq::loadTemplateIntoModulationBufferIfStorageIsFree(ee, state, 3, 9));
-    TEST_ASSERT_EQUAL_UINT8(12, state.length[3]);
-    TEST_ASSERT_EQUAL_UINT8(0x81, state.pattern[3].stepByte(0));
-}
-
-void test_a_free_storage_still_refuses_a_record_the_loader_refuses() {
-    FakeEeprom ee;
-    writeGuardRecord(ee, 10, 99);
-
-    flexseq::ModulatedPatternState state;
-    state.length[1] = 7;
-
-    ee.busyFlag = false;
-    TEST_ASSERT_FALSE(
-        flexseq::loadTemplateIntoModulationBufferIfStorageIsFree(ee, state, 1, 10));
-    TEST_ASSERT_EQUAL_UINT8(7, state.length[1]);
-    TEST_ASSERT_EQUAL_UINT8(0, state.pattern[1].stepByte(0));
-}
-
-
-// ---------------------------------------------------------------------------
-// E3.6.4.4 etape 4 : l'election et le tourniquet.
-// Un canal par appel. Le curseur avance des l'election, jamais au succes.
-// ---------------------------------------------------------------------------
-
-namespace {
-
-struct ServiceRig {
-    FakeEeprom ee;
-    SequencerEngine engine;
-    flexseq::ModulatedPatternState state;
-
-    ServiceRig() {
-        for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-            engine.setChannelMode(ch, flexseq::MODE_SEQ);
-        }
-        uint8_t content[persist::v3::CONTENT_BYTES];
-        for (uint8_t index = 0; index < persist::v3::TEMPLATE_COUNT; ++index) {
-            memset(content, 0, sizeof(content));
-            content[0] = static_cast<uint8_t>(index + 1);
-            writeTemplateRecord(ee, index, content, 16);
-        }
-    }
-
-    void route(uint8_t channel) {
-        TEST_ASSERT_TRUE(engine.setCvDestination(channel, flexseq::CV_SOURCE_1,
-                                                 flexseq::CV_DEST_PATTERN));
-    }
-
-    void unroute(uint8_t channel) {
-        TEST_ASSERT_TRUE(engine.setCvDestination(channel, flexseq::CV_SOURCE_1,
-                                                 flexseq::CV_DEST_NONE));
-    }
-
-    int8_t serve() {
-        return flexseq::serviceOneModulationTemplateLoad(ee, engine, state);
-    }
-};
-
-const uint8_t NONE = flexseq::ModulatedPatternState::NOT_MODULATED;
-
-// L editeur de templates — lot 16E etape 4c. Le harnais entre dans l onglet
-// PATTERNS et ouvre l editeur par les gestes reels, jamais en posant l etat.
-struct ChangeFlagRig {
-    FakeEeprom ee;
-    SequencerEngine engine;
-    Transport transport;
-    UiController ui;
-    Preferences prefs;
-    PersistentImageV3 image;
-    PersistenceScheduler scheduler;
-    flexseq::ModulatedPatternState state;
-
-    ChangeFlagRig() : engine(), transport(engine), ui(engine, transport), prefs(),
-                  image(engine, ui, prefs) {
-        // Comme main.cpp : sans ce cablage le moteur ignore le tampon et rend
-        // l instance, donc l edition tomberait dans l instance.
-        engine.setModulatedPatterns(&state);
-        uint8_t content[persist::v3::CONTENT_BYTES];
-        for (uint8_t index = 0; index < persist::v3::TEMPLATE_COUNT; ++index) {
-            memset(content, 0, sizeof(content));
-            content[0] = static_cast<uint8_t>(index + 1);
-            writeTemplateRecord(ee, index, content, 16);
-        }
-    }
-
-};
-
-
-}  // namespace
-
-void test_no_routing_elects_nobody_and_leaves_the_cursor() {
-    ServiceRig r;
-    TEST_ASSERT_EQUAL_INT8(-1, r.serve());
-    TEST_ASSERT_EQUAL_UINT8(0, r.state.cursor);
-    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-        TEST_ASSERT_EQUAL_UINT8(NONE, r.state.loaded[ch]);
-    }
-    TEST_ASSERT_EQUAL_UINT16(0, r.ee.writes);
-}
-
-void test_a_routed_channel_is_served_and_carries_its_template() {
-    ServiceRig r;
-    r.engine.setSelectedPattern(3, 7);
-    r.route(3);
-
-    TEST_ASSERT_EQUAL_INT8(3, r.serve());
-    TEST_ASSERT_EQUAL_UINT8(7, r.state.loaded[3]);
-    TEST_ASSERT_EQUAL_UINT8(16, r.state.length[3]);
-    TEST_ASSERT_EQUAL_UINT8(8, r.state.pattern[3].stepByte(0));
-    TEST_ASSERT_EQUAL_UINT8(4, r.state.cursor);
-}
-
-void test_a_channel_already_carrying_its_index_is_not_eligible() {
-    ServiceRig r;
-    r.engine.setSelectedPattern(3, 7);
-    r.route(3);
-    TEST_ASSERT_EQUAL_INT8(3, r.serve());
-
-    TEST_ASSERT_EQUAL_INT8(-1, r.serve());
-    TEST_ASSERT_EQUAL_UINT8(4, r.state.cursor);
-}
-
-void test_a_busy_storage_elects_nobody_and_leaves_the_cursor() {
-    ServiceRig r;
-    r.engine.setSelectedPattern(3, 7);
-    r.route(3);
-    r.ee.busyFlag = true;
-
-    TEST_ASSERT_EQUAL_INT8(-1, r.serve());
-    TEST_ASSERT_EQUAL_UINT8(NONE, r.state.loaded[3]);
-    TEST_ASSERT_EQUAL_UINT8(0, r.state.cursor);
-    TEST_ASSERT_EQUAL_UINT8(0, r.state.pattern[3].stepByte(0));
-}
-
-void test_removing_the_routing_releases_the_channel() {
-    ServiceRig r;
-    r.engine.setSelectedPattern(3, 7);
-    r.route(3);
-    TEST_ASSERT_EQUAL_INT8(3, r.serve());
-    TEST_ASSERT_EQUAL_UINT8(7, r.state.loaded[3]);
-
-    r.unroute(3);
-    TEST_ASSERT_EQUAL_INT8(-1, r.serve());
-    TEST_ASSERT_EQUAL_UINT8(NONE, r.state.loaded[3]);
-}
-
-void test_the_release_happens_even_while_the_storage_is_busy() {
-    ServiceRig r;
-    r.engine.setSelectedPattern(3, 7);
-    r.route(3);
-    TEST_ASSERT_EQUAL_INT8(3, r.serve());
-
-    r.unroute(3);
-    r.ee.busyFlag = true;
-    TEST_ASSERT_EQUAL_INT8(-1, r.serve());
-    TEST_ASSERT_EQUAL_UINT8(NONE, r.state.loaded[3]);
-}
-
-void test_a_refused_record_elects_the_channel_and_still_moves_the_cursor() {
-    ServiceRig r;
-    uint8_t content[persist::v3::CONTENT_BYTES];
-    memset(content, 0xFF, sizeof(content));
-    writeTemplateRecord(r.ee, 7, content, 99);   // hors de [1, 36]
-    r.engine.setSelectedPattern(3, 7);
-    r.route(3);
-
-    TEST_ASSERT_EQUAL_INT8(3, r.serve());
-    TEST_ASSERT_EQUAL_UINT8(NONE, r.state.loaded[3]);
-    TEST_ASSERT_EQUAL_UINT8(0, r.state.pattern[3].stepByte(0));
-    TEST_ASSERT_EQUAL_UINT8(4, r.state.cursor);
-}
-
-void test_one_channel_only_is_served_per_call() {
-    ServiceRig r;
-    r.engine.setSelectedPattern(1, 4);
-    r.engine.setSelectedPattern(2, 5);
-    r.route(1);
-    r.route(2);
-
-    TEST_ASSERT_EQUAL_INT8(1, r.serve());
-    TEST_ASSERT_EQUAL_UINT8(4, r.state.loaded[1]);
-    TEST_ASSERT_EQUAL_UINT8(NONE, r.state.loaded[2]);
-
-    TEST_ASSERT_EQUAL_INT8(2, r.serve());
-    TEST_ASSERT_EQUAL_UINT8(5, r.state.loaded[2]);
-}
-
-void test_six_eligible_channels_are_served_in_six_calls() {
-    ServiceRig r;
-    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-        r.engine.setSelectedPattern(ch, static_cast<uint8_t>(ch + 2));
-        r.route(ch);
-    }
-    bool served[SequencerEngine::CHANNEL_COUNT] = {false, false, false, false, false, false};
-    for (uint8_t pass = 0; pass < SequencerEngine::CHANNEL_COUNT; ++pass) {
-        const int8_t channel = r.serve();
-        TEST_ASSERT_TRUE(channel >= 0);
-        TEST_ASSERT_FALSE(served[channel]);
-        served[channel] = true;
-    }
-    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-        TEST_ASSERT_TRUE(served[ch]);
-        TEST_ASSERT_EQUAL_UINT8(ch + 2, r.state.loaded[ch]);
-    }
-    TEST_ASSERT_EQUAL_INT8(-1, r.serve());
-}
-
-void test_the_sweep_starts_at_the_cursor_and_wraps() {
-    ServiceRig r;
-    r.engine.setSelectedPattern(1, 4);
-    r.engine.setSelectedPattern(5, 9);
-    r.route(1);
-    r.route(5);
-    r.state.cursor = 5;
-
-    TEST_ASSERT_EQUAL_INT8(5, r.serve());
-    TEST_ASSERT_EQUAL_UINT8(0, r.state.cursor);
-    TEST_ASSERT_EQUAL_INT8(1, r.serve());
-    TEST_ASSERT_EQUAL_UINT8(2, r.state.cursor);
-}
-
-void test_the_service_writes_no_byte_of_eeprom() {
-    ServiceRig r;
-    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-        r.route(ch);
-    }
-    const uint16_t before = r.ee.writes;
-    for (uint8_t pass = 0; pass < 8; ++pass) {
-        r.serve();
-    }
-    TEST_ASSERT_EQUAL_UINT16(before, r.ee.writes);
-}
-
-void test_a_channel_outside_seq_is_released_even_when_routed() {
-    ServiceRig r;
-    r.engine.setChannelMode(3, flexseq::MODE_SEQ);
-    r.engine.setSelectedPattern(3, 7);
-    r.route(3);
-    TEST_ASSERT_EQUAL_INT8(3, r.serve());
-    TEST_ASSERT_EQUAL_UINT8(7, r.state.loaded[3]);
-
-    TEST_ASSERT_TRUE(r.engine.setChannelMode(3, flexseq::MODE_CLOCK));
-    TEST_ASSERT_EQUAL_INT8(-1, r.serve());
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(NONE, r.state.loaded[3],
-        "hors SEQ le canal est relache : l'instance redevient jouee");
-}
 
 // ---------------------------------------------------------------------------
 // STEP-8.1, P35 normative: PRD 10.3 points 6 and 7, ADR 0011.
 // OLD carries a TRIPLET on step 1, NEW carries none. After the boundary
 // that moves the index to NEW, the content read is NEW, so the cached
 // ratchet must be NEW too: one trigger, a step of one unit.
-void test_the_boundary_that_swaps_the_template_gives_the_content_and_the_ratchet_of_the_same_template() {
-    ServiceRig r;
-    uint8_t content[persist::v3::CONTENT_BYTES];
-
-    memset(content, 0, sizeof(content));
-    content[0] = 0x02;
-    content[persist::v3::STEP_BYTES] = 0x70;
-    writeTemplateRecord(r.ee, 5, content, 16);
-
-    memset(content, 0, sizeof(content));
-    content[0] = 0x02;
-    writeTemplateRecord(r.ee, 0, content, 16);
-
-    r.engine.setModulatedPatterns(&r.state);
-    r.engine.setChannelMode(0, flexseq::MODE_SEQ);
-    r.engine.setSelectedPattern(0, 5);
-    r.route(0);
-    TEST_ASSERT_EQUAL_INT8(0, r.serve());
-    TEST_ASSERT_EQUAL_UINT8(5, r.state.loaded[0]);
-
-    r.engine.start();
-    r.engine.setCvInput(flexseq::CV_SOURCE_1, -165);
-    r.engine.advance(96);
-    TEST_ASSERT_EQUAL_INT8(1, r.engine.effectiveStep(0));
-    TEST_ASSERT_EQUAL_INT8(0, r.engine.patternCvIndex(0));
-    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_TRIPLET,
-                            r.engine.patternForChannel(0)->getRatchet(1));
-    TEST_ASSERT_EQUAL_UINT8(3, r.engine.currentStepTriggers(0));
-    TEST_ASSERT_EQUAL_UINT16(192, r.engine.currentStepTicks(0));
-
-    TEST_ASSERT_EQUAL_INT8(0, r.serve());
-    TEST_ASSERT_EQUAL_UINT8(0, r.state.loaded[0]);
-
-    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE,
-                            r.engine.patternForChannel(0)->getRatchet(1));
-    TEST_ASSERT_EQUAL_UINT8(1, r.engine.currentStepTriggers(0));
-    TEST_ASSERT_EQUAL_UINT16(96, r.engine.currentStepTicks(0));
-}
 
 // STEP-8.1, the refused path is a characterization, green before B6 and
 // after it: the loader validates the length before it writes one byte, so
 // a refused record publishes nothing and the cache has nothing to follow.
-void test_a_refused_template_at_the_boundary_leaves_the_buffer_and_the_cache_alone() {
-    ServiceRig r;
-    uint8_t content[persist::v3::CONTENT_BYTES];
-
-    memset(content, 0, sizeof(content));
-    content[0] = 0x02;
-    content[persist::v3::STEP_BYTES] = 0x70;
-    writeTemplateRecord(r.ee, 5, content, 16);
-
-    memset(content, 0, sizeof(content));
-    content[0] = 0x02;
-    writeTemplateRecord(r.ee, 0, content, 0);
-
-    r.engine.setModulatedPatterns(&r.state);
-    r.engine.setChannelMode(0, flexseq::MODE_SEQ);
-    r.engine.setSelectedPattern(0, 5);
-    r.route(0);
-    TEST_ASSERT_EQUAL_INT8(0, r.serve());
-    TEST_ASSERT_EQUAL_UINT8(5, r.state.loaded[0]);
-
-    r.engine.start();
-    r.engine.setCvInput(flexseq::CV_SOURCE_1, -165);
-    r.engine.advance(96);
-    TEST_ASSERT_EQUAL_INT8(0, r.engine.patternCvIndex(0));
-    TEST_ASSERT_EQUAL_UINT8(3, r.engine.currentStepTriggers(0));
-    TEST_ASSERT_EQUAL_UINT16(192, r.engine.currentStepTicks(0));
-
-    TEST_ASSERT_EQUAL_INT8(0, r.serve());
-    TEST_ASSERT_EQUAL_UINT8(5, r.state.loaded[0]);
-    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_TRIPLET,
-                            r.engine.patternForChannel(0)->getRatchet(1));
-    TEST_ASSERT_EQUAL_UINT8(16, r.state.length[0]);
-    TEST_ASSERT_EQUAL_UINT8(3, r.engine.currentStepTriggers(0));
-    TEST_ASSERT_EQUAL_UINT16(192, r.engine.currentStepTicks(0));
-}
 
 // STEP-8b.5, P35 under a STEP offset: PRD 10.2 E3.4-1, 10.3 points 6 and 7,
 // ADR 0011. CV1 moves the PATTERN index, CV2 shifts the read by +3. On the
@@ -2269,73 +868,6 @@ void test_a_refused_template_at_the_boundary_leaves_the_buffer_and_the_cache_alo
 // NEW differs from OLD on both dimensions at step 5, and NEW differs from
 // itself between step 5 and step 2: a reader left on localStep, or a ratchet
 // left on OLD, changes the observation.
-void test_after_a_template_swap_under_a_step_offset_the_content_and_the_ratchet_come_from_the_new_template_at_the_read_step() {
-    ServiceRig r;
-    flexseq::TriggerSequencer triggers(r.engine);
-    uint8_t content[persist::v3::CONTENT_BYTES];
-
-    memset(content, 0, sizeof(content));
-    content[0] = 0x20;
-    content[persist::v3::STEP_BYTES + 2] = 0x70;
-    writeTemplateRecord(r.ee, 5, content, 16);
-
-    memset(content, 0, sizeof(content));
-    content[0] = 0x04;
-    content[persist::v3::STEP_BYTES + 1] = 0x07;
-    content[persist::v3::STEP_BYTES + 2] = 0x20;
-    writeTemplateRecord(r.ee, 0, content, 16);
-
-    r.engine.setModulatedPatterns(&r.state);
-    r.engine.setChannelMode(0, flexseq::MODE_SEQ);
-    r.engine.setBaseLength(0, 12);
-    r.engine.setSelectedPattern(0, 5);
-    r.route(0);
-    TEST_ASSERT_TRUE(r.engine.setCvDestination(0, flexseq::CV_SOURCE_2,
-                                               flexseq::CV_DEST_STEP));
-    TEST_ASSERT_EQUAL_INT8(0, r.serve());
-    TEST_ASSERT_EQUAL_UINT8(5, r.state.loaded[0]);
-
-    r.engine.setCvInput(flexseq::CV_SOURCE_2, 99);
-    r.engine.start();
-    r.engine.advance(96);
-    triggers.update();
-    TEST_ASSERT_EQUAL_INT8(1, r.engine.effectiveStep(0));
-    TEST_ASSERT_EQUAL_INT8(4, r.engine.currentReadStep(0));
-    TEST_ASSERT_EQUAL_INT8(3, r.engine.stepCvOffset(0));
-
-    r.engine.setCvInput(flexseq::CV_SOURCE_1, -165);
-    r.engine.advance(96);
-    triggers.update();
-    TEST_ASSERT_EQUAL_INT8(2, r.engine.effectiveStep(0));
-    TEST_ASSERT_EQUAL_INT8(5, r.engine.currentReadStep(0));
-    TEST_ASSERT_EQUAL_INT8(0, r.engine.patternCvIndex(0));
-    TEST_ASSERT_EQUAL_UINT8(3, r.engine.currentStepTriggers(0));
-    TEST_ASSERT_EQUAL_UINT16(192, r.engine.currentStepTicks(0));
-    TEST_ASSERT_EQUAL_UINT8(1, triggers.triggerCount(0));
-
-    TEST_ASSERT_EQUAL_INT8(0, r.serve());
-    TEST_ASSERT_EQUAL_UINT8(0, r.state.loaded[0]);
-
-    const flexseq::Pattern* played = r.engine.patternForChannel(0);
-    bool active = true;
-    TEST_ASSERT_TRUE(played->readStep(5, active));
-    TEST_ASSERT_FALSE(active);
-    TEST_ASSERT_TRUE(played->readStep(2, active));
-    TEST_ASSERT_TRUE(active);
-    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_2, played->getRatchet(5));
-    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_TRIPLET, played->getRatchet(2));
-
-    TEST_ASSERT_EQUAL_INT8(2, r.engine.effectiveStep(0));
-    TEST_ASSERT_EQUAL_INT8(5, r.engine.currentReadStep(0));
-    TEST_ASSERT_EQUAL_UINT8(2, r.engine.currentStepTriggers(0));
-    TEST_ASSERT_EQUAL_UINT16(96, r.engine.currentStepTicks(0));
-
-    r.engine.advance(48);
-    triggers.update();
-    TEST_ASSERT_EQUAL_INT8(2, r.engine.effectiveStep(0));
-    TEST_ASSERT_EQUAL_UINT8(1, r.engine.onsetCount(0));
-    TEST_ASSERT_EQUAL_UINT8(0, triggers.triggerCount(0));
-}
 
 // STEP-9.3 G2: the PATTERN index and the STEP offset change on the SAME
 // boundary. CV1 moves the index from 5 to 0 and CV2 shifts the read by +3 in
@@ -2343,443 +875,475 @@ void test_after_a_template_swap_under_a_step_offset_the_content_and_the_ratchet_
 // NEW read step: NEW carries an active step 5 with RATCHET_2, so the sub-onset
 // at half a step fires exactly once. Every other pairing is silent: OLD has
 // nothing at step 5, NEW has nothing at local step 2.
-void test_when_the_index_and_the_step_offset_change_on_the_same_boundary_the_decision_reads_the_new_template_at_the_new_read_step() {
-    ServiceRig r;
-    flexseq::TriggerSequencer triggers(r.engine);
-    uint8_t content[persist::v3::CONTENT_BYTES];
-
-    memset(content, 0, sizeof(content));
-    writeTemplateRecord(r.ee, 5, content, 16);
-
-    memset(content, 0, sizeof(content));
-    content[0] = 0x20;
-    content[persist::v3::STEP_BYTES + 2] = 0x20;
-    writeTemplateRecord(r.ee, 0, content, 16);
-
-    r.engine.setModulatedPatterns(&r.state);
-    r.engine.setChannelMode(0, flexseq::MODE_SEQ);
-    r.engine.setBaseLength(0, 12);
-    r.engine.setSelectedPattern(0, 5);
-    r.route(0);
-    TEST_ASSERT_TRUE(r.engine.setCvDestination(0, flexseq::CV_SOURCE_2,
-                                               flexseq::CV_DEST_STEP));
-    TEST_ASSERT_EQUAL_INT8(0, r.serve());
-    TEST_ASSERT_EQUAL_UINT8(5, r.state.loaded[0]);
-
-    r.engine.start();
-    r.engine.advance(96);
-    triggers.update();
-    TEST_ASSERT_EQUAL_INT8(1, r.engine.effectiveStep(0));
-    TEST_ASSERT_EQUAL_INT8(1, r.engine.currentReadStep(0));
-    TEST_ASSERT_EQUAL_INT8(5, r.engine.patternCvIndex(0));
-
-    r.engine.setCvInput(flexseq::CV_SOURCE_1, -165);
-    r.engine.setCvInput(flexseq::CV_SOURCE_2, 99);
-    r.engine.advance(96);
-    triggers.update();
-    TEST_ASSERT_EQUAL_INT8(2, r.engine.effectiveStep(0));
-    TEST_ASSERT_EQUAL_INT8(3, r.engine.stepCvOffset(0));
-    TEST_ASSERT_EQUAL_INT8(5, r.engine.currentReadStep(0));
-    TEST_ASSERT_EQUAL_INT8(0, r.engine.patternCvIndex(0));
-    TEST_ASSERT_EQUAL_UINT8(1, r.engine.currentStepTriggers(0));
-    TEST_ASSERT_EQUAL_UINT16(96, r.engine.currentStepTicks(0));
-    TEST_ASSERT_EQUAL_UINT8(0, triggers.triggerCount(0));
-
-    TEST_ASSERT_EQUAL_INT8(0, r.serve());
-    TEST_ASSERT_EQUAL_UINT8(0, r.state.loaded[0]);
-    TEST_ASSERT_EQUAL_UINT8(2, r.engine.currentStepTriggers(0));
-    TEST_ASSERT_EQUAL_UINT16(96, r.engine.currentStepTicks(0));
-
-    r.engine.advance(48);
-    triggers.update();
-    TEST_ASSERT_EQUAL_INT8(2, r.engine.effectiveStep(0));
-    TEST_ASSERT_EQUAL_INT8(5, r.engine.currentReadStep(0));
-    TEST_ASSERT_EQUAL_UINT8(1, r.engine.onsetCount(0));
-    TEST_ASSERT_EQUAL_UINT8(1, triggers.triggerCount(0));
-}
-
-/*
- * Le tampon d edition — lot 16E etape 4c
- */
-
-/*
- * L ecriture en sortant — lot 16E etape 4e
- */
 
 // Entre dans l ecran EDIT d un canal. Le mode SEQ est obligatoire : EDIT n est
 // atteignable que de la, decision du proprietaire du 2026-09-05.
-void enterChannelEdit(ChangeFlagRig& r, uint8_t channel) {
-    r.engine.setChannelMode(channel, flexseq::MODE_SEQ);
-    while (r.ui.currentTab() != UiController::TAB_FIRST_CHANNEL + channel) {
-        r.ui.handle(UiController::EVENT_ROTATE, 1);
-    }
-    r.ui.handle(UiController::EVENT_PRESS);
-    while (r.ui.field() != UiController::FIELD_EDIT_ENTRY) {
-        r.ui.handle(UiController::EVENT_ROTATE, 1);
-    }
-    r.ui.handle(UiController::EVENT_PRESS);
-}
 
-/*
- * Le drapeau par canal — lot 16E etape 5b, PRD 5.0 amendement 1bis
- *
- * Un bit par canal : la copie du canal differe du template qu il a charge. Il
- * garde le chargement : une copie changee mange le premier cran du geste.
- */
-
-namespace {
-
-// Les six bits partent a un — PRD 5.0 amendement 1ter. Un test qui mesure une
-// EDITION doit donc partir d une ardoise propre, sans quoi il verrait le
-// drapeau du demarrage.
-void clearEveryChannelFlag(flexseq::ModulatedPatternState& state) {
-    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-        state.clearDirty(ch);
-    }
-}
-
-}  // namespace
 
 // PRD 5.0 amendement 1quater : les six copies partent PROPRES, decision du
 // proprietaire. Consequence acceptee et nommee : apres une coupure, le premier
 // chargement d un canal ecrase une copie editee sans rien demander.
-void test_a_fresh_state_carries_no_dirty_channel() {
-    ChangeFlagRig r;
-    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-        TEST_ASSERT_FALSE_MESSAGE(r.state.isDirty(ch), "rien n a ete edite");
-    }
-    TEST_ASSERT_EQUAL_UINT8(0, r.state.dirty);
-}
 
-void test_editing_a_step_raises_the_flag_of_that_channel_alone() {
-    ChangeFlagRig r;
-    clearEveryChannelFlag(r.state);
-    enterChannelEdit(r, 3);
-    r.ui.handle(UiController::EVENT_PRESS);          // bascule le pas 0
-    TEST_ASSERT_TRUE_MESSAGE(r.state.isDirty(3), "le canal edite");
-    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-        if (ch != 3) {
-            TEST_ASSERT_FALSE_MESSAGE(r.state.isDirty(ch), "et lui seul");
-        }
-    }
-}
 
 // Decision du proprietaire du 2026-09-14 : le record de template stocke une
 // longueur, donc un canal dont la longueur a change ne correspond plus au
 // template charge.
-void test_editing_the_length_of_a_channel_raises_its_flag() {
-    ChangeFlagRig r;
-    clearEveryChannelFlag(r.state);
-    r.engine.setChannelMode(2, flexseq::MODE_SEQ);
-    while (r.ui.currentTab() != UiController::TAB_FIRST_CHANNEL + 2) {
-        r.ui.handle(UiController::EVENT_ROTATE, 1);
-    }
-    r.ui.handle(UiController::EVENT_PRESS);
-    while (r.ui.field() != UiController::FIELD_CONFIG) {
-        r.ui.handle(UiController::EVENT_ROTATE, 1);
-    }
-    r.ui.handle(UiController::EVENT_PRESS);          // la page CONFIG
-    while (r.ui.field() != UiController::FIELD_LENGTH) {
-        r.ui.handle(UiController::EVENT_ROTATE, 1);
-    }
-    const uint8_t before = r.engine.getBaseLength(2);
-    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
-    TEST_ASSERT_NOT_EQUAL_MESSAGE(before, r.engine.getBaseLength(2),
-                                  "le geste doit avoir change la longueur");
-    TEST_ASSERT_TRUE_MESSAGE(r.state.isDirty(2), "la longueur leve le drapeau");
-}
 
-void test_loading_a_template_clears_the_flag_of_the_channel() {
-    ChangeFlagRig r;
-    clearEveryChannelFlag(r.state);
-    enterChannelEdit(r, 1);
-    r.ui.handle(UiController::EVENT_PRESS);
-    TEST_ASSERT_TRUE(r.state.isDirty(1));
-    TEST_ASSERT_TRUE(r.image.loadTemplate(r.ee, 1, 5));
-    TEST_ASSERT_FALSE_MESSAGE(r.state.isDirty(1),
-                              "la copie est de nouveau le template");
-}
-
-void test_saving_a_template_clears_the_flag_of_the_channel() {
-    ChangeFlagRig r;
-    clearEveryChannelFlag(r.state);
-    enterChannelEdit(r, 1);
-    r.ui.handle(UiController::EVENT_PRESS);
-    TEST_ASSERT_TRUE(r.state.isDirty(1));
-    TEST_ASSERT_TRUE(r.image.saveTemplate(r.ee, 1, 9));
-    TEST_ASSERT_FALSE_MESSAGE(r.state.isDirty(1),
-                              "le canal adopte l emplacement, PRD 12.9 point 6");
-}
 
 // Le bit vit dans un octet : un index hors des six deborderait sur un voisin.
-void test_an_out_of_range_channel_never_touches_a_bit() {
-    ChangeFlagRig r;
-    clearEveryChannelFlag(r.state);
-    r.state.markDirty(SequencerEngine::CHANNEL_COUNT);
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, r.state.dirty, "aucun bit n a bouge");
-    TEST_ASSERT_FALSE(r.state.isDirty(SequencerEngine::CHANNEL_COUNT));
-}
+
+
+// L oracle est le COMPORTEMENT : le template change apres le premier service, et
+// un second passage ne doit pas aller le relire.
+
+// Le gel de A1 a A8 porte sur l ECRITURE, jamais sur la lecture.
+
+// Une EEPROM occupee GARDE la demande : la consommer sans charger la perdrait
+// en silence.
+
+// Le chargement remet la copie a l identique du template : le drapeau tombe.
 
 /*
- * Lot 16E etape 5d — LOAD charge. Le controleur POSE la demande, ce service
- * l execute : ADR 0002 interdit au domaine de lire l EEPROM.
+ * Version 4 — the shared bank, PRD 11.1 and ADR 0014
  */
 
 namespace {
 
-// PRD 5.0 amendement 1quater : le curseur s arrete sur la grande valeur, un
-// appui court ouvre le champ, une rotation choisit le nom, et un appui court
-// charge. Une copie changee fait poser la question, et YES la confirme.
-void loadByField(RigV3& r, uint8_t target) {
-    r.engine.setChannelMode(0, flexseq::MODE_SEQ);
-    r.engine.setSelectedPattern(0, static_cast<uint8_t>(target - 1));
-    r.ui.handle(UiController::EVENT_PRESS);              // entre dans l onglet
-    TEST_ASSERT_EQUAL(UiController::FIELD_PATTERN, r.ui.field());
-    r.ui.handle(UiController::EVENT_PRESS);              // ouvre le champ
-    r.ui.handle(UiController::EVENT_ROTATE, 1);          // choisit le nom
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(target, r.ui.displayedPattern(),
-                                    "le geste atteint le template vise");
-    r.ui.handle(UiController::EVENT_PRESS);              // charge, ou demande
-    if (r.ui.patternAskPending()) {
-        r.ui.handle(UiController::EVENT_ROTATE, 1);      // YES
-        r.ui.handle(UiController::EVENT_PRESS);
+struct RigV4 {
+    PatternBank bank;
+    SequencerEngine engine;
+    Transport transport;
+    UiController ui;
+    Preferences prefs;
+    PersistentImageV4 image;
+    PersistenceScheduler scheduler;
+
+    RigV4() : engine(), transport(engine), ui(engine, transport), prefs(),
+              image(engine, ui, prefs) {
+        engine.setPatternBank(&bank);
     }
-    TEST_ASSERT_FALSE_MESSAGE(r.ui.patternAskPending(), "la question est repondue");
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(target, r.engine.getSelectedPattern(0),
-                                    "le canal adopte le template");
+};
+
+uint16_t finishWriteV4(RigV4& r, FakeEeprom& ee, uint32_t nowMs) {
+    uint16_t calls = 0;
+    while (r.scheduler.advance(ee, r.image, nowMs)) {
+        ++calls;
+    }
+    return calls;
+}
+
+uint64_t bankStepMask(const Pattern& pattern) {
+    uint64_t mask = 0;
+    for (uint8_t step = 0; step < 36; ++step) {
+        bool active = false;
+        pattern.readStep(step, active);
+        if (active) {
+            mask |= (static_cast<uint64_t>(1) << step);
+        }
+    }
+    return mask;
+}
+
+void fillDistinctStateV4(RigV4& r) {
+    for (uint8_t index = 0; index < flexseq::PATTERN_COUNT; ++index) {
+        Pattern* p = r.bank.getPattern(index);
+        p->writeStep(static_cast<uint8_t>(index % 36), true);
+        p->writeStep(static_cast<uint8_t>((index * 7 + 3) % 36), true);
+        p->writeStep(35, index % 2 == 0);
+        p->setRatchet(static_cast<uint8_t>(index % 36), flexseq::RATCHET_3);
+        p->setRatchet(static_cast<uint8_t>((index * 5 + 1) % 36), flexseq::RATCHET_TRIPLET);
+    }
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        r.engine.setSelectedPattern(ch, static_cast<uint8_t>(15 - ch));
+        r.engine.setBaseLength(ch, static_cast<uint8_t>(36 - ch * 3));
+        r.engine.setSubdiv(ch, flexseq::subdivAtIndex(static_cast<uint8_t>(ch * 3)));
+        r.engine.setBarLength(ch, ch % 2 == 0 ? 3 : 6);
+        r.engine.setChannelMode(ch, static_cast<flexseq::ChannelMode>(ch % 3));
+        r.engine.setOffset(ch, static_cast<uint16_t>(ch * 2 + 1));
+        r.engine.setSkipChance(ch, static_cast<uint8_t>(ch + 2));
+        r.engine.setCvDestination(ch, flexseq::CV_SOURCE_1,
+                                  static_cast<flexseq::CvDestination>((ch + 1) % 5));
+        r.engine.setCvDestination(ch, flexseq::CV_SOURCE_2,
+                                  static_cast<flexseq::CvDestination>((ch + 3) % 5));
+    }
+    r.ui.setTempo(287);
+    r.ui.setClockSource(4);
+    r.prefs.rotateScreen = 0;
+    r.prefs.reverseEncoder = 0;
+    r.prefs.cvCalibration[0] = -26;
+    r.prefs.cvCalibration[1] = 300;
+}
+
+bool sameStateV4(const RigV4& a, const RigV4& b) {
+    for (uint16_t index = 0; index < PersistentImageV4::SIZE; ++index) {
+        if (a.image.byteAt(index) != b.image.byteAt(index)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 }  // namespace
 
-void test_a_validated_load_copies_the_template_into_the_channel() {
-    FakeEeprom ee;
-    RigV3 r;
-    const Pattern wanted = distinctContent(7);
-    writeTemplateRecord(ee, 11, wanted, 21);
-
-    loadByField(r, 11);
-    flexseq::servicePatternAction(ee, r.image, r.engine, r.ui);
-
-    TEST_ASSERT_TRUE_MESSAGE(sameContent(wanted, *r.engine.instanceForChannel(0)),
-        "le contenu vient du template");
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(21, r.engine.getBaseLength(0),
-        "et la longueur aussi");
+void test_the_v4_layout_is_the_one_the_prd_fixed() {
+    TEST_ASSERT_EQUAL_UINT8(4, persist::v4::FORMAT_VERSION);
+    TEST_ASSERT_EQUAL_UINT8(2, persist::FORMAT_VERSION);
+    TEST_ASSERT_EQUAL_UINT16(1, persist::v4::HEADER_SIZE);
+    TEST_ASSERT_EQUAL_UINT16(1, persist::v4::BANK_OFFSET);
+    TEST_ASSERT_EQUAL_UINT16(368, persist::v4::BANK_SIZE);
+    TEST_ASSERT_EQUAL_UINT8(23, persist::v4::BANK_RECORD);
+    TEST_ASSERT_EQUAL_UINT8(16, persist::v4::BANK_COUNT);
+    TEST_ASSERT_EQUAL_UINT16(369, persist::v4::CHANNELS_OFFSET);
+    TEST_ASSERT_EQUAL_UINT16(54, persist::v4::CHANNELS_SIZE);
+    TEST_ASSERT_EQUAL_UINT16(423, persist::v4::GLOBAL_OFFSET);
+    TEST_ASSERT_EQUAL_UINT16(5, persist::v4::GLOBAL_SIZE);
+    TEST_ASSERT_EQUAL_UINT16(428, persist::v4::PREFS_OFFSET);
+    TEST_ASSERT_EQUAL_UINT16(6, persist::v4::PREFS_SIZE);
+    TEST_ASSERT_EQUAL_UINT16(434, persist::v4::TOTAL_SIZE);
+    TEST_ASSERT_EQUAL_UINT16(817, persist::v4::LAST_ADDRESS);
 }
 
-void test_the_service_does_nothing_without_a_demand() {
-    FakeEeprom ee;
-    RigV3 r;
-    writeTemplateRecord(ee, 11, distinctContent(7), 21);
-    r.engine.setSelectedPattern(0, 11);
-    const Pattern before = *r.engine.instanceForChannel(0);
-
-    flexseq::servicePatternAction(ee, r.image, r.engine, r.ui);
-    TEST_ASSERT_TRUE_MESSAGE(sameContent(before, *r.engine.instanceForChannel(0)),
-        "sans demande, le service ne touche a rien");
+void test_the_v4_records_carry_thirty_six_steps_and_no_length() {
+    TEST_ASSERT_EQUAL_UINT8(5, persist::v4::STEP_BYTES);
+    TEST_ASSERT_EQUAL_UINT8(18, persist::v4::RATCHET_BYTES);
+    TEST_ASSERT_EQUAL_UINT8(23, persist::v4::CONTENT_BYTES);
+    TEST_ASSERT_EQUAL_UINT8(0, persist::v4::RECORD_STEPS_AT);
+    TEST_ASSERT_EQUAL_UINT8(5, persist::v4::RECORD_RATCHETS_AT);
+    TEST_ASSERT_EQUAL_UINT8(0x0F, persist::v4::LAST_STEP_BYTE_MASK);
 }
 
-// L oracle est le COMPORTEMENT : le template change apres le premier service, et
-// un second passage ne doit pas aller le relire.
-void test_a_demand_is_executed_once() {
-    FakeEeprom ee;
-    RigV3 r;
-    const Pattern first = distinctContent(7);
-    writeTemplateRecord(ee, 11, first, 21);
-
-    loadByField(r, 11);
-    flexseq::servicePatternAction(ee, r.image, r.engine, r.ui);
-    TEST_ASSERT_TRUE(sameContent(first, *r.engine.instanceForChannel(0)));
-
-    writeTemplateRecord(ee, 11, distinctContent(2), 19);
-    flexseq::servicePatternAction(ee, r.image, r.engine, r.ui);
-    TEST_ASSERT_TRUE_MESSAGE(sameContent(first, *r.engine.instanceForChannel(0)),
-        "la demande est consommee : le second passage ne recharge rien");
-    TEST_ASSERT_EQUAL_UINT8(21, r.engine.getBaseLength(0));
+void test_the_v4_image_is_scanned_whole_and_ends_on_its_version() {
+    TEST_ASSERT_EQUAL_UINT16(434, PersistentImageV4::SIZE);
+    TEST_ASSERT_EQUAL_UINT16(433, PersistentImageV4::VERSION_INDEX);
+    TEST_ASSERT_EQUAL_UINT16(0, persist::v4::IMAGE_BANK_AT);
+    TEST_ASSERT_EQUAL_UINT16(368, persist::v4::IMAGE_CHANNELS_AT);
+    TEST_ASSERT_EQUAL_UINT16(422, persist::v4::IMAGE_GLOBAL_AT);
+    TEST_ASSERT_EQUAL_UINT16(427, persist::v4::IMAGE_PREFS_AT);
+    TEST_ASSERT_EQUAL_UINT16(433, persist::v4::IMAGE_VERSION_AT);
 }
 
-// Le gel de A1 a A8 porte sur l ECRITURE, jamais sur la lecture.
-void test_a_frozen_slot_loads() {
-    FakeEeprom ee;
-    RigV3 r;
-    const Pattern wanted = distinctContent(2);
-    writeTemplateRecord(ee, 3, wanted, 18);
-
-    loadByField(r, 3);
-    flexseq::servicePatternAction(ee, r.image, r.engine, r.ui);
-    TEST_ASSERT_TRUE(sameContent(wanted, *r.engine.instanceForChannel(0)));
+void test_the_v4_image_leaves_the_original_memcode_alone() {
+    TEST_ASSERT_TRUE(persist::BASE_ADDRESS + persist::v4::TOTAL_SIZE <= 1023);
+    TEST_ASSERT_EQUAL_UINT16(817, persist::BASE_ADDRESS + persist::v4::TOTAL_SIZE - 1);
 }
 
-// Une EEPROM occupee GARDE la demande : la consommer sans charger la perdrait
-// en silence.
-void test_a_busy_storage_keeps_the_demand() {
-    FakeEeprom ee;
-    RigV3 r;
-    const Pattern wanted = distinctContent(4);
-    writeTemplateRecord(ee, 12, wanted, 19);
-    const Pattern before = *r.engine.instanceForChannel(0);
-
-    loadByField(r, 12);
-    ee.busyFlag = true;
-    flexseq::servicePatternAction(ee, r.image, r.engine, r.ui);
-    TEST_ASSERT_TRUE_MESSAGE(sameContent(before, *r.engine.instanceForChannel(0)),
-        "rien n est charge tant que l EEPROM est occupee");
-
-    ee.busyFlag = false;
-    flexseq::servicePatternAction(ee, r.image, r.engine, r.ui);
-    TEST_ASSERT_TRUE_MESSAGE(sameContent(wanted, *r.engine.instanceForChannel(0)),
-        "et la demande a survecu");
+void test_the_v4_version_holds_the_last_logical_index_at_the_first_address() {
+    RigV4 r;
+    TEST_ASSERT_EQUAL_UINT16(384, r.image.addressAt(433));
+    TEST_ASSERT_EQUAL_UINT8(4, r.image.byteAt(433));
+    TEST_ASSERT_EQUAL_UINT16(385, r.image.addressAt(0));
+    TEST_ASSERT_EQUAL_UINT16(817, r.image.addressAt(432));
 }
 
-// Le chargement remet la copie a l identique du template : le drapeau tombe.
-void test_a_load_clears_the_change_flag() {
-    FakeEeprom ee;
-    RigV3 r;
-    flexseq::ModulatedPatternState state;
-    r.engine.setModulatedPatterns(&state);
-    writeTemplateRecord(ee, 11, distinctContent(7), 21);
+void test_the_v4_mapping_covers_the_format_exactly_once() {
+    RigV4 r;
+    bool seen[1024];
+    memset(seen, 0, sizeof(seen));
+    for (uint16_t index = 0; index < PersistentImageV4::SIZE; ++index) {
+        const uint16_t address = r.image.addressAt(index);
+        TEST_ASSERT_FALSE_MESSAGE(seen[address], "two logical indexes map to one address");
+        seen[address] = true;
+    }
+    for (uint16_t address = 384; address <= 817; ++address) {
+        TEST_ASSERT_TRUE_MESSAGE(seen[address], "an address of the format is never scanned");
+    }
+    TEST_ASSERT_FALSE(seen[383]);
+    TEST_ASSERT_FALSE(seen[818]);
+}
 
-    loadByField(r, 11);
-    flexseq::servicePatternAction(ee, r.image, r.engine, r.ui);
-    TEST_ASSERT_FALSE(state.isDirty(0));
+void test_the_v4_scan_writes_the_whole_image_and_the_version_last() {
+    journal.reset();
+    RigV4 r;
+    for (uint16_t index = 0; index < PersistentImageV4::SIZE; ++index) {
+        journal.cell[r.image.addressAt(index)] = static_cast<uint8_t>(~r.image.byteAt(index));
+    }
+    journal.count = 0;
+    r.scheduler.markDirty(0);
+    while (r.scheduler.advance(journal, r.image, persist::QUIET_MS)) {
+    }
+    TEST_ASSERT_FALSE(journal.overflowed);
+    TEST_ASSERT_EQUAL_UINT16(434, journal.count);
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(384, journal.order[journal.count - 1],
+        "the version must be the last byte written");
+    for (uint16_t i = 0; i + 1 < journal.count; ++i) {
+        TEST_ASSERT_TRUE_MESSAGE(journal.order[i] >= 385 && journal.order[i] <= 817,
+            "a data byte fell outside the format, or the version came early");
+    }
+}
+
+void test_the_v4_global_zone_reads_mod_and_range_as_zero_and_normalises_them() {
+    RigV4 r;
+    TEST_ASSERT_EQUAL_UINT8(0, r.image.byteAt(422 + 3));
+    TEST_ASSERT_EQUAL_UINT8(0, r.image.byteAt(422 + 4));
+    r.image.applyByte(422 + 3, 0x5A);
+    r.image.applyByte(422 + 4, 0xA5);
+    TEST_ASSERT_EQUAL_UINT8(0, r.image.byteAt(422 + 3));
+    TEST_ASSERT_EQUAL_UINT8(0, r.image.byteAt(422 + 4));
+    TEST_ASSERT_EQUAL_UINT16(UiController::DEFAULT_TEMPO, r.ui.tempo());
+    TEST_ASSERT_EQUAL_UINT8(0, r.ui.clockSource());
+}
+
+void test_a_v4_round_trip_restores_the_bank_and_the_channels_byte_for_byte() {
+    eeprom.reset();
+    RigV4 saved;
+    fillDistinctStateV4(saved);
+    saved.scheduler.markDirty(0);
+    finishWriteV4(saved, eeprom, persist::QUIET_MS);
+
+    RigV4 loaded;
+    TEST_ASSERT_TRUE(loaded.scheduler.load(eeprom, loaded.image));
+    TEST_ASSERT_TRUE(sameStateV4(saved, loaded));
+    for (uint8_t index = 0; index < flexseq::PATTERN_COUNT; ++index) {
+        TEST_ASSERT_EQUAL_UINT64(bankStepMask(*saved.bank.getPattern(index)),
+                                 bankStepMask(*loaded.bank.getPattern(index)));
+        TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_3,
+                                loaded.bank.getPattern(index)->getRatchet(index % 36));
+    }
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        TEST_ASSERT_EQUAL_INT8(15 - ch, loaded.engine.getSelectedPattern(ch));
+        TEST_ASSERT_EQUAL_UINT8(36 - ch * 3, loaded.engine.getBaseLength(ch));
+        TEST_ASSERT_EQUAL_UINT8((ch + 1) % 5, loaded.engine.getCvDestination(ch, flexseq::CV_SOURCE_1));
+        TEST_ASSERT_EQUAL_UINT8((ch + 3) % 5, loaded.engine.getCvDestination(ch, flexseq::CV_SOURCE_2));
+    }
+    TEST_ASSERT_EQUAL_UINT16(287, loaded.ui.tempo());
+    TEST_ASSERT_EQUAL_INT16(-26, loaded.prefs.cvCalibration[0]);
+}
+
+void test_the_v4_defaults_seed_the_factory_bank_and_clear_the_free_slots() {
+    RigV4 r;
+    r.bank.getPattern(9)->writeStep(2, true);
+    r.bank.getPattern(0)->writeStep(1, true);
+    r.bank.getPattern(0)->setRatchet(0, flexseq::RATCHET_6);
+    r.image.resetToDefaults();
+    TEST_ASSERT_EQUAL_UINT64(0x9111, bankStepMask(*r.bank.getPattern(0)));
+    TEST_ASSERT_EQUAL_UINT64(0x0810, bankStepMask(*r.bank.getPattern(1)));
+    TEST_ASSERT_EQUAL_UINT64(0xB733, bankStepMask(*r.bank.getPattern(7)));
+    TEST_ASSERT_EQUAL_UINT8(0, r.bank.getPattern(0)->getRatchet(0));
+    for (uint8_t index = 8; index < 16; ++index) {
+        TEST_ASSERT_EQUAL_UINT64_MESSAGE(0, bankStepMask(*r.bank.getPattern(index)),
+            "a free slot must come back empty");
+    }
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        TEST_ASSERT_EQUAL_INT8(0, r.engine.getSelectedPattern(ch));
+    }
+    TEST_ASSERT_EQUAL_UINT16(UiController::DEFAULT_TEMPO, r.ui.tempo());
+}
+
+void test_the_v4_defaults_reset_the_mode_the_offset_and_the_skip_chance() {
+    eeprom.reset();
+    eeprom.cell[384] = 0xFF;
+    RigV4 r;
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        TEST_ASSERT_TRUE(r.engine.setChannelMode(ch, flexseq::MODE_RANDOM));
+        TEST_ASSERT_TRUE(r.engine.setOffset(ch, 7));
+        TEST_ASSERT_TRUE(r.engine.setSkipChance(ch, 9));
+    }
+    TEST_ASSERT_FALSE(flexseq::bootstrap(eeprom, r.image, r.scheduler, 0));
+    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+        TEST_ASSERT_EQUAL_UINT8(flexseq::MODE_CLOCK, r.engine.getChannelMode(ch));
+        TEST_ASSERT_EQUAL_UINT8(0, r.engine.getOffset(ch));
+        TEST_ASSERT_EQUAL_UINT8(0, r.engine.getSkipChance(ch));
+    }
+}
+
+void test_the_first_boot_seeds_the_bank_in_ram_and_writes_the_eeprom_after_the_quiet_delay() {
+    journal.reset();
+    RigV4 r;
+    const bool restored = flexseq::bootstrap(journal, r.image, r.scheduler, 0);
+
+    TEST_ASSERT_FALSE_MESSAGE(restored, "a blank EEPROM cannot be restored");
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(0, journal.count,
+        "the boot must write no byte: the scan does, after the quiet delay");
+    TEST_ASSERT_TRUE(r.scheduler.isDirty());
+    TEST_ASSERT_EQUAL_UINT64(0x9111, bankStepMask(*r.engine.patternForChannel(0)));
+    for (uint8_t channel = 0; channel < SequencerEngine::CHANNEL_COUNT; ++channel) {
+        TEST_ASSERT_EQUAL_INT8(0, r.engine.getSelectedPattern(channel));
+    }
+
+    TEST_ASSERT_FALSE(r.scheduler.advance(journal, r.image, persist::QUIET_MS - 1));
+    TEST_ASSERT_EQUAL_UINT16(0, journal.count);
+    while (r.scheduler.advance(journal, r.image, persist::QUIET_MS)) {
+    }
+    TEST_ASSERT_EQUAL_UINT16(434, journal.count);
+    TEST_ASSERT_EQUAL_UINT8(4, journal.cell[384]);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0x11, journal.cell[385], "the low byte of the A1 mask");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0x91, journal.cell[386], "the high byte of the A1 mask");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, journal.cell[385 + 8 * 23], "B1 is empty");
+    TEST_ASSERT_EQUAL_UINT16(384, journal.order[journal.count - 1]);
+}
+
+void test_a_nominal_boot_restores_the_bank_and_writes_nothing() {
+    eeprom.reset();
+    RigV4 saved;
+    saved.image.resetToDefaults();
+    saved.bank.getPattern(3)->writeStep(30, true);
+    saved.bank.getPattern(0)->writeStep(2, true);
+    saved.engine.setSelectedPattern(2, 3);
+    saved.scheduler.markDirty(0);
+    finishWriteV4(saved, eeprom, persist::QUIET_MS);
+    const uint16_t written = eeprom.writes;
+
+    RigV4 loaded;
+    const bool restored = flexseq::bootstrap(eeprom, loaded.image, loaded.scheduler, 0);
+    TEST_ASSERT_TRUE_MESSAGE(restored, "a valid version 4 image must be restored");
+    TEST_ASSERT_FALSE(loaded.scheduler.isDirty());
+    TEST_ASSERT_EQUAL_UINT16(written, eeprom.writes);
+    TEST_ASSERT_EQUAL_UINT64(0x9111 | (static_cast<uint64_t>(1) << 2),
+                             bankStepMask(*loaded.bank.getPattern(0)));
+    TEST_ASSERT_EQUAL_UINT64(0xCCCC | (static_cast<uint64_t>(1) << 30),
+                             bankStepMask(*loaded.bank.getPattern(3)));
+    TEST_ASSERT_EQUAL_INT8(3, loaded.engine.getSelectedPattern(2));
+    TEST_ASSERT_EQUAL_PTR(loaded.bank.getPattern(3), loaded.engine.patternForChannel(2));
+}
+
+void test_a_valid_version_two_image_is_refused_without_migration() {
+    eeprom.reset();
+    Rig legacy;
+    legacy.scheduler.markDirty(0);
+    finishWrite(legacy, eeprom, persist::QUIET_MS);
+    TEST_ASSERT_EQUAL_UINT8(2, eeprom.cell[384]);
+
+    RigV4 r;
+    TEST_ASSERT_FALSE(flexseq::bootstrap(eeprom, r.image, r.scheduler, 0));
+    TEST_ASSERT_EQUAL_UINT64(0x9111, bankStepMask(*r.bank.getPattern(0)));
+}
+
+void test_a_valid_version_three_image_is_refused_without_migration() {
+    eeprom.reset();
+    for (uint16_t address = 384; address <= 971; ++address) {
+        eeprom.cell[address] = 0;
+    }
+    eeprom.cell[384] = 3;
+    eeprom.cell[385] = 0x11;
+    eeprom.cell[386] = 0x91;
+
+    RigV4 r;
+    r.bank.getPattern(0)->writeStep(20, true);
+    TEST_ASSERT_FALSE_MESSAGE(flexseq::bootstrap(eeprom, r.image, r.scheduler, 0),
+        "no migration from version 3: the defaults are taken");
+    TEST_ASSERT_EQUAL_UINT64(0x9111, bankStepMask(*r.bank.getPattern(0)));
+    TEST_ASSERT_TRUE(r.scheduler.isDirty());
+}
+
+void test_every_unknown_version_byte_falls_back_to_the_defaults() {
+    const uint8_t versions[3] = { 0xFF, 1, 5 };
+    for (uint8_t index = 0; index < 3; ++index) {
+        eeprom.reset();
+        eeprom.cell[384] = versions[index];
+        RigV4 r;
+        r.bank.getPattern(0)->writeStep(20, true);
+        TEST_ASSERT_FALSE(flexseq::bootstrap(eeprom, r.image, r.scheduler, 0));
+        TEST_ASSERT_EQUAL_UINT64(0x9111, bankStepMask(*r.bank.getPattern(0)));
+    }
+}
+
+void test_one_edited_step_of_a_shared_pattern_costs_one_write() {
+    eeprom.reset();
+    RigV4 r;
+    r.image.resetToDefaults();
+    r.scheduler.markDirty(0);
+    finishWriteV4(r, eeprom, persist::QUIET_MS);
+    const uint16_t before = eeprom.writes;
+
+    r.bank.getPattern(9)->writeStep(3, true);
+    r.scheduler.markDirty(1000);
+    finishWriteV4(r, eeprom, 1000 + persist::QUIET_MS);
+    TEST_ASSERT_EQUAL_UINT16(1, eeprom.writes - before);
+    TEST_ASSERT_EQUAL_UINT8(0x08, eeprom.cell[385 + 9 * 23]);
+}
+
+void test_the_v4_write_never_leaves_its_zone() {
+    eeprom.reset();
+    RigV4 r;
+    fillDistinctStateV4(r);
+    r.scheduler.markDirty(0);
+    finishWriteV4(r, eeprom, persist::QUIET_MS);
+    TEST_ASSERT_TRUE(eeprom.lowestWrite >= 384);
+    TEST_ASSERT_TRUE(eeprom.highestWrite <= 817);
+    for (uint16_t address = 0; address < 384; ++address) {
+        TEST_ASSERT_EQUAL_UINT8(SENTINEL, eeprom.cell[address]);
+    }
+    for (uint16_t address = 818; address < persist::EEPROM_SIZE; ++address) {
+        TEST_ASSERT_EQUAL_UINT8(SENTINEL, eeprom.cell[address]);
+    }
+}
+
+void test_a_v4_power_cut_in_the_middle_of_a_write_is_caught_by_the_version_byte() {
+    eeprom.reset();
+    RigV4 r;
+    fillDistinctStateV4(r);
+    r.scheduler.markDirty(0);
+    for (uint8_t i = 0; i < 100; ++i) {
+        TEST_ASSERT_TRUE(r.scheduler.advance(eeprom, r.image, persist::QUIET_MS));
+    }
+    TEST_ASSERT_NOT_EQUAL(4, eeprom.cell[384]);
+
+    RigV4 loaded;
+    TEST_ASSERT_FALSE(loaded.scheduler.load(eeprom, loaded.image));
+    TEST_ASSERT_EQUAL_UINT64(0x9111, bankStepMask(*loaded.bank.getPattern(0)));
+}
+
+void test_an_image_without_a_bank_reads_zero_and_applies_nothing() {
+    SequencerEngine engine;
+    Transport transport(engine);
+    UiController ui(engine, transport);
+    Preferences prefs;
+    PersistentImageV4 image(engine, ui, prefs);
+    for (uint16_t index = 0; index < 368; ++index) {
+        TEST_ASSERT_EQUAL_UINT8(0, image.byteAt(index));
+    }
+    image.applyByte(0, 0xFF);
+    image.resetToDefaults();
+    TEST_ASSERT_EQUAL_UINT8(0, image.byteAt(0));
+    TEST_ASSERT_EQUAL_UINT8(4, image.byteAt(433));
+}
+
+void test_a_v4_round_trip_never_restores_a_hysteresis_zone() {
+    eeprom.reset();
+    RigV4 saved;
+    saved.engine.setChannelMode(0, flexseq::MODE_SEQ);
+    saved.engine.setCvDestination(0, flexseq::CV_SOURCE_1, flexseq::CV_DEST_LENGTH);
+    saved.engine.setCvInput(flexseq::CV_SOURCE_1, 330);
+    saved.engine.start();
+    saved.engine.advance(96);
+    TEST_ASSERT_EQUAL_UINT8(26, saved.engine.getEffectiveLength(0));
+    saved.scheduler.markDirty(0);
+    finishWriteV4(saved, eeprom, persist::QUIET_MS);
+
+    RigV4 loaded;
+    TEST_ASSERT_TRUE(loaded.scheduler.load(eeprom, loaded.image));
+    TEST_ASSERT_EQUAL_UINT8(flexseq::CV_DEST_LENGTH,
+                            loaded.engine.getCvDestination(0, flexseq::CV_SOURCE_1));
+    TEST_ASSERT_EQUAL_UINT8(16, loaded.engine.getBaseLength(0));
+    TEST_ASSERT_EQUAL_UINT8(16, loaded.engine.getEffectiveLength(0));
 }
 
 int main() {
     UNITY_BEGIN();
-    RUN_TEST(test_a_validated_load_copies_the_template_into_the_channel);
-    RUN_TEST(test_the_service_does_nothing_without_a_demand);
-    RUN_TEST(test_a_demand_is_executed_once);
-    RUN_TEST(test_a_frozen_slot_loads);
-    RUN_TEST(test_a_busy_storage_keeps_the_demand);
-    RUN_TEST(test_a_load_clears_the_change_flag);
-
-    RUN_TEST(test_the_loader_refuses_a_channel_out_of_range);
-    RUN_TEST(test_the_loader_refuses_a_template_out_of_range);
-    RUN_TEST(test_the_loader_brings_the_content_and_the_length);
-    RUN_TEST(test_the_loader_masks_the_four_bits_above_the_last_step);
-    RUN_TEST(test_the_loader_refuses_a_length_out_of_range_without_touching_the_buffer);
-    RUN_TEST(test_the_loader_refuses_a_length_of_zero_the_same_way);
-    RUN_TEST(test_the_loader_accepts_the_two_bounds_of_the_stored_length);
-    RUN_TEST(test_the_loader_touches_one_channel_only);
-    RUN_TEST(test_the_loader_writes_nothing_to_the_eeprom);
-    RUN_TEST(test_the_loader_leaves_the_instance_and_the_base_alone);
-
-    RUN_TEST(test_a_busy_storage_loads_nothing_into_the_modulation_buffer);
-    RUN_TEST(test_a_free_storage_loads_the_template_into_the_modulation_buffer);
-    RUN_TEST(test_a_storage_that_becomes_free_loads_on_the_next_pass);
-    RUN_TEST(test_a_free_storage_still_refuses_a_record_the_loader_refuses);
-    RUN_TEST(test_no_routing_elects_nobody_and_leaves_the_cursor);
-    RUN_TEST(test_a_routed_channel_is_served_and_carries_its_template);
-    RUN_TEST(test_a_channel_already_carrying_its_index_is_not_eligible);
-    RUN_TEST(test_a_busy_storage_elects_nobody_and_leaves_the_cursor);
-    RUN_TEST(test_removing_the_routing_releases_the_channel);
-    RUN_TEST(test_the_release_happens_even_while_the_storage_is_busy);
-    RUN_TEST(test_a_refused_record_elects_the_channel_and_still_moves_the_cursor);
-    RUN_TEST(test_one_channel_only_is_served_per_call);
-    RUN_TEST(test_six_eligible_channels_are_served_in_six_calls);
-    RUN_TEST(test_the_sweep_starts_at_the_cursor_and_wraps);
-    RUN_TEST(test_the_service_writes_no_byte_of_eeprom);
-    RUN_TEST(test_a_channel_outside_seq_is_released_even_when_routed);
-
-    RUN_TEST(test_the_boundary_that_swaps_the_template_gives_the_content_and_the_ratchet_of_the_same_template);
-    RUN_TEST(test_a_refused_template_at_the_boundary_leaves_the_buffer_and_the_cache_alone);
-    RUN_TEST(test_after_a_template_swap_under_a_step_offset_the_content_and_the_ratchet_come_from_the_new_template_at_the_read_step);
-    RUN_TEST(test_when_the_index_and_the_step_offset_change_on_the_same_boundary_the_decision_reads_the_new_template_at_the_new_read_step);
-    RUN_TEST(test_the_first_boot_seeds_the_templates_and_fills_the_instances_from_a1);
-    RUN_TEST(test_a_nominal_boot_restores_the_instances_and_never_overwrites_them);
-    RUN_TEST(test_a_valid_version_two_image_is_refused_without_migration);
-    RUN_TEST(test_every_unknown_version_byte_falls_back_to_the_defaults);
-    RUN_TEST(test_the_v3_defaults_reset_the_mode_the_offset_and_the_skip_chance);
-
-    RUN_TEST(test_the_v3_scan_visits_and_writes_the_two_hundred_and_four_logical_bytes);
-    RUN_TEST(test_the_v3_scan_touches_only_the_version_and_the_data_zone);
-    RUN_TEST(test_the_v3_version_byte_is_the_last_address_written);
-    RUN_TEST(test_the_v2_scan_still_writes_the_version_first);
-
-    RUN_TEST(test_the_v3_logical_image_is_two_hundred_and_four_bytes);
-    RUN_TEST(test_the_v3_version_holds_the_last_logical_index_at_the_first_address);
-    RUN_TEST(test_the_v3_mapping_never_lands_in_the_template_zone);
-    RUN_TEST(test_the_v3_mapping_covers_the_version_and_the_data_zone_exactly);
-    RUN_TEST(test_the_v3_global_zone_reads_mod_and_range_as_zero);
-    RUN_TEST(test_a_stored_mod_or_range_is_normalised_back_to_zero);
-    RUN_TEST(test_the_v3_image_round_trips_the_six_instances);
-    RUN_TEST(test_the_v3_reset_clears_the_six_instances_without_a_bank);
-
-    RUN_TEST(test_the_v2_mapping_is_the_identity_the_scheduler_used_to_inline);
-    RUN_TEST(test_the_v2_version_sits_at_the_first_logical_index);
 
     RUN_TEST(test_the_layout_is_the_one_the_prd_fixed);
+    RUN_TEST(test_the_format_version_is_two);
     RUN_TEST(test_the_image_ends_below_the_original_memcode);
-
-    RUN_TEST(test_the_v3_layout_is_the_one_the_prd_fixed);
-    RUN_TEST(test_the_v3_format_version_is_three);
-    RUN_TEST(test_the_v3_records_carry_thirty_six_steps);
-    RUN_TEST(test_the_v3_global_zone_reserves_mod_and_range);
-    RUN_TEST(test_the_v3_image_leaves_the_original_memcode_alone);
-
     RUN_TEST(test_the_pattern_keeps_its_twenty_three_bytes);
     RUN_TEST(test_a_raw_step_byte_refuses_an_index_past_the_pattern);
     RUN_TEST(test_a_raw_ratchet_byte_refuses_an_index_past_the_pattern);
     RUN_TEST(test_a_raw_step_byte_stores_what_it_is_given_without_canonicalising);
-
-    RUN_TEST(test_the_v3_content_codec_round_trips_the_twenty_three_bytes);
-    RUN_TEST(test_the_v3_codec_drops_the_four_bits_above_the_last_step_on_load);
-    RUN_TEST(test_the_v3_codec_drops_the_four_bits_above_the_last_step_on_emit);
-    RUN_TEST(test_the_v3_codec_leaves_the_other_step_bytes_whole);
-    RUN_TEST(test_the_v3_codec_normalises_an_invalid_ratchet_nibble);
-    RUN_TEST(test_an_invalid_v3_nibble_replaces_a_previous_ratchet_instead_of_keeping_it);
-    RUN_TEST(test_the_v3_codec_ignores_an_offset_past_the_record);
-
-    RUN_TEST(test_the_v3_template_record_round_trips_its_twenty_four_bytes);
-    RUN_TEST(test_the_v3_template_record_accepts_every_length_in_range);
-    RUN_TEST(test_the_v3_template_record_refuses_a_length_out_of_range);
-    RUN_TEST(test_a_refused_length_leaves_the_loaded_content_intact);
-    RUN_TEST(test_the_v3_template_record_clamps_the_length_it_emits);
-    RUN_TEST(test_the_length_byte_touches_no_content_byte);
-    RUN_TEST(test_the_v3_instance_record_carries_no_length);
-    RUN_TEST(test_the_v3_length_bound_is_the_pattern_capacity_not_the_engine_cap);
-
-    RUN_TEST(test_a_round_trip_restores_the_state_byte_for_byte);
+    RUN_TEST(test_the_v4_content_codec_round_trips_the_twenty_three_bytes);
+    RUN_TEST(test_the_v4_codec_drops_the_four_bits_above_the_last_step_on_load);
+    RUN_TEST(test_the_v4_codec_drops_the_four_bits_above_the_last_step_on_emit);
+    RUN_TEST(test_the_v4_codec_leaves_the_other_step_bytes_whole);
+    RUN_TEST(test_the_v4_codec_normalises_an_invalid_ratchet_nibble);
+    RUN_TEST(test_an_invalid_v4_nibble_replaces_a_previous_ratchet_instead_of_keeping_it);
+    RUN_TEST(test_the_v4_codec_ignores_an_offset_past_the_record);
     RUN_TEST(test_a_round_trip_restores_the_cv_destinations);
     RUN_TEST(test_a_round_trip_never_restores_a_hysteresis_zone);
     RUN_TEST(test_a_round_trip_keeps_a_base_length_of_thirty_six);
-    RUN_TEST(test_an_all_zero_template_is_empty);
-    RUN_TEST(test_one_active_step_makes_a_template_occupied);
-    RUN_TEST(test_the_thirty_sixth_step_alone_makes_a_template_occupied);
-    RUN_TEST(test_ratchets_alone_leave_a_template_empty);
-    RUN_TEST(test_the_four_bits_above_the_last_step_do_not_occupy_a_template);
-    RUN_TEST(test_an_empty_query_reads_five_bytes_and_writes_none);
-    RUN_TEST(test_an_out_of_range_index_is_not_empty);
-    RUN_TEST(test_a_template_request_arms_and_reports_itself);
-    RUN_TEST(test_a_template_request_writes_one_byte_per_advance);
-    RUN_TEST(test_a_template_request_ends_after_its_record);
-    RUN_TEST(test_a_template_request_on_a_frozen_slot_arms_nothing);
-    RUN_TEST(test_a_second_template_request_is_refused_while_one_is_in_flight);
-    RUN_TEST(test_the_template_request_goes_before_the_image_scan);
-    RUN_TEST(test_the_image_scan_resumes_after_the_template);
-    RUN_TEST(test_no_advance_ever_writes_more_than_one_byte);
-    RUN_TEST(test_save_template_writes_the_instance_content_into_the_record);
-    RUN_TEST(test_save_template_writes_the_base_not_the_modulated_length);
-    RUN_TEST(test_save_template_writes_the_channel_length_into_the_record);
-    RUN_TEST(test_save_template_refuses_the_eight_frozen_slots_without_writing);
-    RUN_TEST(test_save_template_accepts_the_eight_writable_slots);
-    RUN_TEST(test_save_template_refuses_an_invalid_channel_or_index_without_writing);
-    RUN_TEST(test_save_then_load_returns_the_same_pattern_and_length);
-    RUN_TEST(test_load_template_copies_the_content_into_the_channel_instance);
-    RUN_TEST(test_load_template_leaves_the_five_other_instances_untouched);
-    RUN_TEST(test_load_template_keeps_a_length_of_thirty_six_in_the_base);
-    RUN_TEST(test_load_template_needs_no_clamp_below_the_ceiling);
-    RUN_TEST(test_load_template_refuses_an_invalid_length_without_losing_the_content);
-    RUN_TEST(test_load_template_accepts_a_frozen_factory_slot);
-    RUN_TEST(test_load_template_refuses_an_invalid_channel_or_index);
-    RUN_TEST(test_load_template_writes_nothing_to_the_eeprom);
+    RUN_TEST(test_a_round_trip_restores_the_state_byte_for_byte);
     RUN_TEST(test_the_patterns_survive_with_their_ratchets);
-
     RUN_TEST(test_a_wrong_version_byte_returns_the_defaults);
     RUN_TEST(test_a_blank_eeprom_returns_the_defaults);
     RUN_TEST(test_the_version_byte_is_written_first_and_kept);
-
     RUN_TEST(test_no_byte_below_384_or_above_687_is_ever_touched);
-
     RUN_TEST(test_nothing_is_written_before_the_quiet_delay);
     RUN_TEST(test_a_change_during_the_delay_restarts_the_countdown);
     RUN_TEST(test_at_most_one_byte_is_written_per_call);
@@ -2788,13 +1352,10 @@ int main() {
     RUN_TEST(test_the_scheduler_is_clean_once_the_image_is_written);
     RUN_TEST(test_a_power_cut_after_the_write_completes_loses_nothing);
     RUN_TEST(test_a_power_cut_in_the_middle_of_a_write_is_caught_by_the_version_byte);
-
     RUN_TEST(test_an_invalid_ratchet_nibble_is_read_back_as_none);
     RUN_TEST(test_an_invalid_nibble_replaces_a_previous_ratchet_instead_of_keeping_it);
     RUN_TEST(test_an_out_of_range_stored_value_is_refused_not_applied);
     RUN_TEST(test_a_stored_subdiv_index_survives_as_its_value);
-
-    RUN_TEST(test_the_format_version_is_two);
     RUN_TEST(test_the_channel_record_carries_the_mode_the_offset_and_the_skip_chance);
     RUN_TEST(test_the_three_new_fields_sit_at_their_fixed_place_in_the_record);
     RUN_TEST(test_a_version_one_image_returns_the_defaults);
@@ -2803,12 +1364,30 @@ int main() {
     RUN_TEST(test_the_offset_never_exceeds_the_single_byte_the_format_gives_it);
     RUN_TEST(test_the_two_cv_target_bytes_are_reserved_and_read_as_zero);
     RUN_TEST(test_a_stored_cv_target_is_ignored_without_disturbing_the_record);
-    RUN_TEST(test_a_fresh_state_carries_no_dirty_channel);
-    RUN_TEST(test_editing_a_step_raises_the_flag_of_that_channel_alone);
-    RUN_TEST(test_editing_the_length_of_a_channel_raises_its_flag);
-    RUN_TEST(test_loading_a_template_clears_the_flag_of_the_channel);
-    RUN_TEST(test_saving_a_template_clears_the_flag_of_the_channel);
-    RUN_TEST(test_an_out_of_range_channel_never_touches_a_bit);
+    RUN_TEST(test_the_v2_scan_still_writes_the_version_first);
+    RUN_TEST(test_the_v2_mapping_is_the_identity_the_scheduler_used_to_inline);
+    RUN_TEST(test_the_v2_version_sits_at_the_first_logical_index);
 
+    RUN_TEST(test_the_v4_layout_is_the_one_the_prd_fixed);
+    RUN_TEST(test_the_v4_records_carry_thirty_six_steps_and_no_length);
+    RUN_TEST(test_the_v4_image_is_scanned_whole_and_ends_on_its_version);
+    RUN_TEST(test_the_v4_image_leaves_the_original_memcode_alone);
+    RUN_TEST(test_the_v4_version_holds_the_last_logical_index_at_the_first_address);
+    RUN_TEST(test_the_v4_mapping_covers_the_format_exactly_once);
+    RUN_TEST(test_the_v4_scan_writes_the_whole_image_and_the_version_last);
+    RUN_TEST(test_the_v4_global_zone_reads_mod_and_range_as_zero_and_normalises_them);
+    RUN_TEST(test_a_v4_round_trip_restores_the_bank_and_the_channels_byte_for_byte);
+    RUN_TEST(test_the_v4_defaults_seed_the_factory_bank_and_clear_the_free_slots);
+    RUN_TEST(test_the_v4_defaults_reset_the_mode_the_offset_and_the_skip_chance);
+    RUN_TEST(test_the_first_boot_seeds_the_bank_in_ram_and_writes_the_eeprom_after_the_quiet_delay);
+    RUN_TEST(test_a_nominal_boot_restores_the_bank_and_writes_nothing);
+    RUN_TEST(test_a_valid_version_two_image_is_refused_without_migration);
+    RUN_TEST(test_a_valid_version_three_image_is_refused_without_migration);
+    RUN_TEST(test_every_unknown_version_byte_falls_back_to_the_defaults);
+    RUN_TEST(test_one_edited_step_of_a_shared_pattern_costs_one_write);
+    RUN_TEST(test_the_v4_write_never_leaves_its_zone);
+    RUN_TEST(test_a_v4_power_cut_in_the_middle_of_a_write_is_caught_by_the_version_byte);
+    RUN_TEST(test_an_image_without_a_bank_reads_zero_and_applies_nothing);
+    RUN_TEST(test_a_v4_round_trip_never_restores_a_hysteresis_zone);
     return UNITY_END();
 }

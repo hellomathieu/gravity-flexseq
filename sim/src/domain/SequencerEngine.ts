@@ -36,6 +36,7 @@ import {
 } from "./CvDestination.js";
 import { zoneWithHysteresis, patternIndexFor, readStepFor } from "./LengthCv.js";
 import type { ModulatedPatternState } from "./ModulatedPatternState.js";
+import type { PatternBank } from "./PatternBank.js";
 
 import {
   Pattern,
@@ -133,13 +134,12 @@ export class SequencerEngine {
   private running = false;
   private readonly onsets: number[];
   private readonly channels: ChannelState[];
-  private readonly instances: Pattern[];
+  private bank: PatternBank | null = null;
   // Le C++ tient cet etat HORS du moteur et n en garde qu un pointeur, nul par
   // defaut : un moteur non cable se comporte exactement comme avant.
   private modulated: ModulatedPatternState | null = null;
 
   constructor(channelCount: number = CHANNEL_COUNT) {
-    this.instances = Array.from({ length: channelCount }, () => new Pattern());
     this.channels = Array.from({ length: channelCount }, () => ({
       selectedPattern: 0,
       baseLength: DEFAULT_LENGTH,
@@ -209,19 +209,18 @@ export class SequencerEngine {
     if (this.channel(channel)) this.refreshStepTiming(channel, false);
   }
 
-  /**
-   * Banque partagee optionnelle. Une fois fournie, un step appartenant a un
-   * groupe ternaire LOCAL du pattern selectionne dure `ticksPerStep / 3` : les
-   * trois steps tiennent dans la duree d'UN step (ils passent plus vite). Sans
-   * banque, la duree de step reste uniforme.
-   */
-  instanceForChannel(channel: number): Pattern | null {
-    const instance = this.instances[channel];
-    return instance ?? null;
+  setPatternBank(bank: PatternBank | null): void {
+    this.bank = bank;
+  }
+
+  patternBank(): PatternBank | null {
+    return this.bank;
   }
 
   patternForChannel(channel: number): Pattern | null {
-    return this.instanceForChannel(channel);
+    const c = this.channel(channel);
+    if (!c || this.bank === null) return null;
+    return this.bank.getPattern(this.patternCvIndex(channel));
   }
 
   /**

@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { PatternBank } from "../src/domain/PatternBank.js";
 import { SequencerEngine, ChannelMode } from "../src/domain/SequencerEngine";
 import { TriggerSequencer } from "../src/domain/TriggerSequencer";
 import {
@@ -12,6 +13,7 @@ const STEP = 96;
 
 function seqRouted(source = CV_SOURCE_1): SequencerEngine {
   const e = new SequencerEngine();
+  e.setPatternBank(new PatternBank());
   e.setChannelMode(0, ChannelMode.SEQ);
   expect(e.setCvDestination(0, source, CvDestination.RESET)).toBe(true);
   return e;
@@ -125,7 +127,7 @@ describe("le reset CV — l'onset arme", () => {
   it("un step 0 actif donne un trigger", () => {
     const e = seqRouted();
     const t = new TriggerSequencer(e);
-    expect(e.instanceForChannel(0)!.writeStep(0, true)).toBe(true);
+    expect(e.patternForChannel(0)!.writeStep(0, true)).toBe(true);
     e.start();
     e.advance(2 * STEP);
     t.update();
@@ -164,7 +166,7 @@ describe("le reset CV — l'onset arme", () => {
 describe("le reset CV — ce qui reste intact", () => {
   it("le pattern, la selection, la base et la phase restent intacts", () => {
     const e = seqRouted();
-    const p = e.instanceForChannel(0)!;
+    const p = e.patternForChannel(0)!;
     expect(p.writeStep(0, true)).toBe(true);
     expect(p.writeStep(5, true)).toBe(true);
     expect(p.setRatchet(3, RATCHET_4)).toBe(true);
@@ -195,6 +197,7 @@ describe("le reset CV — ce qui reste intact", () => {
 
   it("l'offset du length cv survit a un reset", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.setChannelMode(0, ChannelMode.SEQ);
     expect(e.setBaseLength(0, 18)).toBe(true);
     expect(e.setCvDestination(0, CV_SOURCE_1, CvDestination.LENGTH)).toBe(true);
@@ -226,6 +229,7 @@ describe("le reset CV — ce qui reste intact", () => {
 describe("le reset CV — la matrice des modes", () => {
   it("CLOCK offset 0 tire au premier tick", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.setChannelMode(0, ChannelMode.CLOCK);
     expect(e.setCvDestination(0, CV_SOURCE_1, CvDestination.RESET)).toBe(true);
     e.start();
@@ -238,6 +242,7 @@ describe("le reset CV — la matrice des modes", () => {
 
   it("CLOCK avec offset tire a l'offset et pas a l'armement", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.setChannelMode(0, ChannelMode.CLOCK);
     expect(e.setOffset(0, 10)).toBe(true);
     expect(e.setCvDestination(0, CV_SOURCE_1, CvDestination.RESET)).toBe(true);
@@ -254,6 +259,7 @@ describe("le reset CV — la matrice des modes", () => {
 
   it("RANDOM ignore le reset et le retour en SEQ ne rejoue rien", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.setChannelMode(0, ChannelMode.RANDOM);
     expect(e.setCvDestination(0, CV_SOURCE_1, CvDestination.RESET)).toBe(true);
     e.start();
@@ -306,6 +312,7 @@ describe("le reset CV — le transport", () => {
 
   it("le reset global arme les six channels", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     for (let ch = 0; ch < 6; ++ch) e.setChannelMode(ch, ChannelMode.SEQ);
     e.start();
     e.advance(3 * STEP);
@@ -319,6 +326,7 @@ describe("le reset CV — le transport", () => {
 
   it("un reset a l'arret arme jusqu'au premier start", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.setChannelMode(0, ChannelMode.SEQ);
     e.start();
     e.advance(2 * STEP);
@@ -333,6 +341,7 @@ describe("le reset CV — le transport", () => {
 
   it("le reset global fait tirer CLOCK offset 0 au premier tick", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.setChannelMode(0, ChannelMode.CLOCK);
     e.start();
     e.advance(2 * STEP);
@@ -343,6 +352,7 @@ describe("le reset CV — le transport", () => {
 
   it("un armement global en CLOCK attend l'offset", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.setChannelMode(0, ChannelMode.CLOCK);
     expect(e.setOffset(0, 10)).toBe(true);
     e.start();
@@ -358,6 +368,7 @@ describe("le reset CV — le transport", () => {
 
   it("un armement global en RANDOM emet l'onset a travers le tirage", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.setChannelMode(0, ChannelMode.RANDOM);
     e.start();
     e.advance(2 * STEP);
@@ -390,6 +401,7 @@ describe("le reset CV — D80, l'armement survit au changement de mode", () => {
 
   it("un armement global survit au passage en RANDOM", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.setChannelMode(0, ChannelMode.SEQ);
     e.start();
     e.advance(2 * STEP);
@@ -403,7 +415,7 @@ describe("le reset CV — D80, l'armement survit au changement de mode", () => {
 describe("le reset CV — les ratchets", () => {
   it("un reset en plein ratchet abandonne les sous-onsets restants", () => {
     const e = seqRouted();
-    expect(e.instanceForChannel(0)!.setRatchet(2, RATCHET_4)).toBe(true);
+    expect(e.patternForChannel(0)!.setRatchet(2, RATCHET_4)).toBe(true);
     e.start();
     e.advance(2 * STEP);
     e.advance(24);
@@ -419,7 +431,7 @@ describe("le reset CV — les ratchets", () => {
 
   it("un TRIPLET sur le step 0 double le stepTicks recache", () => {
     const e = seqRouted();
-    expect(e.instanceForChannel(0)!.setRatchet(0, RATCHET_TRIPLET)).toBe(true);
+    expect(e.patternForChannel(0)!.setRatchet(0, RATCHET_TRIPLET)).toBe(true);
     e.refreshTiming(0);
     e.start();
     e.advance(192);
@@ -439,6 +451,7 @@ describe("le reset CV — les ratchets", () => {
 describe("le reset CV — l'isolation", () => {
   it("le reset d'un channel laisse les cinq autres intacts", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     for (let ch = 0; ch < 6; ++ch) e.setChannelMode(ch, ChannelMode.SEQ);
     expect(e.setCvDestination(2, CV_SOURCE_1, CvDestination.RESET)).toBe(true);
     e.start();

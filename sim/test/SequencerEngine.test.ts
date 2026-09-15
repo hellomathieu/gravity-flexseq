@@ -1,4 +1,6 @@
 import { Transport } from "../src/domain/Transport.js";
+import { PatternBank } from "../src/domain/PatternBank.js";
+import { CvDestination, CV_SOURCE_1 } from "../src/domain/CvDestination.js";
 import { describe, expect, it } from "vitest";
 import {
   SequencerEngine,
@@ -15,6 +17,7 @@ const STEP = PPQN; // 96 ticks = default ticksPerStep (/1 = noire)
 describe("SequencerEngine — transport & masterPhase", () => {
   it("starts stopped at phase 0 with default per-channel state", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     expect(e.masterPhase).toBe(0);
     expect(e.isRunning).toBe(false);
     for (let ch = 0; ch < CHANNEL_COUNT; ++ch) {
@@ -25,12 +28,14 @@ describe("SequencerEngine — transport & masterPhase", () => {
 
   it("does not advance while stopped", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.advance(STEP);
     expect(e.masterPhase).toBe(0);
   });
 
   it("advances by ticks only while running", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.start();
     e.advance(); // +1 tick default
     expect(e.masterPhase).toBe(1);
@@ -40,6 +45,7 @@ describe("SequencerEngine — transport & masterPhase", () => {
 
   it("stop() preserves the phase; advance after stop is a no-op", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.start();
     e.advance(STEP * 3);
     e.stop();
@@ -50,6 +56,7 @@ describe("SequencerEngine — transport & masterPhase", () => {
 
   it("reset() zeroes the phase without changing running state", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.start();
     e.advance(STEP * 5);
     e.reset();
@@ -59,6 +66,7 @@ describe("SequencerEngine — transport & masterPhase", () => {
 
   it("ignores negative or non-integer tick advances", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.start();
     e.advance(-4);
     e.advance(1.5);
@@ -69,6 +77,7 @@ describe("SequencerEngine — transport & masterPhase", () => {
 describe("SequencerEngine — effectiveStep derivation", () => {
   it("derives the step as floor(phase / ticksPerStep) % effectiveLength", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.start();
     expect(e.effectiveStep(0)).toBe(0);
 
@@ -84,6 +93,7 @@ describe("SequencerEngine — effectiveStep derivation", () => {
 
   it("wraps effectiveStep at effectiveLength", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.start();
     e.setBaseLength(0, 16);
     e.advance(STEP * 16); // one full loop of 16 steps
@@ -94,6 +104,7 @@ describe("SequencerEngine — effectiveStep derivation", () => {
 
   it("keeps masterPhase untouched when LENGTH changes", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.start();
     e.advance(STEP * 10);
     const before = e.masterPhase;
@@ -109,6 +120,7 @@ describe("SequencerEngine — effectiveStep derivation", () => {
     // Regression : anciennement effectiveStep = absStep % length sautait meme
     // quand localStep < newLength. Desormais (phase locale lissee) : conserve.
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.start();
     e.advance(STEP * 5); // localStep = 5, length 16
     expect(e.effectiveStep(0)).toBe(5);
@@ -122,6 +134,7 @@ describe("SequencerEngine — effectiveStep derivation", () => {
 
   it("folds the playhead into range only when LENGTH drops at/below it", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.start();
     e.advance(STEP * 13); // localStep = 13
     expect(e.setBaseLength(0, 11)).toBe(true);
@@ -130,6 +143,7 @@ describe("SequencerEngine — effectiveStep derivation", () => {
 
   it("keeps the current step when LENGTH grows", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.start();
     e.setBaseLength(0, 8);
     e.advance(STEP * 3); // localStep = 3
@@ -141,6 +155,7 @@ describe("SequencerEngine — effectiveStep derivation", () => {
 
   it("global reset realigns all channels to step 0", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.start();
     e.setBaseLength(1, 3);
     e.advance(STEP * 7);
@@ -153,6 +168,7 @@ describe("SequencerEngine — effectiveStep derivation", () => {
 
   it("rejects invalid effectiveLength without mutation", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     expect(e.setBaseLength(0, 12)).toBe(true);
     expect(e.setBaseLength(0, 0)).toBe(false);
     expect(e.setBaseLength(0, 37)).toBe(false);
@@ -161,6 +177,7 @@ describe("SequencerEngine — effectiveStep derivation", () => {
 
   it("isolates execution state between channels (same master phase)", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.start();
     e.setBaseLength(0, 16);
     e.setBaseLength(1, 3);
@@ -173,6 +190,7 @@ describe("SequencerEngine — effectiveStep derivation", () => {
 
   it("supports different per-channel ticksPerStep from one master phase", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.start();
     e.setTicksPerStep(1, STEP * 2); // channel 1 advances half as fast
     e.advance(STEP * 4);
@@ -183,6 +201,7 @@ describe("SequencerEngine — effectiveStep derivation", () => {
 
   it("rejects invalid channel indices and ticksPerStep", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     expect(e.effectiveStep(6)).toBe(-1);
     expect(e.setBaseLength(6, 8)).toBe(false);
     expect(e.setTicksPerStep(0, 0)).toBe(false);
@@ -192,11 +211,13 @@ describe("SequencerEngine — effectiveStep derivation", () => {
 describe("SequencerEngine — per-channel selected pattern", () => {
   it("defaults every channel to pattern 0", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     for (let ch = 0; ch < 6; ++ch) expect(e.getSelectedPattern(ch)).toBe(0);
   });
 
   it("sets and reads a channel's selected pattern independently", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     expect(e.setSelectedPattern(0, 3)).toBe(true);
     expect(e.setSelectedPattern(1, 10)).toBe(true);
     expect(e.getSelectedPattern(0)).toBe(3);
@@ -206,6 +227,7 @@ describe("SequencerEngine — per-channel selected pattern", () => {
 
   it("rejects out-of-range pattern indices and channels", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     expect(e.setSelectedPattern(0, -1)).toBe(false);
     expect(e.setSelectedPattern(0, 16)).toBe(false);
     expect(e.setSelectedPattern(6, 0)).toBe(false);
@@ -216,6 +238,7 @@ describe("SequencerEngine — per-channel selected pattern", () => {
 describe("SequencerEngine — hasStepped (onset)", () => {
   it("reports boundary crossings for the last advance()", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.start();
     e.advance(STEP - 1);
     expect(e.hasStepped(0)).toBe(false);
@@ -227,6 +250,7 @@ describe("SequencerEngine — hasStepped (onset)", () => {
 
   it("is false while stopped and for an invalid channel", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.advance(STEP);
     expect(e.hasStepped(0)).toBe(false);
     expect(e.hasStepped(6)).toBe(false);
@@ -234,6 +258,7 @@ describe("SequencerEngine — hasStepped (onset)", () => {
 
   it("is per-channel with different ticksPerStep", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.start();
     e.setTicksPerStep(1, STEP * 2);
     e.advance(STEP);
@@ -247,12 +272,14 @@ describe("SequencerEngine — hasStepped (onset)", () => {
 describe("SequencerEngine — SUBDIV", () => {
   it("defaults each channel to SUBDIV /1 (quarter = 96 ticks)", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     expect(e.getSubdiv(0)).toBe(1);
     expect(e.getTicksPerStep(0)).toBe(96);
   });
 
   it("setSubdiv updates the step rate", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.start();
     expect(e.setSubdiv(0, -4)).toBe(true); // 1/16 = 24 ticks
     expect(e.getTicksPerStep(0)).toBe(24);
@@ -262,6 +289,7 @@ describe("SequencerEngine — SUBDIV", () => {
 
   it("supports a different SUBDIV per channel (different rates)", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.start();
     e.setSubdiv(0, -4); // 1/16 -> 24 ticks
     e.setSubdiv(1, 1); //  1/4  -> 96 ticks
@@ -272,6 +300,7 @@ describe("SequencerEngine — SUBDIV", () => {
 
   it("rejects invalid subdiv and channel", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     expect(e.setSubdiv(0, 0)).toBe(false);
     expect(e.setSubdiv(6, 1)).toBe(false);
     expect(e.getSubdiv(6)).toBe(0);
@@ -281,6 +310,7 @@ describe("SequencerEngine — SUBDIV", () => {
 describe("SequencerEngine — ratchets", () => {
   function rig() {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     for (let ch = 0; ch < e.channelCount(); ++ch) e.setChannelMode(ch, ChannelMode.SEQ);
     e.setSelectedPattern(0, 0);
     return { e };
@@ -298,7 +328,7 @@ describe("SequencerEngine — ratchets", () => {
 
   it("un ratchet emet N declenchements SANS changer la duree du step", () => {
     const { e } = rig();
-    e.instanceForChannel(0)!.setRatchet(1, RATCHET_3);
+    e.patternForChannel(0)!.setRatchet(1, RATCHET_3);
     e.start();
 
     e.advance(96); // -> step 1
@@ -317,7 +347,7 @@ describe("SequencerEngine — ratchets", () => {
   it("un ratchet ne change pas la duree totale du pattern", () => {
     const { e } = rig();
     e.setBaseLength(0, 4);
-    e.instanceForChannel(0)!.setRatchet(0, RATCHET_6);
+    e.patternForChannel(0)!.setRatchet(0, RATCHET_6);
     e.start();
     e.advance(96 * 4);
     expect(e.effectiveStep(0)).toBe(0); // boucle complete
@@ -325,7 +355,7 @@ describe("SequencerEngine — ratchets", () => {
 
   it("compte tous les declenchements d'un advance groupe", () => {
     const { e } = rig();
-    e.instanceForChannel(0)!.setRatchet(1, RATCHET_4);
+    e.patternForChannel(0)!.setRatchet(1, RATCHET_4);
     e.start();
     e.advance(96);
     e.advance(96); // tout le step ratchet en une passe
@@ -334,7 +364,7 @@ describe("SequencerEngine — ratchets", () => {
 
   it("le triolet etire le step sur DEUX unites", () => {
     const { e } = rig();
-    e.instanceForChannel(0)!.setRatchet(1, RATCHET_TRIPLET);
+    e.patternForChannel(0)!.setRatchet(1, RATCHET_TRIPLET);
     e.start();
     e.advance(96); // -> step 1
     expect(e.currentStepTicks(0)).toBe(192);
@@ -350,12 +380,14 @@ describe("SequencerEngine — ratchets", () => {
   it("le triolet decale la suite du pattern", () => {
 
     const plain = new SequencerEngine();
+    plain.setPatternBank(new PatternBank());
     const stretched = new SequencerEngine();
+    stretched.setPatternBank(new PatternBank());
     for (let ch = 0; ch < CHANNEL_COUNT; ++ch) {
       plain.setChannelMode(ch, ChannelMode.SEQ);
       stretched.setChannelMode(ch, ChannelMode.SEQ);
     }
-    stretched.instanceForChannel(0)!.setRatchet(0, RATCHET_TRIPLET);
+    stretched.patternForChannel(0)!.setRatchet(0, RATCHET_TRIPLET);
     stretched.refreshTiming();
     plain.start();
     stretched.start();
@@ -369,20 +401,21 @@ describe("SequencerEngine — ratchets", () => {
   // au moins MIN_SLOT_TICKS.
   it("joue le ratchet meme quand le sous-slot n'est pas un tick entier", () => {
     const { e } = rig();
-    e.instanceForChannel(0)!.setRatchet(0, RATCHET_3);
+    e.patternForChannel(0)!.setRatchet(0, RATCHET_3);
     expect(e.setSubdiv(0, -3)).toBe(true); // 32 ticks : un tiers = 10,67
     expect(e.currentStepTriggers(0)).toBe(3);
   });
 
   it("refuse le ratchet quand la tranche tomberait sous deux ticks", () => {
     const { e } = rig();
-    e.instanceForChannel(0)!.setRatchet(0, RATCHET_6);
+    e.patternForChannel(0)!.setRatchet(0, RATCHET_6);
     expect(e.setSubdiv(0, -12)).toBe(true); // 8 ticks : un sixieme = 1,33
     expect(e.currentStepTriggers(0)).toBe(1);
   });
 
   it("un moteur neuf joue des steps simples", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.start();
     expect(e.currentStepTriggers(0)).toBe(1);
     e.advance(96);
@@ -391,7 +424,7 @@ describe("SequencerEngine — ratchets", () => {
 
   it("les ratchets ne decalent pas masterPhase", () => {
     const { e } = rig();
-    e.instanceForChannel(0)!.setRatchet(0, RATCHET_TRIPLET);
+    e.patternForChannel(0)!.setRatchet(0, RATCHET_TRIPLET);
     e.start();
     e.advance(192);
     expect(e.masterPhase).toBe(192);
@@ -401,6 +434,7 @@ describe("SequencerEngine — ratchets", () => {
 describe("SequencerEngine — separation de mesure (graphique)", () => {
   it("vaut 4 par defaut et accepte le jeu autorise", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     expect(e.getBarLength(0)).toBe(4);
     for (const n of [0, 2, 3, 4, 6]) expect(e.setBarLength(0, n)).toBe(true);
     expect(e.getBarLength(0)).toBe(6);
@@ -408,6 +442,7 @@ describe("SequencerEngine — separation de mesure (graphique)", () => {
 
   it("rejette une valeur qui ne divise pas 12", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     expect(e.setBarLength(0, 5)).toBe(false);
     expect(e.setBarLength(0, 8)).toBe(false);
     expect(e.setBarLength(6, 4)).toBe(false);
@@ -416,7 +451,9 @@ describe("SequencerEngine — separation de mesure (graphique)", () => {
 
   it("n'a AUCUN effet sur le temps", () => {
     const a = new SequencerEngine();
+    a.setPatternBank(new PatternBank());
     const b = new SequencerEngine();
+    b.setPatternBank(new PatternBank());
     b.setBarLength(0, 3);
     a.start();
     b.start();
@@ -430,6 +467,7 @@ describe("SequencerEngine — separation de mesure (graphique)", () => {
 describe("SequencerEngine — modes de channel (PRD 4.2)", () => {
   it("demarre avec les six channels en CLOCK, sans offset ni chance de saut", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     for (let ch = 0; ch < CHANNEL_COUNT; ++ch) {
       expect(e.getChannelMode(ch)).toBe(ChannelMode.CLOCK);
       expect(e.getOffset(ch)).toBe(0);
@@ -439,6 +477,7 @@ describe("SequencerEngine — modes de channel (PRD 4.2)", () => {
 
   it("refuse un mode inconnu et un channel inconnu", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     expect(e.setChannelMode(0, 3 as ChannelMode)).toBe(false);
     expect(e.setChannelMode(CHANNEL_COUNT, ChannelMode.SEQ)).toBe(false);
     expect(e.getChannelMode(0)).toBe(ChannelMode.CLOCK);
@@ -446,6 +485,7 @@ describe("SequencerEngine — modes de channel (PRD 4.2)", () => {
 
   it("CLOCK emet un declenchement par step a offset 0", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.start();
     e.advance(95);
     expect(e.onsetCount(0)).toBe(0);
@@ -457,6 +497,7 @@ describe("SequencerEngine — modes de channel (PRD 4.2)", () => {
 
   it("CLOCK declenche au pulse offset, pas a la frontiere", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     expect(e.setOffset(0, 10)).toBe(true);
     e.start();
     e.advance(9);
@@ -472,6 +513,7 @@ describe("SequencerEngine — modes de channel (PRD 4.2)", () => {
   it("CLOCK garde un declenchement par step quel que soit l'offset", () => {
     for (let offset = 0; offset < STEP; offset += 7) {
       const e = new SequencerEngine();
+      e.setPatternBank(new PatternBank());
       e.setOffset(0, offset);
       e.start();
       let total = 0;
@@ -485,6 +527,7 @@ describe("SequencerEngine — modes de channel (PRD 4.2)", () => {
 
   it("CLOCK compte chaque franchissement dans un advance groupe", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.setOffset(0, 10);
     e.start();
     e.advance(200);
@@ -493,8 +536,9 @@ describe("SequencerEngine — modes de channel (PRD 4.2)", () => {
 
   it("CLOCK et RANDOM ignorent les ratchets", () => {
     const e = new SequencerEngine();
-    e.instanceForChannel(0)!.setRatchet(0, RATCHET_4);
-    e.instanceForChannel(0)!.setRatchet(1, RATCHET_TRIPLET);
+    e.setPatternBank(new PatternBank());
+    e.patternForChannel(0)!.setRatchet(0, RATCHET_4);
+    e.patternForChannel(0)!.setRatchet(1, RATCHET_TRIPLET);
     e.setChannelMode(1, ChannelMode.RANDOM);
     e.start();
 
@@ -508,6 +552,7 @@ describe("SequencerEngine — modes de channel (PRD 4.2)", () => {
 
   it("RANDOM declenche sur la frontiere de step, offset ignore", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.setChannelMode(0, ChannelMode.RANDOM);
     e.setOffset(0, 10);
     e.start();
@@ -519,6 +564,7 @@ describe("SequencerEngine — modes de channel (PRD 4.2)", () => {
 
   it("l'offset est ecrete au step et suit la cadence", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     expect(e.setOffset(0, 500)).toBe(true);
     expect(e.getOffset(0)).toBe(95);
     e.setSubdiv(0, 2);
@@ -532,6 +578,7 @@ describe("SequencerEngine — modes de channel (PRD 4.2)", () => {
 
   it("un offset egal au step est ramene dedans", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     e.setOffset(0, STEP);
     expect(e.getOffset(0)).toBe(STEP - 1);
     e.start();
@@ -545,6 +592,7 @@ describe("SequencerEngine — modes de channel (PRD 4.2)", () => {
 
   it("la chance de saut est bornee a dix dixiemes", () => {
     const e = new SequencerEngine();
+    e.setPatternBank(new PatternBank());
     expect(e.setSkipChance(0, MAX_SKIP_CHANCE)).toBe(true);
     expect(e.getSkipChance(0)).toBe(MAX_SKIP_CHANCE);
     expect(e.setSkipChance(0, MAX_SKIP_CHANCE + 1)).toBe(false);
@@ -554,7 +602,8 @@ describe("SequencerEngine — modes de channel (PRD 4.2)", () => {
 
   it("repasser en SEQ relit le pattern", () => {
     const e = new SequencerEngine();
-    e.instanceForChannel(0)!.setRatchet(0, RATCHET_4);
+    e.setPatternBank(new PatternBank());
+    e.patternForChannel(0)!.setRatchet(0, RATCHET_4);
     expect(e.currentStepTriggers(0)).toBe(1);
     e.setChannelMode(0, ChannelMode.SEQ);
     expect(e.currentStepTriggers(0)).toBe(4);
@@ -566,6 +615,7 @@ describe("SequencerEngine — modes de channel (PRD 4.2)", () => {
 describe("Transport", () => {
   it("rapporte l etat de marche", () => {
     const engine = new SequencerEngine();
+    engine.setPatternBank(new PatternBank());
     const transport = new Transport(engine);
     expect(transport.isRunning()).toBe(false);
     transport.start();
@@ -577,36 +627,61 @@ describe("Transport", () => {
   });
 });
 
-describe("les instances par canal", () => {
-  it("existent pour les six canaux", () => {
-    const engine = new SequencerEngine();
-    for (let ch = 0; ch < 6; ++ch) expect(engine.instanceForChannel(ch)).not.toBeNull();
+describe("le banc partage — ADR 0014", () => {
+  const bench = () => {
+    const bank = new PatternBank();
+    const e = new SequencerEngine();
+    e.setPatternBank(bank);
+    return { bank, e };
+  };
+  const CV_ZONE_PLUS_TEN = 330;
+
+  it("un moteur neuf n a pas de banc et ne joue aucun pattern", () => {
+    const e = new SequencerEngine();
+    expect(e.patternBank()).toBeNull();
+    for (let ch = 0; ch < 6; ++ch) expect(e.patternForChannel(ch)).toBeNull();
+  });
+
+  it("garde le banc qu on lui donne", () => {
+    const { bank, e } = bench();
+    expect(e.patternBank()).toBe(bank);
+    e.setPatternBank(null);
+    expect(e.patternBank()).toBeNull();
+    expect(e.patternForChannel(0)).toBeNull();
+  });
+
+  it("le canal joue le pattern que son selecteur nomme", () => {
+    const { bank, e } = bench();
+    for (let ch = 0; ch < 6; ++ch) {
+      expect(e.setSelectedPattern(ch, ch + 3)).toBe(true);
+      expect(e.patternForChannel(ch)).toBe(bank.getPattern(ch + 3));
+    }
     expect(CHANNEL_COUNT).toBe(6);
   });
 
-  it("n existent pas pour un canal invalide", () => {
-    const engine = new SequencerEngine();
-    expect(engine.instanceForChannel(6)).toBeNull();
-    expect(engine.instanceForChannel(255)).toBeNull();
-    expect(engine.instanceForChannel(-1)).toBeNull();
+  it("un canal invalide n a pas de pattern, meme avec un banc", () => {
+    const { e } = bench();
+    expect(e.patternForChannel(6)).toBeNull();
+    expect(e.patternForChannel(255)).toBeNull();
+    expect(e.patternForChannel(-1)).toBeNull();
   });
 
-  it("sont six objets distincts", () => {
-    const engine = new SequencerEngine();
-    for (let a = 0; a < 6; ++a) {
-      for (let b = 0; b < 6; ++b) {
-        if (a === b) continue;
-        expect(engine.instanceForChannel(a)).not.toBe(engine.instanceForChannel(b));
-      }
-    }
+  it("deux canaux sur un meme pattern le PARTAGENT", () => {
+    const { e } = bench();
+    expect(e.setSelectedPattern(0, 2)).toBe(true);
+    expect(e.setSelectedPattern(1, 2)).toBe(true);
+    expect(e.patternForChannel(0)).toBe(e.patternForChannel(1));
+    e.patternForChannel(0)!.writeStep(5, true);
+    expect(e.patternForChannel(1)!.readStep(5)).toBe(true);
   });
 
-  it("ne fuient pas d un canal a l autre", () => {
-    const engine = new SequencerEngine();
-    engine.instanceForChannel(0)!.writeStep(3, true);
-    engine.instanceForChannel(0)!.setRatchet(3, RATCHET_3);
+  it("une edition n atteint aucun canal sur un autre pattern", () => {
+    const { e } = bench();
+    for (let ch = 0; ch < 6; ++ch) expect(e.setSelectedPattern(ch, ch)).toBe(true);
+    e.patternForChannel(0)!.writeStep(3, true);
+    e.patternForChannel(0)!.setRatchet(3, RATCHET_3);
     for (let ch = 1; ch < 6; ++ch) {
-      const other = engine.instanceForChannel(ch)!;
+      const other = e.patternForChannel(ch)!;
       for (let step = 0; step < 36; ++step) {
         expect(other.readStep(step)).toBe(false);
         expect(other.getRatchet(step)).toBe(0);
@@ -614,34 +689,73 @@ describe("les instances par canal", () => {
     }
   });
 
-  it("portent chacune son propre contenu", () => {
-    const engine = new SequencerEngine();
-    for (let ch = 0; ch < 6; ++ch) engine.instanceForChannel(ch)!.writeStep(ch, true);
-    for (let ch = 0; ch < 6; ++ch) {
-      for (let step = 0; step < 6; ++step) {
-        expect(engine.instanceForChannel(ch)!.readStep(step)).toBe(step === ch);
-      }
-    }
+  it("charger est un changement de selecteur, et ne copie rien", () => {
+    const { bank, e } = bench();
+    bank.getPattern(7)!.writeStep(4, true);
+    expect(e.setSelectedPattern(0, 7)).toBe(true);
+    expect(e.patternForChannel(0)!.readStep(4)).toBe(true);
+    expect(e.setSelectedPattern(0, 9)).toBe(true);
+    expect(e.patternForChannel(0)!.readStep(4)).toBe(false);
+    expect(bank.getPattern(7)!.readStep(4)).toBe(true);
+    expect(bank.getPattern(9)!.readStep(4)).toBe(false);
   });
 
-  it("restent separees quand deux canaux visent le meme template", () => {
-    const engine = new SequencerEngine();
-    expect(engine.setSelectedPattern(0, 2)).toBe(true);
-    expect(engine.setSelectedPattern(1, 2)).toBe(true);
-    engine.instanceForChannel(0)!.writeStep(5, true);
-    expect(engine.instanceForChannel(1)!.readStep(5)).toBe(false);
+  it("sans routage PATTERN, le pattern joue est le pattern choisi", () => {
+    const { bank, e } = bench();
+    e.setChannelMode(0, ChannelMode.SEQ);
+    expect(e.setSelectedPattern(0, 4)).toBe(true);
+    expect(e.setCvInput(CV_SOURCE_1, CV_ZONE_PLUS_TEN)).toBe(true);
+    e.start();
+    e.advance(96);
+    expect(e.patternCvIndex(0)).toBe(4);
+    expect(e.patternForChannel(0)).toBe(bank.getPattern(4));
   });
 
-  it("sont la source de patternForChannel DANS LE MODELE — le C++ diverge, voir sim/README.md", () => {
-    const engine = new SequencerEngine();
-    engine.setSelectedPattern(0, 0);
-    expect(engine.patternForChannel(0)).toBe(engine.instanceForChannel(0));
+  it("le pattern joue suit l index derive du CV, et le selecteur ne bouge pas", () => {
+    const { bank, e } = bench();
+    e.setChannelMode(0, ChannelMode.SEQ);
+    expect(e.setSelectedPattern(0, 4)).toBe(true);
+    expect(e.setCvDestination(0, CV_SOURCE_1, CvDestination.PATTERN)).toBe(true);
+    expect(e.setCvInput(CV_SOURCE_1, CV_ZONE_PLUS_TEN)).toBe(true);
+    e.start();
+    expect(e.patternForChannel(0)).toBe(bank.getPattern(4));
+    e.advance(96);
+    expect(e.patternCvIndex(0)).toBe(14);
+    expect(e.patternForChannel(0)).toBe(bank.getPattern(14));
+    expect(e.getSelectedPattern(0)).toBe(4);
+  });
+
+  it("le ratchet mis en cache a la frontiere vient du pattern JOUE", () => {
+    const { bank, e } = bench();
+    e.setChannelMode(0, ChannelMode.SEQ);
+    expect(e.setSelectedPattern(0, 4)).toBe(true);
+    expect(bank.getPattern(4)!.setRatchet(1, RATCHET_TRIPLET)).toBe(true);
+    expect(bank.getPattern(14)!.setRatchet(1, RATCHET_3)).toBe(true);
+    expect(e.setCvDestination(0, CV_SOURCE_1, CvDestination.PATTERN)).toBe(true);
+    expect(e.setCvInput(CV_SOURCE_1, CV_ZONE_PLUS_TEN)).toBe(true);
+    e.start();
+    e.advance(96);
+    expect(e.effectiveStep(0)).toBe(1);
+    expect(e.currentStepTriggers(0)).toBe(3);
+    expect(e.currentStepTicks(0)).toBe(96);
+  });
+
+  it("la modulation PATTERN ne lit aucun pattern hors SEQ", () => {
+    const { bank, e } = bench();
+    expect(e.setSelectedPattern(0, 4)).toBe(true);
+    expect(e.setCvDestination(0, CV_SOURCE_1, CvDestination.PATTERN)).toBe(true);
+    expect(e.setCvInput(CV_SOURCE_1, CV_ZONE_PLUS_TEN)).toBe(true);
+    e.start();
+    e.advance(96);
+    expect(e.patternCvIndex(0)).toBe(4);
+    expect(e.patternForChannel(0)).toBe(bank.getPattern(4));
   });
 });
 
 describe("base length et longueur effective (ADR 0009)", () => {
   it("l'entree manuelle s'arrete au plafond d'interface", () => {
     const engine = new SequencerEngine();
+    engine.setPatternBank(new PatternBank());
     expect(engine.setBaseLength(0, 1)).toBe(true);
     expect(engine.setBaseLength(0, 24)).toBe(true);
     expect(engine.setBaseLength(0, 25)).toBe(true);
@@ -654,6 +768,7 @@ describe("base length et longueur effective (ADR 0009)", () => {
 
   it("l'entree manuelle s'arrete a un", () => {
     const engine = new SequencerEngine();
+    engine.setPatternBank(new PatternBank());
     expect(engine.setBaseLength(0, 1)).toBe(true);
     expect(engine.setBaseLength(0, 0)).toBe(false);
     expect(engine.getBaseLength(0)).toBe(1);
@@ -661,6 +776,7 @@ describe("base length et longueur effective (ADR 0009)", () => {
 
   it("l'entree de stockage accepte la capacite du pattern", () => {
     const engine = new SequencerEngine();
+    engine.setPatternBank(new PatternBank());
     expect(engine.setBaseLengthFromStorage(0, 36)).toBe(true);
     expect(engine.getBaseLength(0)).toBe(36);
     expect(engine.getEffectiveLength(0)).toBe(36);
@@ -668,6 +784,7 @@ describe("base length et longueur effective (ADR 0009)", () => {
 
   it("le stockage s'arrete a la capacite du pattern", () => {
     const engine = new SequencerEngine();
+    engine.setPatternBank(new PatternBank());
     expect(engine.setBaseLengthFromStorage(0, 36)).toBe(true);
     expect(engine.setBaseLengthFromStorage(0, 37)).toBe(false);
     expect(engine.getBaseLength(0)).toBe(36);
@@ -675,6 +792,7 @@ describe("base length et longueur effective (ADR 0009)", () => {
 
   it("une base sous le plafond n'est pas ecretee", () => {
     const engine = new SequencerEngine();
+    engine.setPatternBank(new PatternBank());
     expect(engine.setBaseLengthFromStorage(0, 12)).toBe(true);
     expect(engine.getBaseLength(0)).toBe(12);
     expect(engine.getEffectiveLength(0)).toBe(12);
@@ -682,6 +800,7 @@ describe("base length et longueur effective (ADR 0009)", () => {
 
   it("un channel invalide refuse les deux entrees", () => {
     const engine = new SequencerEngine();
+    engine.setPatternBank(new PatternBank());
     expect(engine.setBaseLength(6, 8)).toBe(false);
     expect(engine.setBaseLengthFromStorage(6, 8)).toBe(false);
     expect(engine.getBaseLength(6)).toBe(0);

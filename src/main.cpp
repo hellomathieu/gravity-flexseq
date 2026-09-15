@@ -21,12 +21,13 @@
 namespace {
 
 flexseq::SequencerEngine engine;
+flexseq::PatternBank patternBank;
 flexseq::ModulatedPatternState modulatedPatterns;
 flexseq::Transport transport(engine);
 flexseq::TriggerSequencer triggers(engine);
 flexseq::UiController ui(engine, transport);
 flexseq::Preferences preferences;
-flexseq::PersistentImageV3 persistentImage(engine, ui, preferences);
+flexseq::PersistentImageV4 persistentImage(engine, ui, preferences);
 flexseq::PersistenceScheduler persistence;
 flexseq::EepromStorage eeprom;
 // --- UI ---------------------------------------------------------------------
@@ -141,10 +142,11 @@ void setup() {
     // Persistance : on relit l'image, et si l'octet de version ne repond pas on
     // repart des defauts EN LES ECRIVANT — le format est ainsi materialise des
     // le premier demarrage, pas a la premiere edition. Voir PRD 11.1.
+    engine.setPatternBank(&patternBank);
     engine.setModulatedPatterns(&modulatedPatterns);
     flexseq::bootstrap(eeprom, persistentImage, persistence, millis());
 
-    flexseq::probe::instanceBase = engine.instanceForChannel(0);
+    flexseq::probe::instanceBase = patternBank.getPattern(0);
 
     // Drive the master phase from the unified 96-PPQN output clock (internal
     // and external sources both surface here).
@@ -240,9 +242,6 @@ void loop() {
         resetMask |= 1u << flexseq::CV_SOURCE_2;
     }
     engine.applyCvResetEvents(resetMask);
-
-    flexseq::servicePatternAction(eeprom, persistentImage, engine, ui);
-    flexseq::serviceOneModulationTemplateLoad(eeprom, engine, modulatedPatterns);
 
     if (ticks > 0) {
         transport.tick(ticks);

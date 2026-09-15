@@ -1,3 +1,4 @@
+#include <flexseq/PatternBank.h>
 #include <flexseq/OriginalFonts.h>
 #include <Arduino.h>
 #include <libGravity.h>
@@ -27,6 +28,7 @@
 namespace {
 
 flexseq::SequencerEngine engine;
+flexseq::PatternBank patternBank;
 flexseq::Transport transport(engine);
 
 constexpr uint8_t CH = 0;
@@ -51,7 +53,7 @@ void beginFrame() {
     flexseq::PatternScreenModel model{};
     model.title = "EDIT PATTERN A1";
     model.titleWidth = 0;  // PagedScreen la mesure une fois par image
-    model.pattern = engine.instanceForChannel(CH);
+    model.pattern = engine.patternForChannel(CH);
     model.length = engine.getEffectiveLength(CH);
     model.cursor = CURSOR;
     model.playhead = engine.effectiveStep(CH);
@@ -64,12 +66,13 @@ void beginFrame() {
 
 void setup() {
     gravity.Init();
+    engine.setPatternBank(&patternBank);
 
     // libGravity ne definit aucune police.
     gravity.display.setFont(flexseq::FONT_VELVETSCREEN);
 
     // Contenu de demonstration : couvre toute la legende du PRD.
-    flexseq::Pattern* pattern = engine.instanceForChannel(CH);
+    flexseq::Pattern* pattern = engine.patternForChannel(CH);
     const uint8_t active[] = {0, 2, 5, 6, 7, 8, 13, 15, 16, 19};
     for (uint8_t i = 0; i < sizeof(active); ++i) {
         pattern->writeStep(active[i], true);

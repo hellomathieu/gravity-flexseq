@@ -2,6 +2,7 @@
 #include <unity.h>
 
 #include <flexseq/Pattern.h>
+#include <flexseq/PatternBank.h>
 #include <flexseq/SequencerEngine.h>
 #include <flexseq/Transport.h>
 #include <flexseq/UiController.h>
@@ -91,11 +92,13 @@ void test_batched_ticks_cross_multiple_steps() {
 namespace {
 
 struct Wired {
+    flexseq::PatternBank bank;
     SequencerEngine engine;
     Transport transport;
     UiController ui;
 
     Wired() : engine(), transport(engine), ui(engine, transport) {
+        engine.setPatternBank(&bank);
         for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
             engine.setChannelMode(ch, flexseq::MODE_SEQ);
         }
@@ -109,7 +112,8 @@ struct Wired {
 // la seule chose qui le fait.
 void test_play_realigns_channels_that_a_triplet_had_pulled_apart() {
     Wired w;
-    w.engine.instanceForChannel(0)->setRatchet(0, flexseq::RATCHET_TRIPLET);
+    w.engine.setSelectedPattern(1, 1);
+    w.engine.patternForChannel(0)->setRatchet(0, flexseq::RATCHET_TRIPLET);
     w.engine.refreshTiming();
     w.engine.start();
 

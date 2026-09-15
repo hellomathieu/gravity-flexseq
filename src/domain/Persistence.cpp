@@ -100,7 +100,7 @@ void applyPrefsRecordByte(Preferences& prefs, uint16_t rel, uint8_t value) {
 }  // namespace
 
 namespace persist {
-namespace v3 {
+namespace v4 {
 
 uint8_t contentByte(const Pattern& pattern, uint8_t offset) {
     if (offset < STEP_BYTES) {
@@ -124,41 +124,9 @@ void applyContentByte(Pattern& pattern, uint8_t offset, uint8_t value) {
                            sanitisedRatchetNibbles(value));
 }
 
-uint8_t templateByte(const Pattern& pattern, uint8_t length, uint8_t offset) {
-    if (offset == RECORD_LENGTH_AT) {
-        if (length < MIN_TEMPLATE_LENGTH) {
-            return MIN_TEMPLATE_LENGTH;
-        }
-        if (length > MAX_TEMPLATE_LENGTH) {
-            return MAX_TEMPLATE_LENGTH;
-        }
-        return length;
-    }
-    return contentByte(pattern, offset);
-}
-
-bool isValidTemplateLength(uint8_t value) {
-    return value >= MIN_TEMPLATE_LENGTH && value <= MAX_TEMPLATE_LENGTH;
-}
-
-bool applyTemplateByte(Pattern& pattern, uint8_t& length, uint8_t offset, uint8_t value) {
-    if (offset == RECORD_LENGTH_AT) {
-        if (!isValidTemplateLength(value)) {
-            return false;
-        }
-        length = value;
-        return true;
-    }
-    applyContentByte(pattern, offset, value);
-    return true;
-}
-
-uint8_t factoryTemplateByte(uint8_t index, uint8_t offset) {
-    if (index >= TEMPLATE_COUNT) {
+uint8_t factoryPatternByte(uint8_t index, uint8_t offset) {
+    if (index >= BANK_COUNT || offset >= CONTENT_BYTES) {
         return 0;
-    }
-    if (offset == RECORD_LENGTH_AT) {
-        return FACTORY_TEMPLATE_LENGTH;
     }
     if (offset >= RECORD_STEPS_AT + FACTORY_MASK_BYTES) {
         return 0;
@@ -168,7 +136,7 @@ uint8_t factoryTemplateByte(uint8_t index, uint8_t offset) {
     return static_cast<uint8_t>((mask >> shift) & 0xFF);
 }
 
-}  // namespace v3
+}  // namespace v4
 }  // namespace persist
 
 uint8_t PersistentImage::patternByte(uint8_t pattern, uint8_t offset) const {
@@ -301,36 +269,36 @@ void PersistentImage::resetToDefaults() {
     engine_.refreshTiming();
 }
 
-uint16_t PersistentImageV3::addressAt(uint16_t index) const {
-    using namespace persist::v3;
-    uint16_t offset = 0;
-    if (index == IMAGE_VERSION_AT) {
-        offset = HEADER_OFFSET;
-    } else if (index < IMAGE_CHANNELS_AT) {
-        offset = static_cast<uint16_t>(INSTANCES_OFFSET + (index - IMAGE_INSTANCES_AT));
-    } else if (index < IMAGE_GLOBAL_AT) {
-        offset = static_cast<uint16_t>(CHANNELS_OFFSET + (index - IMAGE_CHANNELS_AT));
-    } else if (index < IMAGE_PREFS_AT) {
-        offset = static_cast<uint16_t>(GLOBAL_OFFSET + (index - IMAGE_GLOBAL_AT));
-    } else {
-        offset = static_cast<uint16_t>(PREFS_OFFSET + (index - IMAGE_PREFS_AT));
-    }
-    return static_cast<uint16_t>(persist::BASE_ADDRESS + offset);
+Pattern* PersistentImageV4::bankPattern(uint8_t index) {
+    PatternBank* bank = engine_.patternBank();
+    return bank == nullptr ? nullptr : bank->getPattern(index);
 }
 
-uint8_t PersistentImageV3::byteAt(uint16_t index) const {
-    using namespace persist::v3;
+const Pattern* PersistentImageV4::bankPattern(uint8_t index) const {
+    const PatternBank* bank = engine_.patternBank();
+    return bank == nullptr ? nullptr : bank->getPattern(index);
+}
+
+uint16_t PersistentImageV4::addressAt(uint16_t index) const {
+    using namespace persist::v4;
+    if (index == IMAGE_VERSION_AT) {
+        return static_cast<uint16_t>(persist::BASE_ADDRESS + HEADER_OFFSET);
+    }
+    return static_cast<uint16_t>(persist::BASE_ADDRESS + BANK_OFFSET + index);
+}
+
+uint8_t PersistentImageV4::byteAt(uint16_t index) const {
+    using namespace persist::v4;
     if (index == IMAGE_VERSION_AT) {
         return FORMAT_VERSION;
     }
     if (index < IMAGE_CHANNELS_AT) {
-        const uint16_t rel = static_cast<uint16_t>(index - IMAGE_INSTANCES_AT);
-        const Pattern* instance =
-            engine_.instanceForChannel(static_cast<uint8_t>(rel / INSTANCE_RECORD));
-        if (instance == nullptr) {
+        const uint16_t rel = static_cast<uint16_t>(index - IMAGE_BANK_AT);
+        const Pattern* shared = bankPattern(static_cast<uint8_t>(rel / BANK_RECORD));
+        if (shared == nullptr) {
             return 0;
         }
-        return contentByte(*instance, static_cast<uint8_t>(rel % INSTANCE_RECORD));
+        return contentByte(*shared, static_cast<uint8_t>(rel % BANK_RECORD));
     }
     if (index < IMAGE_GLOBAL_AT) {
         const uint16_t rel = static_cast<uint16_t>(index - IMAGE_CHANNELS_AT);
@@ -353,17 +321,16 @@ uint8_t PersistentImageV3::byteAt(uint16_t index) const {
     return prefsRecordByte(prefs_, static_cast<uint16_t>(index - IMAGE_PREFS_AT));
 }
 
-void PersistentImageV3::applyByte(uint16_t index, uint8_t value) {
-    using namespace persist::v3;
+void PersistentImageV4::applyByte(uint16_t index, uint8_t value) {
+    using namespace persist::v4;
     if (index == IMAGE_VERSION_AT) {
         return;
     }
     if (index < IMAGE_CHANNELS_AT) {
-        const uint16_t rel = static_cast<uint16_t>(index - IMAGE_INSTANCES_AT);
-        Pattern* instance =
-            engine_.instanceForChannel(static_cast<uint8_t>(rel / INSTANCE_RECORD));
-        if (instance != nullptr) {
-            applyContentByte(*instance, static_cast<uint8_t>(rel % INSTANCE_RECORD), value);
+        const uint16_t rel = static_cast<uint16_t>(index - IMAGE_BANK_AT);
+        Pattern* shared = bankPattern(static_cast<uint8_t>(rel / BANK_RECORD));
+        if (shared != nullptr) {
+            applyContentByte(*shared, static_cast<uint8_t>(rel % BANK_RECORD), value);
         }
         return;
     }
@@ -392,12 +359,22 @@ void PersistentImageV3::applyByte(uint16_t index, uint8_t value) {
     applyPrefsRecordByte(prefs_, static_cast<uint16_t>(index - IMAGE_PREFS_AT), value);
 }
 
-void PersistentImageV3::resetToDefaults() {
-    for (uint8_t channel = 0; channel < SequencerEngine::CHANNEL_COUNT; ++channel) {
-        Pattern* instance = engine_.instanceForChannel(channel);
-        if (instance != nullptr) {
-            instance->clear();
+void PersistentImageV4::seedFactoryPatterns() {
+    using namespace persist::v4;
+    for (uint8_t index = 0; index < BANK_COUNT; ++index) {
+        Pattern* shared = bankPattern(index);
+        if (shared == nullptr) {
+            continue;
         }
+        for (uint8_t offset = 0; offset < BANK_RECORD; ++offset) {
+            applyContentByte(*shared, offset, factoryPatternByte(index, offset));
+        }
+    }
+}
+
+void PersistentImageV4::resetToDefaults() {
+    seedFactoryPatterns();
+    for (uint8_t channel = 0; channel < SequencerEngine::CHANNEL_COUNT; ++channel) {
         engine_.setSelectedPattern(channel, 0);
         engine_.setBaseLength(channel, SequencerEngine::DEFAULT_LENGTH);
         engine_.setSubdiv(channel, DEFAULT_SUBDIV);

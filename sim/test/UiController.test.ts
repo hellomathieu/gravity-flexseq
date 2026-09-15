@@ -1,4 +1,5 @@
 import { ModulatedPatternState } from "../src/domain/ModulatedPatternState.js";
+import { PatternBank } from "../src/domain/PatternBank.js";
 import { PatternAction } from "../src/domain/PatternAction.js";
 import { describe, expect, it } from "vitest";
 import {
@@ -26,7 +27,6 @@ import {
   UiLevel,
 } from "../src/domain/UiController.js";
 import { Transport } from "../src/domain/Transport.js";
-import { v3 } from "../src/domain/Persistence.js";
 import { PATTERN_COUNT } from "../src/domain/PatternBank.js";
 import {
   CHANNEL_COUNT,
@@ -49,6 +49,7 @@ import {
 
 function rig() {
   const engine = new SequencerEngine();
+  engine.setPatternBank(new PatternBank());
   for (let ch = 0; ch < engine.channelCount(); ++ch) {
     engine.setChannelMode(ch, ChannelMode.SEQ);
   }
@@ -438,11 +439,11 @@ describe("UiController — EDIT PATTERN", () => {
     const { ui, enterEdit, engine } = rig();
     enterEdit();
     for (let i = 0; i < 7; ++i) ui.handle(UiEvent.Rotate, 1);
-    expect(engine.instanceForChannel(0)!.readStep(7)).toBe(false);
+    expect(engine.patternForChannel(0)!.readStep(7)).toBe(false);
     ui.handle(UiEvent.Press);
-    expect(engine.instanceForChannel(0)!.readStep(7)).toBe(true);
+    expect(engine.patternForChannel(0)!.readStep(7)).toBe(true);
     ui.handle(UiEvent.Press);
-    expect(engine.instanceForChannel(0)!.readStep(7)).toBe(false);
+    expect(engine.patternForChannel(0)!.readStep(7)).toBe(false);
   });
 
   it("shift rotate sets the ratchet of an active step and clamps", () => {
@@ -450,13 +451,13 @@ describe("UiController — EDIT PATTERN", () => {
     enterEdit();
     ui.handle(UiEvent.Press);
     ui.handle(UiEvent.ShiftRotate, 1);
-    expect(engine.instanceForChannel(0)!.getRatchet(0)).toBe(RATCHET_2);
+    expect(engine.patternForChannel(0)!.getRatchet(0)).toBe(RATCHET_2);
     ui.handle(UiEvent.ShiftRotate, 1);
-    expect(engine.instanceForChannel(0)!.getRatchet(0)).toBe(RATCHET_3);
+    expect(engine.patternForChannel(0)!.getRatchet(0)).toBe(RATCHET_3);
     for (let i = 0; i < RATCHET_CODES.length + 3; i += 1) ui.handle(UiEvent.ShiftRotate, 1);
-    expect(engine.instanceForChannel(0)!.getRatchet(0)).toBe(RATCHET_TRIPLET);
+    expect(engine.patternForChannel(0)!.getRatchet(0)).toBe(RATCHET_TRIPLET);
     for (let i = 0; i < RATCHET_CODES.length + 3; i += 1) ui.handle(UiEvent.ShiftRotate, -1);
-    expect(engine.instanceForChannel(0)!.getRatchet(0)).toBe(RATCHET_NONE);
+    expect(engine.patternForChannel(0)!.getRatchet(0)).toBe(RATCHET_NONE);
   });
 
   it("a ratchet edit takes effect on the current step immediately", () => {
@@ -466,7 +467,7 @@ describe("UiController — EDIT PATTERN", () => {
     engine.start();
     expect(engine.currentStepTicks(0)).toBe(PPQN);
     for (let i = 0; i < 5; ++i) ui.handle(UiEvent.ShiftRotate, 5);
-    expect(engine.instanceForChannel(0)!.getRatchet(0)).toBe(RATCHET_TRIPLET);
+    expect(engine.patternForChannel(0)!.getRatchet(0)).toBe(RATCHET_TRIPLET);
     expect(engine.currentStepTicks(0)).toBe(2 * PPQN);
   });
 
@@ -477,15 +478,15 @@ describe("UiController — EDIT PATTERN", () => {
     ui.handle(UiEvent.ShiftRotate, 1);
     expect(ui.selectedChannel).toBe(0);
     expect(ui.level).toBe(UiLevel.Edit);
-    expect(engine.instanceForChannel(0)!.getRatchet(0)).toBe(RATCHET_2);
+    expect(engine.patternForChannel(0)!.getRatchet(0)).toBe(RATCHET_2);
   });
 
   it("shift rotate on an inactive step does nothing", () => {
     const { ui, enterEdit, engine } = rig();
     enterEdit();
-    expect(engine.instanceForChannel(0)!.readStep(0)).toBe(false);
+    expect(engine.patternForChannel(0)!.readStep(0)).toBe(false);
     ui.handle(UiEvent.ShiftRotate, 1);
-    expect(engine.instanceForChannel(0)!.getRatchet(0)).toBe(RATCHET_NONE);
+    expect(engine.patternForChannel(0)!.getRatchet(0)).toBe(RATCHET_NONE);
   });
 
   it("the grid follows the pattern of the channel selected in edit", () => {
@@ -494,8 +495,8 @@ describe("UiController — EDIT PATTERN", () => {
     gotoTab(TAB_FIRST_CHANNEL + 1);
     enterEdit();
     ui.handle(UiEvent.Press);
-    expect(engine.instanceForChannel(1)!.readStep(0)).toBe(true);
-    expect(engine.instanceForChannel(0)!.readStep(0)).toBe(false);
+    expect(engine.patternForChannel(1)!.readStep(0)).toBe(true);
+    expect(engine.patternForChannel(0)!.readStep(0)).toBe(false);
   });
 
   it("shift long press clears the pattern steps and ratchets", () => {
@@ -507,8 +508,8 @@ describe("UiController — EDIT PATTERN", () => {
     ui.handle(UiEvent.Press);
     ui.handle(UiEvent.ShiftLongPress);
     for (let step = 0; step < STEP_COUNT; step += 1) {
-      expect(engine.instanceForChannel(0)!.readStep(step)).toBe(false);
-      expect(engine.instanceForChannel(0)!.getRatchet(step)).toBe(RATCHET_NONE);
+      expect(engine.patternForChannel(0)!.readStep(step)).toBe(false);
+      expect(engine.patternForChannel(0)!.getRatchet(step)).toBe(RATCHET_NONE);
     }
   });
 
@@ -589,7 +590,7 @@ describe("UiController — PLAY and the gesture left free", () => {
     ui.handle(UiEvent.ShiftPress);
     expect(ui.level).toBe(UiLevel.Edit);
     expect(ui.stepCursor).toBe(3);
-    expect(engine.instanceForChannel(0)!.readStep(3)).toBe(false);
+    expect(engine.patternForChannel(0)!.readStep(3)).toBe(false);
   });
 });
 
@@ -714,6 +715,7 @@ describe("UiController — step cursor bound", () => {
 
 function modeRig(mode: ChannelMode) {
   const engine = new SequencerEngine();
+  engine.setPatternBank(new PatternBank());
   for (let ch = 0; ch < engine.channelCount(); ++ch) engine.setChannelMode(ch, mode);
   const transport = new Transport(engine);
   const ui = new UiController(engine, transport);
@@ -954,6 +956,7 @@ describe("le champ MOD, PRD 10.2", () => {
 describe("UiController — le pattern se choisit dans son champ", () => {
   const seqChannelOnPattern = () => {
     const engine = new SequencerEngine();
+    engine.setPatternBank(new PatternBank());
     for (let ch = 0; ch < engine.channelCount(); ++ch) {
       engine.setChannelMode(ch, ChannelMode.SEQ);
     }
@@ -1107,6 +1110,7 @@ describe("UiController — le pattern se choisit dans son champ", () => {
 
   it("un moteur sans tampon n interroge jamais", () => {
     const engine = new SequencerEngine();
+    engine.setPatternBank(new PatternBank());
     for (let ch = 0; ch < engine.channelCount(); ++ch) {
       engine.setChannelMode(ch, ChannelMode.SEQ);
     }
@@ -1131,6 +1135,7 @@ describe("UiController — le pattern se choisit dans son champ", () => {
 
   it("sans geste, aucune demande", () => {
     const engine = new SequencerEngine();
+    engine.setPatternBank(new PatternBank());
     const ui = new UiController(engine, new Transport(engine));
     expect(ui.takePatternAction()).toBeNull();
     ui.handle(UiEvent.Press);

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { PatternBank } from "../src/domain/PatternBank.js";
 import { SequencerEngine, PPQN } from "../src/domain/SequencerEngine.js";
 import { Transport } from "../src/domain/Transport.js";
 import { SUBDIVS, subdivToTicks } from "../src/domain/subdiv.js";
@@ -7,6 +8,7 @@ import { ChannelMode } from "../src/domain/SequencerEngine.js";
 
 function rig() {
   const engine = new SequencerEngine();
+  engine.setPatternBank(new PatternBank());
   const transport = new Transport(engine);
   return { engine, transport };
 }
@@ -149,6 +151,7 @@ describe("SUBDIV — aucune autre edition ne decale un channel", () => {
   /** Les deux channels tournent a la meme cadence ; l'edition ne touche que le 0. */
   function driftAfter(act: (engine: SequencerEngine) => void): number {
     const engine = new SequencerEngine();
+    engine.setPatternBank(new PatternBank());
     for (const ch of [0, 1]) engine.setChannelMode(ch, ChannelMode.SEQ);
     engine.setSelectedPattern(0, 0);
     engine.setSelectedPattern(1, 1);
@@ -183,11 +186,11 @@ describe("SUBDIV — aucune autre edition ne decale un channel", () => {
 
   it("editing the ratchet of the current step does not shift the channel", () => {
     expect(driftAfter((e) => {
-      e.instanceForChannel(0)!.setRatchet(e.effectiveStep(0), RATCHET_TRIPLET);
+      e.patternForChannel(0)!.setRatchet(e.effectiveStep(0), RATCHET_TRIPLET);
       e.refreshTiming(0);
     })).toBe(0);
     expect(driftAfter((e) => {
-      e.instanceForChannel(0)!.setRatchet(e.effectiveStep(0), RATCHET_NONE);
+      e.patternForChannel(0)!.setRatchet(e.effectiveStep(0), RATCHET_NONE);
       e.refreshTiming(0);
     })).toBe(0);
   });
@@ -195,6 +198,7 @@ describe("SUBDIV — aucune autre edition ne decale un channel", () => {
   it("a setTicksPerStep round trip returns to the grid", () => {
     for (const mid of [24, 32, 48, 192, 384]) {
       const engine = new SequencerEngine();
+      engine.setPatternBank(new PatternBank());
       const transport = new Transport(engine);
       transport.start();
       for (let t = 0; t < 137; ++t) engine.advance(1);

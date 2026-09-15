@@ -2,6 +2,7 @@
 #include <unity.h>
 
 #include <flexseq/Pattern.h>
+#include <flexseq/PatternBank.h>
 #include <flexseq/SequencerEngine.h>
 #include <flexseq/Transport.h>
 #include <flexseq/TriggerSequencer.h>
@@ -63,6 +64,7 @@ const uint8_t TRIGGERS[SUBDIV_COUNT][CODE_COUNT] = {
 };
 
 struct Rig {
+    flexseq::PatternBank bank;
     SequencerEngine engine;
     Transport transport;
     UiController ui;
@@ -70,10 +72,11 @@ struct Rig {
 
     Rig() : engine(), transport(engine), ui(engine, transport),
             seq(engine) {
+        engine.setPatternBank(&bank);
         engine.setChannelMode(0, flexseq::MODE_SEQ);
     }
 
-    Pattern* pattern() { return engine.instanceForChannel(0); }
+    Pattern* pattern() { return engine.patternForChannel(0); }
 
     void useSubdiv(int16_t subdiv) {
         engine.setSubdiv(0, subdiv);

@@ -7,11 +7,13 @@
 #include <flexseq/MainScreen.h>
 #include <flexseq/SequencerEngine.h>
 #include <flexseq/Transport.h>
+#include <flexseq/PatternBank.h>
 #include <flexseq/UiController.h>
 
 namespace {
 
 flexseq::SequencerEngine engine;
+flexseq::PatternBank patternBank;
 flexseq::Transport transport(engine);
 flexseq::UiController ui(engine, transport);
 #if defined(FLEXSEQ_DEMO_PATTERN_ASK)
@@ -72,6 +74,7 @@ void renderBand() {
 
 void setup() {
     gravity.Init();
+    engine.setPatternBank(&patternBank);
 #if defined(FLEXSEQ_DEMO_PATTERN_ASK)
     engine.setModulatedPatterns(&modulated);
 #endif
