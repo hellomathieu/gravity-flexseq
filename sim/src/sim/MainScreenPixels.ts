@@ -53,7 +53,6 @@ import {
   TRANSPORT_PLAY_X,
   TRANSPORT_STOP_X,
   TAB_LAST_CHANNEL,
-  TAB_PATTERNS,
   TAB_SETTINGS,
   TAB_SLOT_W,
   TAB_TOP_Y,
@@ -66,8 +65,6 @@ import {
   patternName,
   sourceLabel,
   subdivLabel,
-  MAIN_LABEL_GLYPH_W,
-  MAIN_LABEL_GLYPH_GAP,
 } from "./MainScreenDisplay.js";
 import { MainParameter, type MainScreenModel } from "../domain/MainScreenModel.js";
 import { ChannelMode } from "../domain/SequencerEngine.js";
@@ -260,10 +257,6 @@ export function modText(model: MainScreenModel): string {
 // La grande valeur prend la PREMIERE position du curseur sur un canal en SEQ —
 // PRD 5.0 amendement 1bis. Les trois lignes de l original suivent donc d un
 export function legacyLine(model: MainScreenModel, index: number): [string, string] {
-  // L onglet PATTERNS prend la mise en page d un canal en SEQ.
-  if (model.tab === TAB_PATTERNS) {
-    return [index === 0 ? LBL_EDIT : "", ""];
-  }
   if (model.configPage) return configLine(model, index);
   if (index === 0) return [LBL_MODE, modeText(model.mode)];
   if (model.mode === ChannelMode.SEQ) {
@@ -284,16 +277,6 @@ function drawSettingsGlyph(ink: Ink, cx: number, topY: number): void {
   ink.drawHLine(x, topY + 3, TAB_WIDE_GLYPH_W);
   ink.drawHLine(cx, topY, 1);
   ink.drawHLine(x + 1, topY + TAB_GLYPH_H - 1, 1);
-}
-
-function drawPatternsGlyph(ink: Ink, cx: number, topY: number): void {
-  const x = cx - Math.floor(TAB_WIDE_GLYPH_W / 2);
-  for (let row = 0; row < 2; ++row) {
-    const y = topY + row * (TAB_GLYPH_H - 1);
-    for (let col = 0; col < 3; ++col) {
-      ink.drawHLine(x + col * 3, y, 1);
-    }
-  }
 }
 
 function drawLabelledField(
@@ -333,16 +316,7 @@ function drawLegacyChannel(ink: Ink, model: MainScreenModel): void {
 
   const mainLabel = mainLabelOf(model);
   const lw = textWidth(mainLabel, VELVETSCREEN);
-  const lead = model.tab === TAB_PATTERNS ? MAIN_LABEL_GLYPH_W + MAIN_LABEL_GLYPH_GAP : 0;
-  const labelX = MAIN_CENTRE_X - Math.floor((lw + lead) / 2) + lead;
-  if (lead > 0) {
-    const gy = MAIN_LABEL_BASELINE_Y - MAIN_LABEL_GLYPH_W;
-    if (model.slotEmpty) {
-      ink.drawFrame(labelX - lead, gy, MAIN_LABEL_GLYPH_W, MAIN_LABEL_GLYPH_W);
-    } else {
-      ink.drawBox(labelX - lead, gy, MAIN_LABEL_GLYPH_W, MAIN_LABEL_GLYPH_W);
-    }
-  }
+  const labelX = MAIN_CENTRE_X - Math.floor(lw / 2);
   // Le curseur sur la grande valeur : l etiquette s inverse.
   if (bigValueTakesCursor(model) && model.insideTab && model.cursor === 0
       && !model.fieldOpen) {
@@ -396,8 +370,7 @@ export interface Render {
 
 export function renderMainScreen(model: MainScreenModel): Render {
   const ink = new Ink();
-  const legacy = isChannelTab(model)
-    || model.tab === TAB_PATTERNS;
+  const legacy = isChannelTab(model);
   const cursorOnHeadline = model.insideTab && model.cursor === 0;
 
   if (!legacy) {
@@ -447,8 +420,7 @@ export function renderMainScreen(model: MainScreenModel): Render {
       ink.setDrawColor(0);
     }
     const cx = tabCentreX(tab);
-    if (tab === TAB_PATTERNS) drawPatternsGlyph(ink, cx, TAB_GLYPH_TOP_Y);
-    else if (tab === TAB_SETTINGS) drawSettingsGlyph(ink, cx, TAB_GLYPH_TOP_Y);
+    if (tab === TAB_SETTINGS) drawSettingsGlyph(ink, cx, TAB_GLYPH_TOP_Y);
     else {
       const label = tab === TAB_CLOCK ? VELVETSCREEN_CLOCK : String(tab);
       ink.drawStr(cx - 2, TAB_BASELINE_Y, label, VELVETSCREEN);

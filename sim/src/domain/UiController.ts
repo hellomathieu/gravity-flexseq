@@ -52,19 +52,14 @@ export enum UiField {
   Offset,
   Mod,
   Config,
-  Slot,
 }
 
-export const TAB_COUNT = 9;
+export const TAB_COUNT = 8;
 export const TAB_CLOCK = 0;
 export const TAB_FIRST_CHANNEL = 1;
-export const TAB_PATTERNS = 7;
-export const TAB_SETTINGS = 8;
-
-export const FIRST_WRITABLE_TEMPLATE = 8;
+export const TAB_SETTINGS = 7;
 
 export const CLOCK_TAB_FIELDS = 2;
-export const PATTERNS_TAB_FIELDS = 1;
 export const CHANNEL_TAB_FIELDS = 3;
 export const SEQ_CHANNEL_TAB_FIELDS = 4;
 export const CONFIG_PAGE_FIELDS = 3;
@@ -83,8 +78,6 @@ export const NO_BROWSE = -1;
 export const CONFIG_FIELD_INDEX_LENGTH = 0;
 export const CONFIG_FIELD_INDEX_SUBDIV = 1;
 export const CONFIG_FIELD_INDEX_MOD = 2;
-
-export const PATTERNS_FIELD_INDEX_EDIT_ENTRY = 0;
 
 export const CLOCK_SOURCE_COUNT = 6;
 export const CLOCK_SOURCE_INTERNAL = 0;
@@ -122,7 +115,6 @@ export class UiController {
   private tab = TAB_FIRST_CHANNEL;
   private fieldCursor = 0;
   private step = 0;
-  private slot = FIRST_WRITABLE_TEMPLATE;
   private header = false;
   private configPage = false;
   private open = false;
@@ -260,7 +252,6 @@ export class UiController {
       // aucun pattern.
       return this.isLegacyModeTab ? CHANNEL_TAB_FIELDS : SEQ_CHANNEL_TAB_FIELDS;
     }
-    if (this.tab === TAB_PATTERNS) return PATTERNS_TAB_FIELDS;
     return 0;
   }
 
@@ -268,11 +259,6 @@ export class UiController {
     if (index < 0 || index >= this.fieldCount) return UiField.None;
     if (this.tab === TAB_CLOCK) {
       return index === 0 ? UiField.Tempo : UiField.ClockSource;
-    }
-    if (this.tab === TAB_PATTERNS) {
-      // Une seule ligne : l emplacement se change par SHIFT plus rotation
-      // depuis la barre, comme le pattern d un canal.
-      return UiField.EditEntry;
     }
     if (this.configPage) {
       switch (index) {
@@ -321,10 +307,6 @@ export class UiController {
 
   get stepCursor(): number {
     return this.step;
-  }
-
-  get slotCursor(): number {
-    return this.slot;
   }
 
   get tempo(): number {
@@ -504,7 +486,6 @@ export class UiController {
 
   get mainField(): UiField {
     if (this.tab === TAB_CLOCK) return UiField.Tempo;
-    if (this.tab === TAB_PATTERNS) return UiField.Slot;
     const channel = this.selectedChannel;
     if (channel < 0) return UiField.None;
     switch (this.engine.getChannelMode(channel)) {
@@ -530,9 +511,6 @@ export class UiController {
         break;
       case UiField.ClockSource:
         this.source = clampIndex(this.source, delta, CLOCK_SOURCE_COUNT);
-        break;
-      case UiField.Slot:
-        this.slot = clampRange(this.slot + delta, FIRST_WRITABLE_TEMPLATE, PATTERN_COUNT - 1);
         break;
       case UiField.Pattern: {
         if (channel < 0) break;

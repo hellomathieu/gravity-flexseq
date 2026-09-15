@@ -172,41 +172,6 @@ void test_the_model_shows_the_editable_length_and_not_the_derived_one() {
         "l ecran montre la longueur EDITABLE, jamais la longueur modulee");
 }
 
-/*
- * PATTERNS tab — lot 16E step 4b
- */
-
-void test_the_patterns_tab_publishes_the_browsed_slot() {
-    Rig r;
-    for (uint8_t guard = 0; guard < 2 * UiController::TAB_COUNT; ++guard) {
-        if (r.ui.currentTab() == UiController::TAB_PATTERNS) {
-            break;
-        }
-        r.ui.handle(UiController::EVENT_ROTATE, 1);
-    }
-    TEST_ASSERT_EQUAL_UINT8(UiController::TAB_PATTERNS, r.ui.currentTab());
-    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
-    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
-    const MainScreenModel m = r.model();
-    // Sur cet onglet, le pattern que l ecran NOMME est l emplacement parcouru,
-    // et il est le parametre principal : la mise en page d un canal en SEQ.
-    TEST_ASSERT_EQUAL_INT8(10, m.patternIndex);
-    TEST_ASSERT_EQUAL(flexseq::MAIN_PATTERN, m.mainParameter);
-}
-
-// Hors de l'onglet PATTERNS le modele porte quand meme un emplacement valide :
-// le rendu ne doit jamais lire un index hors des seize.
-// Sur un onglet de canal, le pattern nomme est celui du CANAL, et non
-// l emplacement parcouru dans l onglet PATTERNS. Les deux vivent dans le meme
-// champ, et ce test est ce qui les empeche de se confondre : le curseur
-// d emplacement part a 8, le pattern du canal a 0.
-void test_a_channel_tab_names_the_pattern_of_the_channel_not_the_slot() {
-    Rig r;
-    TEST_ASSERT_EQUAL_UINT8(8, r.ui.slotCursor());
-    const MainScreenModel m = r.model();
-    TEST_ASSERT_EQUAL_INT8(0, m.patternIndex);
-}
-
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_the_model_shows_the_editable_length_and_not_the_derived_one);
@@ -218,7 +183,5 @@ int main() {
     RUN_TEST(test_seq_makes_the_pattern_the_main_parameter);
     RUN_TEST(test_the_clock_tab_makes_the_tempo_the_main_parameter);
     RUN_TEST(test_the_mode_defaults_to_clock_outside_a_channel);
-    RUN_TEST(test_the_patterns_tab_publishes_the_browsed_slot);
-    RUN_TEST(test_a_channel_tab_names_the_pattern_of_the_channel_not_the_slot);
     return UNITY_END();
 }

@@ -1989,7 +1989,7 @@ const uint8_t NONE = flexseq::ModulatedPatternState::NOT_MODULATED;
 
 // L editeur de templates — lot 16E etape 4c. Le harnais entre dans l onglet
 // PATTERNS et ouvre l editeur par les gestes reels, jamais en posant l etat.
-struct EditorRig {
+struct ChangeFlagRig {
     FakeEeprom ee;
     SequencerEngine engine;
     Transport transport;
@@ -1999,7 +1999,7 @@ struct EditorRig {
     PersistenceScheduler scheduler;
     flexseq::ModulatedPatternState state;
 
-    EditorRig() : engine(), transport(engine), ui(engine, transport), prefs(),
+    ChangeFlagRig() : engine(), transport(engine), ui(engine, transport), prefs(),
                   image(engine, ui, prefs) {
         // Comme main.cpp : sans ce cablage le moteur ignore le tampon et rend
         // l instance, donc l edition tomberait dans l instance.
@@ -2012,52 +2012,8 @@ struct EditorRig {
         }
     }
 
-    void gotoPatternsTab() {
-        for (uint8_t guard = 0; guard < 2 * UiController::TAB_COUNT; ++guard) {
-            if (ui.currentTab() == UiController::TAB_PATTERNS) return;
-            ui.handle(UiController::EVENT_ROTATE, 1);
-        }
-        TEST_FAIL_MESSAGE("l onglet PATTERNS n est pas atteint");
-    }
-
-    void openEditor() {
-        gotoPatternsTab();
-        ui.handle(UiController::EVENT_PRESS);
-        while (ui.field() != UiController::FIELD_EDIT_ENTRY) {
-            ui.handle(UiController::EVENT_ROTATE, 1);
-        }
-        ui.handle(UiController::EVENT_PRESS);
-        TEST_ASSERT_EQUAL(UiController::LEVEL_EDIT, ui.level());
-    }
-
-    void closeEditor() {
-        ui.handle(UiController::EVENT_LONG_PRESS);
-        TEST_ASSERT_NOT_EQUAL(UiController::LEVEL_EDIT, ui.level());
-    }
-
-    void serve() {
-        flexseq::serviceTemplateEditor(ee, engine, ui, state, scheduler, image);
-    }
-
-    // Mene l ecriture differee a son terme : un octet par appel.
-    uint16_t finishTemplateWrite() {
-        uint16_t calls = 0;
-        while (scheduler.isWritingTemplate()) {
-            scheduler.advance(ee, image, 0);
-            ++calls;
-        }
-        return calls;
-    }
-
-    void selectSlot(uint8_t index) {
-        gotoPatternsTab();
-        while (ui.slotCursor() != index) {
-            ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
-        }
-    }
 };
 
-const uint8_t NO_EDITOR = flexseq::ModulatedPatternState::NO_EDITOR;
 
 }  // namespace
 
@@ -2446,305 +2402,13 @@ void test_when_the_index_and_the_step_offset_change_on_the_same_boundary_the_dec
  * Le tampon d edition — lot 16E etape 4c
  */
 
-void test_opening_the_editor_loads_the_template_into_the_channel_one_buffer() {
-    EditorRig r;
-    r.selectSlot(11);
-    r.openEditor();
-    r.serve();
-    TEST_ASSERT_EQUAL_UINT8(11, r.state.editorTemplate);
-    TEST_ASSERT_EQUAL_UINT8(11, r.state.loaded[0]);
-    TEST_ASSERT_EQUAL_UINT8(12, r.state.pattern[0].stepByte(0));
-    TEST_ASSERT_EQUAL_UINT8(16, r.state.length[0]);
-}
-
-void test_opening_the_editor_saves_the_mode_and_the_base_length_of_channel_one() {
-    EditorRig r;
-    r.engine.setChannelMode(0, flexseq::MODE_RANDOM);
-    r.engine.setBaseLength(0, 29);
-    r.selectSlot(11);
-    r.openEditor();
-    r.serve();
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(flexseq::MODE_RANDOM),
-                            r.state.editorSavedMode);
-    TEST_ASSERT_EQUAL_UINT8(29, r.state.editorSavedLength);
-}
-
-void test_opening_the_editor_puts_channel_one_into_seq_with_the_template_length() {
-    EditorRig r;
-    r.engine.setChannelMode(0, flexseq::MODE_CLOCK);
-    r.engine.setBaseLength(0, 29);
-    uint8_t content[persist::v3::CONTENT_BYTES];
-    memset(content, 0, sizeof(content));
-    content[0] = 0x03;
-    writeTemplateRecord(r.ee, 11, content, 9);
-    r.selectSlot(11);
-    r.openEditor();
-    r.serve();
-    TEST_ASSERT_EQUAL(flexseq::MODE_SEQ, r.engine.getChannelMode(0));
-    TEST_ASSERT_EQUAL_UINT8(9, r.engine.getBaseLength(0));
-}
-
-void test_a_record_with_an_out_of_range_length_does_not_open_the_editor() {
-    EditorRig r;
-    uint8_t content[persist::v3::CONTENT_BYTES];
-    memset(content, 0xFF, sizeof(content));
-    writeTemplateRecord(r.ee, 11, content, 99);
-    r.engine.setChannelMode(0, flexseq::MODE_CLOCK);
-    r.selectSlot(11);
-    r.openEditor();
-    r.serve();
-    TEST_ASSERT_EQUAL_UINT8(NO_EDITOR, r.state.editorTemplate);
-    TEST_ASSERT_EQUAL_UINT8(NONE, r.state.loaded[0]);
-    TEST_ASSERT_EQUAL_UINT8(0, r.state.pattern[0].stepByte(0));
-    TEST_ASSERT_EQUAL(flexseq::MODE_CLOCK, r.engine.getChannelMode(0));
-}
-
-void test_the_modulation_service_does_not_release_a_buffer_the_editor_holds() {
-    EditorRig r;
-    r.selectSlot(11);
-    r.openEditor();
-    r.serve();
-    TEST_ASSERT_EQUAL_UINT8(11, r.state.loaded[0]);
-    // Le canal 1 n est route vers aucun CV : sans garde, la boucle de
-    // relachement effacerait loaded[0] des le passage suivant.
-    flexseq::serviceOneModulationTemplateLoad(r.ee, r.engine, r.state);
-    TEST_ASSERT_EQUAL_UINT8(11, r.state.loaded[0]);
-    TEST_ASSERT_EQUAL_UINT8(12, r.state.pattern[0].stepByte(0));
-}
-
-void test_the_modulation_service_does_not_elect_a_channel_the_editor_holds() {
-    EditorRig r;
-    r.selectSlot(11);
-    r.openEditor();
-    r.serve();
-    // Un routage vers PATTERN rendrait le canal 1 eligible : sans garde, le CV
-    // rechargerait son propre template par-dessus le tampon d edition.
-    TEST_ASSERT_TRUE(r.engine.setCvDestination(0, flexseq::CV_SOURCE_1,
-                                               flexseq::CV_DEST_PATTERN));
-    r.engine.setSelectedPattern(0, 3);
-    flexseq::serviceOneModulationTemplateLoad(r.ee, r.engine, r.state);
-    TEST_ASSERT_EQUAL_UINT8(11, r.state.loaded[0]);
-    TEST_ASSERT_EQUAL_UINT8(12, r.state.pattern[0].stepByte(0));
-}
-
-void test_editing_never_touches_the_instance_of_channel_one() {
-    EditorRig r;
-    Pattern* instance = r.engine.instanceForChannel(0);
-    TEST_ASSERT_NOT_NULL(instance);
-    uint8_t before[persist::v3::CONTENT_BYTES];
-    for (uint8_t i = 0; i < persist::v3::STEP_BYTES; ++i) {
-        before[i] = instance->stepByte(i);
-    }
-    r.selectSlot(11);
-    r.openEditor();
-    r.serve();
-    r.ui.handle(UiController::EVENT_PRESS);   // allume le pas sous le curseur
-    for (uint8_t i = 0; i < persist::v3::STEP_BYTES; ++i) {
-        TEST_ASSERT_EQUAL_UINT8_MESSAGE(before[i], instance->stepByte(i),
-                                        "l instance du canal 1 ne bouge pas");
-    }
-    bool active = false;
-    TEST_ASSERT_TRUE(r.state.pattern[0].readStep(0, active));
-    TEST_ASSERT_TRUE_MESSAGE(active, "l edition tombe dans le tampon");
-}
-
-void test_closing_the_editor_restores_the_mode_and_the_base_length() {
-    EditorRig r;
-    r.engine.setChannelMode(0, flexseq::MODE_RANDOM);
-    r.engine.setBaseLength(0, 29);
-    r.selectSlot(11);
-    r.openEditor();
-    r.serve();
-    r.closeEditor();
-    r.serve();
-    TEST_ASSERT_EQUAL(flexseq::MODE_RANDOM, r.engine.getChannelMode(0));
-    TEST_ASSERT_EQUAL_UINT8(29, r.engine.getBaseLength(0));
-}
-
-void test_closing_the_editor_gives_channel_one_its_own_pattern_back() {
-    EditorRig r;
-    r.selectSlot(11);
-    r.openEditor();
-    r.serve();
-    TEST_ASSERT_EQUAL_PTR(&r.state.pattern[0], r.engine.patternForChannel(0));
-    r.closeEditor();
-    r.serve();
-    TEST_ASSERT_EQUAL_UINT8(NO_EDITOR, r.state.editorTemplate);
-    TEST_ASSERT_EQUAL_UINT8(NONE, r.state.loaded[0]);
-    TEST_ASSERT_EQUAL_PTR(r.engine.instanceForChannel(0),
-                          r.engine.patternForChannel(0));
-}
-
 /*
  * L ecriture en sortant — lot 16E etape 4e
  */
 
-void test_closing_an_untouched_editor_writes_nothing() {
-    EditorRig r;
-    r.selectSlot(11);
-    r.openEditor();
-    r.serve();
-    const uint16_t before = r.ee.writes;
-    r.closeEditor();
-    r.serve();
-    TEST_ASSERT_FALSE(r.scheduler.isWritingTemplate());
-    TEST_ASSERT_EQUAL_UINT16(before, r.ee.writes);
-    TEST_ASSERT_EQUAL_UINT8(NO_EDITOR, r.state.editorTemplate);
-}
-
-void test_closing_a_touched_editor_writes_the_twenty_four_bytes() {
-    EditorRig r;
-    r.selectSlot(11);
-    r.openEditor();
-    r.serve();
-    r.ui.handle(UiController::EVENT_PRESS);   // allume le pas 0
-    r.closeEditor();
-    r.serve();
-    TEST_ASSERT_TRUE(r.scheduler.isWritingTemplate());
-    TEST_ASSERT_EQUAL_UINT16(persist::v3::TEMPLATE_RECORD, r.finishTemplateWrite());
-    // Le fixture pose 0x0C sur ce template ; le pas 0 allume ajoute 0x01.
-    TEST_ASSERT_EQUAL_UINT8(
-        0x0D, r.ee.read(persist::v3::templateAddress(11, persist::v3::RECORD_STEPS_AT)));
-}
-
-void test_the_buffer_is_held_until_the_deferred_write_ends() {
-    EditorRig r;
-    r.selectSlot(11);
-    r.openEditor();
-    r.serve();
-    r.ui.handle(UiController::EVENT_PRESS);
-    r.closeEditor();
-    r.serve();
-    // L ecriture va rechercher chaque octet au moment ou elle l ecrit : relacher
-    // le tampon ici ecrirait la fin de l enregistrement depuis un autre pattern.
-    TEST_ASSERT_EQUAL_UINT8(11, r.state.editorTemplate);
-    TEST_ASSERT_EQUAL_UINT8(11, r.state.loaded[0]);
-    r.serve();
-    TEST_ASSERT_EQUAL_UINT8(11, r.state.editorTemplate);
-    r.finishTemplateWrite();
-    r.serve();
-    TEST_ASSERT_EQUAL_UINT8(NO_EDITOR, r.state.editorTemplate);
-    TEST_ASSERT_EQUAL_UINT8(NONE, r.state.loaded[0]);
-}
-
-void test_the_deferred_write_takes_its_bytes_from_the_editor_buffer() {
-    EditorRig r;
-    r.selectSlot(11);
-    r.openEditor();
-    r.serve();
-    // L instance du canal 1 porte un contenu DIFFERENT du tampon : si l ecriture
-    // lisait l instance, le premier octet vaudrait 0x02 et non 0x01.
-    Pattern* instance = r.engine.instanceForChannel(0);
-    instance->writeStep(1, true);
-    r.ui.handle(UiController::EVENT_PRESS);
-    r.closeEditor();
-    r.serve();
-    r.finishTemplateWrite();
-    const uint8_t written =
-        r.ee.read(persist::v3::templateAddress(11, persist::v3::RECORD_STEPS_AT));
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0x0D, written, "le contenu du tampon");
-    TEST_ASSERT_NOT_EQUAL_MESSAGE(0x02, written, "et surtout pas celui de l instance");
-}
-
-void test_the_channel_save_path_still_takes_its_bytes_from_the_instance() {
-    EditorRig r;
-    Pattern* instance = r.engine.instanceForChannel(3);
-    instance->writeStep(2, true);
-    r.engine.setBaseLength(3, 12);
-    TEST_ASSERT_TRUE(r.scheduler.requestTemplateWrite(r.image, 3, 12));
-    r.finishTemplateWrite();
-    TEST_ASSERT_EQUAL_UINT8(
-        0x04, r.ee.read(persist::v3::templateAddress(12, persist::v3::RECORD_STEPS_AT)));
-    TEST_ASSERT_EQUAL_UINT8(
-        12, r.ee.read(persist::v3::templateAddress(12, persist::v3::RECORD_LENGTH_AT)));
-}
-
-void test_the_header_field_edits_the_template_length() {
-    EditorRig r;
-    r.selectSlot(11);
-    r.openEditor();
-    r.serve();
-    TEST_ASSERT_EQUAL_UINT8(16, r.state.length[0]);
-    r.ui.handle(UiController::EVENT_ROTATE, -1);   // monte dans l en-tete
-    TEST_ASSERT_TRUE(r.ui.isOnHeader());
-    r.ui.handle(UiController::EVENT_PRESS);        // ouvre le champ
-    r.ui.handle(UiController::EVENT_ROTATE, 1);
-    TEST_ASSERT_EQUAL_UINT8(17, r.state.length[0]);
-    TEST_ASSERT_EQUAL_UINT8(17, r.engine.getBaseLength(0));
-}
-
-// Le ratchet a besoin de la cadence d un canal, et l onglet PATTERNS n en
-// selectionne aucun : c est le canal d audition qui la donne.
-// ADR 0011 : celui qui remplit le tampon invalide le cache de ratchet.
-// ⚠️ Le canal est mis en SEQ AVANT d ouvrir, et c est ce qui rend la propriete
-// observable : setChannelMode() rafraichit le cache, mais il sort tot quand le
-// mode ne change pas. Un canal deja en SEQ n a donc que cet appel-la.
-void test_opening_the_editor_invalidates_the_timing_cache() {
-    EditorRig r;
-    uint8_t content[persist::v3::CONTENT_BYTES];
-    memset(content, 0, sizeof(content));
-    content[persist::v3::RECORD_STEPS_AT] = 0x01;
-    content[persist::v3::RECORD_RATCHETS_AT] = flexseq::RATCHET_TRIPLET;
-    writeTemplateRecord(r.ee, 11, content, 16);
-    r.engine.setChannelMode(0, flexseq::MODE_SEQ);
-    const uint16_t plain = r.engine.currentStepTicks(0);
-    r.selectSlot(11);
-    r.openEditor();
-    r.serve();
-    TEST_ASSERT_NOT_EQUAL_MESSAGE(plain, r.engine.currentStepTicks(0),
-                                  "le cache porte le ratchet du template charge");
-}
-
-void test_the_editor_sets_a_ratchet_on_the_template() {
-    EditorRig r;
-    r.selectSlot(11);
-    r.openEditor();
-    r.serve();
-    r.ui.handle(UiController::EVENT_PRESS);            // allume le pas 0
-    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);  // pose un ratchet
-    TEST_ASSERT_NOT_EQUAL(flexseq::RATCHET_NONE, r.state.pattern[0].getRatchet(0));
-    TEST_ASSERT_EQUAL_UINT8(1, r.state.editorDirty);
-}
-
-// L audition : le canal 1 doit EMETTRE ce que l editeur montre. Ce test couvre
-// tout sauf le cablage de main.cpp, que nul test natif ne compile.
-void test_the_audition_emits_the_template_on_channel_one() {
-    EditorRig r;
-    // Un template VIDE : le seul pas actif sera celui que l edition allume, et
-    // le compte d onsets devient alors imputable a ce pas-la.
-    uint8_t content[persist::v3::CONTENT_BYTES];
-    memset(content, 0, sizeof(content));
-    writeTemplateRecord(r.ee, 11, content, 16);
-    r.selectSlot(11);
-    r.openEditor();
-    r.serve();
-    r.ui.handle(UiController::EVENT_PRESS);   // allume le pas 0
-    bool active = false;
-    TEST_ASSERT_TRUE(r.state.pattern[0].readStep(0, active));
-    TEST_ASSERT_TRUE(active);
-
-    flexseq::TriggerSequencer triggers(r.engine);
-    r.transport.start();
-    uint16_t onsets = 0;
-    const uint16_t ticks = r.engine.getTicksPerStep(0);
-    for (uint16_t t = 0; t < ticks * 4; ++t) {
-        r.transport.tick(1);
-        triggers.update();
-        while (triggers.takeTrigger(0)) {
-            ++onsets;
-        }
-    }
-    // ⚠️ « au moins un onset » ne prouve RIEN : un canal en CLOCK emet a CHAQUE
-    // pas, et passerait ce critere. Le compte exact est ce qui distingue les
-    // deux. Le transport arme les canaux, donc le premier tick emet l onset du
-    // pas 0, qui est le seul actif : UN onset sur quatre pas.
-    TEST_ASSERT_EQUAL_UINT16_MESSAGE(
-        1, onsets, "le canal 1 suit le contenu, il n emet pas a chaque pas");
-}
-
 // Entre dans l ecran EDIT d un canal. Le mode SEQ est obligatoire : EDIT n est
 // atteignable que de la, decision du proprietaire du 2026-09-05.
-void enterChannelEdit(EditorRig& r, uint8_t channel) {
+void enterChannelEdit(ChangeFlagRig& r, uint8_t channel) {
     r.engine.setChannelMode(channel, flexseq::MODE_SEQ);
     while (r.ui.currentTab() != UiController::TAB_FIRST_CHANNEL + channel) {
         r.ui.handle(UiController::EVENT_ROTATE, 1);
@@ -2780,7 +2444,7 @@ void clearEveryChannelFlag(flexseq::ModulatedPatternState& state) {
 // proprietaire. Consequence acceptee et nommee : apres une coupure, le premier
 // chargement d un canal ecrase une copie editee sans rien demander.
 void test_a_fresh_state_carries_no_dirty_channel() {
-    EditorRig r;
+    ChangeFlagRig r;
     for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
         TEST_ASSERT_FALSE_MESSAGE(r.state.isDirty(ch), "rien n a ete edite");
     }
@@ -2788,7 +2452,7 @@ void test_a_fresh_state_carries_no_dirty_channel() {
 }
 
 void test_editing_a_step_raises_the_flag_of_that_channel_alone() {
-    EditorRig r;
+    ChangeFlagRig r;
     clearEveryChannelFlag(r.state);
     enterChannelEdit(r, 3);
     r.ui.handle(UiController::EVENT_PRESS);          // bascule le pas 0
@@ -2804,7 +2468,7 @@ void test_editing_a_step_raises_the_flag_of_that_channel_alone() {
 // longueur, donc un canal dont la longueur a change ne correspond plus au
 // template charge.
 void test_editing_the_length_of_a_channel_raises_its_flag() {
-    EditorRig r;
+    ChangeFlagRig r;
     clearEveryChannelFlag(r.state);
     r.engine.setChannelMode(2, flexseq::MODE_SEQ);
     while (r.ui.currentTab() != UiController::TAB_FIRST_CHANNEL + 2) {
@@ -2825,29 +2489,8 @@ void test_editing_the_length_of_a_channel_raises_its_flag() {
     TEST_ASSERT_TRUE_MESSAGE(r.state.isDirty(2), "la longueur leve le drapeau");
 }
 
-// ⚠️ setBaseLength a sept appelants et un seul est un geste. Le demarrage et
-// l editeur de templates en font partie : ils ne doivent lever AUCUN bit.
-void test_the_template_editor_raises_no_channel_flag() {
-    EditorRig r;
-    clearEveryChannelFlag(r.state);
-    r.selectSlot(11);
-    r.openEditor();
-    r.serve();
-    r.ui.handle(UiController::EVENT_PRESS);          // edite le TEMPLATE
-    // ⚠️ Le drapeau du template se lit AVANT la sortie : sortir ecrit le record
-    // et le fait retomber, ce qui est son contrat.
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, r.state.editorDirty,
-                                    "le drapeau du template, lui, est leve");
-    r.closeEditor();
-    r.serve();
-    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-        TEST_ASSERT_FALSE_MESSAGE(r.state.isDirty(ch),
-                                  "l editeur de templates n edite aucune copie de canal");
-    }
-}
-
 void test_loading_a_template_clears_the_flag_of_the_channel() {
-    EditorRig r;
+    ChangeFlagRig r;
     clearEveryChannelFlag(r.state);
     enterChannelEdit(r, 1);
     r.ui.handle(UiController::EVENT_PRESS);
@@ -2858,7 +2501,7 @@ void test_loading_a_template_clears_the_flag_of_the_channel() {
 }
 
 void test_saving_a_template_clears_the_flag_of_the_channel() {
-    EditorRig r;
+    ChangeFlagRig r;
     clearEveryChannelFlag(r.state);
     enterChannelEdit(r, 1);
     r.ui.handle(UiController::EVENT_PRESS);
@@ -2870,67 +2513,11 @@ void test_saving_a_template_clears_the_flag_of_the_channel() {
 
 // Le bit vit dans un octet : un index hors des six deborderait sur un voisin.
 void test_an_out_of_range_channel_never_touches_a_bit() {
-    EditorRig r;
+    ChangeFlagRig r;
     clearEveryChannelFlag(r.state);
     r.state.markDirty(SequencerEngine::CHANNEL_COUNT);
     TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, r.state.dirty, "aucun bit n a bouge");
     TEST_ASSERT_FALSE(r.state.isDirty(SequencerEngine::CHANNEL_COUNT));
-}
-
-// PRD 5.0 point 11 : l editeur fait taire les cinq autres canaux. Un canal en
-// CLOCK emet a CHAQUE pas, donc les six emettent des que le transport tourne et
-// l audition est inaudible.
-void test_the_editor_silences_the_five_other_channels() {
-    EditorRig r;
-    r.selectSlot(11);
-    r.openEditor();
-    r.serve();
-    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-        const bool audible = r.state.channelIsAudible(ch);
-        if (ch == flexseq::ModulatedPatternState::EDITOR_CHANNEL) {
-            TEST_ASSERT_TRUE_MESSAGE(audible, "le canal d audition reste audible");
-        } else {
-            TEST_ASSERT_FALSE_MESSAGE(audible, "les cinq autres se taisent");
-        }
-    }
-}
-
-// Hors de l editeur, les six canaux sont audibles : le silence ne survit pas a
-// la fermeture, et il n a jamais lieu quand l editeur n a pas ete ouvert.
-void test_outside_the_editor_every_channel_is_audible() {
-    EditorRig r;
-    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-        TEST_ASSERT_TRUE_MESSAGE(r.state.channelIsAudible(ch), "avant l ouverture");
-    }
-    r.selectSlot(11);
-    r.openEditor();
-    r.serve();
-    r.closeEditor();
-    r.serve();
-    for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
-        TEST_ASSERT_TRUE_MESSAGE(r.state.channelIsAudible(ch), "apres la fermeture");
-    }
-}
-
-void test_the_written_length_is_the_length_shown_in_the_header() {
-    EditorRig r;
-    r.selectSlot(11);
-    r.openEditor();
-    r.serve();
-    r.ui.handle(UiController::EVENT_ROTATE, -1);
-    r.ui.handle(UiController::EVENT_PRESS);
-    for (uint8_t i = 0; i < 4; ++i) {
-        r.ui.handle(UiController::EVENT_ROTATE, 1);
-    }
-    TEST_ASSERT_EQUAL_UINT8(20, r.state.length[0]);
-    // Un appui long sur un champ OUVERT le referme : il en faut un second pour
-    // quitter l editeur. C est le comportement de l ecran EDIT, inchange.
-    r.ui.handle(UiController::EVENT_LONG_PRESS);
-    r.closeEditor();
-    r.serve();
-    r.finishTemplateWrite();
-    TEST_ASSERT_EQUAL_UINT8(
-        20, r.ee.read(persist::v3::templateAddress(11, persist::v3::RECORD_LENGTH_AT)));
 }
 
 /*
@@ -3216,34 +2803,12 @@ int main() {
     RUN_TEST(test_the_offset_never_exceeds_the_single_byte_the_format_gives_it);
     RUN_TEST(test_the_two_cv_target_bytes_are_reserved_and_read_as_zero);
     RUN_TEST(test_a_stored_cv_target_is_ignored_without_disturbing_the_record);
-    RUN_TEST(test_opening_the_editor_loads_the_template_into_the_channel_one_buffer);
-    RUN_TEST(test_opening_the_editor_saves_the_mode_and_the_base_length_of_channel_one);
-    RUN_TEST(test_opening_the_editor_puts_channel_one_into_seq_with_the_template_length);
-    RUN_TEST(test_a_record_with_an_out_of_range_length_does_not_open_the_editor);
-    RUN_TEST(test_the_modulation_service_does_not_release_a_buffer_the_editor_holds);
-    RUN_TEST(test_the_modulation_service_does_not_elect_a_channel_the_editor_holds);
-    RUN_TEST(test_editing_never_touches_the_instance_of_channel_one);
-    RUN_TEST(test_closing_the_editor_restores_the_mode_and_the_base_length);
-    RUN_TEST(test_closing_the_editor_gives_channel_one_its_own_pattern_back);
-    RUN_TEST(test_closing_an_untouched_editor_writes_nothing);
-    RUN_TEST(test_closing_a_touched_editor_writes_the_twenty_four_bytes);
-    RUN_TEST(test_the_buffer_is_held_until_the_deferred_write_ends);
-    RUN_TEST(test_the_deferred_write_takes_its_bytes_from_the_editor_buffer);
-    RUN_TEST(test_the_channel_save_path_still_takes_its_bytes_from_the_instance);
-    RUN_TEST(test_the_header_field_edits_the_template_length);
-    RUN_TEST(test_opening_the_editor_invalidates_the_timing_cache);
-    RUN_TEST(test_the_editor_sets_a_ratchet_on_the_template);
-    RUN_TEST(test_the_audition_emits_the_template_on_channel_one);
     RUN_TEST(test_a_fresh_state_carries_no_dirty_channel);
     RUN_TEST(test_editing_a_step_raises_the_flag_of_that_channel_alone);
     RUN_TEST(test_editing_the_length_of_a_channel_raises_its_flag);
-    RUN_TEST(test_the_template_editor_raises_no_channel_flag);
     RUN_TEST(test_loading_a_template_clears_the_flag_of_the_channel);
     RUN_TEST(test_saving_a_template_clears_the_flag_of_the_channel);
     RUN_TEST(test_an_out_of_range_channel_never_touches_a_bit);
-    RUN_TEST(test_the_editor_silences_the_five_other_channels);
-    RUN_TEST(test_outside_the_editor_every_channel_is_audible);
-    RUN_TEST(test_the_written_length_is_the_length_shown_in_the_header);
 
     return UNITY_END();
 }

@@ -207,23 +207,11 @@ private:
 struct ModulatedPatternState {
     static constexpr uint8_t NOT_MODULATED = 0xFF;
 
-    // L editeur de templates emprunte le tampon du canal 1 — ADR 0013. PRD 5.0
-    // point 9 : l audition passe par CHAN 1.
-    static constexpr uint8_t NO_EDITOR = 0xFF;
-    static constexpr uint8_t EDITOR_CHANNEL = 0;
-
     ModulatedPatternState()
-        : pattern(), length{}, loaded{}, cursor(0), editorTemplate(NO_EDITOR),
-          editorSavedMode(0), editorSavedLength(0), editorDirty(0), dirty(0) {
+        : pattern(), length{}, loaded{}, cursor(0), dirty(0) {
         for (uint8_t c = 0; c < SequencerEngine::CHANNEL_COUNT; ++c) {
             loaded[c] = NOT_MODULATED;
         }
-    }
-
-    // editorTemplate porte l etat ET la destination : la sentinelle dit que
-    // l editeur est ferme, toute autre valeur nomme l emplacement qu il ecrira.
-    bool heldByEditor(uint8_t channel) const {
-        return editorTemplate != NO_EDITOR && channel == EDITOR_CHANNEL;
     }
 
     // PRD 5.0 amendement 1quater : un bit par canal, la copie du canal differe
@@ -254,24 +242,10 @@ struct ModulatedPatternState {
         }
     }
 
-    // PRD 5.0 point 11 : tant que l editeur est ouvert, le canal d audition est
-    // le seul qui emette. Un canal en CLOCK emet a CHAQUE pas, donc sans cela
-    // les six sortent ensemble et l audition ne s entend pas.
-    //
-    // La decision vit ICI et non dans src/main.cpp, qu aucun test natif ne
-    // compile — docs/open-risks.md ligne 99.
-    bool channelIsAudible(uint8_t channel) const {
-        return editorTemplate == NO_EDITOR || channel == EDITOR_CHANNEL;
-    }
-
     Pattern pattern[SequencerEngine::CHANNEL_COUNT];
     uint8_t length[SequencerEngine::CHANNEL_COUNT];
     uint8_t loaded[SequencerEngine::CHANNEL_COUNT];
     uint8_t cursor;
-    uint8_t editorTemplate;
-    uint8_t editorSavedMode;
-    uint8_t editorSavedLength;
-    uint8_t editorDirty;
     uint8_t dirty;
 };
 
@@ -281,11 +255,6 @@ static_assert(SequencerEngine::CHANNEL_COUNT <= 8,
 static_assert(ModulatedPatternState::NOT_MODULATED
                   > SequencerEngine::PATTERN_COUNT - 1,
               "the sentinel must never name a pattern of the bank");
-
-static_assert(ModulatedPatternState::NO_EDITOR > SequencerEngine::PATTERN_COUNT - 1,
-              "the editor sentinel must never name a template of the bank");
-static_assert(ModulatedPatternState::EDITOR_CHANNEL < SequencerEngine::CHANNEL_COUNT,
-              "the audition channel must exist");
 
 }  // namespace flexseq
 

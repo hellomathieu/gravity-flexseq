@@ -11,7 +11,6 @@ namespace flexseq {
 enum UiFrameKind : uint8_t {
     UI_FRAME_MAIN,
     UI_FRAME_CHANNEL_EDIT,
-    UI_FRAME_TEMPLATE_EDIT,
 };
 
 struct UiFrameChoice {
@@ -25,23 +24,15 @@ struct UiFrameChoice {
 //
 // ⚠️ CETTE FONCTION EXISTE POUR QUE DEUX LECTEURS NE DIVERGENT PAS. Le
 // declencheur de redessin de main.cpp et le selecteur d ecran lisaient des
-// etats differents : le premier demandait quel canal est selectionne, le second
-// si l editeur de templates est ouvert. L onglet PATTERNS ne selectionne aucun
-// canal, donc le playhead n y redessinait jamais et la fermeture differee de
-// l editeur ne redessinait pas non plus. Les deux lisent desormais ceci.
+// etats differents, et le playhead ne redessinait pas toujours. Les deux lisent
+// desormais ceci.
 //
 // Elle vit dans un en-tete et non dans main.cpp parce que main.cpp n est
 // compile par aucun test natif — docs/open-risks.md, ligne 99.
-inline UiFrameChoice uiFrameChoiceOf(const UiController& ui,
-                                     const ModulatedPatternState& state) {
+inline UiFrameChoice uiFrameChoiceOf(const UiController& ui) {
     const int8_t channel = ui.selectedChannel();
     if (ui.level() == UiController::LEVEL_EDIT && channel >= 0) {
         return UiFrameChoice{UI_FRAME_CHANNEL_EDIT, channel};
-    }
-    if (state.editorTemplate != ModulatedPatternState::NO_EDITOR) {
-        return UiFrameChoice{
-            UI_FRAME_TEMPLATE_EDIT,
-            static_cast<int8_t>(ModulatedPatternState::EDITOR_CHANNEL)};
     }
     return UiFrameChoice{UI_FRAME_MAIN, -1};
 }

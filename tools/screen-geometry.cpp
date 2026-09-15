@@ -9,7 +9,6 @@ int main() {
     std::printf("TAB_CLOCK=%u\n", static_cast<unsigned>(ms::TAB_CLOCK));
     std::printf("TAB_FIRST_CHANNEL=%u\n", static_cast<unsigned>(ms::TAB_FIRST_CHANNEL));
     std::printf("TAB_LAST_CHANNEL=%u\n", static_cast<unsigned>(ms::TAB_LAST_CHANNEL));
-    std::printf("TAB_PATTERNS=%u\n", static_cast<unsigned>(ms::TAB_PATTERNS));
     std::printf("TAB_SETTINGS=%u\n", static_cast<unsigned>(ms::TAB_SETTINGS));
     return 0;
 }

@@ -357,26 +357,6 @@ void test_a_changed_bar_length_redraws_the_header_band(void) {
         "la valeur de SEP a change et sa bande n a pas ete refaite");
 }
 
-// Dans l editeur de templates la meme bande porte LEN et sa valeur, et cette
-// valeur est model.length. Le saut doit la suivre aussi.
-void test_a_changed_template_length_redraws_the_header_band(void) {
-    reset();
-    PatternScreenModel m = modelOf(source);
-    m.templateEditor = true;
-    m.length = 16;
-
-    paged.begin(display, m);
-    finishFrame();
-
-    memset(display.sent, 0, sizeof(display.sent));
-    m.length = 17;
-    paged.begin(display, m);
-    finishFrame();
-
-    TEST_ASSERT_TRUE_MESSAGE(display.sent[FakeDisplay::PAGES - 1],
-        "la valeur de LEN a change et sa bande n a pas ete refaite");
-}
-
 void test_the_cursor_arriving_on_sep_redraws_the_header_band(void) {
     reset();
     PatternScreenModel m = modelOf(source);
@@ -671,6 +651,5 @@ int main(int, char**) {
     RUN_TEST(test_the_main_screen_never_skips_even_on_a_second_frame);
     RUN_TEST(test_switching_screen_forces_a_full_frame);
     RUN_TEST(test_the_main_screen_leaves_ink);
-    RUN_TEST(test_a_changed_template_length_redraws_the_header_band);
     return UNITY_END();
 }

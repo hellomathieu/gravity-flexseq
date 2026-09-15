@@ -229,13 +229,6 @@ R8_MASK_ATTENDU="0229"
 R9_OCTET_ATTENDU="60"
 R12_OCTET_ATTENDU="70"
 
-# PAT : l onglet PATTERNS et son editeur, lot 16E etape 4.
-# Les attendus sont DERIVES, pas releves : B1 est vide d usine, donc son premier
-# octet de pas vaut 00 ; allumer le step 0 y pose le bit 0, donc 01. La longueur
-# d usine ne bouge pas. Un seul octet des 384 de la zone change donc.
-PAT_OCTET_PAS_ATTENDU="01"
-PAT_LONGUEUR_ATTENDUE=16
-PAT_OCTETS_CHANGES_ATTENDUS=1
 RIG_MASQUE_BASE="0221"
 SALVES_MIN_A=5
 SALVES_MIN_B=2
@@ -2459,84 +2452,6 @@ else
   bad "bootstrap : plafond non atteint" "le garde-fou de ${B_PLAFOND:-?} ms a ete atteint : le balayage n a pas abouti"
 fi
 
-# ---- PAT : l onglet PATTERNS et son editeur, sur les broches ----
-PAT_LU="$(grep -E '^pat_lecture ' "$LOG" | awk '{print $3 $5}')"
-PAT_TWI="$(grep -E '^pat_ouverture_twi ' "$LOG" | awk '{print $2}')"
-PAT_PAS="$(grep -E '^pat_octet_pas ' "$LOG" | awk '{print $2}')"
-PAT_LEN="$(grep -E '^pat_longueur ' "$LOG" | awk '{print $2}')"
-PAT_CHG="$(grep -E '^pat_octets_changes ' "$LOG" | awk '{print $2}')"
-PAT_SLOT="$(grep -E '^pat_emplacement ' "$LOG" | awk '{print $2}')"
-
-if [ "${PAT_LU:-}" != "11" ]; then
-  inval "PAT : lecture EEPROM" "la zone du format n a pas ete relue avant et apres : aucun verdict"
-else
-  if [ "${PAT_TWI:-0}" -gt 0 ] 2>/dev/null; then
-    ok "PAT : l editeur s ouvre" "l ecran redessine apres la pression, $PAT_TWI octets I2C — l interface a vu le geste"
-  else
-    bad "PAT : l editeur s ouvre" "aucun trafic I2C apres la pression : l interface n a pas vu le geste"
-  fi
-
-  PAT_PAS_ATT="${EXPECT_PAT_OCTET:-$PAT_OCTET_PAS_ATTENDU}"
-  if [ "${PAT_PAS:-}" = "$PAT_PAS_ATT" ]; then
-    ok "PAT : le pas est ecrit" "emplacement B$(( ${PAT_SLOT:-8} - 7 )), premier octet de pas $PAT_PAS — vide d usine, step 0 allume"
-  else
-    bad "PAT : le pas est ecrit" "octet de pas ${PAT_PAS:-?} au lieu de $PAT_PAS_ATT"
-  fi
-
-  if [ "${PAT_LEN:-}" = "${EXPECT_PAT_LONGUEUR:-$PAT_LONGUEUR_ATTENDUE}" ]; then
-    ok "PAT : la longueur tient" "octet de longueur $PAT_LEN, celui de l usine, inchange par l edition"
-  else
-    bad "PAT : la longueur tient" "longueur ${PAT_LEN:-?} au lieu de ${EXPECT_PAT_LONGUEUR:-$PAT_LONGUEUR_ATTENDUE}"
-  fi
-
-  if [ "${PAT_CHG:-}" = "${EXPECT_PAT_CHANGES:-$PAT_OCTETS_CHANGES_ATTENDUS}" ]; then
-    ok "PAT : rien d autre ne bouge" "$PAT_CHG octet change sur les 384 de la zone des templates"
-  else
-    bad "PAT : rien d autre ne bouge" "${PAT_CHG:-?} octets changes au lieu de ${EXPECT_PAT_CHANGES:-$PAT_OCTETS_CHANGES_ATTENDUS}"
-  fi
-fi
-
-# ---- Le silence de l editeur, sur les broches — PRD 5.0 point 11 ----
-#
-# La fenetre AVANT etablit que la mesure est EVALUABLE : les six canaux sont en
-# CLOCK, donc ils emettent a chaque pas. Sans elle, un transport a l arret
-# rendrait six silences et le critere passerait pour la mauvaise raison.
-# ⚠️ L EVALUABILITE porte sur OUT2 a OUT6, et PAS sur les six. Le canal 1 est
-# laisse en SEQ par une recette precedente, donc OUT1 peut etre muet AVANT sans
-# que cela dise quoi que ce soit du silence. Mesure : 0 4 4 4 4 4 avant.
-SIL_EMETTAIENT_AVANT=0
-SIL_MUETS_PENDANT=0
-SIL_LUS=0
-for o in 1 2 3 4 5 6; do
-  a="$(grep -E "^pat_sil_avant_OUT$o " "$LOG" | awk '{print $2}')"
-  p="$(grep -E "^pat_sil_pendant_OUT$o " "$LOG" | awk '{print $2}')"
-  [ -n "${a:-}" ] && [ -n "${p:-}" ] && SIL_LUS=$(( SIL_LUS + 1 ))
-  if [ "$o" != "1" ]; then
-    [ "${a:-0}" -ge 1 ] 2>/dev/null && SIL_EMETTAIENT_AVANT=$(( SIL_EMETTAIENT_AVANT + 1 ))
-    [ "${p:-1}" -eq 0 ] 2>/dev/null && SIL_MUETS_PENDANT=$(( SIL_MUETS_PENDANT + 1 ))
-  fi
-done
-SIL_OUT1="$(grep -E '^pat_sil_pendant_OUT1 ' "$LOG" | awk '{print $2}')"
-
-if [ "$SIL_LUS" -ne 6 ]; then
-  inval "PAT : silence de l editeur" "les douze releves de fronts n ont pas ete lus : aucun verdict"
-elif [ "$SIL_EMETTAIENT_AVANT" -ne 5 ]; then
-  inval "PAT : silence de l editeur" \
-    "seules $SIL_EMETTAIENT_AVANT des cinq sorties emettaient AVANT l ouverture : le transport ne tournait pas, la mesure ne discrimine rien"
-else
-  ok "PAT : mesure evaluable" "les cinq sorties emettent avant l ouverture — le silence d apres sera imputable a l editeur"
-  if [ "$SIL_MUETS_PENDANT" -eq 5 ]; then
-    ok "PAT : les cinq autres se taisent" "aucun front sur OUT2 a OUT6 pendant que l editeur est ouvert"
-  else
-    bad "PAT : les cinq autres se taisent" "$SIL_MUETS_PENDANT sortie(s) muette(s) sur 5 : l editeur ne fait pas taire les autres canaux"
-  fi
-  if [ "${SIL_OUT1:-0}" -ge 1 ] 2>/dev/null; then
-    ok "PAT : l audition s entend" "OUT1 emet $SIL_OUT1 fois pendant l edition — le canal d audition reste audible"
-  else
-    bad "PAT : l audition s entend" "OUT1 n a emis aucun front : le silence a emporte le canal d audition"
-  fi
-fi
-
 printf '\n'
 if [ "$BAD_COUNT" -gt 0 ]; then
   printf '  %s❌ VERDICT : FAIL — %d defaut(s) du firmware, %d critere(s) rendu(s) non decidable(s) en aval.%s\n' \
@@ -2556,6 +2471,5 @@ printf '  %s✅ P2.3 : SHIFT tenu, trois crans, ratchet 00 -> 04, pattern intact
 printf '  %s✅ P2.4 : controle d usine octet pour octet, triolet pose et retire, step bascule et rebascule.%s\n' "$C_OK" "$C_0"
 printf '  %s✅ P2.5 : LENGTH et SUBDIV verifies sur les sorties, report au temps respecte, aucune contagion.%s\n' "$C_OK" "$C_0"
 printf '  %s✅ FRACT : shiftRotate long decoupe en salves, chaque maintien mesure et sous 750 ms, pattern intact.%s\n' "$C_OK" "$C_0"
-printf '  %s✅ PAT : l onglet PATTERNS edite un template et l ecrit, un octet change sur 384.%s\n' "$C_OK" "$C_0"
 printf '  %s✅ VERDICT : PASS — %d criteres verts, 0 defaut, 0 non decidable.%s\n' "$C_OK" "$OK_COUNT" "$C_0"
 exit 0

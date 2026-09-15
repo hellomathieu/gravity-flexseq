@@ -34,10 +34,6 @@ export const HEADER_TITLE_X = HEADER_LINE_X;
 export const TITLE_W = 65;
 // L en-tete de l editeur de TEMPLATES porte la longueur et non la separation de
 // mesure. Elle a SA position : deux chiffres ne tiennent pas la ou un seul tient.
-export const LEN_LABEL_X = 94;
-export const LEN_VALUE_X = 112;
-export const LEN_LABEL_W = 16;
-export const LEN_VALUE_W = 2 * 5;
 
 export const SEP_LABEL_X = 102;
 export const SEP_VALUE_X = 120;
@@ -82,7 +78,6 @@ export interface PatternScreenPixelModel {
   barLength: number;
   sepSelected: boolean;
   sepOpen: boolean;
-  templateEditor?: boolean;
 }
 
 class Ink {
@@ -211,14 +206,11 @@ export function renderPatternScreen(model: PatternScreenPixelModel): Render {
   ink.drawHLine(HEADER_LINE_X, HEADER_LINE_Y, HEADER_LINE_W);
 
   {
-    const editor = model.templateEditor === true;
-    const value = editor
-      ? String(model.length)
-      : (model.barLength === 0 ? "-" : String(model.barLength));
-    const labelText = editor ? "LEN:" : "SEP:";
-    const labelX = editor ? LEN_LABEL_X : SEP_LABEL_X;
-    const labelW = editor ? LEN_LABEL_W : SEP_LABEL_W;
-    const valueX = editor ? LEN_VALUE_X : SEP_VALUE_X;
+    const value = model.barLength === 0 ? "-" : String(model.barLength);
+    const labelText = "SEP:";
+    const labelX = SEP_LABEL_X;
+    const labelW = SEP_LABEL_W;
+    const valueX = SEP_VALUE_X;
     const base = TITLE_BASELINE_Y;
     const h = 5;
     if (model.sepSelected && !model.sepOpen) {

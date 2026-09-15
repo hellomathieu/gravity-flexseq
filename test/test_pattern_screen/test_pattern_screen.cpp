@@ -591,39 +591,12 @@ void test_the_open_value_stays_inside_band_zero() {
  * L en-tete de l editeur de templates — lot 16E etape 4d
  */
 
-void test_the_template_editor_header_reads_len_and_the_length() {
-    PatternScreenModel m = model(16);
-    m.templateEditor = true;
-    canvas.reset();
-    drawPatternScreen(canvas, m);
-    const Str* label = canvas.findStr("LEN:");
-    TEST_ASSERT_NOT_NULL_MESSAGE(label, "l etiquette de la longueur");
-    TEST_ASSERT_EQUAL_UINT8(screen::LEN_LABEL_X, label->x);
-    const Str* value = canvas.findStr("16");
-    TEST_ASSERT_NOT_NULL_MESSAGE(value, "la valeur de la longueur");
-    TEST_ASSERT_EQUAL_UINT8(screen::LEN_VALUE_X, value->x);
-    TEST_ASSERT_NULL_MESSAGE(canvas.findStr("SEP:"),
-                             "un template ne porte pas de separation de mesure");
-}
-
 void test_the_channel_editor_header_still_reads_sep() {
     PatternScreenModel m = model(16, -1, -1, 4);
     canvas.reset();
     drawPatternScreen(canvas, m);
     TEST_ASSERT_NOT_NULL(canvas.findStr("SEP:"));
     TEST_ASSERT_NULL(canvas.findStr("LEN:"));
-}
-
-// Une longueur a deux chiffres tient a l ecran : c est la raison pour laquelle
-// LEN ne peut pas prendre la position de SEP.
-void test_a_two_digit_length_clears_the_right_edge() {
-    PatternScreenModel m = model(36);
-    m.templateEditor = true;
-    canvas.reset();
-    drawPatternScreen(canvas, m);
-    const Str* value = canvas.findStr("36");
-    TEST_ASSERT_NOT_NULL(value);
-    TEST_ASSERT_TRUE(value->x + 2 * flexseq::FONT_VELVETSCREEN_MAX_WIDTH <= screen::WIDTH);
 }
 
 int main() {
@@ -665,8 +638,6 @@ int main() {
 
     RUN_TEST(test_eight_bands_reunited_equal_the_whole_image);
     RUN_TEST(test_a_band_draws_only_the_row_it_contains);
-    RUN_TEST(test_the_template_editor_header_reads_len_and_the_length);
     RUN_TEST(test_the_channel_editor_header_still_reads_sep);
-    RUN_TEST(test_a_two_digit_length_clears_the_right_edge);
     return UNITY_END();
 }

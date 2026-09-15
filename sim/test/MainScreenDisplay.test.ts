@@ -61,7 +61,6 @@ function channelTab(tab = 1): MainScreenModel {
     fieldOpen: false,
     fieldCount: CHANNEL_TAB_FIELDS,
     patternIndex: 0,
-    slotEmpty: false,
     length: 16,
     subdiv: 1,
     barLength: 4,
@@ -134,18 +133,18 @@ describe("MainScreenDisplay — labels, mirrored from the C++ renderer", () => {
 });
 
 describe("MainScreenDisplay — geometry", () => {
-  it("has nine evenly spaced tab slots", () => {
-    expect(TAB_COUNT).toBe(9);
+  it("has eight evenly spaced tab slots", () => {
+    expect(TAB_COUNT).toBe(8);
     expect(TAB_SLOT_W).toBe(12);
     expect(tabCentreX(0)).toBe(6);
-    expect(tabCentreX(8)).toBe(102);
+    expect(tabCentreX(7)).toBe(90);
     for (let tab = 1; tab < TAB_COUNT; ++tab) {
       expect(tabCentreX(tab) - tabCentreX(tab - 1)).toBe(12);
     }
   });
 
   it("no longer fills the width of the screen", () => {
-    expect(TAB_SLOT_W * TAB_COUNT).toBe(108);
+    expect(TAB_SLOT_W * TAB_COUNT).toBe(96);
     expect(TAB_SLOT_W * TAB_COUNT).toBeLessThan(128);
   });
 

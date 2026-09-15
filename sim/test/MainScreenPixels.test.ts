@@ -28,7 +28,6 @@ import {
   RULE_Y,
   TAB_CLOCK,
   TAB_FIRST_CHANNEL,
-  TAB_PATTERNS,
   ROW_A_BOX_Y,
   ROW_B_BOX_Y,
   TAB_SETTINGS,
@@ -53,7 +52,6 @@ const PANEL_MODEL: MainScreenModel = {
   fieldOpen: false,
   fieldCount: 3,
   patternIndex: 9,
-  slotEmpty: false,
   length: 20,
   subdiv: -4,
   barLength: 3,
@@ -83,10 +81,10 @@ const PANEL_ROWS: ReadonlyArray<readonly [number, number]> = [
   [18, 34], [19, 20], [20, 18], [21, 15], [22, 9], [23, 11], [24, 28],
   [25, 31], [26, 23], [27, 29], [28, 16], [29, 16], [30, 19], [36, 23],
   [37, 18], [38, 21], [39, 18], [40, 22], [52, 120], [56, 12], [57, 12],
-  [58, 29], [59, 30], [60, 30], [61, 28], [62, 28], [63, 12],
+  [58, 26], [59, 30], [60, 30], [61, 28], [62, 25], [63, 12],
 ];
 
-const PANEL_INK = 939;
+const PANEL_INK = 933;
 
 describe("l ecran principal, confronte au PANNEAU (risque 89)", () => {
   it("rend exactement l encre que le panneau recoit", () => {
@@ -109,9 +107,9 @@ describe("l ecran principal, confronte au PANNEAU (risque 89)", () => {
 describe("les glyphes de la barre, en pixels", () => {
   const on = (px: Set<string>, x: number, y: number) => px.has(`${x},${y}`);
 
-  it("les trois glyphes partagent la bande des chiffres, 58 a 62", () => {
+  it("les deux glyphes partagent la bande des chiffres, 58 a 62", () => {
     const px = renderMainScreen(PANEL_MODEL).pixels;
-    for (const tab of [TAB_CLOCK, TAB_PATTERNS, TAB_SETTINGS]) {
+    for (const tab of [TAB_CLOCK, TAB_SETTINGS]) {
       const x0 = tabCentreX(tab) - 6;
       let top = -1;
       let bottom = -1;
@@ -126,20 +124,6 @@ describe("les glyphes de la barre, en pixels", () => {
       expect(top, `haut du creneau ${tab}`).toBe(58);
       expect(bottom, `bas du creneau ${tab}`).toBe(62);
     }
-  });
-
-  it("le glyphe de PATTERNS est deux rangees de trois points d un pixel", () => {
-    const px = renderMainScreen(PANEL_MODEL).pixels;
-    const cx = tabCentreX(TAB_PATTERNS);
-    for (const x of [cx - 3, cx, cx + 3]) {
-      expect(on(px, x, 58)).toBe(true);
-      expect(on(px, x, 62)).toBe(true);
-      expect(on(px, x, 59)).toBe(false);
-      expect(on(px, x, 60)).toBe(false);
-      expect(on(px, x, 61)).toBe(false);
-    }
-    expect(on(px, cx - 2, 58)).toBe(false);
-    expect(on(px, cx - 1, 58)).toBe(false);
   });
 
   it("le glyphe des reglages est deux curseurs de sept pixels", () => {
@@ -199,9 +183,9 @@ describe("l indicateur de transport, hors de la navigation", () => {
     }
   });
 
-  it("reste hors des neuf creneaux de la barre", () => {
-    expect(TAB_SLOT_W * TAB_COUNT).toBe(108);
-    expect(TRANSPORT_STOP_X).toBeGreaterThanOrEqual(108);
+  it("reste hors des huit creneaux de la barre", () => {
+    expect(TAB_SLOT_W * TAB_COUNT).toBe(96);
+    expect(TRANSPORT_STOP_X).toBeGreaterThanOrEqual(96);
   });
 });
 
@@ -274,8 +258,8 @@ describe("la convention verticale de u8g2 (ADR 0012)", () => {
  * compile avec `-DFLEXSEQ_DEMO_MODE_SEQ=1`, meme methode et meme modele : seuls
  * le mode et le parametre principal changent.
  *
- * ⚠️ RELEVE A NOUVEAU le 2026-09-14 apres PRD 5.0 amendement 1quater : 931
- * pixels. Le curseur du panneau est en position 2, qui nomme EDIT tant que la
+ * ⚠️ RELEVE A NOUVEAU le 2026-09-14 apres le retrait de l onglet PATTERNS : 925
+ * pixels, soit 931 moins les six points du glyphe qui a disparu de la barre. Le curseur du panneau est en position 2, qui nomme EDIT tant que la
  * grande valeur tient la position 0. Le chiffre a valu 931, puis 977 sous
  * l amendement 1ter qui retirait cette position, et il revaut 931 : ce n est pas
  * un aller-retour fortuit, c est la meme ligne qui reprend sa surbrillance.
@@ -285,11 +269,11 @@ const SEQ_PANEL_ROWS: ReadonlyArray<readonly [number, number]> = [
   [11, 9], [12, 9], [13, 27], [14, 21], [15, 29], [16, 28], [17, 27], [18, 21],
   [19, 28], [20, 10], [21, 9], [22, 9], [23, 9], [24, 10], [25, 37], [26, 34],
   [27, 36], [28, 11], [29, 10], [36, 20], [37, 12], [38, 19], [39, 11], [40, 13],
-  [52, 120], [56, 12], [57, 12], [58, 29], [59, 30], [60, 30], [61, 28], [62, 28],
+  [52, 120], [56, 12], [57, 12], [58, 26], [59, 30], [60, 30], [61, 28], [62, 25],
   [63, 12],
 ];
 
-const SEQ_PANEL_INK = 931;
+const SEQ_PANEL_INK = 925;
 
 describe("l onglet d un canal en SEQ", () => {
   const seq: MainScreenModel = {
@@ -357,6 +341,11 @@ describe("la ligne MOD nomme le routage des deux entrees", () => {
  * Le meme releve, pour la page CONFIG PATTERN d'un canal en SEQ dont CV1 va au
  * PATTERN et CV2 a la LENGTH, curseur sur MOD. Lu sur `env:mainscreen` compile
  * avec `-DFLEXSEQ_DEMO_MOD=1`.
+ *
+ * ⚠️ RELEVE A NOUVEAU le 2026-09-14 : 983 pixels. Le banc de demonstration
+ * portait une copie EN DUR de l index du champ CONFIG, et l amendement 1quater
+ * l avait deplace : la course n atteignait plus la page. Il lit desormais
+ * SEQ_FIELD_INDEX_CONFIG par son nom.
  */
 const CONFIG_PANEL_ROWS: ReadonlyArray<readonly [number, number]> = [
   [3, 19], [4, 13], [5, 36], [6, 34], [7, 42], [8, 15], [9, 12], [10, 12],
@@ -364,10 +353,10 @@ const CONFIG_PANEL_ROWS: ReadonlyArray<readonly [number, number]> = [
   [18, 29], [19, 11], [20, 10], [21, 9], [22, 9], [23, 9], [24, 29],
   [25, 40], [26, 38], [27, 40], [28, 15], [29, 18], [30, 19], [36, 20],
   [37, 12], [38, 19], [39, 11], [40, 13], [52, 120], [56, 12], [57, 12],
-  [58, 29], [59, 30], [60, 30], [61, 28], [62, 28], [63, 12],
+  [58, 26], [59, 30], [60, 30], [61, 28], [62, 25], [63, 12],
 ];
 
-const CONFIG_PANEL_INK = 989;
+const CONFIG_PANEL_INK = 983;
 
 describe("la page CONFIG PATTERN, confrontee au PANNEAU", () => {
   const config: MainScreenModel = {
@@ -395,23 +384,6 @@ describe("la page CONFIG PATTERN, confrontee au PANNEAU", () => {
     expect(CONFIG_PANEL_ROWS.reduce((s, [, n]) => s + n, 0)).toBe(CONFIG_PANEL_INK);
   });
 });
-
-/**
- * L encre que le PANNEAU recoit pour l onglet PATTERNS, relevee le 2026-09-13 par
- * `PLATFORMIO_BUILD_FLAGS="-DFLEXSEQ_DEMO_TAB_PATTERNS=1" ASCII=1 ENVNAME=mainscreen
- * ./tools/run-screen-dump.sh`, remise en coordonnees logiques. Ces nombres sont LUS
- * sur la memoire du panneau, jamais calcules ici.
- */
-const PATTERNS_PANEL_ROWS: ReadonlyArray<readonly [number, number]> = [
-  [2, 17], [3, 6], [4, 12], [5, 25], [6, 31], [7, 29], [8, 32], [9, 12],
-  [10, 12], [11, 9], [12, 10], [13, 11], [14, 15], [15, 15], [16, 17],
-  [17, 13], [18, 11], [19, 9], [20, 9], [21, 9], [22, 9], [23, 12],
-  [24, 15], [25, 22], [26, 20], [27, 17], [36, 25], [37, 14], [38, 21],
-  [39, 13], [40, 18], [52, 120], [56, 12], [57, 12], [58, 29], [59, 32],
-  [60, 34], [61, 30], [62, 30], [63, 12]
-];
-
-const PATTERNS_PANEL_INK = 801;
 
 // Lot 16E etape 5a : le curseur peut se poser sur la grande valeur, et il faut
 // le VOIR. L etiquette s inverse, comme la valeur ouverte d un en-tete.
@@ -603,10 +575,6 @@ describe("la question SURE: YES / NO", () => {
     expect(mainLabelOf(seq(true, { configPage: true }))).toBe("PATTERN");
   });
 
-  it("l onglet PATTERNS garde son etiquette", () => {
-    expect(mainLabelOf(seq(true, { tab: TAB_PATTERNS }))).toBe("PATTERN");
-  });
-
   // Le champ OUVERT encadre le nom.
   it("le champ ouvert encadre le nom", () => {
     const ouvert = renderMainScreen(seq(false)).count;
@@ -615,72 +583,3 @@ describe("la question SURE: YES / NO", () => {
   });
 });
 
-describe("l onglet PATTERNS — lot 16E etape 4b", () => {
-  const patternsTab = (slotEmpty: boolean): MainScreenModel => ({
-    ...PANEL_MODEL,
-    tab: TAB_PATTERNS,
-    insideTab: true,
-    // Une seule ligne selectionnable, EDIT, et le curseur y est.
-    cursor: 0,
-    fieldCount: 1,
-    slotEmpty,
-    // Ce que mainScreenModelOf produit sur cet onglet : le pattern que l ecran
-    // NOMME est l emplacement parcouru, et il est le parametre principal.
-    patternIndex: 10,
-    mainParameter: MainParameter.Pattern,
-  });
-
-  const inkInRows = (rows: number[], y0: number, y1: number): number => {
-    let n = 0;
-    for (let y = y0; y <= y1; y += 1) n += rows[y] ?? 0;
-    return n;
-  };
-
-  // La mise en page est celle d un canal en SEQ : une grande valeur a gauche,
-  // son etiquette dessous, et deux lignes a droite. La troisieme reste vide.
-  it("encre la grande valeur et les deux premieres lignes", () => {
-    const rows = renderMainScreen(patternsTab(true)).rows;
-    expect(inkInRows(rows, MAIN_VALUE_BASELINE_Y - 10, MAIN_VALUE_BASELINE_Y))
-      .toBeGreaterThan(0);
-    expect(inkInRows(rows, MAIN_LABEL_BASELINE_Y - 4, MAIN_LABEL_BASELINE_Y))
-      .toBeGreaterThan(0);
-    expect(inkInRows(rows, LINE_0_BASELINE_Y - 4, LINE_0_BASELINE_Y))
-      .toBeGreaterThan(0);
-    // ⚠️ La troisieme ligne se mesure COLONNE par colonne : la grande valeur
-    // occupe les memes RANGEES a gauche, donc un compte par rangee y verrait
-    // toujours de l encre et ne prouverait rien.
-    const { pixels } = renderMainScreen(patternsTab(true));
-    let onLine2 = 0;
-    for (const key of pixels) {
-      const parts = key.split(",");
-      const x = Number(parts[0]);
-      const y = Number(parts[1]);
-      if (x >= LINE_LABEL_X && y > LINE_2_BASELINE_Y - 6 && y <= LINE_2_BASELINE_Y) {
-        onLine2 += 1;
-      }
-    }
-    expect(onLine2, "la troisieme ligne reste vide").toBe(0);
-  });
-
-  it("rend exactement ce que le panneau a recu, rangee par rangee", () => {
-    const model = patternsTab(true);
-    const rows = renderMainScreen(model).rows;
-    const expected = new Map<number, number>(
-      PATTERNS_PANEL_ROWS.map(([y, n]) => [y, n]),
-    );
-    const divergent: string[] = [];
-    for (let y = 0; y < 64; y += 1) {
-      const mine = rows[y] ?? 0;
-      const theirs = expected.get(y) ?? 0;
-      if (mine !== theirs) divergent.push(`y=${y} miroir=${mine} panneau=${theirs}`);
-    }
-    expect(divergent.join(" | ")).toBe("");
-    expect(renderMainScreen(model).count).toBe(PATTERNS_PANEL_INK);
-  });
-
-  it("distingue un emplacement vide d un emplacement occupe", () => {
-    const free = renderMainScreen(patternsTab(true)).count;
-    const used = renderMainScreen(patternsTab(false)).count;
-    expect(free).not.toBe(used);
-  });
-});

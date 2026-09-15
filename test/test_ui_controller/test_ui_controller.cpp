@@ -1192,55 +1192,6 @@ void test_the_mod_field_is_navigable_and_does_nothing_yet() {
 }
 
 /*
- * PATTERNS tab — lot 16E step 4a
- */
-
-// L onglet ne porte QU UNE ligne selectionnable : l etat de l emplacement vit
-// sous la grande valeur, et l emplacement se change par SHIFT plus rotation
-// depuis la barre, comme le pattern d un canal.
-void test_the_patterns_tab_holds_one_selectable_field() {
-    Rig r;
-    r.gotoTab(UiController::TAB_PATTERNS);
-    r.enterTab();
-    TEST_ASSERT_EQUAL(UiController::LEVEL_TAB, r.ui.level());
-    TEST_ASSERT_EQUAL_UINT8(1, r.ui.fieldCount());
-    TEST_ASSERT_EQUAL(UiController::FIELD_EDIT_ENTRY, r.ui.fieldAt(0));
-    TEST_ASSERT_EQUAL(UiController::FIELD_SLOT, r.ui.mainField());
-}
-
-void test_the_slot_cursor_starts_on_the_first_writable_template() {
-    Rig r;
-    TEST_ASSERT_EQUAL_UINT8(8, r.ui.slotCursor());
-}
-
-void test_the_slot_cursor_never_reaches_a_factory_template() {
-    Rig r;
-    r.gotoTab(UiController::TAB_PATTERNS);
-    for (uint8_t i = 0; i < 20; ++i) {
-        r.ui.handle(UiController::EVENT_SHIFT_ROTATE, -1);
-    }
-    TEST_ASSERT_EQUAL_UINT8(8, r.ui.slotCursor());
-}
-
-void test_the_slot_cursor_stops_on_the_last_template() {
-    Rig r;
-    r.gotoTab(UiController::TAB_PATTERNS);
-    for (uint8_t i = 0; i < 20; ++i) {
-        r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
-    }
-    TEST_ASSERT_EQUAL_UINT8(15, r.ui.slotCursor());
-}
-
-// Le controleur porte sa propre copie du compte d'emplacements figes, comme
-// TAB_COUNT vit en trois exemplaires independants. Ce test est le seul endroit
-// qui inclut les deux en-tetes, donc le seul qui puisse voir une divergence.
-void test_the_controller_and_the_format_agree_on_the_frozen_count() {
-    TEST_ASSERT_EQUAL_UINT8(flexseq::persist::v3::FROZEN_TEMPLATE_COUNT,
-                            UiController::FIRST_WRITABLE_TEMPLATE);
-    TEST_ASSERT_EQUAL_UINT8(8, UiController::FIRST_WRITABLE_TEMPLATE);
-}
-
-/*
  * Le curseur d un onglet en SEQ — PRD 5.0 amendement 1quater
  *
  * La grande valeur reprend la premiere position : c est le nom qu on choisit
@@ -1305,44 +1256,17 @@ void test_turning_a_channel_back_to_clock_keeps_the_cursor_on_mode() {
 
 void test_the_frame_choice_names_the_main_screen_by_default() {
     Rig r;
-    flexseq::ModulatedPatternState state;
-    const flexseq::UiFrameChoice choice = flexseq::uiFrameChoiceOf(r.ui, state);
+    const flexseq::UiFrameChoice choice = flexseq::uiFrameChoiceOf(r.ui);
     TEST_ASSERT_EQUAL(flexseq::UI_FRAME_MAIN, choice.kind);
     TEST_ASSERT_EQUAL_INT8(-1, choice.channel);
 }
 
 void test_the_frame_choice_names_the_channel_editor_and_its_channel() {
     Rig r;
-    flexseq::ModulatedPatternState state;
     r.enterEdit();
-    const flexseq::UiFrameChoice choice = flexseq::uiFrameChoiceOf(r.ui, state);
+    const flexseq::UiFrameChoice choice = flexseq::uiFrameChoiceOf(r.ui);
     TEST_ASSERT_EQUAL(flexseq::UI_FRAME_CHANNEL_EDIT, choice.kind);
     TEST_ASSERT_EQUAL_INT8(0, choice.channel);
-}
-
-// Le playhead de l editeur de templates est celui du canal d audition. Sans ce
-// canal, rien ne varie dans le temps et l image ne se redessine jamais.
-void test_the_frame_choice_gives_the_template_editor_its_audition_channel() {
-    Rig r;
-    flexseq::ModulatedPatternState state;
-    state.editorTemplate = 11;
-    const flexseq::UiFrameChoice choice = flexseq::uiFrameChoiceOf(r.ui, state);
-    TEST_ASSERT_EQUAL(flexseq::UI_FRAME_TEMPLATE_EDIT, choice.kind);
-    TEST_ASSERT_EQUAL_INT8(flexseq::ModulatedPatternState::EDITOR_CHANNEL,
-                           choice.channel);
-}
-
-// La fermeture arrive en DIFFERE, apres l ecriture des 24 octets. Le choix doit
-// changer sans qu aucun geste ne survienne, sinon l ecran reste sur l editeur.
-void test_closing_the_template_editor_changes_the_frame_choice_with_no_gesture() {
-    Rig r;
-    flexseq::ModulatedPatternState state;
-    state.editorTemplate = 11;
-    const flexseq::UiFrameChoice ouvert = flexseq::uiFrameChoiceOf(r.ui, state);
-    state.editorTemplate = flexseq::ModulatedPatternState::NO_EDITOR;
-    const flexseq::UiFrameChoice ferme = flexseq::uiFrameChoiceOf(r.ui, state);
-    TEST_ASSERT_NOT_EQUAL(ouvert.kind, ferme.kind);
-    TEST_ASSERT_EQUAL(flexseq::UI_FRAME_MAIN, ferme.kind);
 }
 
 /*
@@ -1717,19 +1641,12 @@ int main(int, char**) {
     RUN_TEST(test_shift_rotate_on_the_bar_moves_nothing_else);
     RUN_TEST(test_shift_rotate_on_the_settings_tab_changes_nothing);
     RUN_TEST(test_shift_play_is_reserved_and_does_not_toggle_the_transport);
-    RUN_TEST(test_the_patterns_tab_holds_one_selectable_field);
-    RUN_TEST(test_the_slot_cursor_starts_on_the_first_writable_template);
-    RUN_TEST(test_the_slot_cursor_never_reaches_a_factory_template);
-    RUN_TEST(test_the_slot_cursor_stops_on_the_last_template);
-    RUN_TEST(test_the_controller_and_the_format_agree_on_the_frozen_count);
     RUN_TEST(test_the_published_seq_indices_are_zero_to_three);
     RUN_TEST(test_a_clock_channel_keeps_three_positions_and_mode_first);
     RUN_TEST(test_turning_a_channel_to_seq_puts_the_cursor_back_on_mode);
     RUN_TEST(test_turning_a_channel_back_to_clock_keeps_the_cursor_on_mode);
     RUN_TEST(test_the_frame_choice_names_the_main_screen_by_default);
     RUN_TEST(test_the_frame_choice_names_the_channel_editor_and_its_channel);
-    RUN_TEST(test_the_frame_choice_gives_the_template_editor_its_audition_channel);
-    RUN_TEST(test_closing_the_template_editor_changes_the_frame_choice_with_no_gesture);
 
     return UNITY_END();
 }

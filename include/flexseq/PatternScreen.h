@@ -68,16 +68,6 @@ constexpr uint8_t HEADER_LINE_W = 120;
 constexpr uint8_t HEADER_TITLE_X = HEADER_LINE_X;
 constexpr uint8_t TITLE_W = 65;
 
-// L en-tete de l editeur de TEMPLATES porte la longueur, et non la separation de
-// mesure : un enregistrement de template stocke une longueur et rien d autre ne
-// sait la regler (PRD 5.0, amendement du 2026-09-13). Elle a SA position, parce
-// qu une longueur porte DEUX chiffres la ou une separation en porte un : a la
-// position de SEP elle deborderait l ecran. La position de SEP ne bouge pas.
-constexpr uint8_t LEN_LABEL_X = 94;
-constexpr uint8_t LEN_VALUE_X = 112;
-constexpr uint8_t LEN_LABEL_W = 16;
-constexpr uint8_t LEN_VALUE_W = 2 * FONT_VELVETSCREEN_MAX_WIDTH;
-
 constexpr uint8_t SEP_LABEL_X = 102;
 constexpr uint8_t SEP_VALUE_X = 120;
 constexpr uint8_t SEP_LABEL_W = 16;
@@ -89,14 +79,6 @@ static_assert(SEP_LABEL_X + SEP_LABEL_W < SEP_VALUE_X,
               "l etiquette vient avant la valeur, sans la toucher");
 static_assert(SEP_VALUE_X + FONT_VELVETSCREEN_MAX_WIDTH + SEP_FRAME_PAD <= WIDTH,
               "le cadre de la valeur ouverte tient dans l ecran");
-static_assert(HEADER_TITLE_X + TITLE_W < LEN_LABEL_X,
-              "le titre de l editeur de templates degage l etiquette LEN");
-static_assert(LEN_LABEL_X + LEN_LABEL_W < LEN_VALUE_X,
-              "l etiquette vient avant la valeur, sans la toucher");
-static_assert(LEN_VALUE_X + LEN_VALUE_W + SEP_FRAME_PAD <= WIDTH,
-              "une longueur a deux chiffres et son cadre tiennent a l ecran");
-static_assert(LEN_LABEL_X + LEN_LABEL_W <= LEN_VALUE_X - SEP_FRAME_PAD,
-              "le cadre de la valeur ne mord pas sur l etiquette");
 static_assert(SEP_LABEL_X + SEP_LABEL_W <= SEP_VALUE_X - SEP_FRAME_PAD,
               "le cadre de la valeur ouverte degage l etiquette");
 static_assert(TITLE_BASELINE_Y + 1 <= 8,
@@ -178,7 +160,6 @@ struct PatternScreenModel {
     uint8_t barLength; // separation de mesure (0 = aucune) : GRAPHIQUE seule
     bool sepSelected;  // le curseur est monte dans l'en-tete, sur le champ
     bool sepOpen;      // et la rotation fait defiler sa valeur
-    bool templateEditor; // l en-tete porte LEN et non SEP (ADR 0013)
 };
 
 namespace detail {
@@ -274,16 +255,6 @@ void drawTriangle(Canvas& c, uint8_t cx, uint8_t cy) {
 
 namespace detail {
 
-// La longueur d un template vaut 1 a 36 : deux chiffres au plus. Un formateur
-// local evite d inclure MainScreen.h, qui porterait toutes ses etiquettes.
-inline void lengthText(uint8_t length, char* out) {
-    if (length >= 10) {
-        *out++ = static_cast<char>('0' + length / 10);
-    }
-    *out++ = static_cast<char>('0' + length % 10);
-    *out = '\0';
-}
-
 }  // namespace detail
 
 template <typename Canvas>
@@ -304,23 +275,11 @@ void drawPatternScreen(Canvas& canvas, const PatternScreenModel& model,
 
     if (touches(band, 0, screen::TITLE_BASELINE_Y)) {
         char value[3];
-        const char* labelText;
-        uint8_t labelX;
-        uint8_t labelW;
-        uint8_t valueX;
-        if (model.templateEditor) {
-            detail::lengthText(model.length, value);
-            labelText = "LEN:";
-            labelX = screen::LEN_LABEL_X;
-            labelW = screen::LEN_LABEL_W;
-            valueX = screen::LEN_VALUE_X;
-        } else {
-            detail::barText(model.barLength, value);
-            labelText = "SEP:";
-            labelX = screen::SEP_LABEL_X;
-            labelW = screen::SEP_LABEL_W;
-            valueX = screen::SEP_VALUE_X;
-        }
+        detail::barText(model.barLength, value);
+        const char* labelText = "SEP:";
+        const uint8_t labelX = screen::SEP_LABEL_X;
+        const uint8_t labelW = screen::SEP_LABEL_W;
+        const uint8_t valueX = screen::SEP_VALUE_X;
         const uint8_t base = screen::TITLE_BASELINE_Y;
         const uint8_t h = FONT_VELVETSCREEN_HEIGHT;
         if (model.sepSelected && !model.sepOpen) {

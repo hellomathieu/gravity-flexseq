@@ -25,10 +25,8 @@ struct MainScreenModel {
     bool fieldOpen;
     uint8_t fieldCount;
 
-    // Le pattern que l ecran NOMME : celui du canal sur un onglet de canal,
-    // l emplacement parcouru sur l onglet PATTERNS.
+    // Le pattern que l ecran NOMME : celui du canal.
     int8_t patternIndex;
-    bool slotEmpty;      // rempli hors du domaine : le lire demande l EEPROM
     uint8_t length;
     int16_t subdiv;
     uint8_t barLength;

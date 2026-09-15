@@ -20,10 +20,7 @@ MainScreenModel mainScreenModelOf(const UiController& ui, const SequencerEngine&
     // ne joue pas forcement encore. Sans choix en cours, c est celui qu il joue.
     model.patternIndex = onChannel
         ? ui.displayedPattern()
-        : (ui.currentTab() == UiController::TAB_PATTERNS
-               ? static_cast<int8_t>(ui.slotCursor())
-               : static_cast<int8_t>(-1));
-    model.slotEmpty = false;
+        : static_cast<int8_t>(-1);
     model.length = onChannel ? engine.getBaseLength(ch) : 0;
     model.subdiv = onChannel ? engine.getSubdiv(ch) : 0;
     model.barLength = onChannel
@@ -40,7 +37,6 @@ MainScreenModel mainScreenModelOf(const UiController& ui, const SequencerEngine&
         case UiController::FIELD_SUBDIV:      model.mainParameter = MAIN_SUBDIV; break;
         case UiController::FIELD_SKIP_CHANCE: model.mainParameter = MAIN_SKIP_CHANCE; break;
         case UiController::FIELD_PATTERN:     model.mainParameter = MAIN_PATTERN; break;
-        case UiController::FIELD_SLOT:        model.mainParameter = MAIN_PATTERN; break;
         default:                              model.mainParameter = MAIN_NONE; break;
     }
     model.cv1Target = onChannel

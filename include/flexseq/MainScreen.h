@@ -19,18 +19,17 @@ namespace flexseq {
 
 namespace mainscreen {
 
-constexpr uint8_t TAB_COUNT = 9;
+constexpr uint8_t TAB_COUNT = 8;
 constexpr uint8_t TAB_SLOT_W = 12;
 constexpr uint8_t TAB_CLOCK = 0;
 constexpr uint8_t TAB_FIRST_CHANNEL = 1;
 constexpr uint8_t TAB_LAST_CHANNEL = 6;
-constexpr uint8_t TAB_PATTERNS = 7;
-constexpr uint8_t TAB_SETTINGS = 8;
+constexpr uint8_t TAB_SETTINGS = 7;
 
 static_assert(TAB_SLOT_W * TAB_COUNT <= screen::WIDTH,
-              "the nine slots must fit the width of the screen");
-static_assert(TAB_PATTERNS == TAB_LAST_CHANNEL + 1,
-              "PATTERNS follows the last channel");
+              "the eight slots must fit the width of the screen");
+static_assert(TAB_SETTINGS == TAB_LAST_CHANNEL + 1,
+              "CONF follows the last channel");
 static_assert(TAB_SETTINGS == TAB_COUNT - 1,
               "CONF stays the last tab of the bar");
 constexpr uint8_t TAB_BASELINE_Y = screen::HEIGHT - 1;
@@ -53,7 +52,7 @@ constexpr uint8_t TRANSPORT_PLAY_X = 122;
 constexpr uint8_t TRANSPORT_STOP_W = 5;
 
 static_assert(TAB_SLOT_W * TAB_COUNT <= TRANSPORT_STOP_X,
-              "the transport indicator must sit outside the nine slots");
+              "the transport indicator must sit outside the eight slots");
 static_assert(TRANSPORT_STOP_X + TRANSPORT_STOP_W <= screen::WIDTH,
               "the transport indicator must fit the width of the screen");
 static_assert(TRANSPORT_PLAY_X > TRANSPORT_STOP_X,
@@ -99,15 +98,6 @@ constexpr uint8_t MAIN_CENTRE_X = 29;
 constexpr uint8_t MAIN_BOX_W = 55;
 constexpr uint8_t MAIN_VALUE_BASELINE_Y = 28;
 constexpr uint8_t MAIN_LABEL_BASELINE_Y = 41;
-
-// L etat d un emplacement, sur l onglet PATTERNS : un carre a gauche de
-// l etiquette, PLEIN quand l emplacement porte quelque chose et CREUX quand il
-// est libre. C est le sens que la grille de l editeur donne deja a ces formes.
-constexpr uint8_t MAIN_LABEL_GLYPH_W = FONT_VELVETSCREEN_HEIGHT;
-constexpr uint8_t MAIN_LABEL_GLYPH_GAP = 3;
-
-static_assert(MAIN_LABEL_GLYPH_W + MAIN_LABEL_GLYPH_GAP < MAIN_CENTRE_X,
-              "le glyphe d etat tient a gauche du centre de l etiquette");
 
 static_assert(LINE_1_BASELINE_Y == LINE_0_BASELINE_Y + LINE_SPACING_Y,
               "the three lines of the original are evenly spaced");
@@ -223,7 +213,7 @@ inline const char* sourceLabel(uint8_t source) {
 inline void headlineOf(const MainScreenModel& model, char* out) {
     if (model.tab == mainscreen::TAB_CLOCK) {
         writeUnsigned(out, model.tempo);
-    } else if (model.tab >= mainscreen::TAB_PATTERNS) {
+    } else if (model.tab >= mainscreen::TAB_SETTINGS) {
         out[0] = '\0';
     } else {
         patternName(model.patternIndex, out);
@@ -238,18 +228,6 @@ void drawSettingsGlyph(Canvas& canvas, uint8_t cx, uint8_t topY) {
     canvas.drawHLine(cx, topY, 1);
     canvas.drawHLine(static_cast<uint8_t>(x + 1),
                      static_cast<uint8_t>(topY + mainscreen::TAB_GLYPH_H - 1), 1);
-}
-
-template <typename Canvas>
-void drawPatternsGlyph(Canvas& canvas, uint8_t cx, uint8_t topY) {
-    const uint8_t x = static_cast<uint8_t>(cx - mainscreen::TAB_WIDE_GLYPH_W / 2);
-    for (uint8_t row = 0; row < 2; ++row) {
-        const uint8_t y =
-            static_cast<uint8_t>(topY + row * (mainscreen::TAB_GLYPH_H - 1));
-        for (uint8_t col = 0; col < 3; ++col) {
-            canvas.drawHLine(static_cast<uint8_t>(x + col * 3), y, 1);
-        }
-    }
 }
 
 #if defined(__AVR__)
@@ -270,10 +248,9 @@ inline bool isChannelTab(const MainScreenModel& model) {
         && model.tab <= mainscreen::TAB_LAST_CHANNEL;
 }
 
-// Les onglets qui prennent les trois lignes de l original : les six canaux, et
-// l onglet PATTERNS depuis le 2026-09-13, par decision du proprietaire.
+// Les onglets qui prennent les trois lignes de l original : les six canaux.
 inline bool usesLegacyLayout(const MainScreenModel& model) {
-    return isChannelTab(model) || model.tab == mainscreen::TAB_PATTERNS;
+    return isChannelTab(model);
 }
 
 // La grande valeur prend la PREMIERE position du curseur sur un canal en SEQ —
@@ -281,7 +258,6 @@ FLEXSEQ_LABEL(LBL_MODE, "MODE:");
 FLEXSEQ_LABEL(LBL_OFFSET, "OFFSET:");
 FLEXSEQ_LABEL(LBL_SUBDIV_FIELD, "SUBDIV:");
 FLEXSEQ_LABEL(LBL_MOD, "MOD:");
-FLEXSEQ_LABEL(LBL_EMPTY, "");
 FLEXSEQ_LABEL(LBL_EDIT, "EDIT");
 FLEXSEQ_LABEL(LBL_CONFIG, "CONFIG");
 FLEXSEQ_LABEL(LBL_OFF, "OFF");
@@ -419,13 +395,6 @@ inline void configLine(const MainScreenModel& model, uint8_t index,
 
 inline void legacyLine(const MainScreenModel& model, uint8_t index,
                        const char** out, char* value) {
-    // L onglet PATTERNS prend la mise en page d un canal en SEQ : le nom de
-    // l emplacement en grand, puis son etat et l entree dans l editeur.
-    if (model.tab == mainscreen::TAB_PATTERNS) {
-        value[0] = '\0';
-        *out = index == 0 ? LBL_EDIT : LBL_EMPTY;
-        return;
-    }
     if (model.configPage) {
         configLine(model, index, out, value);
         return;
@@ -532,24 +501,7 @@ void drawLegacyChannel(Canvas& canvas, const Band& band, const MainScreenModel& 
         char scratch[14];
         const char* text = label(mainLabelOf(model), scratch);
         const uint8_t w = static_cast<uint8_t>(canvas.getStrWidth(text));
-        const bool withGlyph = (model.tab == ms::TAB_PATTERNS);
-        const uint8_t lead = withGlyph
-            ? static_cast<uint8_t>(ms::MAIN_LABEL_GLYPH_W + ms::MAIN_LABEL_GLYPH_GAP)
-            : 0;
-        const uint8_t textX =
-            static_cast<uint8_t>(ms::MAIN_CENTRE_X - (w + lead) / 2 + lead);
-        if (withGlyph) {
-            const uint8_t gx = static_cast<uint8_t>(textX - lead);
-            // Les glyphes de velvetscreen occupent base-5 a base-1 : le carre
-            // s aligne dessus, et non sur la ligne de base elle-meme.
-            const uint8_t gy = static_cast<uint8_t>(
-                ms::MAIN_LABEL_BASELINE_Y - ms::MAIN_LABEL_GLYPH_W);
-            if (model.slotEmpty) {
-                canvas.drawFrame(gx, gy, ms::MAIN_LABEL_GLYPH_W, ms::MAIN_LABEL_GLYPH_W);
-            } else {
-                canvas.drawBox(gx, gy, ms::MAIN_LABEL_GLYPH_W, ms::MAIN_LABEL_GLYPH_W);
-            }
-        }
+        const uint8_t textX = static_cast<uint8_t>(ms::MAIN_CENTRE_X - w / 2);
         // Le curseur sur la grande valeur : l etiquette s inverse, comme la
         // valeur ouverte d un en-tete. Sans elle on ne verrait pas ou est le
         // curseur sur cette position.
@@ -669,9 +621,7 @@ void drawMainScreen(Canvas& canvas, const MainScreenModel& model,
             const uint8_t cx = ms::tabCentreX(tab);
             char label[2];
             label[1] = '\0';
-            if (tab == ms::TAB_PATTERNS) {
-                detail::drawPatternsGlyph(canvas, cx, ms::TAB_GLYPH_TOP_Y);
-            } else if (tab == ms::TAB_SETTINGS) {
+            if (tab == ms::TAB_SETTINGS) {
                 detail::drawSettingsGlyph(canvas, cx, ms::TAB_GLYPH_TOP_Y);
             } else {
                 label[0] = tab == ms::TAB_CLOCK

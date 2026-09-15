@@ -19,9 +19,7 @@ import {
   TAB_CLOCK,
   TAB_COUNT,
   TAB_FIRST_CHANNEL,
-  TAB_PATTERNS,
   TAB_SETTINGS,
-  FIRST_WRITABLE_TEMPLATE,
   UiController,
   UiEvent,
   UiField,
@@ -944,42 +942,6 @@ describe("le champ MOD, PRD 10.2", () => {
     for (let i = 0; i < 5; ++i) r.ui.handle(UiEvent.Rotate, 1);
     expect(r.engine.getCvDestination(0, CV_SOURCE_1)).toBe(CvDestination.NONE);
     expect(r.engine.getCvDestination(0, CV_SOURCE_2)).toBe(CvDestination.NONE);
-  });
-});
-
-describe("l onglet PATTERNS — lot 16E etape 4a", () => {
-  it("ne porte qu une ligne selectionnable, l entree dans l editeur", () => {
-    const r = rig();
-    r.gotoTab(TAB_PATTERNS);
-    r.enterTab();
-    expect(r.ui.level).toBe(UiLevel.Tab);
-    expect(r.ui.fieldCount).toBe(1);
-    expect(r.ui.fieldAt(0)).toBe(UiField.EditEntry);
-    expect(r.ui.mainField).toBe(UiField.Slot);
-  });
-
-  it("part du premier emplacement modifiable", () => {
-    const r = rig();
-    expect(r.ui.slotCursor).toBe(8);
-  });
-
-  it("n atteint jamais un emplacement d usine", () => {
-    const r = rig();
-    r.gotoTab(TAB_PATTERNS);
-    for (let i = 0; i < 20; ++i) r.ui.handle(UiEvent.ShiftRotate, -1);
-    expect(r.ui.slotCursor).toBe(8);
-  });
-
-  it("s arrete sur le dernier emplacement", () => {
-    const r = rig();
-    r.gotoTab(TAB_PATTERNS);
-    for (let i = 0; i < 20; ++i) r.ui.handle(UiEvent.ShiftRotate, 1);
-    expect(r.ui.slotCursor).toBe(15);
-  });
-
-  it("porte le meme compte d emplacements figes que le format", () => {
-    expect(FIRST_WRITABLE_TEMPLATE).toBe(v3.FROZEN_TEMPLATE_COUNT);
-    expect(FIRST_WRITABLE_TEMPLATE).toBe(8);
   });
 });
 

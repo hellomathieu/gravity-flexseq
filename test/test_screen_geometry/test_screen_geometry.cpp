@@ -162,8 +162,6 @@ bool production(char family, int index, int& out) {
             case 25: out = ms::ROW_B_BASELINE_Y; return true;
             case 26: out = ms::LINE_LABEL_X; return true;
             case 27: out = ms::LINE_VALUE_X; return true;
-            case 51: out = ms::MAIN_LABEL_GLYPH_W; return true;
-            case 52: out = ms::MAIN_LABEL_GLYPH_GAP; return true;
             case 28: out = ms::LINE_0_BASELINE_Y; return true;
             case 29: out = ms::LINE_1_BASELINE_Y; return true;
             case 30: out = ms::LINE_2_BASELINE_Y; return true;
@@ -175,7 +173,6 @@ bool production(char family, int index, int& out) {
             case 36: out = ms::TAB_CLOCK; return true;
             case 37: out = ms::TAB_FIRST_CHANNEL; return true;
             case 38: out = ms::TAB_LAST_CHANNEL; return true;
-            case 39: out = ms::TAB_PATTERNS; return true;
             case 40: out = ms::TAB_SETTINGS; return true;
             case 41: out = ms::TAB_GLYPH_TOP_Y; return true;
             case 42: out = ms::TAB_GLYPH_H; return true;
@@ -229,10 +226,6 @@ bool production(char family, int index, int& out) {
             case 24: out = screen::SEP_LABEL_W; return true;
             case 25: out = screen::HEADER_TITLE_X; return true;
             case 26: out = screen::TITLE_W; return true;
-            case 47: out = screen::LEN_LABEL_X; return true;
-            case 48: out = screen::LEN_VALUE_X; return true;
-            case 49: out = screen::LEN_LABEL_W; return true;
-            case 50: out = screen::LEN_VALUE_W; return true;
             default: return false;
         }
     }

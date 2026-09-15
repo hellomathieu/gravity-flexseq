@@ -47,11 +47,6 @@ char uiTitle[16] = "EDIT PATTERN A1";
 constexpr uint8_t UI_TITLE_BANK = 13;
 constexpr uint8_t UI_TITLE_NUM = 14;
 
-// Les deux titres partagent CE tampon, et chacun le reecrit entierement depuis
-// la Flash. Un second tampon aurait coute 12 octets de RAM, et le garde de
-// derive l a refuse : la RAM libre sous le plafond ne vaut que 136 octets.
-constexpr uint8_t UI_TEMPLATE_TITLE_NUM = 10;
-
 uint32_t uiLastDrawMs = 0;
 int8_t uiLastStep = -2;
 uint8_t uiLastRevision = 0xFF;
@@ -102,37 +97,8 @@ void beginEditFrame(uint8_t channel) {
     uiScreen.begin(gravity.display, model);
 }
 
-void beginTemplateEditFrame() {
-    constexpr uint8_t CH = flexseq::ModulatedPatternState::EDITOR_CHANNEL;
-    strcpy_P(uiTitle, PSTR("TEMPLATE B1"));
-    uiTitle[UI_TEMPLATE_TITLE_NUM] = static_cast<char>(
-        '1' + (modulatedPatterns.editorTemplate
-               - flexseq::UiController::FIRST_WRITABLE_TEMPLATE));
-
-    flexseq::PatternScreenModel model{};
-    model.title = uiTitle;
-    model.titleWidth = 0;
-    model.pattern = engine.patternForChannel(CH);
-    model.length = modulatedPatterns.length[CH];
-    model.templateEditor = true;
-    model.sepSelected = ui.isOnHeader();
-    model.sepOpen = model.sepSelected && ui.fieldOpen();
-    model.cursor = model.sepSelected
-        ? static_cast<int8_t>(-1)
-        : static_cast<int8_t>(ui.stepCursor());
-    model.playhead = engine.effectiveStep(CH);
-    model.barLength = 0;
-
-    uiScreen.begin(gravity.display, model);
-}
-
 void beginMainFrame() {
-    flexseq::MainScreenModel model = flexseq::mainScreenModelOf(ui, engine);
-    if (model.tab == flexseq::mainscreen::TAB_PATTERNS && model.patternIndex >= 0) {
-        // Le pattern que l ecran nomme EST l emplacement parcouru sur cet onglet.
-        model.slotEmpty = persistentImage.isTemplateEmpty(
-            eeprom, static_cast<uint8_t>(model.patternIndex));
-    }
+    const flexseq::MainScreenModel model = flexseq::mainScreenModelOf(ui, engine);
     uiScreen.begin(gravity.display, model);
 }
 
@@ -141,8 +107,6 @@ void beginMainFrame() {
 void beginUiFrame(const flexseq::UiFrameChoice& choice) {
     if (choice.kind == flexseq::UI_FRAME_CHANNEL_EDIT) {
         beginEditFrame(static_cast<uint8_t>(choice.channel));
-    } else if (choice.kind == flexseq::UI_FRAME_TEMPLATE_EDIT) {
-        beginTemplateEditFrame();
     } else {
         beginMainFrame();
     }
@@ -217,21 +181,6 @@ void setup() {
     ui.handle(flexseq::UiController::EVENT_PLAY_PRESS);
 #endif
 
-#if FLEXSEQ_START_IN_TEMPLATE_EDIT
-    // Meme besoin que ci-dessus, pour l EDITEUR DE TEMPLATES : une boucle qui
-    // REND en continu, donc un playhead qui avance. On y entre par les gestes
-    // publics, sans rien exposer de plus dans le domaine.
-    while (ui.currentTab() != flexseq::UiController::TAB_PATTERNS) {
-        ui.handle(flexseq::UiController::EVENT_ROTATE, 1);
-    }
-    ui.handle(flexseq::UiController::EVENT_PRESS);
-    while (ui.field() != flexseq::UiController::FIELD_EDIT_ENTRY) {
-        ui.handle(flexseq::UiController::EVENT_ROTATE, 1);
-    }
-    ui.handle(flexseq::UiController::EVENT_PRESS);
-    ui.handle(flexseq::UiController::EVENT_PLAY_PRESS);
-#endif
-
     // Le module demarre A L'ARRET, comme l'original : `isPlaying` y est un
     // global a zero (Gravity.ino:110). PLAY le lance en horloge interne, et une
     // impulsion externe le lance dans les autres sources.
@@ -283,8 +232,6 @@ void loop() {
     }
     engine.applyCvResetEvents(resetMask);
 
-    flexseq::serviceTemplateEditor(eeprom, engine, ui, modulatedPatterns,
-                                   persistence, persistentImage);
     flexseq::servicePatternAction(eeprom, persistentImage, engine, ui);
     flexseq::serviceOneModulationTemplateLoad(eeprom, engine, modulatedPatterns);
 
@@ -299,13 +246,7 @@ void loop() {
     // paie donc UN onset par passage et seulement sur une sortie basse, sur
     // TOUT passage — y compris ceux sans tick, sinon le surplus serait perdu.
     for (uint8_t ch = 0; ch < flexseq::SequencerEngine::CHANNEL_COUNT; ++ch) {
-        if (!modulatedPatterns.channelIsAudible(ch)) {
-            // PRD 5.0 point 11. La dette est VIDEE et jetee : la laisser en
-            // attente ferait partir tout le retard d un coup a la fermeture de
-            // l editeur.
-            while (triggers.takeTrigger(ch)) {
-            }
-        } else if (!gravity.outputs[ch].On() && triggers.takeTrigger(ch)) {
+        if (!gravity.outputs[ch].On() && triggers.takeTrigger(ch)) {
             gravity.outputs[ch].Trigger();
         }
     }
@@ -329,8 +270,7 @@ void loop() {
         // persistance de ses passages sans tick.
         // Le declencheur et le selecteur lisent LA MEME decision : deux
         // lectures separees ont laisse l ecran fige (UiFrame.h).
-        const flexseq::UiFrameChoice choice =
-            flexseq::uiFrameChoiceOf(ui, modulatedPatterns);
+        const flexseq::UiFrameChoice choice = flexseq::uiFrameChoiceOf(ui);
         const int8_t step = choice.channel >= 0
             ? engine.effectiveStep(static_cast<uint8_t>(choice.channel))
             : -1;

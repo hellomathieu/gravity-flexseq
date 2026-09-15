@@ -115,26 +115,27 @@ MUTANTS = [
      "  if (model.cv1Target === CvDestination.NONE && model.cv2Target === CvDestination.NONE) {",
      "  if (true) {",
      "ts-main-screen"),
-    # La barre a NEUF onglets depuis le lot 16E, etape 1. TAB_COUNT vit en
-    # QUATRE exemplaires independants : deux moteurs de rendu et deux
-    # controleurs. Un mutant par exemplaire tient cette independance, comme les
-    # cinq mutants de la grille tiennent la sienne.
-    ("cpp: the renderer's tab bar drops back to eight slots",
+    # La barre a HUIT onglets depuis le retrait de l onglet PATTERNS, et c est
+    # le compte de l original. TAB_COUNT vit en QUATRE exemplaires
+    # independants : deux moteurs de rendu et deux controleurs. Un mutant par
+    # exemplaire tient cette independance, comme les cinq mutants de la grille
+    # tiennent la sienne.
+    ("cpp: the renderer's tab bar drops back to seven slots",
      "include/flexseq/MainScreen.h",
-     "constexpr uint8_t TAB_COUNT = 9;",
-     "constexpr uint8_t TAB_COUNT = 8;", "cpp-main-screen"),
-    ("cpp: the controller's tab bar drops back to eight slots",
+     "constexpr uint8_t TAB_COUNT = 8;",
+     "constexpr uint8_t TAB_COUNT = 7;", "cpp-main-screen"),
+    ("cpp: the controller's tab bar drops back to seven slots",
      "include/flexseq/UiController.h",
-     "static constexpr uint8_t TAB_COUNT = 9;",
-     "static constexpr uint8_t TAB_COUNT = 8;", "cpp-ui"),
-    ("ts: the renderer's tab bar drops back to eight slots",
+     "static constexpr uint8_t TAB_COUNT = 8;",
+     "static constexpr uint8_t TAB_COUNT = 7;", "cpp-ui"),
+    ("ts: the renderer's tab bar drops back to seven slots",
      "sim/src/sim/MainScreenDisplay.ts",
-     "export const TAB_COUNT = 9;",
-     "export const TAB_COUNT = 8;", "ts-main-screen"),
-    ("ts: the controller's tab bar drops back to eight slots",
+     "export const TAB_COUNT = 8;",
+     "export const TAB_COUNT = 7;", "ts-main-screen"),
+    ("ts: the controller's tab bar drops back to seven slots",
      "sim/src/domain/UiController.ts",
-     "export const TAB_COUNT = 9;",
-     "export const TAB_COUNT = 8;", "ts-ui"),
+     "export const TAB_COUNT = 8;",
+     "export const TAB_COUNT = 7;", "ts-ui"),
     ("cpp: the frame of the open SEP value hugs the digit again",
      "include/flexseq/PatternScreen.h",
      "constexpr uint8_t SEP_FRAME_PAD = 2;",
@@ -167,14 +168,6 @@ MUTANTS = [
      "sim/src/sim/MainScreenDisplay.ts",
      "export const TAB_WIDE_GLYPH_W = 7;",
      "export const TAB_WIDE_GLYPH_W = 5;", "ts-main-screen"),
-    ("cpp: the dots of the patterns grid go back to a spacing of three rows",
-     "include/flexseq/MainScreen.h",
-     "            static_cast<uint8_t>(topY + row * (mainscreen::TAB_GLYPH_H - 1));",
-     "            static_cast<uint8_t>(topY + row * 3);", "cpp-main-screen"),
-    ("ts: the dots of the patterns grid go back to a spacing of three rows",
-     "sim/src/sim/MainScreenPixels.ts",
-     "    const y = topY + row * (TAB_GLYPH_H - 1);",
-     "    const y = topY + row * 3;", "ts-main-screen"),
     ("cpp: the second slider of the settings glyph moves up one row",
      "include/flexseq/MainScreen.h",
      "    canvas.drawHLine(x, static_cast<uint8_t>(topY + 3), mainscreen::TAB_WIDE_GLYPH_W);",
@@ -233,7 +226,7 @@ MUTANTS = [
      "ts-main-screen"),
     ("ts: the three lines of the original are kept for the clock tab only",
      "sim/src/sim/MainScreenPixels.ts",
-     "  const legacy = isChannelTab(model)\n    || model.tab === TAB_PATTERNS;",
+     "  const legacy = isChannelTab(model);",
      "  const legacy = model.tab === 0;",
      "ts-main-screen"),
     ("cpp: the screen model derives the main field instead of carrying it",
@@ -1419,8 +1412,8 @@ MUTANTS = [
      "    static constexpr uint8_t NOT_MODULATED = 0x0F;\n", "cpp-engine"),
     ("cpp: the round robin starts on the second channel",
      "include/flexseq/SequencerEngine.h",
-     "loaded{}, cursor(0), editorTemplate(NO_EDITOR),",
-     "loaded{}, cursor(1), editorTemplate(NO_EDITOR),", "cpp-engine"),
+     "loaded{}, cursor(0), dirty(0) {",
+     "loaded{}, cursor(1), dirty(0) {", "cpp-engine"),
     ("cpp: the modulation buffer starts with a length of sixteen",
      "include/flexseq/SequencerEngine.h",
      "pattern(), length{}, loaded{}",
@@ -1475,8 +1468,8 @@ MUTANTS = [
      "        state.cursor =\n            static_cast<uint8_t>((channel + 2) % SequencerEngine::CHANNEL_COUNT);\n", "cpp"),
     ("cpp: a channel with no pattern routing becomes eligible",
      "include/flexseq/Persistence.h",
-     "        if (state.heldByEditor(channel) || !isEligibleForPatternModulation(engine, channel)) {\n            continue;\n        }\n",
-     "        if (state.heldByEditor(channel)) {\n            continue;\n        }\n", "cpp"),
+     "        if (!isEligibleForPatternModulation(engine, channel)) {\n            continue;\n        }\n",
+     "", "cpp"),
     ("cpp: a channel keeps its buffer after its pattern routing is removed",
      "include/flexseq/Persistence.h",
      "        if (!isEligibleForPatternModulation(engine, channel)) {\n            state.loaded[channel] = ModulatedPatternState::NOT_MODULATED;\n        }\n    }\n",
@@ -1680,63 +1673,6 @@ MUTANTS = [
      "  resume(): void {\n    this.engine.start();\n  }",
      "  resume(): void {\n    this.engine.reset();\n    this.engine.start();\n  }",
      "ts-transport"),
-    # --- Lot 16E etape 4 : l onglet PATTERNS et l editeur de templates ---
-    # Ce mutant ne peut etre vu QUE sur les broches : src/main.cpp n est
-    # compile par aucun test natif (docs/open-risks.md ligne 99).
-    ("cpp: main.cpp never services the template editor (PAT)",
-     "src/main.cpp",
-     "    flexseq::serviceTemplateEditor(eeprom, engine, ui, modulatedPatterns,\n                                   persistence, persistentImage);\n",
-     "", "probe-mod"),
-    ("cpp: the template editor writes the instance instead of the buffer",
-     "src/domain/UiController.cpp",
-     "        return level_ == LEVEL_EDIT\n            ? engine_.patternForChannel(ModulatedPatternState::EDITOR_CHANNEL)\n            : nullptr;",
-     "        return level_ == LEVEL_EDIT\n            ? engine_.instanceForChannel(ModulatedPatternState::EDITOR_CHANNEL)\n            : nullptr;", "cpp"),
-    ("cpp: the modulation service releases the buffer the editor holds",
-     "include/flexseq/Persistence.h",
-     "        if (state.heldByEditor(channel)) {\n            continue;\n        }\n        if (!isEligibleForPatternModulation(engine, channel)) {",
-     "        if (false) {\n            continue;\n        }\n        if (!isEligibleForPatternModulation(engine, channel)) {", "cpp"),
-    ("cpp: the modulation service elects a channel the editor holds",
-     "include/flexseq/Persistence.h",
-     "        if (state.heldByEditor(channel) || !isEligibleForPatternModulation(engine, channel)) {",
-     "        if (!isEligibleForPatternModulation(engine, channel)) {", "cpp"),
-    ("cpp: closing the editor writes even when nothing changed",
-     "include/flexseq/Persistence.h",
-     "        if (state.editorDirty != 0) {",
-     "        if (true) {", "cpp"),
-    ("cpp: the buffer is released before the deferred write ends",
-     "include/flexseq/Persistence.h",
-     "        if (scheduler.isWritingTemplate()) {\n            return;\n        }\n        engine.setChannelMode(CH, static_cast<ChannelMode>(state.editorSavedMode));",
-     "        engine.setChannelMode(CH, static_cast<ChannelMode>(state.editorSavedMode));", "cpp"),
-    ("cpp: opening the editor skips the timing cache invalidation",
-     "include/flexseq/Persistence.h",
-     "        state.editorDirty = 0;\n        engine.refreshTiming(CH);   // ADR 0011",
-     "        state.editorDirty = 0;", "cpp"),
-    # AUCUN mutant ne vise la SOURCE de la longueur ecrite, et c est etabli :
-    # remplacer modulated->length[channel] par engine_.getBaseLength(channel)
-    # est un EQUIVALENT MUTANT. Les deux valeurs sont egales tant que l editeur
-    # tient le tampon — l ouverture les pose ensemble depuis l enregistrement
-    # valide, et adjustTemplateLength() les ecrit toutes les deux. Aucun autre
-    # chemin n atteint baseLength du canal d audition pendant l edition.
-    ("cpp: closing the editor does not give the mode back",
-     "include/flexseq/Persistence.h",
-     "        engine.setChannelMode(CH, static_cast<ChannelMode>(state.editorSavedMode));\n        engine.setBaseLength(CH, state.editorSavedLength);",
-     "        engine.setBaseLength(CH, state.editorSavedLength);", "cpp"),
-    ("cpp: the slot list reaches the factory templates",
-     "include/flexseq/UiController.h",
-     "    static constexpr uint8_t FIRST_WRITABLE_TEMPLATE = 8;",
-     "    static constexpr uint8_t FIRST_WRITABLE_TEMPLATE = 0;", "cpp-ui"),
-    ("ts: the slot list reaches the factory templates",
-     "sim/src/domain/UiController.ts",
-     "export const FIRST_WRITABLE_TEMPLATE = 8;",
-     "export const FIRST_WRITABLE_TEMPLATE = 0;", "ts-ui"),
-    ("cpp: the slot state reads the same word whatever the template holds",
-     "include/flexseq/MainScreen.h",
-     "            if (model.slotEmpty) {\n                canvas.drawFrame(gx, gy, ms::MAIN_LABEL_GLYPH_W, ms::MAIN_LABEL_GLYPH_W);\n            } else {\n                canvas.drawBox(gx, gy, ms::MAIN_LABEL_GLYPH_W, ms::MAIN_LABEL_GLYPH_W);\n            }",
-     "            canvas.drawFrame(gx, gy, ms::MAIN_LABEL_GLYPH_W, ms::MAIN_LABEL_GLYPH_W);", "cpp-main-screen"),
-    ("ts: the slot state reads the same word whatever the template holds",
-     "sim/src/sim/MainScreenPixels.ts",
-     "    if (model.slotEmpty) {\n      ink.drawFrame(labelX - lead, gy, MAIN_LABEL_GLYPH_W, MAIN_LABEL_GLYPH_W);\n    } else {\n      ink.drawBox(labelX - lead, gy, MAIN_LABEL_GLYPH_W, MAIN_LABEL_GLYPH_W);\n    }",
-     "    ink.drawFrame(labelX - lead, gy, MAIN_LABEL_GLYPH_W, MAIN_LABEL_GLYPH_W);", "ts-main-screen"),
     ("cpp: the cv reset source bits are swapped in main (M7)",
      "src/main.cpp",
      "    if (flexseq::cv::takeEdge(flexseq::cv::CV1)) {\n"
@@ -1752,13 +1688,6 @@ MUTANTS = [
      "        resetMask |= 1u << flexseq::CV_SOURCE_1;\n"
      "    }",
      "probe-cvreset"),
-    # PRD 5.0 point 11 : l editeur fait taire les cinq autres canaux. DEUX
-    # mutants, parce que la decision et son cablage vivent dans deux fichiers et
-    # que src/main.cpp n est compile par aucun test natif.
-    ("cpp: the template editor silences nobody",
-     "include/flexseq/SequencerEngine.h",
-     "        return editorTemplate == NO_EDITOR || channel == EDITOR_CHANNEL;",
-     "        return true;", "cpp"),
     # PRD 5.0 amendement 1quater : le pattern se choisit dans son champ, et un
     # chargement destructeur demande YES ou NO.
     ("cpp: the big value is not the first cursor position",
@@ -1930,8 +1859,8 @@ MUTANTS = [
      "ts-main-screen"),
     ("cpp: the six copies start changed at boot",
      "include/flexseq/SequencerEngine.h",
-     "editorDirty(0), dirty(0) {",
-     "editorDirty(0), dirty(0x3F) {",
+     "cursor(0), dirty(0) {",
+     "cursor(0), dirty(0x3F) {",
      "cpp"),
     ("ts: the six copies start changed at boot",
      "sim/src/domain/ModulatedPatternState.ts",
@@ -1965,7 +1894,7 @@ MUTANTS = [
     ("cpp: the length gesture does not raise the change flag",
      "src/domain/UiController.cpp",
      "                static_cast<int16_t>(SequencerEngine::MAX_LENGTH))));\n"
-     "            markTemplateEdited();",
+     "            markChannelCopyEdited();",
      "                static_cast<int16_t>(SequencerEngine::MAX_LENGTH))));",
      "cpp"),
     ("cpp: a load leaves the channel dirty",
@@ -1974,10 +1903,6 @@ MUTANTS = [
      "        clearChannelChangeFlag(channel);\n",
      "",
      "cpp"),
-    ("cpp: main forgets the silence guard (pins)",
-     "src/main.cpp",
-     "        if (!modulatedPatterns.channelIsAudible(ch)) {",
-     "        if (false) {", "probe-mod"),
 ]
 
 SUITES = {

@@ -7,13 +7,12 @@ import type { MainScreenModel } from "../domain/MainScreenModel.js";
 import { GLYPH_HEIGHT, textPixels, textWidth } from "./oledFont.js";
 import { INK, OLED_H, OLED_W, PAPER, type OledCtx } from "./OledDisplay.js";
 
-export const TAB_COUNT = 9;
+export const TAB_COUNT = 8;
 export const TAB_SLOT_W = 12;
 export const TAB_CLOCK = 0;
 export const TAB_FIRST_CHANNEL = 1;
 export const TAB_LAST_CHANNEL = 6;
-export const TAB_PATTERNS = 7;
-export const TAB_SETTINGS = 8;
+export const TAB_SETTINGS = 7;
 export const TAB_BASELINE_Y = OLED_H - 1;
 export const TAB_GLYPH_TOP_Y = TAB_BASELINE_Y - GLYPH_HEIGHT;
 export const TAB_GLYPH_H = GLYPH_HEIGHT;
@@ -66,8 +65,6 @@ export const MAIN_LABEL_BASELINE_Y = 41;
 
 // L etat d un emplacement sur l onglet PATTERNS : un carre a gauche de
 // l etiquette, PLEIN quand il porte quelque chose, CREUX quand il est libre.
-export const MAIN_LABEL_GLYPH_W = 5;
-export const MAIN_LABEL_GLYPH_GAP = 3;
 
 export const CLOCK_SOURCE_LABELS = ["INT", "EXT24", "EXT4", "EXT2", "EXT1", "MIDI"] as const;
 
@@ -100,7 +97,7 @@ export function sourceLabel(source: number): string {
 
 export function headlineOf(model: MainScreenModel): string {
   if (model.tab === TAB_CLOCK) return String(model.tempo);
-  if (model.tab >= TAB_PATTERNS) return "";
+  if (model.tab >= TAB_SETTINGS) return "";
   return patternName(model.patternIndex);
 }
 
@@ -194,12 +191,7 @@ export function drawMainScreenOled(ctx: OledCtx, model: MainScreenModel): void {
     }
     const cx = tabCentreX(tab);
     const wideX = cx - Math.floor(TAB_WIDE_GLYPH_W / 2);
-    if (tab === TAB_PATTERNS) {
-      for (let row = 0; row < 2; ++row) {
-        const y = TAB_GLYPH_TOP_Y + row * (TAB_GLYPH_H - 1);
-        for (let col = 0; col < 3; ++col) px(ctx, wideX + col * 3, y);
-      }
-    } else if (tab === TAB_SETTINGS) {
+    if (tab === TAB_SETTINGS) {
       hline(ctx, wideX, TAB_GLYPH_TOP_Y + 1, TAB_WIDE_GLYPH_W);
       hline(ctx, wideX, TAB_GLYPH_TOP_Y + 3, TAB_WIDE_GLYPH_W);
       px(ctx, cx, TAB_GLYPH_TOP_Y);

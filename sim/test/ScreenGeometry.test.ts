@@ -102,7 +102,6 @@ function production(family: Family, index: number): number | undefined {
       19: md.COL_LEFT_X, 20: md.COL_RIGHT_X, 21: md.COL_W, 22: md.TEXT_INSET,
       23: md.GLYPH_SIZE, 24: md.ROW_A_BASELINE_Y, 25: md.ROW_B_BASELINE_Y,
       26: md.LINE_LABEL_X, 27: md.LINE_VALUE_X,
-      51: md.MAIN_LABEL_GLYPH_W, 52: md.MAIN_LABEL_GLYPH_GAP,
       28: md.LINE_0_BASELINE_Y, 29: md.LINE_1_BASELINE_Y, 30: md.LINE_2_BASELINE_Y,
       31: md.MAIN_CENTRE_X, 32: md.MAIN_BOX_W,
       33: md.MAIN_VALUE_BASELINE_Y, 34: md.MAIN_LABEL_BASELINE_Y,
@@ -110,7 +109,6 @@ function production(family: Family, index: number): number | undefined {
       36: md.TAB_CLOCK,
       37: md.TAB_FIRST_CHANNEL,
       38: md.TAB_LAST_CHANNEL,
-      39: md.TAB_PATTERNS,
       40: md.TAB_SETTINGS,
       41: md.TAB_GLYPH_TOP_Y,
       42: md.TAB_GLYPH_H,
@@ -142,10 +140,6 @@ function production(family: Family, index: number): number | undefined {
     18: ps.HEADER_LINE_W, 19: ps.LAST_ROW_CY, 20: ps.GRID_BOTTOM_Y,
     22: ps.SEP_LABEL_X, 23: ps.SEP_VALUE_X, 24: ps.SEP_LABEL_W,
     27: ps.SEP_FRAME_PAD,
-    47: ps.LEN_LABEL_X,
-    48: ps.LEN_VALUE_X,
-    49: ps.LEN_LABEL_W,
-    50: ps.LEN_VALUE_W,
     25: ps.HEADER_TITLE_X, 26: ps.TITLE_W,
   };
   return table[index];

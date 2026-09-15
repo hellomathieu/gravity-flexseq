@@ -4,7 +4,7 @@ import {
   type SequencerEngine,
 } from "./SequencerEngine.js";
 import { CV_SOURCE_1, CV_SOURCE_2, CvDestination } from "./CvDestination.js";
-import { UiField, UiLevel, type UiController, TAB_PATTERNS } from "./UiController.js";
+import { UiField, UiLevel, type UiController } from "./UiController.js";
 
 export enum MainParameter {
   None,
@@ -22,7 +22,6 @@ export interface MainScreenModel {
   fieldCount: number;
 
   patternIndex: number;
-  slotEmpty: boolean;
   length: number;
   subdiv: number;
   barLength: number;
@@ -53,7 +52,6 @@ function parameterOf(field: UiField): MainParameter {
     case UiField.SkipChance:
       return MainParameter.SkipChance;
     case UiField.Pattern:
-    case UiField.Slot:
       return MainParameter.Pattern;
     default:
       return MainParameter.None;
@@ -69,7 +67,6 @@ export function mainScreenModelOf(ui: UiController, engine: SequencerEngine): Ma
     fieldOpen: ui.fieldOpen,
     fieldCount: ui.fieldCount,
     patternIndex: -1,
-    slotEmpty: false,
     length: 0,
     subdiv: 0,
     barLength: 0,
@@ -87,10 +84,6 @@ export function mainScreenModelOf(ui: UiController, engine: SequencerEngine): Ma
     clockSource: ui.clockSource,
     running: engine.isRunning,
   };
-  if (ui.currentTab === TAB_PATTERNS) {
-    // Le pattern que l ecran NOMME est l emplacement parcouru.
-    model.patternIndex = ui.slotCursor;
-  }
   if (channel >= 0) {
     // PRD 5.0 amendement 1quater : l ecran montre le nom CHOISI, que le canal
     // ne joue pas forcement encore.

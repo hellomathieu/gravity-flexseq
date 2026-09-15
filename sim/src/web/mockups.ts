@@ -46,7 +46,6 @@ function mainModel(over: Partial<MainScreenModel>): MainScreenModel {
     fieldOpen: false,
     fieldCount: 3,
     patternIndex: 0,
-    slotEmpty: false,
     length: 16,
     subdiv: -4,
     barLength: 4,

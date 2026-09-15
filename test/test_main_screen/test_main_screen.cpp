@@ -178,33 +178,30 @@ MainScreenModel settingsTab() {
  * Barre d'onglets
  */
 
-void test_the_tab_bar_has_nine_evenly_spaced_slots() {
-    TEST_ASSERT_EQUAL_UINT8(9, ms::TAB_COUNT);
+void test_the_tab_bar_has_eight_evenly_spaced_slots() {
+    TEST_ASSERT_EQUAL_UINT8(8, ms::TAB_COUNT);
     TEST_ASSERT_EQUAL_UINT8(12, ms::TAB_SLOT_W);
     TEST_ASSERT_EQUAL_UINT8(6, ms::tabCentreX(0));
-    TEST_ASSERT_EQUAL_UINT8(102, ms::tabCentreX(8));
+    TEST_ASSERT_EQUAL_UINT8(90, ms::tabCentreX(7));
     for (uint8_t tab = 1; tab < ms::TAB_COUNT; ++tab) {
         TEST_ASSERT_EQUAL_UINT8(12, ms::tabCentreX(tab) - ms::tabCentreX(tab - 1));
     }
 }
 
 void test_the_bar_no_longer_fills_the_width_of_the_screen() {
-    TEST_ASSERT_EQUAL_UINT8(108, ms::TAB_SLOT_W * ms::TAB_COUNT);
+    TEST_ASSERT_EQUAL_UINT8(96, ms::TAB_SLOT_W * ms::TAB_COUNT);
     TEST_ASSERT_TRUE(ms::TAB_SLOT_W * ms::TAB_COUNT < screen::WIDTH);
 }
 
-void test_the_roles_of_the_nine_tabs_are_named() {
+void test_the_roles_of_the_eight_tabs_are_named() {
     TEST_ASSERT_EQUAL_UINT8(0, ms::TAB_CLOCK);
     TEST_ASSERT_EQUAL_UINT8(1, ms::TAB_FIRST_CHANNEL);
     TEST_ASSERT_EQUAL_UINT8(6, ms::TAB_LAST_CHANNEL);
-    TEST_ASSERT_EQUAL_UINT8(7, ms::TAB_PATTERNS);
-    TEST_ASSERT_EQUAL_UINT8(8, ms::TAB_SETTINGS);
+    TEST_ASSERT_EQUAL_UINT8(7, ms::TAB_SETTINGS);
 }
 
-void test_the_patterns_tab_is_not_a_channel() {
+void test_the_settings_tab_is_not_a_channel() {
     MainScreenModel m = channelTab(7);
-    TEST_ASSERT_FALSE(flexseq::detail::isChannelTab(m));
-    m.tab = 8;
     TEST_ASSERT_FALSE(flexseq::detail::isChannelTab(m));
     for (uint8_t tab = 1; tab <= 6; ++tab) {
         m.tab = tab;
@@ -212,16 +209,15 @@ void test_the_patterns_tab_is_not_a_channel() {
     }
 }
 
-// Les trois glyphes de la barre et les six chiffres doivent occuper LA MEME
-// bande. Avant le 2026-09-09 chacun avait son ancrage : l'horloge etait
-// dessinee sur 7 rangees dans une bande qui n'en porte que 5, donc rognee par
-// le bas de l'ecran, et PATTERNS et les reglages flottaient deux pixels plus
-// bas que les chiffres.
+// Les glyphes de la barre et les six chiffres doivent occuper LA MEME bande.
+// Avant le 2026-09-09 chacun avait son ancrage : l'horloge etait dessinee sur
+// 7 rangees dans une bande qui n'en porte que 5, donc rognee par le bas de
+// l'ecran, et les reglages flottaient deux pixels plus bas que les chiffres.
 void test_the_drawn_glyphs_of_the_bar_share_the_band_of_the_digits() {
     canvas.reset();
     drawMainScreen(canvas, channelTab(2));
-    const uint8_t glyphTabs[2] = {ms::TAB_PATTERNS, ms::TAB_SETTINGS};
-    for (uint8_t i = 0; i < 2; ++i) {
+    const uint8_t glyphTabs[1] = {ms::TAB_SETTINGS};
+    for (uint8_t i = 0; i < 1; ++i) {
         const uint8_t tab = glyphTabs[i];
         const uint8_t x0 = ms::tabSlotX(tab);
         int top = -1, bottom = -1;
@@ -246,25 +242,6 @@ void test_the_clock_tab_draws_the_glyph_of_the_original() {
     const Call* call = canvas.findOnBaseline("w", ms::TAB_BASELINE_Y);
     TEST_ASSERT_NOT_NULL(call);
     TEST_ASSERT_EQUAL_UINT8(ms::tabCentreX(ms::TAB_CLOCK) - 2, call->x);
-}
-
-void test_the_patterns_glyph_is_two_rows_of_three_single_dots() {
-    canvas.reset();
-    drawMainScreen(canvas, channelTab());
-    const uint8_t cx = ms::tabCentreX(ms::TAB_PATTERNS);
-    const uint8_t dots[3] = {static_cast<uint8_t>(cx - 3), cx,
-                             static_cast<uint8_t>(cx + 3)};
-    for (uint8_t i = 0; i < 3; ++i) {
-        TEST_ASSERT_TRUE_MESSAGE(canvas.at(dots[i], 58), "rangee du haut");
-        TEST_ASSERT_TRUE_MESSAGE(canvas.at(dots[i], 62), "rangee du bas");
-        TEST_ASSERT_FALSE_MESSAGE(canvas.at(dots[i], 59), "un point tient une rangee");
-        TEST_ASSERT_FALSE_MESSAGE(canvas.at(dots[i], 60), "rien entre les rangees");
-        TEST_ASSERT_FALSE_MESSAGE(canvas.at(dots[i], 61), "un point tient une rangee");
-    }
-    TEST_ASSERT_FALSE_MESSAGE(canvas.at(static_cast<uint8_t>(cx - 2), 58),
-                              "les points sont espaces de trois pixels");
-    TEST_ASSERT_FALSE_MESSAGE(canvas.at(static_cast<uint8_t>(cx - 1), 58),
-                              "les points sont espaces de trois pixels");
 }
 
 void test_the_settings_glyph_is_two_sliders_seven_pixels_wide() {
@@ -327,10 +304,10 @@ void test_the_transport_indicator_is_drawn_on_the_internal_clock_only() {
     }
 }
 
-void test_the_transport_indicator_sits_outside_the_nine_slots() {
+void test_the_transport_indicator_sits_outside_the_eight_slots() {
     TEST_ASSERT_EQUAL_UINT8(121, ms::TRANSPORT_STOP_X);
     TEST_ASSERT_EQUAL_UINT8(122, ms::TRANSPORT_PLAY_X);
-    TEST_ASSERT_EQUAL_UINT8(108, ms::TAB_SLOT_W * ms::TAB_COUNT);
+    TEST_ASSERT_EQUAL_UINT8(96, ms::TAB_SLOT_W * ms::TAB_COUNT);
     TEST_ASSERT_EQUAL_INT('r', ms::VELVETSCREEN_PLAY);
     TEST_ASSERT_EQUAL_INT('t', ms::VELVETSCREEN_STOP);
 }
@@ -369,12 +346,10 @@ void test_the_clock_and_settings_tabs_are_glyphs_not_digits() {
     drawMainScreen(canvas, channelTab());
     TEST_ASSERT_NULL(canvas.find("0"));
     TEST_ASSERT_NULL(canvas.find("7"));
-    TEST_ASSERT_NULL(canvas.find("8"));
     TEST_ASSERT_TRUE(canvas.inkInRows(ms::TAB_TOP_Y, ms::TAB_BASELINE_Y) > 0);
-    const uint8_t roles[2] = {ms::TAB_PATTERNS, ms::TAB_SETTINGS};
-    const char* names[2] = {"glyphe de patterns absent",
-                            "glyphe de reglages absent"};
-    for (uint8_t r = 0; r < 2; ++r) {
+    const uint8_t roles[1] = {ms::TAB_SETTINGS};
+    const char* names[1] = {"glyphe de reglages absent"};
+    for (uint8_t r = 0; r < 1; ++r) {
         bool ink = false;
         const uint8_t x0 = ms::tabSlotX(roles[r]);
         for (uint8_t y = ms::TAB_TOP_Y; y <= ms::TAB_BASELINE_Y; ++y) {
@@ -964,110 +939,6 @@ void test_the_cursor_inverts_the_label_of_its_line() {
  * PATTERNS tab — lot 16E step 4b
  */
 
-void test_the_patterns_tab_draws_the_slot_its_state_and_the_editor_entry() {
-    canvas.reset();
-    flexseq::MainScreenModel m{};
-    m.tab = ms::TAB_PATTERNS;
-    m.patternIndex = 10;
-    m.slotEmpty = true;
-    m.mainParameter = flexseq::MAIN_PATTERN;
-    drawMainScreen(canvas, m);
-    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("B3"), "le nom de l emplacement");
-    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("PATTERN"), "l etiquette");
-    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("EDIT"), "l entree dans l editeur");
-    // L etiquette SLOT repetait le nom que la grande valeur porte deja.
-    TEST_ASSERT_NULL_MESSAGE(canvas.find("SLOT"), "l etat se lit seul");
-}
-
-void test_an_occupied_slot_reads_used() {
-    canvas.reset();
-    flexseq::MainScreenModel m{};
-    m.tab = ms::TAB_PATTERNS;
-    m.patternIndex = 15;
-    m.slotEmpty = false;
-    m.mainParameter = flexseq::MAIN_PATTERN;
-    drawMainScreen(canvas, m);
-    TEST_ASSERT_NOT_NULL(canvas.find("B8"));
-    TEST_ASSERT_NOT_NULL(canvas.find("PATTERN"));
-}
-
-// L onglet PATTERNS prend la mise en page d un canal en SEQ : la grande valeur
-// porte le nom de l emplacement, et il n y a donc PAS de titre centre.
-void test_the_patterns_tab_carries_no_headline() {
-    flexseq::MainScreenModel m{};
-    m.tab = flexseq::mainscreen::TAB_PATTERNS;
-    m.patternIndex = 10;
-    char out[6];
-    flexseq::detail::headlineOf(m, out);
-    TEST_ASSERT_EQUAL_STRING("", out);
-}
-
-void test_the_patterns_tab_names_the_slot_in_the_main_value() {
-    flexseq::MainScreenModel m{};
-    m.tab = flexseq::mainscreen::TAB_PATTERNS;
-    m.patternIndex = 10;
-    m.mainParameter = flexseq::MAIN_PATTERN;
-    char out[10];
-    flexseq::detail::mainValueOf(m, out);
-    TEST_ASSERT_EQUAL_STRING("B3", out);
-    // L etat vit sous la grande valeur, contre le nom de l emplacement qu il
-    // decrit, et il n est donc PAS une ligne selectionnable.
-    TEST_ASSERT_EQUAL_STRING("PATTERN", flexseq::detail::mainLabelOf(m));
-}
-
-// L etat de l emplacement est un CARRE a gauche de l etiquette : plein quand
-// l emplacement porte quelque chose, creux quand il est libre. C est le sens
-// que la grille de l editeur donne deja a ces deux formes.
-void test_the_slot_state_is_a_square_beside_the_label() {
-    namespace ms = flexseq::mainscreen;
-    const uint8_t side = ms::MAIN_LABEL_GLYPH_W;
-    auto inkInGlyph = [&](bool empty) {
-        canvas.reset();
-        flexseq::MainScreenModel m{};
-        m.tab = ms::TAB_PATTERNS;
-        m.patternIndex = 10;
-        m.mainParameter = flexseq::MAIN_PATTERN;
-        m.slotEmpty = empty;
-        drawMainScreen(canvas, m);
-        const Call* c = canvas.find("PATTERN");
-        TEST_ASSERT_NOT_NULL(c);
-        const uint8_t x0 = static_cast<uint8_t>(c->x - ms::MAIN_LABEL_GLYPH_GAP - side);
-        const uint8_t y0 = static_cast<uint8_t>(c->y - side);
-        uint16_t ink = 0;
-        for (uint8_t dy = 0; dy < side; ++dy) {
-            for (uint8_t dx = 0; dx < side; ++dx) {
-                if (canvas.at(static_cast<uint8_t>(x0 + dx),
-                              static_cast<uint8_t>(y0 + dy))) ++ink;
-            }
-        }
-        return ink;
-    };
-    TEST_ASSERT_EQUAL_UINT16_MESSAGE(side * side, inkInGlyph(false),
-                                     "occupe : le carre est PLEIN");
-    TEST_ASSERT_EQUAL_UINT16_MESSAGE(4 * side - 4, inkInGlyph(true),
-                                     "libre : le carre est CREUX");
-}
-
-void test_the_patterns_tab_takes_the_three_lines_of_the_original() {
-    flexseq::MainScreenModel m{};
-    m.tab = flexseq::mainscreen::TAB_PATTERNS;
-    m.patternIndex = 10;
-    m.slotEmpty = true;
-    const char* flashLabel = nullptr;
-    char value[10];
-
-    // EDIT est la SEULE ligne, donc la seule chose que le curseur atteint.
-    flexseq::detail::legacyLine(m, 0, &flashLabel, value);
-    TEST_ASSERT_EQUAL_STRING("EDIT", flashLabel);
-    TEST_ASSERT_EQUAL_STRING("", value);
-
-    flexseq::detail::legacyLine(m, 1, &flashLabel, value);
-    TEST_ASSERT_EQUAL_STRING("", flashLabel);
-
-    flexseq::detail::legacyLine(m, 2, &flashLabel, value);
-    TEST_ASSERT_EQUAL_STRING("", flashLabel);
-}
-
 // PRD 5.0 amendement 1quater : la question prend la ligne de l etiquette, UNE
 // ligne sous le nom du pattern. La grande police ne l ecrit JAMAIS : elle ne
 // porte ni Y, ni N, ni O, ni S.
@@ -1188,21 +1059,6 @@ void test_the_open_field_frames_the_name() {
         "le cadre ajoute de l encre autour du nom");
 }
 
-// ⚠️ L onglet PATTERNS porte la MEME etiquette et un autre champ. Ce test
-// manquait a la premiere redaction de 1ter, et c est le miroir TypeScript qui
-// a trouve le defaut : le rendu ecrivait SURE sur cet onglet.
-void test_the_question_never_shows_on_the_patterns_tab() {
-    namespace ms = flexseq::mainscreen;
-    canvas.reset();
-    flexseq::MainScreenModel m = channelTab(ms::TAB_PATTERNS);
-    m.insideTab = true;
-    m.patternAsk = true;
-    drawMainScreen(canvas, m);
-    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("PATTERN"),
-        "l onglet PATTERNS garde son etiquette");
-    TEST_ASSERT_NULL(canvas.find("SURE"));
-}
-
 // Le curseur peut se poser sur la grande valeur, et il faut le VOIR.
 // L etiquette PATTERN s inverse, comme la valeur ouverte d un en-tete.
 void test_the_cursor_on_the_big_value_inverts_its_label() {
@@ -1261,18 +1117,17 @@ int main() {
     RUN_TEST(test_a_seq_tab_takes_the_three_lines_of_the_original);
     RUN_TEST(test_the_cursor_inverts_the_label_of_its_line);
 
-    RUN_TEST(test_the_tab_bar_has_nine_evenly_spaced_slots);
+    RUN_TEST(test_the_tab_bar_has_eight_evenly_spaced_slots);
     RUN_TEST(test_the_bar_no_longer_fills_the_width_of_the_screen);
-    RUN_TEST(test_the_roles_of_the_nine_tabs_are_named);
-    RUN_TEST(test_the_patterns_tab_is_not_a_channel);
+    RUN_TEST(test_the_roles_of_the_eight_tabs_are_named);
+    RUN_TEST(test_the_settings_tab_is_not_a_channel);
     RUN_TEST(test_the_drawn_glyphs_of_the_bar_share_the_band_of_the_digits);
     RUN_TEST(test_the_clock_tab_draws_the_glyph_of_the_original);
-    RUN_TEST(test_the_patterns_glyph_is_two_rows_of_three_single_dots);
     RUN_TEST(test_the_settings_glyph_is_two_sliders_seven_pixels_wide);
     RUN_TEST(test_the_transport_indicator_shows_stop_when_the_transport_is_stopped);
     RUN_TEST(test_the_transport_indicator_shows_play_when_the_transport_runs);
     RUN_TEST(test_the_transport_indicator_is_drawn_on_the_internal_clock_only);
-    RUN_TEST(test_the_transport_indicator_sits_outside_the_nine_slots);
+    RUN_TEST(test_the_transport_indicator_sits_outside_the_eight_slots);
     RUN_TEST(test_the_glyph_band_of_the_bar_is_never_clipped);
     RUN_TEST(test_the_six_channel_digits_sit_at_their_slot_centres);
     RUN_TEST(test_the_selected_tab_is_inverted);
@@ -1299,12 +1154,6 @@ int main() {
     RUN_TEST(test_eight_bands_reunited_equal_the_whole_image);
     RUN_TEST(test_the_tab_bar_is_drawn_in_exactly_one_band);
     RUN_TEST(test_the_rule_band_carries_the_rule_and_no_text);
-    RUN_TEST(test_the_patterns_tab_draws_the_slot_its_state_and_the_editor_entry);
-    RUN_TEST(test_an_occupied_slot_reads_used);
-    RUN_TEST(test_the_patterns_tab_carries_no_headline);
-    RUN_TEST(test_the_patterns_tab_names_the_slot_in_the_main_value);
-    RUN_TEST(test_the_slot_state_is_a_square_beside_the_label);
-    RUN_TEST(test_the_patterns_tab_takes_the_three_lines_of_the_original);
     RUN_TEST(test_the_cursor_on_the_big_value_inverts_its_label);
     RUN_TEST(test_the_question_takes_the_label_line);
     RUN_TEST(test_the_name_stays_under_the_question);
@@ -1312,7 +1161,6 @@ int main() {
     RUN_TEST(test_the_word_shown_is_the_answer);
     RUN_TEST(test_the_open_field_frames_the_name);
         RUN_TEST(test_the_question_never_replaces_the_label_on_the_config_page);
-    RUN_TEST(test_the_question_never_shows_on_the_patterns_tab);
     RUN_TEST(test_the_settings_tab_headline_stays_empty);
 
     return UNITY_END();
