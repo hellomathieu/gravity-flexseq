@@ -1,4 +1,3 @@
-import { PatternAction } from "../src/domain/PatternAction.js";
 import { describe, expect, it } from "vitest";
 import { legacyLine, mainLabelOf, modText, renderMainScreen } from "../src/sim/MainScreenPixels.js";
 import { MainParameter, mainScreenModelOf, type MainScreenModel } from "../src/domain/MainScreenModel.js";
@@ -60,8 +59,6 @@ const PANEL_MODEL: MainScreenModel = {
   skipChance: 0,
   stepTicks: 24,
   mainParameter: MainParameter.Subdiv,
-  patternAsk: false,
-  patternYes: false,
   cv1Target: 0,
   cv2Target: 0,
   configPage: false,
@@ -532,54 +529,4 @@ describe("la surbrillance suit le champ, pas le numero de ligne", () => {
 // Lot 16E etape 5c : le champ de la grande valeur, une fois OUVERT, nomme
 // l action au lieu de nommer le parametre. C est le seul signal qui separe
 // « le curseur est ici » de « le champ est ouvert ».
-// PRD 5.0 amendement 1quater : la question prend la ligne de l etiquette, UNE
-// ligne sous le nom du pattern.
-describe("la question SURE: YES / NO", () => {
-  const seq = (ask: boolean,
-               extra: Partial<MainScreenModel> = {}): MainScreenModel => ({
-    ...PANEL_MODEL,
-    tab: TAB_FIRST_CHANNEL,
-    mode: ChannelMode.SEQ,
-    insideTab: true,
-    cursor: 0,
-    fieldOpen: true,
-    fieldCount: SEQ_CHANNEL_TAB_FIELDS,
-    mainParameter: MainParameter.Pattern,
-    patternAsk: ask,
-    ...extra,
-  });
-
-  it("sans question, la ligne nomme le parametre", () => {
-    expect(mainLabelOf(seq(false))).toBe("PATTERN");
-  });
-
-  // ⚠️ UN SEUL MOT A LA FOIS : la reponse armee EST le mot affiche.
-  it("la question porte son mot, et NO vient en premier", () => {
-    expect(mainLabelOf(seq(true))).toBe("SURE: NO");
-  });
-
-  it("le mot suit la reponse armee", () => {
-    expect(mainLabelOf(seq(true, { patternYes: true }))).toBe("SURE: YES");
-  });
-
-  // La question ne vit QUE dans le champ ouvert.
-  it("le champ ferme ne montre pas la question", () => {
-    expect(mainLabelOf(seq(true, { fieldOpen: false }))).toBe("PATTERN");
-  });
-
-  it("la barre ne montre pas la question", () => {
-    expect(mainLabelOf(seq(true, { insideTab: false }))).toBe("PATTERN");
-  });
-
-  it("la page CONFIG garde son etiquette", () => {
-    expect(mainLabelOf(seq(true, { configPage: true }))).toBe("PATTERN");
-  });
-
-  // Le champ OUVERT encadre le nom.
-  it("le champ ouvert encadre le nom", () => {
-    const ouvert = renderMainScreen(seq(false)).count;
-    const ferme = renderMainScreen(seq(false, { fieldOpen: false })).count;
-    expect(ouvert).toBeGreaterThan(ferme);
-  });
-});
 

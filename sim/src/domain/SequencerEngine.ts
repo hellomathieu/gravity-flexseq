@@ -35,7 +35,6 @@ import {
   DEFAULT_CV_DESTINATION,
 } from "./CvDestination.js";
 import { zoneWithHysteresis, patternIndexFor, readStepFor } from "./LengthCv.js";
-import type { ModulatedPatternState } from "./ModulatedPatternState.js";
 import type { PatternBank } from "./PatternBank.js";
 
 import {
@@ -135,9 +134,6 @@ export class SequencerEngine {
   private readonly onsets: number[];
   private readonly channels: ChannelState[];
   private bank: PatternBank | null = null;
-  // Le C++ tient cet etat HORS du moteur et n en garde qu un pointeur, nul par
-  // defaut : un moteur non cable se comporte exactement comme avant.
-  private modulated: ModulatedPatternState | null = null;
 
   constructor(channelCount: number = CHANNEL_COUNT) {
     this.channels = Array.from({ length: channelCount }, () => ({
@@ -372,14 +368,6 @@ export class SequencerEngine {
     return this.channels.length;
   }
 
-  setModulatedPatterns(state: ModulatedPatternState | null): void {
-    this.modulated = state;
-  }
-
-  modulatedPatterns(): ModulatedPatternState | null {
-    return this.modulated;
-  }
-
   private channel(index: number): ChannelState | undefined {
     return Number.isInteger(index) ? this.channels[index] : undefined;
   }
@@ -470,6 +458,15 @@ export class SequencerEngine {
     const c = this.channel(channel);
     if (!c || source < 0 || source >= CV_SOURCE_COUNT) return CvDestination.NONE;
     return c.cvTarget[source]!;
+  }
+
+  isRoutedTo(channel: number, destination: number): boolean {
+    const c = this.channel(channel);
+    if (!c) return false;
+    for (let source = 0; source < CV_SOURCE_COUNT; ++source) {
+      if (c.cvTarget[source] === destination) return true;
+    }
+    return false;
   }
 
   private cvZoneSum(channel: number, destination: number): number {

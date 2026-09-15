@@ -268,16 +268,6 @@ FLEXSEQ_LABEL(LBL_SUBDIVISION, "SUBDIVISION");
 FLEXSEQ_LABEL(LBL_SKIP_CHANCE, "SKIP CHANCE");
 FLEXSEQ_LABEL(LBL_LENGTH, "LENGTH:");
 FLEXSEQ_LABEL(LBL_PATTERN, "PATTERN");
-// PRD 5.0 amendement 1quater : la question est UNE ligne sous le nom du
-// pattern, et la grande police ne l ecrit jamais — elle ne porte ni Y, ni N, ni
-// O, ni S.
-//
-// ⚠️ UN SEUL MOT A LA FOIS, et c est une MESURE. Montrer les deux et inverser le
-// choisi demandait un dessin en quatre morceaux : 372 octets de Flash, contre 64
-// pour ces deux etiquettes. L image passait a 99,8 %, 76 octets avant le refus de
-// l editeur de liens. Decision du proprietaire du 2026-09-14.
-FLEXSEQ_LABEL(LBL_SURE_YES, "SURE: YES");
-FLEXSEQ_LABEL(LBL_SURE_NO, "SURE: NO");
 
 inline const char* modeText(uint8_t mode) {
     switch (static_cast<ChannelMode>(mode)) {
@@ -338,16 +328,8 @@ inline bool patternFieldIsOpen(const MainScreenModel& model) {
         && model.cursor == 0;
 }
 
-// La question attend sa reponse. Elle ne s affiche que dans le champ ouvert.
-inline bool patternQuestionIsUp(const MainScreenModel& model) {
-    return patternFieldIsOpen(model) && model.patternAsk;
-}
-
 inline const char* mainLabelOf(const MainScreenModel& model) {
     if (model.configPage || model.mainParameter == MAIN_PATTERN) {
-        if (patternQuestionIsUp(model)) {
-            return model.patternYes ? LBL_SURE_YES : LBL_SURE_NO;
-        }
         return LBL_PATTERN;
     }
     return model.mainParameter == MAIN_SKIP_CHANCE ? LBL_SKIP_CHANCE : LBL_SUBDIVISION;

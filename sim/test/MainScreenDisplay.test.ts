@@ -1,4 +1,3 @@
-import { PatternAction } from "../src/domain/PatternAction.js";
 import { describe, expect, it } from "vitest";
 import {
   COL_LEFT_X,
@@ -69,8 +68,6 @@ function channelTab(tab = 1): MainScreenModel {
     skipChance: 0,
     stepTicks: 96,
     mainParameter: MainParameter.Pattern,
-    patternAsk: false,
-    patternYes: false,
     cv1Target: 0,
     cv2Target: 0,
     configPage: false,

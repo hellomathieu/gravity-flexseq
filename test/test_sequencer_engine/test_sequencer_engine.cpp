@@ -820,40 +820,9 @@ void test_an_invalid_channel_refuses_both_entry_points() {
     TEST_ASSERT_EQUAL_UINT8(0, e.getBaseLength(6));
 }
 
-void test_a_fresh_engine_carries_no_modulation_state() {
-    SequencerEngine e;
-    TEST_ASSERT_NULL(e.modulatedPatterns());
-}
-
-void test_the_engine_keeps_the_state_it_is_given() {
-    SequencerEngine e;
-    flexseq::ModulatedPatternState state;
-    e.setModulatedPatterns(&state);
-    TEST_ASSERT_EQUAL_PTR(&state, e.modulatedPatterns());
-    e.setModulatedPatterns(nullptr);
-    TEST_ASSERT_NULL(e.modulatedPatterns());
-}
-
-void test_the_change_flag_starts_clean_and_marks_one_channel() {
-    flexseq::ModulatedPatternState state;
-    for (uint8_t ch = 0; ch < 6; ++ch) {
-        TEST_ASSERT_FALSE(state.isDirty(ch));
-    }
-    state.markDirty(2);
-    TEST_ASSERT_TRUE(state.isDirty(2));
-    TEST_ASSERT_FALSE(state.isDirty(1));
-    state.clearDirty(2);
-    TEST_ASSERT_FALSE(state.isDirty(2));
-    state.markDirty(6);
-    TEST_ASSERT_EQUAL_UINT8(0, state.dirty);
-}
-
 int main() {
     UNITY_BEGIN();
 
-    RUN_TEST(test_a_fresh_engine_carries_no_modulation_state);
-    RUN_TEST(test_the_engine_keeps_the_state_it_is_given);
-    RUN_TEST(test_the_change_flag_starts_clean_and_marks_one_channel);
     RUN_TEST(test_starts_stopped_at_phase_zero_with_defaults);
     RUN_TEST(test_does_not_advance_while_stopped);
     RUN_TEST(test_advances_by_ticks_only_while_running);

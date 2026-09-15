@@ -1279,39 +1279,29 @@ void test_the_frame_choice_names_the_channel_editor_and_its_channel() {
 }
 
 /*
- * PRD 5.0 amendement 1quater — le pattern se choisit dans son champ, et un
- * chargement destructeur demande YES ou NO.
- *
- * Le nom AFFICHE est un choix. Il n atteint selectedPattern qu au chargement.
+ * PRD 5.0, amendment of 2026-09-15 — the pattern is chosen in its own field, a
+ * short press loads it, and nothing ever asks: the patterns are shared.
  */
 
 namespace {
 
-// Un canal 0 en SEQ, curseur dans l onglet, sur la grande valeur.
-void seqChannelOnPattern(Rig& r, flexseq::ModulatedPatternState& state) {
+void seqChannelOnPattern(Rig& r) {
     r.gotoTab(UiController::TAB_FIRST_CHANNEL);
     r.engine.setChannelMode(0, flexseq::MODE_SEQ);
-    r.engine.setModulatedPatterns(&state);
     r.enterTab();
     TEST_ASSERT_EQUAL(UiController::FIELD_PATTERN, r.ui.field());
 }
 
-bool tookLoad(Rig& r, uint8_t& channel) {
-    uint8_t action = 0xAA;
-    channel = 0xAA;
-    if (!r.ui.takePatternAction(action, channel)) {
-        return false;
-    }
-    TEST_ASSERT_EQUAL_UINT8(flexseq::PATTERN_ACTION_LOAD, action);
-    return true;
+bool stepActive(const flexseq::Pattern* p, uint8_t step) {
+    bool active = false;
+    return p != nullptr && p->readStep(step, active) && active;
 }
 
 }  // namespace
 
 void test_a_seq_tab_puts_the_big_value_first() {
     Rig r;
-    flexseq::ModulatedPatternState state;
-    seqChannelOnPattern(r, state);
+    seqChannelOnPattern(r);
     TEST_ASSERT_EQUAL_UINT8_MESSAGE(4, r.ui.fieldCount(), "quatre positions");
     TEST_ASSERT_EQUAL(UiController::FIELD_PATTERN, r.ui.fieldAt(0));
     TEST_ASSERT_EQUAL(UiController::FIELD_MODE, r.ui.fieldAt(1));
@@ -1319,21 +1309,16 @@ void test_a_seq_tab_puts_the_big_value_first() {
     TEST_ASSERT_EQUAL(UiController::FIELD_CONFIG, r.ui.fieldAt(3));
 }
 
-// Sans choix en cours, l ecran nomme ce que le canal joue.
-void test_the_displayed_name_starts_on_the_played_template() {
+void test_the_displayed_name_starts_on_the_played_pattern() {
     Rig r;
-    flexseq::ModulatedPatternState state;
-    seqChannelOnPattern(r, state);
+    seqChannelOnPattern(r);
     r.engine.setSelectedPattern(0, 6);
     TEST_ASSERT_EQUAL_INT8(6, r.ui.displayedPattern());
 }
 
-// ⚠️ SHIFT plus une rotation choisit le nom et ne charge RIEN — le pointeur du
-// proprietaire sur son propre scenario : le chargement est a l appui court.
-void test_shift_rotate_names_the_template_and_loads_nothing() {
+void test_shift_rotate_names_the_pattern_and_loads_nothing() {
     Rig r;
-    flexseq::ModulatedPatternState state;
-    seqChannelOnPattern(r, state);
+    seqChannelOnPattern(r);
     r.engine.setSelectedPattern(0, 6);
 
     r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
@@ -1341,14 +1326,12 @@ void test_shift_rotate_names_the_template_and_loads_nothing() {
     TEST_ASSERT_EQUAL_INT8_MESSAGE(7, r.ui.displayedPattern(), "le nom avance");
     TEST_ASSERT_EQUAL_INT8_MESSAGE(6, r.engine.getSelectedPattern(0),
         "et le canal joue toujours le sien");
-    uint8_t channel = 0;
-    TEST_ASSERT_FALSE_MESSAGE(tookLoad(r, channel), "rien n est charge");
+    TEST_ASSERT_EQUAL_PTR(r.bank.getPattern(6), r.engine.patternForChannel(0));
 }
 
-void test_the_open_field_names_the_template_too() {
+void test_the_open_field_names_the_pattern_too() {
     Rig r;
-    flexseq::ModulatedPatternState state;
-    seqChannelOnPattern(r, state);
+    seqChannelOnPattern(r);
     r.engine.setSelectedPattern(0, 6);
 
     r.ui.handle(UiController::EVENT_PRESS);
@@ -1361,12 +1344,9 @@ void test_the_open_field_names_the_template_too() {
         "tourner ne charge pas");
 }
 
-// ⚠️ Les deux bouts sont des LITTERAUX : comparer a PATTERN_COUNT ferait suivre
-// l attente si la constante bougeait.
 void test_the_name_stops_at_both_ends() {
     Rig r;
-    flexseq::ModulatedPatternState state;
-    seqChannelOnPattern(r, state);
+    seqChannelOnPattern(r);
     r.engine.setSelectedPattern(0, 0);
 
     for (uint8_t i = 0; i < 20; ++i) r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
@@ -1375,125 +1355,60 @@ void test_the_name_stops_at_both_ends() {
     TEST_ASSERT_EQUAL_INT8_MESSAGE(0, r.ui.displayedPattern(), "A1 est le premier");
 }
 
-void test_a_clean_copy_loads_on_a_short_press() {
+void test_a_short_press_loads_the_shown_pattern_and_the_channel_plays_it() {
     Rig r;
-    flexseq::ModulatedPatternState state;
-    seqChannelOnPattern(r, state);
+    seqChannelOnPattern(r);
     r.engine.setSelectedPattern(0, 6);
+    r.bank.getPattern(7)->writeStep(2, true);
 
     r.ui.handle(UiController::EVENT_PRESS);
     r.ui.handle(UiController::EVENT_ROTATE, 1);
     r.ui.handle(UiController::EVENT_PRESS);
 
     TEST_ASSERT_FALSE_MESSAGE(r.ui.fieldOpen(), "le champ se ferme");
-    TEST_ASSERT_FALSE_MESSAGE(r.ui.patternAskPending(),
-        "une copie propre ne pose aucune question");
-    TEST_ASSERT_EQUAL_INT8_MESSAGE(7, r.engine.getSelectedPattern(0),
-        "le canal adopte le nom choisi");
-    uint8_t channel = 0xAA;
-    TEST_ASSERT_TRUE(tookLoad(r, channel));
-    TEST_ASSERT_EQUAL_UINT8(0, channel);
+    TEST_ASSERT_EQUAL_INT8(7, r.engine.getSelectedPattern(0));
+    TEST_ASSERT_EQUAL_PTR(r.bank.getPattern(7), r.engine.patternForChannel(0));
+    TEST_ASSERT_TRUE(stepActive(r.engine.patternForChannel(0), 2));
+    TEST_ASSERT_EQUAL_INT8_MESSAGE(7, r.ui.displayedPattern(),
+        "sans choix en cours, l ecran nomme ce que le canal joue");
 }
 
-void test_a_changed_copy_asks_before_it_loads() {
+void test_an_edited_pattern_loads_without_a_question_and_keeps_its_edit() {
     Rig r;
-    flexseq::ModulatedPatternState state;
-    seqChannelOnPattern(r, state);
-    state.markDirty(0);
+    seqChannelOnPattern(r);
     r.engine.setSelectedPattern(0, 6);
+    r.bank.getPattern(6)->writeStep(4, true);
 
     r.ui.handle(UiController::EVENT_PRESS);
     r.ui.handle(UiController::EVENT_ROTATE, 1);
-    r.ui.handle(UiController::EVENT_PRESS);
-
-    TEST_ASSERT_TRUE_MESSAGE(r.ui.patternAskPending(), "la question est posee");
-    TEST_ASSERT_FALSE_MESSAGE(r.ui.patternAnswerIsYes(),
-        "NO est arme le premier : un appui de trop ne detruit rien");
-    TEST_ASSERT_TRUE_MESSAGE(r.ui.fieldOpen(), "et le champ reste ouvert");
-    TEST_ASSERT_EQUAL_INT8_MESSAGE(6, r.engine.getSelectedPattern(0),
-        "rien n est charge");
-    uint8_t channel = 0;
-    TEST_ASSERT_FALSE(tookLoad(r, channel));
-}
-
-void test_a_rotation_moves_between_the_two_words() {
-    Rig r;
-    flexseq::ModulatedPatternState state;
-    seqChannelOnPattern(r, state);
-    state.markDirty(0);
-
-    r.ui.handle(UiController::EVENT_PRESS);
-    r.ui.handle(UiController::EVENT_PRESS);
-    TEST_ASSERT_FALSE(r.ui.patternAnswerIsYes());
-    r.ui.handle(UiController::EVENT_ROTATE, 1);
-    TEST_ASSERT_TRUE_MESSAGE(r.ui.patternAnswerIsYes(), "une rotation passe a YES");
-    r.ui.handle(UiController::EVENT_ROTATE, 1);
-    TEST_ASSERT_FALSE_MESSAGE(r.ui.patternAnswerIsYes(), "et la suivante revient");
-}
-
-void test_yes_loads_the_chosen_template() {
-    Rig r;
-    flexseq::ModulatedPatternState state;
-    seqChannelOnPattern(r, state);
-    state.markDirty(0);
-    r.engine.setSelectedPattern(0, 6);
-
-    r.ui.handle(UiController::EVENT_PRESS);
-    r.ui.handle(UiController::EVENT_ROTATE, 1);
-    r.ui.handle(UiController::EVENT_PRESS);
-    r.ui.handle(UiController::EVENT_ROTATE, 1);          // YES
     r.ui.handle(UiController::EVENT_PRESS);
 
     TEST_ASSERT_FALSE(r.ui.fieldOpen());
-    TEST_ASSERT_EQUAL_INT8(7, r.engine.getSelectedPattern(0));
-    uint8_t channel = 0xAA;
-    TEST_ASSERT_TRUE(tookLoad(r, channel));
+    TEST_ASSERT_EQUAL_INT8_MESSAGE(7, r.engine.getSelectedPattern(0),
+        "un seul appui charge : rien ne demande");
+    TEST_ASSERT_TRUE_MESSAGE(stepActive(r.bank.getPattern(6), 4),
+        "le pattern quitte garde son edition : rien n est detruit");
 }
 
-// NO rend son nom au template que le canal joue — le mot du proprietaire.
-void test_no_restores_the_played_template() {
+void test_a_long_press_closes_without_loading() {
     Rig r;
-    flexseq::ModulatedPatternState state;
-    seqChannelOnPattern(r, state);
-    state.markDirty(0);
+    seqChannelOnPattern(r);
     r.engine.setSelectedPattern(0, 6);
 
     r.ui.handle(UiController::EVENT_PRESS);
     r.ui.handle(UiController::EVENT_ROTATE, 1);
     TEST_ASSERT_EQUAL_INT8(7, r.ui.displayedPattern());
-    r.ui.handle(UiController::EVENT_PRESS);
-    r.ui.handle(UiController::EVENT_PRESS);              // NO
-
-    TEST_ASSERT_FALSE(r.ui.fieldOpen());
-    TEST_ASSERT_EQUAL_INT8_MESSAGE(6, r.ui.displayedPattern(),
-        "l ecran revient sur le template joue");
-    uint8_t channel = 0;
-    TEST_ASSERT_FALSE_MESSAGE(tookLoad(r, channel), "et rien n est charge");
-}
-
-void test_a_long_press_closes_without_loading() {
-    Rig r;
-    flexseq::ModulatedPatternState state;
-    seqChannelOnPattern(r, state);
-    state.markDirty(0);
-
-    r.ui.handle(UiController::EVENT_PRESS);
-    r.ui.handle(UiController::EVENT_PRESS);
-    TEST_ASSERT_TRUE(r.ui.patternAskPending());
     r.ui.handle(UiController::EVENT_LONG_PRESS);
 
     TEST_ASSERT_FALSE(r.ui.fieldOpen());
-    TEST_ASSERT_FALSE_MESSAGE(r.ui.patternAskPending(), "la question part avec lui");
-    uint8_t channel = 0;
-    TEST_ASSERT_FALSE(tookLoad(r, channel));
+    TEST_ASSERT_EQUAL_INT8(6, r.engine.getSelectedPattern(0));
+    TEST_ASSERT_EQUAL_INT8_MESSAGE(6, r.ui.displayedPattern(),
+        "l ecran revient sur le pattern joue");
 }
 
-// ⚠️ Le choix appartient au canal qu on quitte. Sans ce retour, l onglet suivant
-// afficherait un nom qui n est pas le sien.
 void test_a_change_of_tab_drops_the_choice() {
     Rig r;
-    flexseq::ModulatedPatternState state;
-    seqChannelOnPattern(r, state);
+    seqChannelOnPattern(r);
     r.engine.setChannelMode(1, flexseq::MODE_SEQ);
     r.engine.setSelectedPattern(0, 6);
     r.engine.setSelectedPattern(1, 2);
@@ -1501,70 +1416,120 @@ void test_a_change_of_tab_drops_the_choice() {
     r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
     TEST_ASSERT_EQUAL_INT8(7, r.ui.displayedPattern());
 
-    r.ui.handle(UiController::EVENT_LONG_PRESS);         // retour a la barre
-    r.ui.handle(UiController::EVENT_ROTATE, 1);          // onglet suivant
+    r.ui.handle(UiController::EVENT_LONG_PRESS);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
     TEST_ASSERT_EQUAL_INT8_MESSAGE(2, r.ui.displayedPattern(),
         "le canal suivant nomme le sien");
 }
 
-void test_an_engine_without_the_buffer_never_asks() {
-    Rig r;
-    r.gotoTab(UiController::TAB_FIRST_CHANNEL);
-    r.engine.setChannelMode(0, flexseq::MODE_SEQ);
-    r.enterTab();
-    r.engine.setSelectedPattern(0, 6);
+/*
+ * PRD 5.0, amendment of 2026-09-15 — EDIT is read only while a source of the
+ * channel is routed to PATTERN.
+ */
 
+void test_an_unrouted_channel_is_editable() {
+    Rig r;
+    TEST_ASSERT_FALSE(r.ui.editIsReadOnly());
+    r.enterEdit();
+    r.ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_TRUE(stepActive(r.engine.patternForChannel(0), 0));
+}
+
+void test_a_pattern_routing_on_the_first_source_makes_edit_read_only() {
+    Rig r;
+    r.engine.setCvDestination(0, flexseq::CV_SOURCE_1, flexseq::CV_DEST_PATTERN);
+    r.engine.patternForChannel(0)->writeStep(3, true);
+    r.enterEdit();
+    TEST_ASSERT_TRUE(r.ui.editIsReadOnly());
+
+    r.ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_FALSE_MESSAGE(stepActive(r.engine.patternForChannel(0), 0),
+        "un appui court n active aucun pas");
+
+    for (uint8_t i = 0; i < 3; ++i) r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_UINT8(3, r.ui.stepCursor());
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(flexseq::RATCHET_NONE,
+        r.engine.patternForChannel(0)->getRatchet(3), "aucun ratchet n est pose");
+
+    r.ui.handle(UiController::EVENT_SHIFT_LONG_PRESS);
+    TEST_ASSERT_TRUE_MESSAGE(stepActive(r.engine.patternForChannel(0), 3),
+        "l effacement ne touche pas le pattern");
+}
+
+void test_a_pattern_routing_on_the_second_source_is_read_only_too() {
+    Rig r;
+    r.engine.setCvDestination(0, flexseq::CV_SOURCE_2, flexseq::CV_DEST_PATTERN);
+    r.enterEdit();
+    TEST_ASSERT_TRUE(r.ui.editIsReadOnly());
+    r.ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_FALSE(stepActive(r.engine.patternForChannel(0), 0));
+}
+
+void test_another_routing_does_not_block_the_edit() {
+    Rig r;
+    r.engine.setCvDestination(0, flexseq::CV_SOURCE_1, flexseq::CV_DEST_LENGTH);
+    r.engine.setCvDestination(0, flexseq::CV_SOURCE_2, flexseq::CV_DEST_STEP);
+    TEST_ASSERT_FALSE(r.ui.editIsReadOnly());
+    r.enterEdit();
+    r.ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_TRUE(stepActive(r.engine.patternForChannel(0), 0));
+}
+
+void test_sep_stays_adjustable_under_a_pattern_routing() {
+    Rig r;
+    r.engine.setCvDestination(0, flexseq::CV_SOURCE_1, flexseq::CV_DEST_PATTERN);
+    r.enterEdit();
+    const int8_t before = r.engine.getBarLength(0);
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    TEST_ASSERT_TRUE(r.ui.isOnHeader());
     r.ui.handle(UiController::EVENT_PRESS);
     r.ui.handle(UiController::EVENT_ROTATE, 1);
-    r.ui.handle(UiController::EVENT_PRESS);
-
-    TEST_ASSERT_FALSE(r.ui.patternAskPending());
-    TEST_ASSERT_EQUAL_INT8(7, r.engine.getSelectedPattern(0));
-    uint8_t channel = 0xAA;
-    TEST_ASSERT_TRUE(tookLoad(r, channel));
+    TEST_ASSERT_NOT_EQUAL_MESSAGE(before, r.engine.getBarLength(0),
+        "SEP appartient au canal, pas au pattern");
 }
 
-void test_a_demand_is_served_once() {
+void test_read_only_follows_the_channel_of_the_tab() {
     Rig r;
-    flexseq::ModulatedPatternState state;
-    seqChannelOnPattern(r, state);
-
-    r.ui.handle(UiController::EVENT_PRESS);
-    r.ui.handle(UiController::EVENT_PRESS);
-
-    uint8_t channel = 0;
-    TEST_ASSERT_TRUE(tookLoad(r, channel));
-    TEST_ASSERT_FALSE_MESSAGE(tookLoad(r, channel),
-        "la demande est consommee, et une seule fois");
+    r.engine.setCvDestination(1, flexseq::CV_SOURCE_1, flexseq::CV_DEST_PATTERN);
+    r.gotoTab(UiController::TAB_FIRST_CHANNEL);
+    TEST_ASSERT_FALSE(r.ui.editIsReadOnly());
+    r.gotoTab(static_cast<uint8_t>(UiController::TAB_FIRST_CHANNEL + 1));
+    TEST_ASSERT_TRUE(r.ui.editIsReadOnly());
+    r.gotoTab(UiController::TAB_CLOCK);
+    TEST_ASSERT_FALSE(r.ui.editIsReadOnly());
 }
 
-void test_no_gesture_posts_no_demand() {
+void test_removing_the_routing_gives_the_edit_back() {
     Rig r;
-    uint8_t action = 0;
-    uint8_t channel = 0;
-    TEST_ASSERT_FALSE(r.ui.takePatternAction(action, channel));
-    r.enterTab();
-    TEST_ASSERT_FALSE_MESSAGE(r.ui.takePatternAction(action, channel),
-        "entrer dans un onglet ne demande rien");
+    r.engine.setCvDestination(0, flexseq::CV_SOURCE_1, flexseq::CV_DEST_PATTERN);
+    r.enterEdit();
+    r.ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_FALSE(stepActive(r.engine.patternForChannel(0), 0));
+    r.engine.setCvDestination(0, flexseq::CV_SOURCE_1, flexseq::CV_DEST_NONE);
+    TEST_ASSERT_FALSE(r.ui.editIsReadOnly());
+    r.ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_TRUE(stepActive(r.engine.patternForChannel(0), 0));
 }
 
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_a_seq_tab_puts_the_big_value_first);
-    RUN_TEST(test_the_displayed_name_starts_on_the_played_template);
-    RUN_TEST(test_shift_rotate_names_the_template_and_loads_nothing);
-    RUN_TEST(test_the_open_field_names_the_template_too);
+    RUN_TEST(test_the_displayed_name_starts_on_the_played_pattern);
+    RUN_TEST(test_shift_rotate_names_the_pattern_and_loads_nothing);
+    RUN_TEST(test_the_open_field_names_the_pattern_too);
+    RUN_TEST(test_a_short_press_loads_the_shown_pattern_and_the_channel_plays_it);
+    RUN_TEST(test_an_edited_pattern_loads_without_a_question_and_keeps_its_edit);
+    RUN_TEST(test_an_unrouted_channel_is_editable);
+    RUN_TEST(test_a_pattern_routing_on_the_first_source_makes_edit_read_only);
+    RUN_TEST(test_a_pattern_routing_on_the_second_source_is_read_only_too);
+    RUN_TEST(test_another_routing_does_not_block_the_edit);
+    RUN_TEST(test_sep_stays_adjustable_under_a_pattern_routing);
+    RUN_TEST(test_read_only_follows_the_channel_of_the_tab);
+    RUN_TEST(test_removing_the_routing_gives_the_edit_back);
     RUN_TEST(test_the_name_stops_at_both_ends);
-    RUN_TEST(test_a_clean_copy_loads_on_a_short_press);
-    RUN_TEST(test_a_changed_copy_asks_before_it_loads);
-    RUN_TEST(test_a_rotation_moves_between_the_two_words);
-    RUN_TEST(test_yes_loads_the_chosen_template);
-    RUN_TEST(test_no_restores_the_played_template);
     RUN_TEST(test_a_long_press_closes_without_loading);
     RUN_TEST(test_a_change_of_tab_drops_the_choice);
-    RUN_TEST(test_an_engine_without_the_buffer_never_asks);
-    RUN_TEST(test_a_demand_is_served_once);
-    RUN_TEST(test_no_gesture_posts_no_demand);
     RUN_TEST(test_a_clock_tab_holds_the_three_lines_of_the_original);
     RUN_TEST(test_a_random_tab_puts_the_subdivision_on_the_second_line);
     RUN_TEST(test_a_seq_tab_takes_the_three_lines_of_the_original);

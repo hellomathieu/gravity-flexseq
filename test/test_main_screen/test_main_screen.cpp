@@ -939,103 +939,6 @@ void test_the_cursor_inverts_the_label_of_its_line() {
  * PATTERNS tab — lot 16E step 4b
  */
 
-// PRD 5.0 amendement 1quater : la question prend la ligne de l etiquette, UNE
-// ligne sous le nom du pattern. La grande police ne l ecrit JAMAIS : elle ne
-// porte ni Y, ni N, ni O, ni S.
-void test_the_question_takes_the_label_line() {
-    auto draw = [](bool ask) {
-        canvas.reset();
-        flexseq::MainScreenModel m = channelTab();
-        m.insideTab = true;
-        m.cursor = 0;
-        m.fieldOpen = true;
-        m.patternAsk = ask;
-        drawMainScreen(canvas, m);
-    };
-
-    draw(false);
-    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("PATTERN"),
-        "sans question, la ligne nomme le parametre");
-    TEST_ASSERT_NULL(canvas.find("SURE: NO"));
-
-    draw(true);
-    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("SURE: NO"),
-        "la question porte son mot, et NO vient en premier");
-    TEST_ASSERT_NULL_MESSAGE(canvas.find("PATTERN"),
-        "et elle remplace le parametre");
-}
-
-// ⚠️ Le NOM du pattern reste, en grande police, pendant la question : elle nomme
-// ainsi le template dont elle parle. Decision du proprietaire.
-void test_the_name_stays_under_the_question() {
-    canvas.reset();
-    flexseq::MainScreenModel m = channelTab();
-    m.insideTab = true;
-    m.cursor = 0;
-    m.fieldOpen = true;
-    m.patternIndex = 9;
-    m.patternAsk = true;
-    drawMainScreen(canvas, m);
-    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("B2"),
-        "le nom du template reste affiche");
-}
-
-// La question ne vit QUE dans le champ ouvert : ni sur la barre, ni le champ
-// ferme.
-void test_the_question_needs_the_open_field() {
-    auto ink = [](bool insideTab, bool open) {
-        canvas.reset();
-        flexseq::MainScreenModel m = channelTab();
-        m.insideTab = insideTab;
-        m.cursor = 0;
-        m.fieldOpen = open;
-        m.patternAsk = true;
-        drawMainScreen(canvas, m);
-        return canvas.find("SURE: NO") != nullptr;
-    };
-    TEST_ASSERT_FALSE_MESSAGE(ink(false, false), "pas sur la barre");
-    TEST_ASSERT_FALSE_MESSAGE(ink(true, false), "pas le champ ferme");
-    TEST_ASSERT_TRUE_MESSAGE(ink(true, true), "dans le champ ouvert");
-}
-
-// ⚠️ UN SEUL MOT A LA FOIS : la reponse armee EST le mot affiche. C est une
-// mesure, pas une preference — les deux mots avec inversion coutaient 372 octets
-// de Flash contre 64.
-void test_the_word_shown_is_the_answer() {
-    auto draw = [](bool yes) {
-        canvas.reset();
-        flexseq::MainScreenModel m = channelTab();
-        m.insideTab = true;
-        m.cursor = 0;
-        m.fieldOpen = true;
-        m.patternAsk = true;
-        m.patternYes = yes;
-        drawMainScreen(canvas, m);
-    };
-    draw(false);
-    TEST_ASSERT_NOT_NULL(canvas.find("SURE: NO"));
-    TEST_ASSERT_NULL(canvas.find("SURE: YES"));
-    draw(true);
-    TEST_ASSERT_NOT_NULL(canvas.find("SURE: YES"));
-    TEST_ASSERT_NULL(canvas.find("SURE: NO"));
-}
-
-// La page CONFIG porte la meme etiquette et un autre champ en position 0 : elle
-// ne doit jamais afficher la question.
-void test_the_question_never_replaces_the_label_on_the_config_page() {
-    canvas.reset();
-    flexseq::MainScreenModel m = channelTab();
-    m.insideTab = true;
-    m.cursor = 0;
-    m.fieldOpen = true;
-    m.configPage = true;
-    m.patternAsk = true;
-    drawMainScreen(canvas, m);
-    TEST_ASSERT_NOT_NULL_MESSAGE(canvas.find("PATTERN"),
-        "la page CONFIG garde son etiquette");
-    TEST_ASSERT_NULL(canvas.find("SURE: NO"));
-}
-
 // Le champ OUVERT encadre le nom : c est ce qui separe « le curseur est ici » de
 // « le champ est ouvert ».
 void test_the_open_field_frames_the_name() {
@@ -1155,12 +1058,7 @@ int main() {
     RUN_TEST(test_the_tab_bar_is_drawn_in_exactly_one_band);
     RUN_TEST(test_the_rule_band_carries_the_rule_and_no_text);
     RUN_TEST(test_the_cursor_on_the_big_value_inverts_its_label);
-    RUN_TEST(test_the_question_takes_the_label_line);
-    RUN_TEST(test_the_name_stays_under_the_question);
-    RUN_TEST(test_the_question_needs_the_open_field);
-    RUN_TEST(test_the_word_shown_is_the_answer);
     RUN_TEST(test_the_open_field_frames_the_name);
-        RUN_TEST(test_the_question_never_replaces_the_label_on_the_config_page);
     RUN_TEST(test_the_settings_tab_headline_stays_empty);
 
     return UNITY_END();

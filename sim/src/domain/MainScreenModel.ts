@@ -31,8 +31,6 @@ export interface MainScreenModel {
   skipChance: number;
   stepTicks: number;
   mainParameter: MainParameter;
-  patternAsk: boolean;
-  patternYes: boolean;
 
   cv1Target: number;
   cv2Target: number;
@@ -75,8 +73,6 @@ export function mainScreenModelOf(ui: UiController, engine: SequencerEngine): Ma
     skipChance: 0,
     stepTicks: 0,
     mainParameter: parameterOf(ui.mainField),
-    patternAsk: ui.patternAskPending,
-    patternYes: ui.patternAnswerIsYes,
     cv1Target: CvDestination.NONE,
     cv2Target: CvDestination.NONE,
     configPage: ui.isOnConfigPage,

@@ -13,8 +13,7 @@ SequencerEngine::SequencerEngine()
       running_(false),
       stepped_(0),
       armed_(0),
-      bank_(nullptr),
-      modulated_(nullptr) {
+      bank_(nullptr) {
     for (uint8_t s = 0; s < CV_SOURCE_COUNT; ++s) {
         cvInput_[s] = 0;
     }
@@ -297,6 +296,18 @@ CvDestination SequencerEngine::getCvDestination(uint8_t channel, uint8_t source)
     return static_cast<CvDestination>(channels_[channel].cvTarget[source]);
 }
 
+bool SequencerEngine::isRoutedTo(uint8_t channel, CvDestination destination) const {
+    if (!validChannel(channel)) {
+        return false;
+    }
+    for (uint8_t source = 0; source < CV_SOURCE_COUNT; ++source) {
+        if (channels_[channel].cvTarget[source] == static_cast<uint8_t>(destination)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 int8_t SequencerEngine::cvZoneSum(uint8_t channel, uint8_t destination) const {
     const ChannelState& c = channels_[channel];
     int16_t sum = 0;
@@ -557,14 +568,6 @@ uint8_t SequencerEngine::currentStepTriggers(uint8_t channel) const {
         return 0;
     }
     return channels_[channel].triggers;
-}
-
-void SequencerEngine::setModulatedPatterns(ModulatedPatternState* state) {
-    modulated_ = state;
-}
-
-ModulatedPatternState* SequencerEngine::modulatedPatterns() const {
-    return modulated_;
 }
 
 int8_t SequencerEngine::effectiveStep(uint8_t channel) const {

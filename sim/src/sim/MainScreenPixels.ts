@@ -68,7 +68,6 @@ import {
 } from "./MainScreenDisplay.js";
 import { MainParameter, type MainScreenModel } from "../domain/MainScreenModel.js";
 import { ChannelMode } from "../domain/SequencerEngine.js";
-import { PatternAction } from "../domain/PatternAction.js";
 import { CvDestination } from "../domain/CvDestination.js";
 import { STK_L, VELVETSCREEN, glyphFor, textWidth, type Font } from "./oledFont.js";
 
@@ -83,13 +82,6 @@ export const LBL_SUBDIVISION = "SUBDIVISION";
 export const LBL_SKIP_CHANCE = "SKIP CHANCE";
 export const LBL_LENGTH = "LENGTH:";
 export const LBL_PATTERN = "PATTERN";
-// PRD 5.0 amendement 1quater : la question est UNE ligne sous le nom du pattern,
-// et la grande police ne l ecrit jamais.
-//
-// ⚠️ UN SEUL MOT A LA FOIS, et c est une MESURE : 372 octets de Flash pour les
-// deux mots avec inversion, contre 64 pour ces deux etiquettes.
-const LBL_SURE_YES = "SURE: YES";
-const LBL_SURE_NO = "SURE: NO";
 
 const VELVETSCREEN_HEIGHT = 5;
 const STK_L_HEIGHT = 23;
@@ -207,16 +199,8 @@ export function patternFieldIsOpen(model: MainScreenModel): boolean {
     && model.cursor === 0;
 }
 
-// La question attend sa reponse. Elle ne s affiche que dans le champ ouvert.
-export function patternQuestionIsUp(model: MainScreenModel): boolean {
-  return patternFieldIsOpen(model) && model.patternAsk;
-}
-
 export function mainLabelOf(model: MainScreenModel): string {
   if (model.configPage || model.mainParameter === MainParameter.Pattern) {
-    if (patternQuestionIsUp(model)) {
-      return model.patternYes ? LBL_SURE_YES : LBL_SURE_NO;
-    }
     return LBL_PATTERN;
   }
   return model.mainParameter === MainParameter.SkipChance ? LBL_SKIP_CHANCE : LBL_SUBDIVISION;

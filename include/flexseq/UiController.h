@@ -4,7 +4,6 @@
 #include <stdint.h>
 
 #include <flexseq/Pattern.h>
-#include <flexseq/PatternAction.h>
 #include <flexseq/SequencerEngine.h>
 #include <flexseq/Transport.h>
 
@@ -108,13 +107,7 @@ public:
     static constexpr int8_t NO_BROWSE = -1;
     int8_t displayedPattern() const;
 
-    // La question qui precede un chargement destructeur, et le mot choisi.
-    bool patternAskPending() const { return patternAsk_; }
-    bool patternAnswerIsYes() const { return patternYes_; }
-
-    // Le controleur POSE une demande, il ne l execute pas : ADR 0002 lui
-    // interdit de connaitre le Storage. Le service la consomme, une seule fois.
-    bool takePatternAction(uint8_t& action, uint8_t& channel);
+    bool editIsReadOnly() const;
 
     uint8_t stepCursor() const { return stepCursor_; }
     bool isOnHeader() const { return onHeader_; }
@@ -142,9 +135,6 @@ private:
     void togglePlay();
     void toggleStep();
     void clearPattern();
-    void markChannelCopyEdited();
-    bool channelCopyHasChanged() const;
-    bool pressInPatternField();
     void postPatternLoad();
     void browsePattern(int8_t delta);
 
@@ -160,11 +150,7 @@ private:
     bool onHeader_;
     bool onConfigPage_;
     bool fieldOpen_;
-    bool patternAsk_;
-    bool patternYes_;
     int8_t patternBrowse_;
-    uint8_t pendingAction_;
-    uint8_t pendingChannel_;
     uint16_t tempo_;
     uint8_t clockSource_;
     uint8_t revision_;

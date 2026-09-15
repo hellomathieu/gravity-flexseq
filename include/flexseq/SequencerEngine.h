@@ -26,7 +26,6 @@ namespace flexseq {
 //
 // Out of scope (deferred): Transport (clock->progression), CV modulation.
 class PatternBank;
-struct ModulatedPatternState;
 
 class SequencerEngine {
 public:
@@ -114,9 +113,6 @@ public:
     int8_t effectiveStep(uint8_t channel) const;
     int8_t currentReadStep(uint8_t channel) const;
 
-    void setModulatedPatterns(ModulatedPatternState* state);
-    ModulatedPatternState* modulatedPatterns() const;
-
     // True if the channel crossed a STEP boundary during the last advance().
     bool hasStepped(uint8_t channel) const;
 
@@ -135,6 +131,7 @@ public:
     // toujours une zone nulle.
     bool setCvDestination(uint8_t channel, uint8_t source, CvDestination destination);
     CvDestination getCvDestination(uint8_t channel, uint8_t source) const;
+    bool isRoutedTo(uint8_t channel, CvDestination destination) const;
 
     // Somme des zones des sources routees vers LENGTH, dans [-30, +30].
     int8_t lengthCvOffset(uint8_t channel) const;
@@ -202,34 +199,7 @@ private:
     int16_t cvInput_[CV_SOURCE_COUNT];
     ChannelState channels_[CHANNEL_COUNT];
     PatternBank* bank_;
-    ModulatedPatternState* modulated_;
 };
-
-struct ModulatedPatternState {
-    ModulatedPatternState() : dirty(0) {}
-
-    bool isDirty(uint8_t channel) const {
-        return channel < SequencerEngine::CHANNEL_COUNT
-               && (dirty & static_cast<uint8_t>(1u << channel)) != 0;
-    }
-
-    void markDirty(uint8_t channel) {
-        if (channel < SequencerEngine::CHANNEL_COUNT) {
-            dirty = static_cast<uint8_t>(dirty | static_cast<uint8_t>(1u << channel));
-        }
-    }
-
-    void clearDirty(uint8_t channel) {
-        if (channel < SequencerEngine::CHANNEL_COUNT) {
-            dirty = static_cast<uint8_t>(dirty & ~static_cast<uint8_t>(1u << channel));
-        }
-    }
-
-    uint8_t dirty;
-};
-
-static_assert(SequencerEngine::CHANNEL_COUNT <= 8,
-              "the change flag holds one bit per channel in a single byte");
 
 }  // namespace flexseq
 

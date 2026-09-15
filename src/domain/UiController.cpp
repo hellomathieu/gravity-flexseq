@@ -92,11 +92,7 @@ UiController::UiController(SequencerEngine& engine, Transport& transport)
       onHeader_(false),
       onConfigPage_(false),
       fieldOpen_(false),
-      patternAsk_(false),
-      patternYes_(false),
       patternBrowse_(NO_BROWSE),
-      pendingAction_(PATTERN_ACTION_NONE),
-      pendingChannel_(0),
       tempo_(DEFAULT_TEMPO),
       clockSource_(0),
       revision_(0) {}
@@ -122,26 +118,10 @@ bool UiController::isLegacyModeTab() const {
     return mode == MODE_CLOCK || mode == MODE_RANDOM;
 }
 
-// SAVE n apparait que si la copie du canal differe du template qu il a charge —
-// PRD 12.9 point 5. Un moteur non cable n a pas de drapeau : il ne propose donc
-// que LOAD, et il ne lit jamais un pointeur nul.
-bool UiController::channelCopyHasChanged() const {
-    const ModulatedPatternState* modulated = engine_.modulatedPatterns();
+bool UiController::editIsReadOnly() const {
     const int8_t channel = selectedChannel();
-    if (modulated == nullptr || channel < 0) {
-        return false;
-    }
-    return modulated->isDirty(static_cast<uint8_t>(channel));
-}
-
-bool UiController::takePatternAction(uint8_t& action, uint8_t& channel) {
-    if (pendingAction_ == PATTERN_ACTION_NONE) {
-        return false;
-    }
-    action = pendingAction_;
-    channel = pendingChannel_;
-    pendingAction_ = PATTERN_ACTION_NONE;
-    return true;
+    return channel >= 0
+        && engine_.isRoutedTo(static_cast<uint8_t>(channel), CV_DEST_PATTERN);
 }
 
 // Le nom que l ECRAN montre. Sans choix en cours, c est celui que le canal joue.
@@ -166,8 +146,6 @@ void UiController::browsePattern(int8_t delta) {
         SequencerEngine::PATTERN_COUNT));
 }
 
-// Le chargement du nom choisi. selectedPattern ne bouge qu ICI : c est le seul
-// endroit ou le canal se met a jouer autre chose.
 void UiController::postPatternLoad() {
     const int8_t channel = selectedChannel();
     const int8_t wanted = displayedPattern();
@@ -177,37 +155,6 @@ void UiController::postPatternLoad() {
     engine_.setSelectedPattern(static_cast<uint8_t>(channel),
                                static_cast<uint8_t>(wanted));
     patternBrowse_ = NO_BROWSE;
-    pendingAction_ = PATTERN_ACTION_LOAD;
-    pendingChannel_ = static_cast<uint8_t>(channel);
-}
-
-// Un appui court dans le champ ouvert de la grande valeur. Rend true quand le
-// champ doit RESTER ouvert, ce qui n arrive que lorsque la question vient d etre
-// posee.
-//
-// PRD 5.0 amendement 1quater : une copie propre charge sans question ; une copie
-// modifiee voit son etiquette devenir SURE: YES / NO, et c est le mot choisi qui
-// decide. NO rend son nom au template joue.
-bool UiController::pressInPatternField() {
-    if (patternAsk_) {
-        patternAsk_ = false;
-        if (patternYes_) {
-            postPatternLoad();
-        } else {
-            // NO rend son nom au template que le canal joue.
-            patternBrowse_ = NO_BROWSE;
-        }
-        return false;
-    }
-    if (channelCopyHasChanged()) {
-        // ⚠️ NO est arme le premier : un appui court de trop ne doit rien
-        // detruire. Decision du proprietaire du 2026-09-14.
-        patternAsk_ = true;
-        patternYes_ = false;
-        return true;
-    }
-    postPatternLoad();
-    return false;
 }
 
 uint8_t UiController::fieldCount() const {
@@ -291,7 +238,6 @@ void UiController::handleTabBar(Event event, int8_t delta) {
             // n est pas le sien, et un octet par canal serait la seule autre
             // facon de l eviter.
             patternBrowse_ = NO_BROWSE;
-            patternAsk_ = false;
             break;
         case EVENT_SHIFT_ROTATE:
             // Le geste de l original : il choisit la valeur du champ principal.
@@ -320,12 +266,7 @@ void UiController::handleTab(Event event, int8_t delta) {
     switch (event) {
         case EVENT_ROTATE:
             if (fieldOpen_ && field() == FIELD_PATTERN) {
-                if (patternAsk_) {
-                    // Deux mots seulement : une rotation passe de l un a l autre.
-                    patternYes_ = !patternYes_;
-                } else {
-                    browsePattern(delta);
-                }
+                browsePattern(delta);
             } else if (fieldOpen_) {
                 adjustField(delta);
             } else {
@@ -343,8 +284,8 @@ void UiController::handleTab(Event event, int8_t delta) {
             break;
         case EVENT_PRESS:
             if (fieldOpen_) {
-                if (field() == FIELD_PATTERN && pressInPatternField()) {
-                    break;
+                if (field() == FIELD_PATTERN) {
+                    postPatternLoad();
                 }
                 fieldOpen_ = false;
             } else if (field() == FIELD_EDIT_ENTRY) {
@@ -356,14 +297,12 @@ void UiController::handleTab(Event event, int8_t delta) {
                 cursor_ = CONFIG_FIELD_INDEX_LENGTH;
             } else if (field() != FIELD_NONE) {
                 fieldOpen_ = true;
-                patternAsk_ = false;
-                patternYes_ = false;
             }
             break;
         case EVENT_LONG_PRESS:
             if (fieldOpen_) {
-                patternAsk_ = false;
                 fieldOpen_ = false;
+                patternBrowse_ = NO_BROWSE;
             } else if (onConfigPage_) {
                 onConfigPage_ = false;
                 cursor_ = SEQ_FIELD_INDEX_CONFIG;
@@ -488,7 +427,6 @@ void UiController::adjustFieldValue(Field target, int8_t raw) {
                 static_cast<int16_t>(engine_.getBaseLength(ch) + delta),
                 static_cast<int16_t>(SequencerEngine::MIN_LENGTH),
                 static_cast<int16_t>(SequencerEngine::MAX_LENGTH))));
-            markChannelCopyEdited();
             break;
         case FIELD_SUBDIV: {
             int8_t index = subdivIndexOf(engine_.getSubdiv(ch));
@@ -567,7 +505,7 @@ void UiController::adjustFieldValue(Field target, int8_t raw) {
 
 void UiController::adjustRatchet(int8_t delta) {
     Pattern* pattern = currentPattern();
-    if (pattern == nullptr) {
+    if (pattern == nullptr || editIsReadOnly()) {
         return;
     }
     bool active = false;
@@ -620,7 +558,7 @@ void UiController::togglePlay() {
 
 void UiController::toggleStep() {
     Pattern* pattern = currentPattern();
-    if (pattern == nullptr) {
+    if (pattern == nullptr || editIsReadOnly()) {
         return;
     }
     bool active = false;
@@ -628,31 +566,15 @@ void UiController::toggleStep() {
         return;
     }
     pattern->writeStep(stepCursor_, !active);
-    markChannelCopyEdited();
 }
 
 void UiController::clearPattern() {
     Pattern* pattern = currentPattern();
-    if (pattern == nullptr) {
+    if (pattern == nullptr || editIsReadOnly()) {
         return;
     }
     pattern->clear();
     engine_.refreshTiming();
-    markChannelCopyEdited();
-}
-
-// PRD 5.0 amendement 1quater : la copie du canal differe du template qu il a
-// charge. Un seul point de pose, parce que les quatre sites d edition passent
-// tous par ici.
-void UiController::markChannelCopyEdited() {
-    ModulatedPatternState* modulated = engine_.modulatedPatterns();
-    if (modulated == nullptr) {
-        return;
-    }
-    const int8_t channel = selectedChannel();
-    if (channel >= 0) {
-        modulated->markDirty(static_cast<uint8_t>(channel));
-    }
 }
 
 }  // namespace flexseq

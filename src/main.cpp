@@ -22,7 +22,6 @@ namespace {
 
 flexseq::SequencerEngine engine;
 flexseq::PatternBank patternBank;
-flexseq::ModulatedPatternState modulatedPatterns;
 flexseq::Transport transport(engine);
 flexseq::TriggerSequencer triggers(engine);
 flexseq::UiController ui(engine, transport);
@@ -143,7 +142,6 @@ void setup() {
     // repart des defauts EN LES ECRIVANT — le format est ainsi materialise des
     // le premier demarrage, pas a la premiere edition. Voir PRD 11.1.
     engine.setPatternBank(&patternBank);
-    engine.setModulatedPatterns(&modulatedPatterns);
     flexseq::bootstrap(eeprom, persistentImage, persistence, millis());
 
     flexseq::probe::instanceBase = patternBank.getPattern(0);

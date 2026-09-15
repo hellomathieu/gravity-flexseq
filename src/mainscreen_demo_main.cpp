@@ -16,9 +16,6 @@ flexseq::SequencerEngine engine;
 flexseq::PatternBank patternBank;
 flexseq::Transport transport(engine);
 flexseq::UiController ui(engine, transport);
-#if defined(FLEXSEQ_DEMO_PATTERN_ASK)
-flexseq::ModulatedPatternState modulated;
-#endif
 
 constexpr uint8_t DEMO_TAB = 2;
 #if defined(FLEXSEQ_DEMO_MOD)
@@ -75,9 +72,6 @@ void renderBand() {
 void setup() {
     gravity.Init();
     engine.setPatternBank(&patternBank);
-#if defined(FLEXSEQ_DEMO_PATTERN_ASK)
-    engine.setModulatedPatterns(&modulated);
-#endif
     gravity.display.setFont(flexseq::FONT_VELVETSCREEN);
 
 #if defined(FLEXSEQ_DEMO_MODE_SEQ)
@@ -110,19 +104,6 @@ void setup() {
     }
 #endif
 
-#if defined(FLEXSEQ_DEMO_PATTERN_ASK)
-    // PRD 5.0 amendement 1quater : la QUESTION, posee par un appui court dans le
-    // champ ouvert sur une copie changee. Aucun etat d interface n est pose a la
-    // main : le panneau montre ce qu une suite de gestes produit.
-    //
-    // Le canal est marque comme change, sans quoi la question n existerait pas.
-    modulated.markDirty(DEMO_TAB - 1);
-    while (ui.cursor() != flexseq::UiController::SEQ_FIELD_INDEX_PATTERN) {
-        ui.handle(flexseq::UiController::EVENT_ROTATE, 1);
-    }
-    ui.handle(flexseq::UiController::EVENT_PRESS);   // ouvre le champ
-    ui.handle(flexseq::UiController::EVENT_PRESS);   // pose la question
-#endif
     gravity.clock.AttachIntHandler(onOutputTick);
     transport.start();
 }

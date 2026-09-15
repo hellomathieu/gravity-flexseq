@@ -1,6 +1,4 @@
-import { ModulatedPatternState } from "../src/domain/ModulatedPatternState.js";
 import { PatternBank } from "../src/domain/PatternBank.js";
-import { PatternAction } from "../src/domain/PatternAction.js";
 import { describe, expect, it } from "vitest";
 import {
   CHANNEL_TAB_FIELDS,
@@ -948,31 +946,23 @@ describe("le champ MOD, PRD 10.2", () => {
 });
 
 /*
- * PRD 5.0 amendement 1quater — le pattern se choisit dans son champ, et un
- * chargement destructeur demande YES ou NO.
+ * PRD 5.0, amendment of 2026-09-15 — the pattern is chosen in its own field, a
+ * short press loads it, and nothing ever asks: the patterns are shared.
  *
  * Miroir de `test/test_ui_controller/test_ui_controller.cpp`.
  */
 describe("UiController — le pattern se choisit dans son champ", () => {
   const seqChannelOnPattern = () => {
+    const bank = new PatternBank();
     const engine = new SequencerEngine();
-    engine.setPatternBank(new PatternBank());
+    engine.setPatternBank(bank);
     for (let ch = 0; ch < engine.channelCount(); ++ch) {
       engine.setChannelMode(ch, ChannelMode.SEQ);
     }
-    const state = new ModulatedPatternState();
-    engine.setModulatedPatterns(state);
     const ui = new UiController(engine, new Transport(engine));
     ui.handle(UiEvent.Press);
     expect(ui.field).toBe(UiField.Pattern);
-    return { engine, state, ui };
-  };
-
-  const tookLoad = (ui: UiController): boolean => {
-    const demand = ui.takePatternAction();
-    if (demand === null) return false;
-    expect(demand.action).toBe(PatternAction.Load);
-    return true;
+    return { bank, engine, ui };
   };
 
   it("un onglet SEQ met la grande valeur en premier", () => {
@@ -990,16 +980,16 @@ describe("UiController — le pattern se choisit dans son champ", () => {
     expect(ui.displayedPattern).toBe(6);
   });
 
-  it("SHIFT plus rotation nomme le template et ne charge rien", () => {
-    const { engine, ui } = seqChannelOnPattern();
+  it("SHIFT plus rotation nomme le pattern et ne charge rien", () => {
+    const { bank, engine, ui } = seqChannelOnPattern();
     engine.setSelectedPattern(0, 6);
     ui.handle(UiEvent.ShiftRotate, 1);
     expect(ui.displayedPattern).toBe(7);
     expect(engine.getSelectedPattern(0)).toBe(6);
-    expect(tookLoad(ui)).toBe(false);
+    expect(engine.patternForChannel(0)).toBe(bank.getPattern(6));
   });
 
-  it("le champ ouvert nomme le template aussi", () => {
+  it("le champ ouvert nomme le pattern aussi", () => {
     const { engine, ui } = seqChannelOnPattern();
     engine.setSelectedPattern(0, 6);
     ui.handle(UiEvent.Press);
@@ -1019,82 +1009,42 @@ describe("UiController — le pattern se choisit dans son champ", () => {
     expect(ui.displayedPattern).toBe(0);
   });
 
-  it("une copie propre charge a l appui court", () => {
+  it("un appui court charge le pattern montre, et le canal le joue", () => {
+    const { bank, engine, ui } = seqChannelOnPattern();
+    engine.setSelectedPattern(0, 6);
+    bank.getPattern(7)!.writeStep(2, true);
+    ui.handle(UiEvent.Press);
+    ui.handle(UiEvent.Rotate, 1);
+    ui.handle(UiEvent.Press);
+    expect(ui.fieldOpen).toBe(false);
+    expect(engine.getSelectedPattern(0)).toBe(7);
+    expect(engine.patternForChannel(0)).toBe(bank.getPattern(7));
+    expect(engine.patternForChannel(0)!.readStep(2)).toBe(true);
+    expect(ui.displayedPattern).toBe(7);
+  });
+
+  it("un pattern edite charge sans question, et garde son edition", () => {
+    const { bank, engine, ui } = seqChannelOnPattern();
+    engine.setSelectedPattern(0, 6);
+    bank.getPattern(6)!.writeStep(4, true);
+    ui.handle(UiEvent.Press);
+    ui.handle(UiEvent.Rotate, 1);
+    ui.handle(UiEvent.Press);
+    expect(ui.fieldOpen).toBe(false);
+    expect(engine.getSelectedPattern(0)).toBe(7);
+    expect(bank.getPattern(6)!.readStep(4)).toBe(true);
+  });
+
+  it("un appui long ferme sans charger", () => {
     const { engine, ui } = seqChannelOnPattern();
     engine.setSelectedPattern(0, 6);
     ui.handle(UiEvent.Press);
     ui.handle(UiEvent.Rotate, 1);
-    ui.handle(UiEvent.Press);
-    expect(ui.fieldOpen).toBe(false);
-    expect(ui.patternAskPending).toBe(false);
-    expect(engine.getSelectedPattern(0)).toBe(7);
-    expect(tookLoad(ui)).toBe(true);
-  });
-
-  it("une copie changee demande avant de charger", () => {
-    const { engine, state, ui } = seqChannelOnPattern();
-    state.markDirty(0);
-    engine.setSelectedPattern(0, 6);
-    ui.handle(UiEvent.Press);
-    ui.handle(UiEvent.Rotate, 1);
-    ui.handle(UiEvent.Press);
-    expect(ui.patternAskPending).toBe(true);
-    expect(ui.patternAnswerIsYes, "NO est arme le premier").toBe(false);
-    expect(ui.fieldOpen).toBe(true);
-    expect(engine.getSelectedPattern(0)).toBe(6);
-    expect(tookLoad(ui)).toBe(false);
-  });
-
-  it("une rotation passe d un mot a l autre", () => {
-    const { state, ui } = seqChannelOnPattern();
-    state.markDirty(0);
-    ui.handle(UiEvent.Press);
-    ui.handle(UiEvent.Press);
-    expect(ui.patternAnswerIsYes).toBe(false);
-    ui.handle(UiEvent.Rotate, 1);
-    expect(ui.patternAnswerIsYes).toBe(true);
-    ui.handle(UiEvent.Rotate, 1);
-    expect(ui.patternAnswerIsYes).toBe(false);
-  });
-
-  it("YES charge le template choisi", () => {
-    const { engine, state, ui } = seqChannelOnPattern();
-    state.markDirty(0);
-    engine.setSelectedPattern(0, 6);
-    ui.handle(UiEvent.Press);
-    ui.handle(UiEvent.Rotate, 1);
-    ui.handle(UiEvent.Press);
-    ui.handle(UiEvent.Rotate, 1);
-    ui.handle(UiEvent.Press);
-    expect(ui.fieldOpen).toBe(false);
-    expect(engine.getSelectedPattern(0)).toBe(7);
-    expect(tookLoad(ui)).toBe(true);
-  });
-
-  it("NO rend son nom au template joue", () => {
-    const { engine, state, ui } = seqChannelOnPattern();
-    state.markDirty(0);
-    engine.setSelectedPattern(0, 6);
-    ui.handle(UiEvent.Press);
-    ui.handle(UiEvent.Rotate, 1);
     expect(ui.displayedPattern).toBe(7);
-    ui.handle(UiEvent.Press);
-    ui.handle(UiEvent.Press);
-    expect(ui.fieldOpen).toBe(false);
-    expect(ui.displayedPattern).toBe(6);
-    expect(tookLoad(ui)).toBe(false);
-  });
-
-  it("un appui long ferme sans charger", () => {
-    const { state, ui } = seqChannelOnPattern();
-    state.markDirty(0);
-    ui.handle(UiEvent.Press);
-    ui.handle(UiEvent.Press);
-    expect(ui.patternAskPending).toBe(true);
     ui.handle(UiEvent.LongPress);
     expect(ui.fieldOpen).toBe(false);
-    expect(ui.patternAskPending).toBe(false);
-    expect(tookLoad(ui)).toBe(false);
+    expect(engine.getSelectedPattern(0)).toBe(6);
+    expect(ui.displayedPattern).toBe(6);
   });
 
   it("changer d onglet abandonne le choix", () => {
@@ -1107,38 +1057,96 @@ describe("UiController — le pattern se choisit dans son champ", () => {
     ui.handle(UiEvent.Rotate, 1);
     expect(ui.displayedPattern).toBe(2);
   });
+});
 
-  it("un moteur sans tampon n interroge jamais", () => {
-    const engine = new SequencerEngine();
-    engine.setPatternBank(new PatternBank());
-    for (let ch = 0; ch < engine.channelCount(); ++ch) {
-      engine.setChannelMode(ch, ChannelMode.SEQ);
-    }
-    const ui = new UiController(engine, new Transport(engine));
-    ui.handle(UiEvent.Press);
-    engine.setSelectedPattern(0, 6);
-    ui.handle(UiEvent.Press);
-    ui.handle(UiEvent.Rotate, 1);
-    ui.handle(UiEvent.Press);
-    expect(ui.patternAskPending).toBe(false);
-    expect(engine.getSelectedPattern(0)).toBe(7);
-    expect(tookLoad(ui)).toBe(true);
+/*
+ * PRD 5.0, amendment of 2026-09-15 — EDIT is read only while a source of the
+ * channel is routed to PATTERN.
+ */
+describe("UiController — EDIT en lecture seule sous un routage PATTERN", () => {
+  const enterEditOf = (r: ReturnType<typeof rig>) => {
+    r.gotoTab(TAB_FIRST_CHANNEL);
+    r.ui.handle(UiEvent.Press);
+    while (r.ui.field !== UiField.EditEntry) r.ui.handle(UiEvent.Rotate, 1);
+    r.ui.handle(UiEvent.Press);
+    expect(r.ui.level).toBe(UiLevel.Edit);
+  };
+
+  it("un canal non route s edite", () => {
+    const r = rig();
+    expect(r.ui.editIsReadOnly).toBe(false);
+    enterEditOf(r);
+    r.ui.handle(UiEvent.Press);
+    expect(r.engine.patternForChannel(0)!.readStep(0)).toBe(true);
   });
 
-  it("une demande n est servie qu une fois", () => {
-    const { ui } = seqChannelOnPattern();
-    ui.handle(UiEvent.Press);
-    ui.handle(UiEvent.Press);
-    expect(tookLoad(ui)).toBe(true);
-    expect(tookLoad(ui)).toBe(false);
+  it("un routage PATTERN sur la premiere source rend EDIT en lecture seule", () => {
+    const r = rig();
+    r.engine.setCvDestination(0, CV_SOURCE_1, CvDestination.PATTERN);
+    r.engine.patternForChannel(0)!.writeStep(3, true);
+    enterEditOf(r);
+    expect(r.ui.editIsReadOnly).toBe(true);
+    r.ui.handle(UiEvent.Press);
+    expect(r.engine.patternForChannel(0)!.readStep(0)).toBe(false);
+    for (let i = 0; i < 3; ++i) r.ui.handle(UiEvent.Rotate, 1);
+    expect(r.ui.stepCursor).toBe(3);
+    r.ui.handle(UiEvent.ShiftRotate, 1);
+    expect(r.engine.patternForChannel(0)!.getRatchet(3)).toBe(RATCHET_NONE);
+    r.ui.handle(UiEvent.ShiftLongPress);
+    expect(r.engine.patternForChannel(0)!.readStep(3)).toBe(true);
   });
 
-  it("sans geste, aucune demande", () => {
-    const engine = new SequencerEngine();
-    engine.setPatternBank(new PatternBank());
-    const ui = new UiController(engine, new Transport(engine));
-    expect(ui.takePatternAction()).toBeNull();
-    ui.handle(UiEvent.Press);
-    expect(ui.takePatternAction()).toBeNull();
+  it("un routage PATTERN sur la seconde source aussi", () => {
+    const r = rig();
+    r.engine.setCvDestination(0, CV_SOURCE_2, CvDestination.PATTERN);
+    enterEditOf(r);
+    expect(r.ui.editIsReadOnly).toBe(true);
+    r.ui.handle(UiEvent.Press);
+    expect(r.engine.patternForChannel(0)!.readStep(0)).toBe(false);
+  });
+
+  it("un autre routage ne bloque pas l edition", () => {
+    const r = rig();
+    r.engine.setCvDestination(0, CV_SOURCE_1, CvDestination.LENGTH);
+    r.engine.setCvDestination(0, CV_SOURCE_2, CvDestination.STEP);
+    expect(r.ui.editIsReadOnly).toBe(false);
+    enterEditOf(r);
+    r.ui.handle(UiEvent.Press);
+    expect(r.engine.patternForChannel(0)!.readStep(0)).toBe(true);
+  });
+
+  it("SEP reste reglable sous un routage PATTERN", () => {
+    const r = rig();
+    r.engine.setCvDestination(0, CV_SOURCE_1, CvDestination.PATTERN);
+    enterEditOf(r);
+    const before = r.engine.getBarLength(0);
+    r.ui.handle(UiEvent.Rotate, -1);
+    expect(r.ui.isOnHeader).toBe(true);
+    r.ui.handle(UiEvent.Press);
+    r.ui.handle(UiEvent.Rotate, 1);
+    expect(r.engine.getBarLength(0)).not.toBe(before);
+  });
+
+  it("la lecture seule suit le canal de l onglet", () => {
+    const r = rig();
+    r.engine.setCvDestination(1, CV_SOURCE_1, CvDestination.PATTERN);
+    r.gotoTab(TAB_FIRST_CHANNEL);
+    expect(r.ui.editIsReadOnly).toBe(false);
+    r.gotoTab(TAB_FIRST_CHANNEL + 1);
+    expect(r.ui.editIsReadOnly).toBe(true);
+    r.gotoTab(TAB_CLOCK);
+    expect(r.ui.editIsReadOnly).toBe(false);
+  });
+
+  it("retirer le routage rend l edition", () => {
+    const r = rig();
+    r.engine.setCvDestination(0, CV_SOURCE_1, CvDestination.PATTERN);
+    enterEditOf(r);
+    r.ui.handle(UiEvent.Press);
+    expect(r.engine.patternForChannel(0)!.readStep(0)).toBe(false);
+    r.engine.setCvDestination(0, CV_SOURCE_1, CvDestination.NONE);
+    expect(r.ui.editIsReadOnly).toBe(false);
+    r.ui.handle(UiEvent.Press);
+    expect(r.engine.patternForChannel(0)!.readStep(0)).toBe(true);
   });
 });

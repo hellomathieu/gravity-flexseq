@@ -2,6 +2,7 @@ import { Pattern, ratchetFitsStep, RATCHET_CODES } from "./Pattern.js";
 import {
   CV_SOURCE_1,
   CV_SOURCE_2,
+  CvDestination,
   MOD_CHOICE_COUNT,
   modChoiceAt,
   modIndexOf,
@@ -17,7 +18,6 @@ import {
   type SequencerEngine,
 } from "./SequencerEngine.js";
 import { PATTERN_COUNT } from "./PatternBank.js";
-import { PatternAction } from "./PatternAction.js";
 import { DEFAULT_SUBDIV, SUBDIVS } from "./subdiv.js";
 import type { Transport } from "./Transport.js";
 
@@ -121,11 +121,7 @@ export class UiController {
   private currentTempo = DEFAULT_TEMPO;
   private source = 0;
   private rev = 0;
-  private ask = false;
-  private yes = false;
   private browse = NO_BROWSE;
-  private pending: PatternAction = PatternAction.None;
-  private pendingChannel = 0;
 
   constructor(
     private readonly engine: SequencerEngine,
@@ -176,22 +172,9 @@ export class UiController {
     return channel < 0 ? NO_BROWSE : this.engine.getSelectedPattern(channel);
   }
 
-  // La question qui precede un chargement destructeur, et le mot choisi.
-  get patternAskPending(): boolean {
-    return this.ask;
-  }
-
-  get patternAnswerIsYes(): boolean {
-    return this.yes;
-  }
-
-  // Le controleur POSE une demande, il ne l execute pas : ADR 0002 lui interdit
-  // de connaitre le Storage. Le service la consomme, une seule fois.
-  takePatternAction(): { action: PatternAction; channel: number } | null {
-    if (this.pending === PatternAction.None) return null;
-    const taken = { action: this.pending, channel: this.pendingChannel };
-    this.pending = PatternAction.None;
-    return taken;
+  get editIsReadOnly(): boolean {
+    const channel = this.selectedChannel;
+    return channel >= 0 && this.engine.isRoutedTo(channel, CvDestination.PATTERN);
   }
 
   // SHIFT plus une rotation, et la rotation dans le champ ouvert, deplacent le
@@ -202,46 +185,12 @@ export class UiController {
     this.browse = clampIndex(shown, oneStep(delta), PATTERN_COUNT);
   }
 
-  // Le chargement du nom choisi. selectedPattern ne bouge qu ICI : c est le seul
-  // endroit ou le canal se met a jouer autre chose.
   private postPatternLoad(): void {
     const channel = this.selectedChannel;
     const wanted = this.displayedPattern;
     if (channel < 0 || wanted < 0) return;
     this.engine.setSelectedPattern(channel, wanted);
     this.browse = NO_BROWSE;
-    this.pending = PatternAction.Load;
-    this.pendingChannel = channel;
-  }
-
-  // Un appui court dans le champ ouvert. Rend true quand le champ doit RESTER
-  // ouvert, ce qui n arrive que lorsque la question vient d etre posee.
-  private pressInPatternField(): boolean {
-    if (this.ask) {
-      this.ask = false;
-      if (this.yes) {
-        this.postPatternLoad();
-      } else {
-        // NO rend son nom au template que le canal joue.
-        this.browse = NO_BROWSE;
-      }
-      return false;
-    }
-    if (this.channelCopyHasChanged()) {
-      // ⚠️ NO est arme le premier : un appui court de trop ne doit rien detruire.
-      this.ask = true;
-      this.yes = false;
-      return true;
-    }
-    this.postPatternLoad();
-    return false;
-  }
-
-  private channelCopyHasChanged(): boolean {
-    const state = this.engine.modulatedPatterns();
-    const channel = this.selectedChannel;
-    if (state === null || channel < 0) return false;
-    return state.isDirty(channel);
   }
 
   get fieldCount(): number {
@@ -359,7 +308,6 @@ export class UiController {
       this.open = false;
       // ⚠️ Le choix en cours appartient au canal qu on quitte.
       this.browse = NO_BROWSE;
-      this.ask = false;
       return;
     }
     if (event === UiEvent.ShiftRotate) {
@@ -383,12 +331,7 @@ export class UiController {
     switch (event) {
       case UiEvent.Rotate:
         if (this.open && this.field === UiField.Pattern) {
-          if (this.ask) {
-            // Deux mots seulement : une rotation passe de l un a l autre.
-            this.yes = !this.yes;
-          } else {
-            this.browsePattern(delta);
-          }
+          this.browsePattern(delta);
         } else if (this.open) {
           this.adjustField(delta);
         } else {
@@ -404,7 +347,7 @@ export class UiController {
         break;
       case UiEvent.Press:
         if (this.open) {
-          if (this.field === UiField.Pattern && this.pressInPatternField()) break;
+          if (this.field === UiField.Pattern) this.postPatternLoad();
           this.open = false;
         } else if (this.field === UiField.EditEntry) {
           this.currentLevel = UiLevel.Edit;
@@ -415,14 +358,12 @@ export class UiController {
           this.fieldCursor = CONFIG_FIELD_INDEX_LENGTH;
         } else if (this.field !== UiField.None) {
           this.open = true;
-          this.ask = false;
-          this.yes = false;
         }
         break;
       case UiEvent.LongPress:
         if (this.open) {
-          this.ask = false;
           this.open = false;
+          this.browse = NO_BROWSE;
         } else if (this.configPage) {
           this.configPage = false;
           this.fieldCursor = SEQ_FIELD_INDEX_CONFIG;
@@ -586,7 +527,7 @@ export class UiController {
 
   private adjustRatchet(delta: number): void {
     const pattern = this.currentPattern();
-    if (pattern === null) return;
+    if (pattern === null || this.editIsReadOnly) return;
     if (pattern.readStep(this.step) !== true) return;
     const channel = this.selectedChannel;
     if (channel < 0) return;
@@ -624,7 +565,7 @@ export class UiController {
 
   private toggleStep(): void {
     const pattern = this.currentPattern();
-    if (pattern === null) return;
+    if (pattern === null || this.editIsReadOnly) return;
     const active = pattern.readStep(this.step);
     if (active === null) return;
     pattern.writeStep(this.step, !active);
@@ -632,7 +573,7 @@ export class UiController {
 
   private clearPattern(): void {
     const pattern = this.currentPattern();
-    if (pattern === null) return;
+    if (pattern === null || this.editIsReadOnly) return;
     pattern.clear();
     this.engine.refreshTiming();
   }
