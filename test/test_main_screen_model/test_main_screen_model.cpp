@@ -1,5 +1,7 @@
+#include <string.h>
 #include <unity.h>
 
+#include <flexseq/EditTitle.h>
 #include <flexseq/MainScreenModel.h>
 #include <flexseq/PatternBank.h>
 #include <flexseq/SequencerEngine.h>
@@ -176,6 +178,111 @@ void test_the_model_shows_the_editable_length_and_not_the_derived_one() {
         "l ecran montre la longueur EDITABLE, jamais la longueur modulee");
 }
 
+
+/*
+ * PRD 5.0, amendment of 2026-09-15 — the EDIT title names the pattern the
+ * channel PLAYS, and it reads CV PATTERN while a source is routed to PATTERN.
+ */
+
+namespace {
+
+struct EditRig : Rig {
+    char title[flexseq::EDIT_TITLE_CAPACITY];
+
+    EditRig() : Rig() {
+        memset(title, 'x', sizeof(title));
+        for (uint8_t ch = 0; ch < SequencerEngine::CHANNEL_COUNT; ++ch) {
+            engine.setChannelMode(ch, flexseq::MODE_SEQ);
+        }
+    }
+
+    void enterEditOf(uint8_t channel) {
+        enterChannel(channel);
+        while (ui.field() != UiController::FIELD_EDIT_ENTRY) {
+            ui.handle(UiController::EVENT_ROTATE, 1);
+        }
+        ui.handle(UiController::EVENT_PRESS);
+        TEST_ASSERT_EQUAL(UiController::LEVEL_EDIT, ui.level());
+    }
+};
+
+}  // namespace
+
+void test_the_edit_title_names_the_selected_pattern_without_a_routing() {
+    EditRig r;
+    r.engine.setSelectedPattern(0, 4);
+    r.enterEditOf(0);
+    TEST_ASSERT_TRUE(flexseq::editTitleFor(r.ui, r.engine, 0, r.title));
+    TEST_ASSERT_EQUAL_STRING("EDIT PATTERN A5", r.title);
+    r.engine.setSelectedPattern(0, 13);
+    TEST_ASSERT_TRUE(flexseq::editTitleFor(r.ui, r.engine, 0, r.title));
+    TEST_ASSERT_EQUAL_STRING("EDIT PATTERN B6", r.title);
+}
+
+void test_the_cv_title_names_the_played_pattern_and_not_the_selected_one() {
+    EditRig r;
+    r.engine.setSelectedPattern(0, 4);
+    r.engine.setCvDestination(0, flexseq::CV_SOURCE_1, flexseq::CV_DEST_PATTERN);
+    r.engine.setCvInput(flexseq::CV_SOURCE_1, 330);
+    r.engine.start();
+    r.engine.advance(96);
+    TEST_ASSERT_EQUAL_INT8(14, r.engine.patternCvIndex(0));
+    r.enterEditOf(0);
+    TEST_ASSERT_TRUE(flexseq::editTitleFor(r.ui, r.engine, 0, r.title));
+    TEST_ASSERT_EQUAL_STRING_MESSAGE("CV PATTERN B7", r.title,
+        "the title names the pattern the channel plays, B7, not the selected A5");
+}
+
+void test_the_cv_title_appears_as_soon_as_a_source_is_routed_to_pattern() {
+    EditRig r;
+    r.engine.setSelectedPattern(0, 0);
+    r.engine.setCvDestination(0, flexseq::CV_SOURCE_2, flexseq::CV_DEST_PATTERN);
+    r.enterEditOf(0);
+    TEST_ASSERT_TRUE(flexseq::editTitleFor(r.ui, r.engine, 0, r.title));
+    TEST_ASSERT_EQUAL_STRING_MESSAGE("CV PATTERN A1", r.title,
+        "the routing decides, not the zone: at zone zero the word already changes");
+}
+
+void test_another_routing_keeps_the_edit_title() {
+    EditRig r;
+    r.engine.setCvDestination(0, flexseq::CV_SOURCE_1, flexseq::CV_DEST_LENGTH);
+    r.enterEditOf(0);
+    TEST_ASSERT_TRUE(flexseq::editTitleFor(r.ui, r.engine, 0, r.title));
+    TEST_ASSERT_EQUAL_STRING("EDIT PATTERN A1", r.title);
+}
+
+void test_the_title_refuses_an_invalid_channel_and_leaves_the_buffer_alone() {
+    EditRig r;
+    TEST_ASSERT_FALSE(flexseq::editTitleFor(r.ui, r.engine, 6, r.title));
+    TEST_ASSERT_EQUAL_CHAR('x', r.title[0]);
+}
+
+void test_the_edit_cursor_follows_the_step_and_hides_on_the_header() {
+    EditRig r;
+    r.enterEditOf(0);
+    TEST_ASSERT_EQUAL_INT8(0, flexseq::editCursorFor(r.ui));
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_INT8(2, flexseq::editCursorFor(r.ui));
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    TEST_ASSERT_TRUE(r.ui.isOnHeader());
+    TEST_ASSERT_EQUAL_INT8(-1, flexseq::editCursorFor(r.ui));
+}
+
+void test_the_edit_cursor_hides_under_a_pattern_routing() {
+    EditRig r;
+    r.engine.setCvDestination(0, flexseq::CV_SOURCE_1, flexseq::CV_DEST_PATTERN);
+    r.enterEditOf(0);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_UINT8(1, r.ui.stepCursor());
+    TEST_ASSERT_EQUAL_INT8_MESSAGE(-1, flexseq::editCursorFor(r.ui),
+        "nothing to edit, so no cursor is drawn");
+    r.engine.setCvDestination(0, flexseq::CV_SOURCE_1, flexseq::CV_DEST_NONE);
+    TEST_ASSERT_EQUAL_INT8(1, flexseq::editCursorFor(r.ui));
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_the_model_shows_the_editable_length_and_not_the_derived_one);
@@ -187,5 +294,12 @@ int main() {
     RUN_TEST(test_seq_makes_the_pattern_the_main_parameter);
     RUN_TEST(test_the_clock_tab_makes_the_tempo_the_main_parameter);
     RUN_TEST(test_the_mode_defaults_to_clock_outside_a_channel);
+    RUN_TEST(test_the_edit_title_names_the_selected_pattern_without_a_routing);
+    RUN_TEST(test_the_cv_title_names_the_played_pattern_and_not_the_selected_one);
+    RUN_TEST(test_the_cv_title_appears_as_soon_as_a_source_is_routed_to_pattern);
+    RUN_TEST(test_another_routing_keeps_the_edit_title);
+    RUN_TEST(test_the_title_refuses_an_invalid_channel_and_leaves_the_buffer_alone);
+    RUN_TEST(test_the_edit_cursor_follows_the_step_and_hides_on_the_header);
+    RUN_TEST(test_the_edit_cursor_hides_under_a_pattern_routing);
     return UNITY_END();
 }

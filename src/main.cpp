@@ -9,6 +9,7 @@
 #endif
 #include <flexseq/InputAdapter.h>
 #include <flexseq/Persistence.h>
+#include <flexseq/EditTitle.h>
 #include <flexseq/UiFrame.h>
 #include <flexseq/PagedScreen.h>
 #include <flexseq/PatternScreen.h>
@@ -42,10 +43,7 @@ flexseq::EepromStorage eeprom;
 // et l'emission des triggers passent toujours en premier dans loop().
 constexpr uint16_t UI_MIN_INTERVAL_MS = 40;
 
-// "EDIT PATTERN A1" : les deux derniers caracteres suivent le pattern courant.
-char uiTitle[16] = "EDIT PATTERN A1";
-constexpr uint8_t UI_TITLE_BANK = 13;
-constexpr uint8_t UI_TITLE_NUM = 14;
+char uiTitle[flexseq::EDIT_TITLE_CAPACITY] = "";
 
 uint32_t uiLastDrawMs = 0;
 int8_t uiLastStep = -2;
@@ -69,13 +67,9 @@ void onOutputTick(uint32_t) {
 }
 
 void beginEditFrame(uint8_t channel) {
-    const int8_t selected = engine.getSelectedPattern(channel);
-    if (selected < 0) {
+    if (!flexseq::editTitleFor(ui, engine, channel, uiTitle)) {
         return;
     }
-    strcpy_P(uiTitle, PSTR("EDIT PATTERN A1"));
-    uiTitle[UI_TITLE_BANK] = (selected < 8) ? 'A' : 'B';
-    uiTitle[UI_TITLE_NUM] = static_cast<char>('1' + (selected % 8));
 
 #if FLEXSEQ_ENCODER_PROBE
     flexseq::probe::writeReport(uiTitle);
@@ -88,9 +82,7 @@ void beginEditFrame(uint8_t channel) {
     model.length = engine.getEffectiveLength(channel);
     model.sepSelected = ui.isOnHeader();
     model.sepOpen = model.sepSelected && ui.fieldOpen();
-    model.cursor = model.sepSelected
-        ? static_cast<int8_t>(-1)
-        : static_cast<int8_t>(ui.stepCursor());
+    model.cursor = flexseq::editCursorFor(ui);
     model.playhead = engine.effectiveStep(channel);
     model.barLength = static_cast<uint8_t>(engine.getBarLength(channel));
 
