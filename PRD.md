@@ -370,7 +370,27 @@ The gesture that names a template does not change: `SHIFT` plus a rotation moves
 
 **What STAYS, and none of it moves:** ADR 0006 and the template / instance model · `loadTemplate` and the gesture of `1quater` · the question `SURE: NO` / `SURE: YES` · the `EDIT` screen of a channel · the `PATTERN` modulation by CV and its buffer · the format of §11.1, its version and its 588 bytes. **The tab bar returns to eight slots**, which is the count of the original.
 
-⚠️ **AN OPEN QUESTION, DELIBERATELY SEPARATED FROM THIS AMENDMENT.** The owner proposes on 2026-09-14 to return to the **shared** patterns of the original, so that to edit a pattern edits it for every channel that plays it, and to make `A1` to `A8` editable again. **That reverses ADR 0006 and ADR 0013**, it rewrites the model of §5.0, and it changes the EEPROM format of §11.1 — the image would carry no instance, so the version would move. Its RAM arithmetic is an **estimate with three terms**: a resident bank of sixteen costs 368 bytes, the six instances return 138, the modulation buffer returns 138, so **+92 bytes against 140 of allowed growth**. ⚠️ **Nothing of that is measured**, and a fifty-byte error kills the work after everything has been undone. **It is not decided, it is not this amendment, and it needs its own measurement.**
+⚠️ **AN OPEN QUESTION, DELIBERATELY SEPARATED FROM THIS AMENDMENT — AND IT IS NOW MEASURED.** The owner proposes on 2026-09-14 to return to the **shared** patterns of the original, so that to edit a pattern edits it for every channel that plays it, and to make `A1` to `A8` editable again. **That reverses ADR 0006 and ADR 0013**, it rewrites the model of this section, and it changes the EEPROM format of §11.1 — the image would carry no instance, so the version would move. ⚠️ **IT IS STILL NOT DECIDED.**
+
+✅ **MEASURED ON 2026-09-15, on a throwaway branch, and the estimate of this paragraph was WRONG in the project's favour.** A prototype that links and runs gives:
+
+```text
+Flash   28992 -> 27868   RETURNS 1124 bytes
+RAM      1513 ->  1582   COSTS     69 bytes, against 151 of allowed growth
+stack     200 ->   200   unchanged, 6/6 watched vectors
+loop     p90 6.62 -> 6.63 ms   no measurable cost, budget 12 ms
+image     588 ->   434 bytes, and the WHOLE image is scanned
+```
+
+⚠️ **The estimate of three terms that this paragraph carried — +368, −138, −138, so +92 against 140 — was wrong on two counts.** The modulation buffer weighs **152 bytes** and not 138, read on the ELF with `avr-nm`; and the allowed growth is **151** and not 140, the removal of the `PATTERNS` tab having returned 11 bytes of RAM. The measured **+69** is the same arithmetic with the right terms, plus five bytes that the deferred load demand and the deferred template write return.
+
+**Where the Flash goes**: the six instances, the whole modulation buffer and its round-robin service, `loadTemplate`, `saveTemplate`, `isTemplateEmpty`, the deferred template write, the deferred load demand, and the 384-byte template zone. A load becomes a change of index, so it reads no EEPROM.
+
+⚠️ **WHAT THE PROTOTYPE DOES NOT ESTABLISH.** Its C++ tests are not green — `test_ui_controller` and `test_persistence` do not compile against it — so it is representative in size, not proven correct. It has **no TypeScript mirror**, so the parity rule of the project is not met and it cannot reach `main` as it stands. And `patternForChannel()` can return `nullptr` for a valid channel when no bank is wired, a state the per-channel model could not reach; the two readers of the engine already guard it, the tests did not.
+
+**The shape the owner described on 2026-09-15, and it is NOT decided either.** Two channels on `B4` both hear an edit made by either one; only the modulation can differ between them. The confirmation `SURE` is **abandoned everywhere**: a shared edit reaches every channel that plays the pattern, and the owner accepted that. ⚠️ **A first wording put `SURE` on the `EDIT` entry, and it was withdrawn**: the guard it needed — a channel that is *not up to date* — cannot exist when there is no copy.
+
+**The price that is not in bytes**: the format changes version, so the patterns the user has edited are lost at the first boot; and the per-channel variant, which is the whole point of ADR 0006, disappears. The user then authors sixteen patterns instead of six, as the original does.
 
 ---
 
