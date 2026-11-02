@@ -49,6 +49,14 @@ format keeps its own, and a mutant that swaps one for the other turns the suite
 red. The version 2 format is untouched, and its own tests still assert
 it, the version byte included, which stays at 2.
 
+The version 3 codec LEFT with lot PARTAGE on 2026-09-15 (PRD 5.0, ADR 0014).
+The suite now asserts the version 4 image: 434 bytes, the sixteen patterns of
+the shared bank at logical index 1, a record of 23 bytes with no length byte,
+the channel records at 369, and the version at the last logical index, 433. A
+version 3 image is refused and the factory bank is seeded in RAM. The two
+paragraphs above record the lot B state, and they stay as history. The
+version 2 class is still a witness, and its tests still run.
+
 The TypeScript mirror gained twenty. The gap of four is not a hole in the
 coverage, and it decomposes exactly: FIVE C++ tests have no TypeScript twin --
 `sizeof(Pattern)`, the three on the raw byte accessors, and the mask applied ON
@@ -82,7 +90,8 @@ mutation there being an equivalent mutant, which ADR 0001 records rather than
 counts as a pass. Their TypeScript mirrors were swept the same way (15/15,
 15/15, 22/22).
 
-The version 3 codec of lot B was swept the same way, and the sweep found a real
+The version 3 codec of lot B was swept the same way (the codec is version 4
+since 2026-09-15, and its mutants were re-targeted then), and the sweep found a real
 gap. 34 mutants of the codec -- 16 in C++, 18 in TypeScript -- are all detected,
 but only after a first pass returned 194/195. The undetected mutation removed the
 ratchet normalisation on the TypeScript side, and it was NOT an equivalent

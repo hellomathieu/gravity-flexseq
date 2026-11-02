@@ -179,6 +179,14 @@ with `PPQN = 4`, which means nothing, while a derived view cannot lie.
 
 So the version 3 image gains only `MOD` and `RANGE`: **306 bytes**.
 
+⚠️ **The version numbers of this section are the arithmetic of 2026-09-07, and
+the format moved twice since.** Version 3 carried 588 physical bytes, and the
+five-byte global zone this section asks for went into it. Since 2026-09-15 the
+format is **version 4**, 434 bytes, with the sixteen shared patterns in the image
+(PRD §11.1, ADR 0014). The global zone still holds its 5 bytes, at logical index
+423. Nothing of the decision changes; only the figures 304, 306 and 3 are
+history.
+
 ⚠️ **`PPQN` NAMES THE INPUT, NEVER THE ENGINE.** The engine runs at **96 PPQN in
 every mode**, INT included: `clock.h:59` calls `setOutputPPQN(PPQN_96)` once and
 `SetSource()` never touches it. `SetSource()` only calls `setInputPPQN`, and only

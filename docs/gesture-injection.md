@@ -612,20 +612,26 @@ harness **links the domain itself** — all of `src/domain/` — builds a
 from the simulated RAM.
 
 **The expectation is produced by the firmware's own boot rule**, not by a rewrite
-of it (`src/main.cpp:170-176`):
-
-```c
-if (!persistence.load(eeprom, persistentImage)) {
-    loadFactoryPatterns(patternBank);
-}
-```
+of it. Since 2026-09-15 that rule is `flexseq::bootstrap()` in `src/main.cpp`:
+`load()` the version 4 image, or `resetToDefaults()`, which seeds the factory
+bank in RAM and marks the image dirty.
 
 The harness replays exactly that. `PersistenceScheduler::load()` is a template
 over a `Storage` that exposes `read(address)`, so the harness supplies a ten-line
-adapter over the EEPROM image bytes it hands to the machine, and falls back to
-`loadFactoryPatterns()` when the reader refuses the header — which is also the
-no-image case, simavr returning `0xFF`. **One control covers both**, and it
-reports which source it used: `controle_source` reads `usine` or `image`.
+adapter over the EEPROM image bytes it hands to the machine, and takes the
+factory bank when the reader refuses the version — which is also the no-image
+case, simavr returning `0xFF`. **One control covers both**, and it reports which
+source it used: `controle_source` reads `usine` or `image`.
+
+⚠️ **Between 2026-08-27 and 2026-09-15 the observed zone was not the bank.** The
+firmware held six per-channel instances (ADR 0006), the harness read those 138
+bytes, and the bank it compared them to was the one of the EEPROM templates. Lot
+PARTAGE (ADR 0014) brings the shared bank back into RAM: the harness observes
+the 368 bytes behind `probe::instanceBase`, which points at pattern 0 of
+`patternBank`, and it maps a channel to the pattern it PLAYS through the twin
+(`playedPattern()`), never through the channel index. The courses `bootstrap`,
+`chargement` and `instances` were rewritten for that model, and `BANK_MUTATE`
+is the lever that flips one byte of the expected bank.
 
 ⚠️ **Until 2026-08-25 the control was BYPASSED whenever an image was preloaded**
 (`temporal || memcmp(...)`), because the image replaces the bank and the factory

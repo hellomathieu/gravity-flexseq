@@ -50,37 +50,28 @@ the SIMULATION, never to a physical module. And two models are compared, not
 every model: a layout that neither `env:mainscreen` nor `env:wokwi` shows has no
 panel reference, and `sim/mockups.html` says so on each of its screens.
 
-**One divergence sits INSIDE the shared domain, and it is a decision.** The C++
-firmware holds a modulation buffer, `ModulatedPatternState`, which a round robin
-fills from the EEPROM templates. The model holds none: `ModulatedPatternState`
-has zero occurrence in `sim/src`. The buffers, the round robin and `Storage`
-belong to the AVR firmware, and decision 5 of lot E3.6.4.4 left them out on
-2026-09-01.
+**The shared domain has NO divergence left, since 2026-09-15.** Lot PARTAGE
+(PRD §5.0 amendment of 2026-09-15, ADR 0014) made the sixteen patterns a shared
+bank in RAM, on both sides. The modulation buffer `ModulatedPatternState`, its
+round robin and the per-channel instances left the C++ firmware, so there is
+nothing of them to mirror any more. `patternForChannel()` means the same thing in
+both languages: the pattern of the bank that `patternCvIndex()` names, the
+selector plus the zones routed to `PATTERN`, clamped to the sixteen slots.
 
-The consequence has a name. `patternForChannel()` exists on both sides and it
-does NOT mean the same thing:
+So P35 HAS a mirror now. The boundary where the derived index changes needs no
+buffer, only a second read of the bank, and `SequencerEngine.test.ts` holds the
+same tests as `test_sequencer_engine`: the played pattern follows the CV index
+while the selector stays, and the ratchet cached at the boundary comes from the
+pattern the index now names. The pins keep their own proof, the `cvpattern`
+course of the trigger probe.
 
-- in C++ it returns the modulation buffer when a template is loaded for that
-  channel, and the instance otherwise;
-- in TypeScript it always returns the instance.
+The paragraphs that stood here until 2026-09-15 described the modulation buffer
+as a decided divergence, and the removal of the `PATTERNS` tab on 2026-09-14 as
+the narrowing of that gap. Both are history: `git log -p -- sim/README.md`.
 
-**So P35 has no mirror.** P35 asks that the content and the ratchet of a step
-come from the same pattern, on the boundary where the derived PATTERN index
-changes. That boundary needs the buffer, so the model cannot express it. P35 is
-held on the C++ side alone: the writer of the buffer invalidates the timing
-cache (ADR 0011), a normative test in `test_persistence` proves it, and the
-`cvpattern` course of the trigger probe proves it on the pins. The
-characterization of the former order is deleted. The boundary of the mirror
-does not move: the model still holds no buffer, and this section still says
-so.
-
-✅ **THE PARAGRAPH THAT STOOD HERE IS GONE WITH ITS SUBJECT, on 2026-09-14.** It
-said that the template editor borrowed the modulation buffer, so it had no mirror
-either, and that the screen of the `PATTERNS` tab was mirrored at 589 pixels of
-ink. **The `PATTERNS` tab and its template editor are REMOVED** — PRD §5.0, third
-amendment of 2026-09-14 — so neither half exists to mirror. **The gap this
-section describes therefore narrows**: what TypeScript still lacks is the
-modulation buffer and its round-robin service, and nothing else.
+What TypeScript still does not carry is unchanged: `Storage`, the EEPROM
+scheduler and the AVR loop. They belong to the firmware, and the section above
+says so.
 
 ## What a green model proves, and what it does not
 
@@ -133,6 +124,14 @@ npm run typecheck # tsc --noEmit
       **370 bytes of RAM**. ⚠️ The class `PatternBank` stays: `PersistentImage`
       v2, `loadFactoryPatterns`, the image generator and `PATTERN_COUNT` use it,
       so `PatternBank == 368 B` above is still true.
+- [x] **2026-09-15 revision — the bank is back, and it is SHARED.** Lot PARTAGE
+      (ADR 0014, supersedes 0006 and 0011) gives the engine a pointer to one
+      `PatternBank` of sixteen patterns, in both languages. `patternForChannel()`
+      returns `bank[patternCvIndex(channel)]`: editing a pattern edits it for
+      every channel that plays it, as in the original. The six instances and the
+      modulation buffer are gone. The EEPROM format is version 4, 434 bytes, the
+      bank included. Measured on the AVR: RAM +69 B, Flash −1262 B against the
+      firmware of 2026-09-15 morning.
 - [ ] Real Transport layer (clock/MIDI); C++ port of the engine.
 - [ ] avr8js backend, wired onto the same `SimBackend` seam.
 
