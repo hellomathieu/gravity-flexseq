@@ -57,6 +57,34 @@ void test_triggers_only_on_active_step_onset() {
     TEST_ASSERT_FALSE(trig.triggered(0));
 }
 
+void test_under_a_pattern_routing_the_trigger_reads_the_pattern_the_cv_names() {
+    SequencerEngine engine;
+    flexseq::PatternBank bank;
+    engine.setPatternBank(&bank);
+    TriggerSequencer trig(engine);
+    seqMode(engine);
+
+    engine.setSelectedPattern(0, 4);
+    engine.setBaseLength(0, 4);
+    TEST_ASSERT_TRUE(bank.getPattern(4)->writeStep(1, true));
+    TEST_ASSERT_TRUE(bank.getPattern(14)->writeStep(2, true));
+    TEST_ASSERT_TRUE(engine.setCvDestination(0, flexseq::CV_SOURCE_1, flexseq::CV_DEST_PATTERN));
+    TEST_ASSERT_TRUE(engine.setCvInput(flexseq::CV_SOURCE_1, 330));
+    engine.start();
+
+    engine.advance(STEP);
+    trig.update();
+    TEST_ASSERT_EQUAL_INT8(14, engine.patternCvIndex(0));
+    TEST_ASSERT_FALSE_MESSAGE(trig.triggered(0),
+                              "step 1 is active on the selected pattern only, and the CV names another one");
+
+    engine.advance(STEP);
+    trig.update();
+    TEST_ASSERT_TRUE_MESSAGE(trig.triggered(0),
+                             "step 2 is active on the pattern the CV names, and that is the one played");
+    TEST_ASSERT_EQUAL_UINT8(4, engine.getSelectedPattern(0));
+}
+
 void test_no_trigger_without_a_step_onset() {
     SequencerEngine engine;
     flexseq::PatternBank engineBank;
@@ -335,6 +363,7 @@ void test_the_generator_covers_the_whole_draw_range() {
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_triggers_only_on_active_step_onset);
+    RUN_TEST(test_under_a_pattern_routing_the_trigger_reads_the_pattern_the_cv_names);
     RUN_TEST(test_no_trigger_without_a_step_onset);
     RUN_TEST(test_channels_with_different_patterns_are_independent);
     RUN_TEST(test_clock_triggers_on_every_step_whatever_the_pattern);

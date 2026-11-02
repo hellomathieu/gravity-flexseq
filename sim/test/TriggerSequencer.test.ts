@@ -4,6 +4,7 @@ import { SequencerEngine, PPQN, ChannelMode, CHANNEL_COUNT } from "../src/domain
 import { Prng } from "../src/domain/Prng.js";
 import { TriggerSequencer } from "../src/domain/TriggerSequencer.js";
 import { RATCHET_6, Pattern } from "../src/domain/Pattern.js";
+import { CvDestination, CV_SOURCE_1 } from "../src/domain/CvDestination.js";
 
 const TOTAL_STEPS = Pattern.DEFAULT_TOTAL_STEPS;
 
@@ -41,6 +42,32 @@ describe("TriggerSequencer", () => {
 
     trig.update();
     expect(trig.triggered(0)).toBe(false);
+  });
+
+  it("under a PATTERN routing, reads the pattern the CV names and not the selected one", () => {
+    const engine = new SequencerEngine();
+    const bank = new PatternBank();
+    engine.setPatternBank(bank);
+    const trig = new TriggerSequencer(engine);
+    for (let ch = 0; ch < CHANNEL_COUNT; ++ch) engine.setChannelMode(ch, ChannelMode.SEQ);
+
+    engine.setSelectedPattern(0, 4);
+    engine.setBaseLength(0, 4);
+    expect(bank.getPattern(4)!.writeStep(1, true)).toBe(true);
+    expect(bank.getPattern(14)!.writeStep(2, true)).toBe(true);
+    expect(engine.setCvDestination(0, CV_SOURCE_1, CvDestination.PATTERN)).toBe(true);
+    expect(engine.setCvInput(CV_SOURCE_1, 330)).toBe(true);
+    engine.start();
+
+    engine.advance(STEP);
+    trig.update();
+    expect(engine.patternCvIndex(0)).toBe(14);
+    expect(trig.triggered(0)).toBe(false);
+
+    engine.advance(STEP);
+    trig.update();
+    expect(trig.triggered(0)).toBe(true);
+    expect(engine.getSelectedPattern(0)).toBe(4);
   });
 
   it("does not trigger without a step onset", () => {

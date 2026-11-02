@@ -137,7 +137,7 @@ RESET_PULSE_MV="${RESET_PULSE_MV:-4000}"
 RESET_PULSE_SOURCE="${RESET_PULSE_SOURCE:-1}"
 RESET_LATENCY_MS="${RESET_LATENCY_MS:-60}"
 # Courses PATOLD, PATNEW, CVPATTERN : la fixture P35 du lot STEP, decidee le
-# 2026-09-03. Deux templates ecrits par --template : OLD (index 8) porte seize
+# 2026-09-03. Deux patterns du banc ecrits par --bank : OLD (index 8) porte seize
 # steps actifs et un TRIPLET sur chacun, NEW (index 15) les memes seize steps et
 # aucun ratchet. CV1 est route vers PATTERN, les six canaux selectionnent OLD.
 #   patold     CV1 au zero mesure          -> index 8, tous les ecarts font 2/3 step
@@ -166,7 +166,7 @@ PAT_TRIPLETS="0/7,1/7,2/7,3/7,4/7,5/7,6/7,7/7,8/7,9/7,10/7,11/7,12/7,13/7,14/7,1
 PAT_PULSE_MS="${PAT_PULSE_MS:-8137}"
 PAT_MIN_LATENCY_MS="${PAT_MIN_LATENCY_MS:-30}"
 # Course CVSTEP (STEP-12, 2026-09-03) : la consommation PHYSIQUE de STEP sur les
-# six sorties. Six INSTANCES distinctes (--instance du generateur, ce que le canal
+# six sorties. Six PATTERNS distincts du banc partage (--per-channel --bank du generateur, ce que le canal
 # joue sans routage PATTERN), longueur 16, aucun ratchet, CV1 -> STEP tenu a
 # CV_NOMINAL_MV : zone +10 des la premiere frontiere. L'oracle est a PHASE CONNUE :
 # l'onset arme de PLAY (D79) fixe n = 0, lu au step 0 a zone NULLE ; la frontiere
@@ -175,7 +175,7 @@ PAT_MIN_LATENCY_MS="${PAT_MIN_LATENCY_MS:-30}"
 # recopie ni readStepFor(), ni le quantizer, ni le decalage. STEP_EXPECTED_OFFSET
 # choisit la table : 10 (nominal) ou 0 (CP1). CVSTEP_SWAP=a:b echange les tables
 # de deux sorties (CP4). Aucun critere ne porte sur le nombre global de fronts.
-CVSTEP_INSTANCES="--instance 0:0,3,4,9,15 --instance 1:1,2,7,12 --instance 2:0,5,6,11,13 --instance 3:2,8,9,10 --instance 4:4,7,14 --instance 5:1,6,12,13,15"
+CVSTEP_INSTANCES="--per-channel --bank 0:0,3,4,9,15 --bank 1:1,2,7,12 --bank 2:0,5,6,11,13 --bank 3:2,8,9,10 --bank 4:4,7,14 --bank 5:1,6,12,13,15"
 CVSTEP_TABLE_0="0,3,4,9,15;1,2,7,12;0,5,6,11,13;2,8,9,10;4,7,14;1,6,12,13,15"
 CVSTEP_TABLE_10="5,6,9,10,15;2,7,8,13;1,3,6,11,12;0,8,14,15;4,10,13;2,3,5,7,12"
 CVSTEP_STEP0="1;0;1;0;0;0"
@@ -353,7 +353,7 @@ for MODE in $COURSES; do
   esac
   case "$MODE" in
     patold|patnew|cvpattern)
-      GEN_ARGS="$GEN_ARGS --template $PAT_OLD:$PAT_STEPS:$PAT_TRIPLETS --template $PAT_NEW:$PAT_STEPS" ;;
+      GEN_ARGS="$GEN_ARGS --bank $PAT_OLD:$PAT_STEPS:$PAT_TRIPLETS --bank $PAT_NEW:$PAT_STEPS" ;;
   esac
   # RATCHET_MUTATE=<step>:<code> ajoute un ratchet a l IMAGE et pas a l ATTENTE.
   # Avec un code dont N-1 ne divise pas celui du critere, la difference cesse
@@ -363,7 +363,11 @@ for MODE in $COURSES; do
     GEN_ARGS="--mode seq --ratchet $RATCHET_STEP:$RATCHET_CODE"
     [ -n "${RATCHET_MUTATE:-}" ] && GEN_ARGS="$GEN_ARGS,$RATCHET_MUTATE"
   fi
-  if ! "$GEN" $GEN_ARGS --format "$FLEXSEQ_FORMAT_VERSION" --steps "$IMAGE_STEPS" --tempo "$TEMPO" \
+  # --per-channel porte son propre contenu, donc la liste de pas de la course
+  # commune ne s y ajoute pas : le generateur la refuserait.
+  STEPS_ARGS="--steps $IMAGE_STEPS"
+  case "$GEN_ARGS" in *--per-channel*) STEPS_ARGS="" ;; esac
+  if ! "$GEN" $GEN_ARGS --format "$FLEXSEQ_FORMAT_VERSION" $STEPS_ARGS --tempo "$TEMPO" \
        --length "$LENGTH" \
        > "$(dirname "$BIN")/ee-$MODE.bin" 2>"$LOG"; then
     cat "$LOG"; die "generation de l'image $MODE en echec"

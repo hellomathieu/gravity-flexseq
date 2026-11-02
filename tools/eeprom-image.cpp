@@ -23,7 +23,8 @@ void usage() {
         "--steps and --ratchet write the shared pattern 0, which every channel\n"
         "plays unless --selected or --per-channel says otherwise.\n"
         "--per-channel gives channel c the pattern c, each with its own\n"
-        "content, and refuses --steps, --ratchet, --bank and --selected.\n"
+        "content, and refuses --steps, --ratchet and --selected. A --bank on\n"
+        "one of the six patterns replaces its content.\n"
         "--format picks the EEPROM layout. It defaults to 2, the historical\n"
         "format. Format 4 is the one the firmware reads.\n"
         "--length sets the base length of the six channels. The engine keeps\n"
@@ -304,10 +305,6 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "eeprom-image: --bank needs --format 4\n");
         return 2;
     }
-    if (anyBank && perChannel) {
-        std::fprintf(stderr, "eeprom-image: --per-channel refuses --bank\n");
-        return 2;
-    }
 
     ChannelMode channelMode;
     if (std::strcmp(mode, "clock") == 0) {
@@ -358,14 +355,14 @@ int main(int argc, char** argv) {
         }
     }
 
+    if (perChannel && !writePerChannelPatterns(bank)) {
+        return 2;
+    }
+
     for (uint8_t index = 0; index < persist::v4::BANK_COUNT; ++index) {
         if (overrides.set[index]) {
             *bank.getPattern(index) = overrides.content[index];
         }
-    }
-
-    if (perChannel && !writePerChannelPatterns(bank)) {
-        return 2;
     }
 
     for (uint8_t channel = 0; channel < SequencerEngine::CHANNEL_COUNT; ++channel) {

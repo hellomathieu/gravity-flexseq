@@ -74,9 +74,10 @@ flexseq_resolve_active_format() {
   FLEXSEQ_SCAN_SIZE="$(printf '%s\n' "$fmt_out" | sed -n 's/^SCAN_SIZE=//p')"
   FLEXSEQ_VERSION_OFFSET="$(printf '%s\n' "$fmt_out" | sed -n 's/^VERSION_OFFSET=//p')"
   FLEXSEQ_BASE_ADDRESS="$(printf '%s\n' "$fmt_out" | sed -n 's/^BASE_ADDRESS=//p')"
+  FLEXSEQ_BANK_OFFSET="$(printf '%s\n' "$fmt_out" | sed -n 's/^BANK_OFFSET=//p')"
 
   for fmt_name in FLEXSEQ_FORMAT_VERSION FLEXSEQ_IMAGE_SIZE FLEXSEQ_SCAN_SIZE \
-                  FLEXSEQ_VERSION_OFFSET FLEXSEQ_BASE_ADDRESS; do
+                  FLEXSEQ_VERSION_OFFSET FLEXSEQ_BASE_ADDRESS FLEXSEQ_BANK_OFFSET; do
     eval "fmt_value=\$$fmt_name"
     case "$fmt_value" in
       ''|*[!0-9]*) flexseq_format_die "constante $fmt_name absente ou non numerique : \"$fmt_value\""; return 1 ;;

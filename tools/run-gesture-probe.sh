@@ -53,8 +53,8 @@ production simule, et verifie leur effet.
   SKIP_SHIFT=1                   n'injecte pas le geste SHIFT (classe 1)
   INSTANCE_BASE_FORCE=<adr>      force la base du tampon observe (0 = pointeur nul)
   INSTANCE_CHANNEL_FORCE=<n>     force le canal lu par les accesseurs gardes
-  TEMPLATE_MUTATE=<offset>       change un octet de la zone EEPROM des templates entre
-                                 les deux lectures du parcours instances
+  BANK_MUTATE=<offset>           change un octet de la zone EEPROM du banc entre
+                                 l edition et la relecture du parcours instances
   R11_STEP_ROTATIONS=<n>         crans de deplacement du curseur dans R11 (defaut 5)
   SKIP_EDIT=1                    n'entre pas dans EDIT (classe 2)
   R13_CRANS_LENGTH=<1..12>       crans de la salve LENGTH de R13 (defaut 3). Le
@@ -207,7 +207,9 @@ R11_CADENCE_X24_ATTENDUE=4
 R11_NIBBLE_1_ATTENDU="02"
 R11_NIBBLE_TRIOLET_ATTENDU="07"
 R11_NIBBLE_ZERO="00"
-R11_CANAL_ATTENDU=3
+# Le banc est partage : le canal 3 joue le pattern 0 sous l image du rig, et
+# c est le PATTERN que la sonde rapporte. Litteral, jamais derive.
+R11_CANAL_ATTENDU=0
 R11_OCTET_ATTENDU=7
 R11_CODES_REFUSES="${R11_CODES_REFUSES:-03 04 06}"
 # Le compte de creneaux vient du DOMAINE, jamais d'une copie : c'est la regle
@@ -285,7 +287,7 @@ ok "image de rig" "SEQ, steps $RIG_STEPS, subdiv $RIG_SUBDIV, 138 BPM — rig de
 if ! "$GEN" --mode seq --per-channel --tempo 138 --format "$FLEXSEQ_FORMAT_VERSION" > "$WORK/perchannel.bin" 2>"$LOG"; then
   cat "$LOG"; die "generation de l'image differenciee en echec"
 fi
-ok "image differenciee" "SEQ, un template par canal, C0 a C5 vers les templates 0 a 5"
+ok "image differenciee" "SEQ, un pattern du banc par canal, C0 a C5 jouent les patterns 0 a 5"
 
 ELF="$ROOT/.pio/build/nanoatmega328/firmware.elf"
 AVR_DATA_BASE=$(( 0x800000 ))
@@ -653,7 +655,7 @@ MUTANT3
   elif [ "$IMG_RC" = "0" ]; then
     selfbad "P2.6.0 controle de l image" "la sonde rend 0 alors que l image injectee ne correspond pas a l attendu"
   else
-    if [ "$IMG_RC" = "5" ] && grep -q '⛔ instances : templates d usine' "$WORK/img.log"; then
+    if [ "$IMG_RC" = "5" ] && grep -q '⛔ controle d usine' "$WORK/img.log"; then
       ok "P2.6.0 controle de l image" "un octet altere cote machine rend le controle du rig INVALID, sortie 5, aucun verdict firmware"
     else
       selfbad "P2.6.0 controle de l image" "sortie $IMG_RC au lieu de 5"
@@ -810,12 +812,12 @@ MUTANT3
     selfbad "k. l octet dans l instance est verifie" "l octet lu n a pas ete rapporte"
   fi
 
-  progress "l : un octet du template change -> FAIL"
-  expect_verdict "l. template modifie -> FAIL" FAIL 1 "+" "*" TEMPLATE_MUTATE=0
-  if grep -q '❌ instances : templates EEPROM stables' "$WORK/class.log"; then
-    ok "l. la non-modification du template a des dents" "un seul octet change dans la zone EEPROM des templates suffit a rougir"
+  progress "l : un octet du banc EEPROM change -> FAIL"
+  expect_verdict "l. banc EEPROM modifie -> FAIL" FAIL 1 "+" "*" BANK_MUTATE=0
+  if grep -q '❌ instances : l edition atteint l EEPROM' "$WORK/class.log"; then
+    ok "l. le compte d octets EEPROM a des dents" "un octet de plus dans la zone EEPROM du banc suffit a rougir"
   else
-    selfbad "l. la non-modification du template a des dents" "le critere de template n a pas rougi"
+    selfbad "l. le compte d octets EEPROM a des dents" "le critere d EEPROM n a pas rougi"
   fi
 
   progress "i : symbole d instrumentation absent -> INVALID"
@@ -2179,15 +2181,18 @@ else
 fi
 
 INST_MASQUES_ATTENDUS="0001 0006 0038 03c0 7c00 84a5"
-# Depuis 5.c.3 chaque instance --format 3 --per-channel porte un step de plus,
-# le marqueur 18 + c. Les comptes sont ecrits en litteral, jamais derives.
-INST_ACTIFS_ATTENDUS="2 3 4 5 6 7"
+# Les comptes de pas actifs des six patterns du banc, ecrits en litteral, jamais
+# derives. Le banc partage ne porte plus le marqueur 18 + c des instances.
+INST_ACTIFS_ATTENDUS="1 2 3 4 5 6"
 INST_SELECTION_ATTENDUE="0 1 2 3 4 5"
 INST_CANAL_ATTENDU=3
 INST_OCTET_ATTENDU=0
+# L octet EEPROM que l edition doit atteindre : 1 (le banc suit la version) plus
+# 3 x 23 (le pattern 3), soit l offset 70 dans l image.
+INST_EEPROM_OCTET_ATTENDU=70
 
 LOG8="$WORK/log8"
-progress "parcours instances (separation template/instance)"
+progress "parcours instances (le banc partage, un pattern par canal)"
 "$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$INSTANCE_PTR_ADDR" "$BOOT_MS" \
      "$WORK/perchannel.bin" 384 instances "$SUPPRESSED_ADDR" > "$LOG8" 2>&1
 RC=$?
@@ -2199,7 +2204,7 @@ if [ "$RC" != "0" ]; then
   esac
 fi
 
-printf '\n%s--- PARCOURS INSTANCES : SEPARATION TEMPLATE / INSTANCE ---%s\n' "$C_B" "$C_0"
+printf '\n%s--- PARCOURS INSTANCES : LE BANC PARTAGE, UN PATTERN PAR CANAL ---%s\n' "$C_B" "$C_0"
 grep -E '^controle_source|^inst_attendus|^controle_usine|^inst_' "$LOG8" | sed 's/^/  /'
 printf '\n'
 
@@ -2212,12 +2217,9 @@ I_ECARTS="$(grep -E '^inst_edit ' "$LOG8" | awk '{print $5}')"
 I_CANAL="$(grep -E '^inst_edit ' "$LOG8" | awk '{print $9}')"
 I_OCTET="$(grep -E '^inst_edit ' "$LOG8" | awk '{print $11}')"
 I_TWI="$(grep -E '^inst_edit ' "$LOG8" | awk '{print $13}')"
-I_EE_USINE="$(grep -E '^inst_tpl_usine ' "$LOG8" | awk '{print $3}')"
-I_EE_USINE_OU="$(grep -E '^inst_tpl_usine ' "$LOG8" | awk '{print $5}')"
-I_EE_LISIBLE="$(grep -E '^inst_tpl_usine ' "$LOG8" | awk '{print $7}')"
-I_EE_DERIVE="$(grep -E '^inst_tpl_eeprom ' "$LOG8" | awk '{print $3}')"
-I_EE_DERIVE_OU="$(grep -E '^inst_tpl_eeprom ' "$LOG8" | awk '{print $5}')"
-I_EE_LU="$(grep -E '^inst_tpl_eeprom ' "$LOG8" | awk '{print $7}')"
+I_EE_DERIVE="$(grep -E '^inst_banc_eeprom ' "$LOG8" | awk '{print $3}')"
+I_EE_DERIVE_OU="$(grep -E '^inst_banc_eeprom ' "$LOG8" | awk '{print $5}')"
+I_EE_LU="$(grep -E '^inst_banc_eeprom ' "$LOG8" | awk '{print $7}')"
 I_ONGLET="$(grep -E '^inst_nav_edit ' "$LOG8" | awk '{print $3}')"
 I_ONGLET_VISE="$(grep -E '^inst_nav_edit ' "$LOG8" | awk '{print $5}')"
 I_BARRE="$(grep -E '^inst_nav_edit ' "$LOG8" | awk '{print $7}')"
@@ -2225,7 +2227,7 @@ I_EDIT_CRENEAUX="$(grep -E '^inst_nav_edit ' "$LOG8" | awk '{print $8}')"
 
 garde_pointeur "$LOG8" "instances : temoin du pointeur" && W_INST_PTR=1 || W_INST_PTR=0
 if [ "$I_SRC" = "image" ] && [ "$I_CTRL" = "1" ]; then
-  ok "instances : image differenciee" "image lue, six instances conformes a leur template octet pour octet"
+  ok "instances : image differenciee" "image lue, les six patterns du banc conformes a l image octet pour octet"
   W_INST_IMG=1
 else
   inval "instances : image differenciee" "source ${I_SRC:-rien}, controle d usine ${I_CTRL:-rien} : l instrument n est pas sain"
@@ -2240,13 +2242,13 @@ if [ "$W_INST" != "1" ]; then
   inval "instances : edition du canal 3" "temoins amont invalides"
 else
   if [ "$I_SELECTION" = "$INST_SELECTION_ATTENDUE" ]; then
-    ok "instances : six selections" "selectedPattern $I_SELECTION : chaque canal vise son propre template"
+    ok "instances : six selections" "selectedPattern $I_SELECTION : chaque canal joue son propre pattern"
   else
     bad "instances : six selections" "selectedPattern '$I_SELECTION' au lieu de '$INST_SELECTION_ATTENDUE'"
   fi
 
   if [ "$I_MASQUES" = "$INST_MASQUES_ATTENDUS" ]; then
-    ok "instances : six masques distincts" "$I_MASQUES : aucune instance n est confondable avec une autre"
+    ok "instances : six masques distincts" "$I_MASQUES : aucun pattern n est confondable avec un autre"
   else
     bad "instances : six masques distincts" "masques '$I_MASQUES' au lieu de '$INST_MASQUES_ATTENDUS'"
   fi
@@ -2268,40 +2270,38 @@ else
     inval "instances : edition du canal 3" "aucun trafic : le geste d edition n a pas ete injecte"
   elif [ "$I_ECARTS" = "1" ] && [ "$I_CANAL" = "$INST_CANAL_ATTENDU" ] \
        && [ "$I_OCTET" = "$INST_OCTET_ATTENDU" ]; then
-    ok "instances : edition du canal 3" "1 seul octet change, canal $I_CANAL octet $I_OCTET : les cinq autres instances sont intactes"
+    ok "instances : edition du canal 3" "1 seul octet change, pattern $I_CANAL octet $I_OCTET : les cinq autres patterns sont intacts"
   else
     bad "instances : edition du canal 3" "$I_ECARTS ecart(s), canal ${I_CANAL:-?} octet ${I_OCTET:-?} (attendu 1 ecart, canal $INST_CANAL_ATTENDU octet $INST_OCTET_ATTENDU)"
   fi
 fi
 
-if [ -z "${I_EE_LISIBLE:-}" ] || [ "${I_EE_LISIBLE:-0}" != "1" ]; then
-  inval "instances : templates d usine" "la zone EEPROM des templates n est pas lisible : critere non decidable"
-elif [ "$I_EE_USINE" = "0" ]; then
-  ok "instances : templates d usine" "les 384 octets EEPROM portent A1..A8 puis huit records vides, longueur 16"
-else
-  inval "instances : templates d usine" "$I_EE_USINE octet(s) hors attendu dans l image FOURNIE, premier a l offset ${I_EE_USINE_OU:-?} : le rig est faux, aucun verdict sur le firmware"
-fi
-
+# Le banc est du contenu vivant : l edition du canal 3 doit atteindre l EEPROM
+# apres le delai de calme, sur UN octet, celui du pattern 3. Ni plus, ni ailleurs.
 if [ "${I_EE_LU:-0}" != "1" ]; then
-  inval "instances : templates EEPROM stables" "l EEPROM simulee n a pas pu etre relue par AVR_IOCTL_EEPROM_GET"
+  inval "instances : l edition atteint l EEPROM" "l EEPROM simulee n a pas pu etre relue par AVR_IOCTL_EEPROM_GET"
 elif [ "$W_INST" != "1" ]; then
-  inval "instances : templates EEPROM stables" "temoins amont invalides"
-elif [ "${I_EE_USINE:-1}" != "0" ]; then
-  inval "instances : templates EEPROM stables" "le controle du rig est invalide : une derive n est pas attribuable au firmware"
-elif [ "$I_EE_DERIVE" = "0" ]; then
-  ok "instances : templates EEPROM stables" "les 384 octets RELUS de l EEPROM simulee sont identiques a l image fournie"
+  inval "instances : l edition atteint l EEPROM" "temoins amont invalides"
+elif [ "$I_EE_DERIVE" = "1" ] && [ "$I_EE_DERIVE_OU" = "$INST_EEPROM_OCTET_ATTENDU" ]; then
+  ok "instances : l edition atteint l EEPROM" "1 octet EEPROM change, a l offset $I_EE_DERIVE_OU du banc : le pattern 3, et lui seul, est persiste"
 else
-  bad "instances : templates EEPROM stables" "$I_EE_DERIVE octet(s) EEPROM modifie(s), premier a l offset ${I_EE_DERIVE_OU:-?} : l edition a touche un template"
+  bad "instances : l edition atteint l EEPROM" "$I_EE_DERIVE octet(s) EEPROM change(s), premier a l offset ${I_EE_DERIVE_OU:-?} (attendu 1 octet a l offset $INST_EEPROM_OCTET_ATTENDU)"
 fi
 
 printf '\n'
 
-# --- LOT 16E ETAPE 5h : LOAD SUR LES BROCHES, ET LA QUESTION ---------------
+# --- PRD 5.0, AMENDEMENT DU 2026-09-15 : LOAD SUR LES BROCHES, SANS QUESTION ---
 #
-# L oracle est le MASQUE du canal, qui doit devenir celui du template que le
-# canal a selectionne. Le harnais le derive de la table du domaine.
+# Le banc est partage : charger ne copie rien. Le temoin du chargement est
+# l edition qui suit, qui doit atteindre le pattern CHARGE et laisser intact
+# celui que le canal jouait. Les masques sont des LITTERAUX.
+CHG_MASQUE_ANCIEN_ATTENDU="03c0"
+CHG_MASQUE_VISE_DEPART="0001"
+CHG_MASQUE_VISE_EDITE="0021"
+CHG_PATTERN_VISE=0
+CHG_OCTET_ATTENDU=0
 LOGC="$WORK/logc"
-progress "parcours chargement (LOAD et sa confirmation)"
+progress "parcours chargement (LOAD sans question, puis l edition qui le prouve)"
 "$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$INSTANCE_PTR_ADDR" "$BOOT_MS" \
      "$WORK/perchannel.bin" 384 chargement "$SUPPRESSED_ADDR" > "$LOGC" 2>&1
 RC=$?
@@ -2313,72 +2313,65 @@ if [ "$RC" != "0" ]; then
   esac
 fi
 
-printf '\n%s--- PARCOURS CHARGEMENT : LOAD ET SA CONFIRMATION ---%s\n' "$C_B" "$C_0"
+printf '\n%s--- PARCOURS CHARGEMENT : LOAD SANS QUESTION ---%s\n' "$C_B" "$C_0"
 grep -E '^chg_' "$LOGC" | sed 's/^/  /'
 printf '\n'
 
-C_DEPART="$(grep -E '^chg_depart ' "$LOGC" | awk '{print $5}')"
-C_ATT1="$(grep -E '^chg_depart ' "$LOGC" | awk '{print $7}')"
-C_ATT2="$(grep -E '^chg_depart ' "$LOGC" | awk '{print $8}')"
-C_CURSEUR="$(grep -E '^chg_propre ' "$LOGC" | awk '{print $3}')"
-C_PROPRE="$(grep -E '^chg_propre ' "$LOGC" | awk '{print $5}')"
-C_EDITE="$(grep -E '^chg_edite ' "$LOGC" | awk '{print $3}')"
-C_CURSQ="$(grep -E '^chg_question ' "$LOGC" | awk '{print $3}')"
-C_QUESTION="$(grep -E '^chg_question ' "$LOGC" | awk '{print $7}')"
-C_CONFIRME="$(grep -E '^chg_confirme ' "$LOGC" | awk '{print $5}')"
-C_VOISINS="$(grep -E '^chg_voisins ' "$LOGC" | sed 's/^chg_voisins *//' | tr -s ' ')"
-C_VOISINS0="$(grep -E '^chg_voisins_depart' "$LOGC" | sed 's/^chg_voisins_depart *//' | tr -s ' ')"
+C_ANCIEN0="$(grep -E '^chg_depart ' "$LOGC" | awk '{print $7}')"
+C_VISE0="$(grep -E '^chg_depart ' "$LOGC" | awk '{print $11}')"
+C_CURSEUR="$(grep -E '^chg_charge ' "$LOGC" | awk '{print $3}')"
+C_ECARTS_CHARGE="$(grep -E '^chg_charge ' "$LOGC" | awk '{print $5}')"
+C_TWI_CHARGE="$(grep -E '^chg_charge ' "$LOGC" | awk '{print $7}')"
+C_VISE="$(grep -E '^chg_edite ' "$LOGC" | awk '{print $3}')"
+C_ANCIEN="$(grep -E '^chg_edite ' "$LOGC" | awk '{print $5}')"
+C_ECARTS_EDIT="$(grep -E '^chg_edite ' "$LOGC" | awk '{print $7}')"
+C_PATTERN_EDIT="$(grep -E '^chg_edite ' "$LOGC" | awk '{print $9}')"
+C_OCTET_EDIT="$(grep -E '^chg_edite ' "$LOGC" | awk '{print $11}')"
+C_TWI_EDIT="$(grep -E '^chg_edite ' "$LOGC" | awk '{print $13}')"
+C_AUTRES="$(grep -E '^chg_autres ' "$LOGC" | sed 's/^chg_autres *//' | tr -s ' ')"
+C_AUTRES0="$(grep -E '^chg_autres_depart' "$LOGC" | sed 's/^chg_autres_depart *//' | tr -s ' ')"
 C_FAUTES="$(grep -E '^chg_temoin ' "$LOGC" | awk '{print $7}')"
 
-if [ -z "$C_ATT1" ] || [ -z "$C_CONFIRME" ] || [ "${C_FAUTES:-1}" != "0" ]; then
-  inval "chargement : instrument" "releve incomplet ou acces d instance en faute : aucun verdict sur ce parcours"
-elif [ "$C_DEPART" = "$C_ATT1" ] || [ "$C_ATT1" = "$C_ATT2" ]; then
-  inval "chargement : discrimination" "le depart $C_DEPART et les templates $C_ATT1 $C_ATT2 ne sont pas tous distincts : un chargement ne se verrait pas"
+if [ -z "$C_VISE" ] || [ -z "$C_ECARTS_CHARGE" ] || [ "${C_FAUTES:-1}" != "0" ]; then
+  inval "chargement : instrument" "releve incomplet ou acces au banc en faute : aucun verdict sur ce parcours"
+elif [ "$C_ANCIEN0" != "$CHG_MASQUE_ANCIEN_ATTENDU" ] || [ "$C_VISE0" != "$CHG_MASQUE_VISE_DEPART" ]; then
+  inval "chargement : depart" "le canal 3 joue $C_ANCIEN0 et le pattern vise porte $C_VISE0 : attendus $CHG_MASQUE_ANCIEN_ATTENDU et $CHG_MASQUE_VISE_DEPART, le rig n est pas celui du parcours"
 else
-  ok "chargement : discrimination" "depart $C_DEPART, templates $C_ATT1 $C_ATT2, tous distincts"
+  ok "chargement : depart" "le canal 3 joue $C_ANCIEN0, le pattern vise porte $C_VISE0 : distincts"
 
-  # PRD 5.0 amendement 1quater : le curseur s arrete sur la grande valeur, et
-  # -3 est le code que la sonde lui donne.
   if [ "$C_CURSEUR" = "-3" ]; then
     ok "chargement : le curseur entre sur la grande valeur" "curseur -3, la position que PRD 5.0 amendement 1quater lui donne"
   else
     bad "chargement : le curseur entre sur la grande valeur" "curseur ${C_CURSEUR:-rien}, attendu -3"
   fi
 
-  if [ "$C_PROPRE" = "$C_ATT1" ]; then
-    ok "chargement : une copie propre charge sans question" "masque $C_PROPRE, celui du template, apres ouverture, un cran et un appui"
+  if [ "${C_TWI_CHARGE:-0}" -eq 0 ] 2>/dev/null; then
+    inval "chargement : charger ne copie rien" "aucun trafic : le geste de chargement n a pas ete injecte"
+  elif [ "$C_ECARTS_CHARGE" = "0" ]; then
+    ok "chargement : charger ne copie rien" "0 octet du banc change : le chargement est un changement de selecteur"
   else
-    bad "chargement : une copie propre charge sans question" "masque $C_PROPRE, attendu $C_ATT1"
+    bad "chargement : charger ne copie rien" "$C_ECARTS_CHARGE octet(s) du banc change(s) par le chargement"
   fi
 
-  if [ "$C_EDITE" != "$C_ATT1" ]; then
-    ok "chargement : l edition eloigne la copie" "masque $C_EDITE, different de $C_ATT1 : la copie a change"
+  if [ "${C_TWI_EDIT:-0}" -eq 0 ] 2>/dev/null; then
+    inval "chargement : l edition va au pattern charge" "aucun trafic : le geste d edition n a pas ete injecte"
+  elif [ "$C_VISE" = "$CHG_MASQUE_VISE_EDITE" ] && [ "$C_ECARTS_EDIT" = "1" ] \
+       && [ "$C_PATTERN_EDIT" = "$CHG_PATTERN_VISE" ] && [ "$C_OCTET_EDIT" = "$CHG_OCTET_ATTENDU" ]; then
+    ok "chargement : l edition va au pattern charge" "le pattern $CHG_PATTERN_VISE passe de $CHG_MASQUE_VISE_DEPART a $C_VISE, 1 octet, octet $C_OCTET_EDIT : le canal a bien change de pattern"
   else
-    inval "chargement : l edition eloigne la copie" "masque inchange a $C_EDITE : l edition n a pas pris, la question n est pas attribuable"
+    bad "chargement : l edition va au pattern charge" "masque $C_VISE, $C_ECARTS_EDIT ecart(s), pattern ${C_PATTERN_EDIT:-?} octet ${C_OCTET_EDIT:-?} (attendu $CHG_MASQUE_VISE_EDITE, 1 ecart, pattern $CHG_PATTERN_VISE octet $CHG_OCTET_ATTENDU)"
   fi
 
-  if [ "$C_CURSQ" = "-3" ]; then
-    ok "chargement : le curseur revient sur la grande valeur" "curseur -3"
+  if [ "$C_ANCIEN" = "$CHG_MASQUE_ANCIEN_ATTENDU" ]; then
+    ok "chargement : l ancien pattern reste intact" "le pattern 3 porte toujours $C_ANCIEN : rien n a ete copie ni detruit"
   else
-    bad "chargement : le curseur revient sur la grande valeur" "curseur ${C_CURSQ:-rien}, attendu -3"
+    bad "chargement : l ancien pattern reste intact" "le pattern 3 porte $C_ANCIEN au lieu de $CHG_MASQUE_ANCIEN_ATTENDU"
   fi
 
-  if [ "$C_QUESTION" = "$C_EDITE" ]; then
-    ok "chargement : l appui court ne charge pas" "masque $C_QUESTION, celui de la copie editee : la question est posee, rien n est detruit"
+  if [ "$C_AUTRES" = "$C_AUTRES0" ]; then
+    ok "chargement : les quatre autres patterns" "masques $C_AUTRES, identiques au depart"
   else
-    bad "chargement : l appui court ne charge pas" "masque $C_QUESTION, attendu $C_EDITE"
-  fi
-
-  if [ "$C_CONFIRME" = "$C_ATT2" ]; then
-    ok "chargement : YES execute" "masque $C_CONFIRME, celui du template vise"
-  else
-    bad "chargement : YES execute" "masque $C_CONFIRME, attendu $C_ATT2"
-  fi
-
-  if [ "$C_VOISINS" = "$C_VOISINS0" ]; then
-    ok "chargement : les cinq autres canaux" "masques $C_VOISINS, identiques au depart"
-  else
-    bad "chargement : les cinq autres canaux" "masques $C_VOISINS, au depart $C_VOISINS0"
+    bad "chargement : les quatre autres patterns" "masques $C_AUTRES, au depart $C_AUTRES0"
   fi
 fi
 
@@ -2404,8 +2397,8 @@ B_REP_ATT="$(grep -E '^boot_repare ' "$LOG9" | awk '{print $9}')"
 B_SEM_LU="$(grep -E '^boot_semis ' "$LOG9" | awk '{print $3}')"
 B_SEM_ECARTS="$(grep -E '^boot_semis ' "$LOG9" | awk '{print $5}')"
 B_SEM_PREM="$(grep -E '^boot_semis ' "$LOG9" | awk '{print $7}')"
-B_INST="$(grep -E '^boot_instances ' "$LOG9" | sed 's/^boot_instances *//' | sed 's/ attendu.*//' | tr -s ' ')"
-B_INST_ATT="$(grep -E '^boot_instances ' "$LOG9" | awk '{print $NF}')"
+B_INST="$(grep -E '^boot_instances ' "$LOG9" | sed 's/^boot_instances *//' | sed 's/ attendu.*//' | tr -s ' ' | sed 's/^ *//; s/ *$//')"
+B_INST_ATT="9111 0810 1249 cccc eeee 5454"
 B_VER_VUE="$(grep -E '^boot_version ' "$LOG9" | awk '{print $3}')"
 B_VER_VAL="$(grep -E '^boot_version ' "$LOG9" | awk '{print $5}')"
 B_VER_ATT="$(grep -E '^boot_version ' "$LOG9" | awk '{print $7}')"
@@ -2415,7 +2408,7 @@ B_PLAFOND="$(grep -E '^boot_version ' "$LOG9" | awk '{print $11}')"
 if [ "${B_REP_LU:-0}" != "1" ]; then
   inval "bootstrap : octet repare" "l EEPROM simulee n a pas pu etre relue apres le demarrage"
 elif [ "$B_REP_VAL" = "$B_REP_ATT" ]; then
-  ok "bootstrap : octet repare" "l octet de template corrompu vaut de nouveau $B_REP_ATT : SEUL le semis du firmware a pu le reparer"
+  ok "bootstrap : octet repare" "l octet du banc corrompu vaut de nouveau $B_REP_ATT apres le balayage : SEUL le semis du firmware a pu le reparer"
 else
   bad "bootstrap : octet repare" "l octet corrompu vaut $B_REP_VAL au lieu de $B_REP_ATT : le semis n a pas eu lieu"
 fi
@@ -2423,23 +2416,23 @@ fi
 if [ "${B_SEM_LU:-0}" != "1" ]; then
   inval "bootstrap : semis complet" "EEPROM simulee non relue"
 elif [ "$B_SEM_ECARTS" = "0" ]; then
-  ok "bootstrap : semis complet" "les 384 octets de templates portent A1..A8 puis huit records vides"
+  ok "bootstrap : semis complet" "les 368 octets du banc EEPROM portent A1..A8 puis huit patterns vides"
 else
   bad "bootstrap : semis complet" "$B_SEM_ECARTS octet(s) hors attendu, premier a l offset ${B_SEM_PREM:-?}"
 fi
 
-B_INST_ATTENDU="$(printf '%s %s %s %s %s %s' "$B_INST_ATT" "$B_INST_ATT" "$B_INST_ATT" "$B_INST_ATT" "$B_INST_ATT" "$B_INST_ATT")"
+B_INST_ATTENDU="$B_INST_ATT"
 garde_pointeur "$LOG9" "bootstrap : temoin du pointeur" && W_BOOT_PTR=1 || W_BOOT_PTR=0
 if [ "$W_BOOT_PTR" != "1" ]; then
-  inval "bootstrap : six instances sur A1" "temoin du pointeur invalide : les masques lus ne sont pas attribuables au firmware"
+  inval "bootstrap : le banc d usine en RAM" "temoin du pointeur invalide : les masques lus ne sont pas attribuables au firmware"
 elif [ "$(echo $B_INST)" = "$(echo $B_INST_ATTENDU)" ]; then
-  ok "bootstrap : six instances sur A1" "les six masques valent $B_INST_ATT, et non ceux de l image differenciee"
+  ok "bootstrap : le banc d usine en RAM" "les six premiers patterns portent $B_INST_ATT, et non ceux de l image differenciee"
 else
-  bad "bootstrap : six instances sur A1" "masques $B_INST au lieu de six fois $B_INST_ATT"
+  bad "bootstrap : le banc d usine en RAM" "masques $B_INST au lieu de $B_INST_ATT"
 fi
 
 if [ "${B_VER_VUE:-0}" != "1" ]; then
-  bad "bootstrap : version ecrite" "la version relue vaut ${B_VER_VAL:-?} au lieu de ${B_VER_ATT:-3} apres ${B_ATTENTE:-?} ms"
+  bad "bootstrap : version ecrite" "la version relue vaut ${B_VER_VAL:-?} au lieu de ${B_VER_ATT:-4} apres ${B_ATTENTE:-?} ms"
 elif [ "$B_VER_VAL" = "$B_VER_ATT" ]; then
   ok "bootstrap : version ecrite" "l octet de version vaut $B_VER_ATT, releve par AVR_IOCTL_EEPROM_GET"
 else

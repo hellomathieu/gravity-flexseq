@@ -101,6 +101,22 @@ describe("l ecran principal, confronte au PANNEAU (risque 89)", () => {
   });
 });
 
+describe("le champ ouvert, en pixels", () => {
+  const seqTab = (fieldOpen: boolean): MainScreenModel => ({
+    ...PANEL_MODEL,
+    cursor: 0,
+    fieldOpen,
+    mode: ChannelMode.SEQ,
+    mainParameter: MainParameter.Pattern,
+  });
+
+  it("encadre le nom du pattern quand le champ est ouvert", () => {
+    const closed = renderMainScreen(seqTab(false)).count;
+    const open = renderMainScreen(seqTab(true)).count;
+    expect(open).toBeGreaterThan(closed);
+  });
+});
+
 describe("les glyphes de la barre, en pixels", () => {
   const on = (px: Set<string>, x: number, y: number) => px.has(`${x},${y}`);
 

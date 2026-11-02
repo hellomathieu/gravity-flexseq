@@ -100,8 +100,9 @@ static_assert(SHIFT_BURST_GAP_MS > BUTTON_DEBOUNCE_MS,
 
 static constexpr uint8_t OBSERVED_CHANNEL_COUNT =
     flexseq::SequencerEngine::CHANNEL_COUNT;
+static constexpr uint8_t OBSERVED_PATTERN_COUNT = flexseq::PATTERN_COUNT;
 static constexpr size_t OBSERVED_INSTANCE_BYTES =
-    (size_t)OBSERVED_CHANNEL_COUNT * sizeof(flexseq::Pattern);
+    (size_t)OBSERVED_PATTERN_COUNT * sizeof(flexseq::Pattern);
 #define STEP_BYTES     5
 #define RATCHET_BYTES 18
 
@@ -113,12 +114,11 @@ static_assert(sizeof(flexseq::Pattern) == PATTERN_BYTES,
 static_assert(STEP_BYTES + RATCHET_BYTES == PATTERN_BYTES,
               "the step bytes plus the ratchet bytes must fill the record");
 static_assert(OBSERVED_CHANNEL_COUNT == 6,
-              "the probe observes six channel instances");
-static_assert(OBSERVED_INSTANCE_BYTES == 138,
-              "the observed buffer must be 138 bytes");
-static_assert(OBSERVED_INSTANCE_BYTES
-                  == (size_t)OBSERVED_CHANNEL_COUNT * PATTERN_BYTES,
-              "the observed buffer must hold one record per channel");
+              "the probe drives six channel tabs");
+static_assert(OBSERVED_PATTERN_COUNT == 16,
+              "the probe observes the sixteen shared patterns of the bank");
+static_assert(OBSERVED_INSTANCE_BYTES == 368,
+              "the observed buffer must be the whole bank, 368 bytes");
 static_assert(flexseq::UiController::TAB_FIRST_CHANNEL == 1,
               "the first channel tab must be tab 1");
 static_assert((size_t)flexseq::UiController::TAB_FIRST_CHANNEL
@@ -135,13 +135,14 @@ static constexpr int8_t channelOfTab(int tab)
         : (int8_t)(tab - (int)flexseq::UiController::TAB_FIRST_CHANNEL);
 }
 
-static constexpr size_t instanceOffset(int8_t channel, size_t byteInRecord)
+/* L offset d un octet d un PATTERN du banc dans la zone observee. */
+static constexpr size_t patternOffset(int8_t index, size_t byteInRecord)
 {
-    return (channel < 0
-            || channel >= (int8_t)OBSERVED_CHANNEL_COUNT
+    return (index < 0
+            || index >= (int8_t)OBSERVED_PATTERN_COUNT
             || byteInRecord >= (size_t)PATTERN_BYTES)
         ? OUT_OF_BUFFER
-        : (size_t)channel * PATTERN_BYTES + byteInRecord;
+        : (size_t)index * PATTERN_BYTES + byteInRecord;
 }
 
 static_assert(channelOfTab(0) == NO_CHANNEL,
@@ -158,31 +159,27 @@ static_assert(channelOfTab(8) == NO_CHANNEL,
 static_assert(channelOfTab(-1) == NO_CHANNEL,
               "a negative tab carries no channel");
 
-static_assert(instanceOffset(0, 0) == 0, "channel 0 starts at byte 0");
-static_assert(instanceOffset(0, 5) == 5,
-              "the first ratchet byte of channel 0 is byte 5");
-static_assert(instanceOffset(3, 7) == 76,
-              "the third ratchet byte of channel 3 is byte 76");
-static_assert(instanceOffset(5, 22) == 137,
-              "the last byte of channel 5 is byte 137");
-static_assert(instanceOffset(6, 0) == (size_t)-1,
-              "the first channel above the count is out of the buffer");
-static_assert(instanceOffset(6, 22) == (size_t)-1,
-              "no byte of a channel above the count is in the buffer");
-static_assert(instanceOffset(7, 0) == (size_t)-1,
-              "a channel well above the count is out of the buffer");
-static_assert(instanceOffset(NO_CHANNEL, 0) == (size_t)-1,
-              "no channel is out of the buffer");
-static_assert(instanceOffset(-2, 0) == (size_t)-1,
-              "a negative channel is out of the buffer");
-static_assert(instanceOffset(3, 23) == (size_t)-1,
+static_assert(patternOffset(0, 0) == 0, "pattern 0 starts at byte 0");
+static_assert(patternOffset(0, 5) == 5,
+              "the first ratchet byte of pattern 0 is byte 5");
+static_assert(patternOffset(3, 7) == 76,
+              "the third ratchet byte of pattern 3 is byte 76");
+static_assert(patternOffset(5, 22) == 137,
+              "the last byte of pattern 5 is byte 137");
+static_assert(patternOffset(15, 22) == 367,
+              "the last byte of the last pattern is byte 367");
+static_assert(patternOffset(16, 0) == (size_t)-1,
+              "the first index above the bank is out of the buffer");
+static_assert(patternOffset(NO_CHANNEL, 0) == (size_t)-1,
+              "no pattern is out of the buffer");
+static_assert(patternOffset(3, 23) == (size_t)-1,
               "a byte above the record is out of the buffer");
-static_assert(instanceOffset(5, 22) < OBSERVED_INSTANCE_BYTES,
-              "the last byte of the last channel is inside the buffer");
-static_assert(instanceOffset(6, 0) >= OBSERVED_INSTANCE_BYTES,
+static_assert(patternOffset(15, 22) < OBSERVED_INSTANCE_BYTES,
+              "the last byte of the last pattern is inside the buffer");
+static_assert(patternOffset(16, 0) >= OBSERVED_INSTANCE_BYTES,
               "an out-of-buffer offset must fail the caller bound test");
 
-static constexpr int8_t channelOfOffset(size_t offset)
+static constexpr int8_t patternOfOffset(size_t offset)
 {
     return (offset >= OBSERVED_INSTANCE_BYTES)
         ? NO_CHANNEL
@@ -196,35 +193,36 @@ static constexpr size_t byteOfOffset(size_t offset)
         : offset % PATTERN_BYTES;
 }
 
-static_assert(channelOfOffset(0) == 0, "byte 0 belongs to channel 0");
+static_assert(patternOfOffset(0) == 0, "byte 0 belongs to pattern 0");
 static_assert(byteOfOffset(0) == 0, "byte 0 is the first byte of its record");
-static_assert(channelOfOffset(7) == 0, "byte 7 belongs to channel 0");
-static_assert(byteOfOffset(7) == 7, "byte 7 is byte 7 of its record");
-static_assert(channelOfOffset(76) == 3, "byte 76 belongs to channel 3");
+static_assert(patternOfOffset(76) == 3, "byte 76 belongs to pattern 3");
 static_assert(byteOfOffset(76) == 7, "byte 76 is byte 7 of its record");
-static_assert(channelOfOffset(137) == 5, "byte 137 belongs to channel 5");
-static_assert(byteOfOffset(137) == 22, "byte 137 is byte 22 of its record");
-static_assert(channelOfOffset(138) == NO_CHANNEL,
-              "byte 138 is outside the buffer");
-static_assert(byteOfOffset(138) == (size_t)-1,
-              "byte 138 has no rank inside a record");
-static_assert(instanceOffset(channelOfOffset(76), byteOfOffset(76)) == 76,
+static_assert(patternOfOffset(367) == 15, "byte 367 belongs to pattern 15");
+static_assert(byteOfOffset(367) == 22, "byte 367 is byte 22 of its record");
+static_assert(patternOfOffset(368) == NO_CHANNEL,
+              "byte 368 is outside the buffer");
+static_assert(byteOfOffset(368) == (size_t)-1,
+              "byte 368 has no rank inside a record");
+static_assert(patternOffset(patternOfOffset(76), byteOfOffset(76)) == 76,
               "the decomposition must invert the composition");
 
-static const uint8_t *instanceOf(const uint8_t *buffer, int8_t channel)
+/* Le pattern qu un canal JOUE, lu sur le jumeau : c est la carte canal ->
+ * pattern que le banc partage rend necessaire. Avant que le jumeau soit
+ * construit, chaque canal joue le pattern 0, le defaut du moteur. */
+static int8_t playedPattern(int8_t channel);
+
+static const uint8_t *patternOf(const uint8_t *buffer, int8_t index)
 {
     if (buffer == NULL) return NULL;
-    const size_t offset = instanceOffset(channel, 0);
+    const size_t offset = patternOffset(index, 0);
     if (offset >= OBSERVED_INSTANCE_BYTES) return NULL;
     return buffer + offset;
 }
 
-static uint8_t *mutableInstanceOf(uint8_t *buffer, int8_t channel)
+static const uint8_t *instanceOf(const uint8_t *buffer, int8_t channel)
 {
-    if (buffer == NULL) return NULL;
-    const size_t offset = instanceOffset(channel, 0);
-    if (offset >= OBSERVED_INSTANCE_BYTES) return NULL;
-    return buffer + offset;
+    if (channel < 0 || channel >= (int8_t)OBSERVED_CHANNEL_COUNT) return NULL;
+    return patternOf(buffer, playedPattern(channel));
 }
 
 static avr_t *g_avr;
@@ -583,7 +581,7 @@ static void reportInstanceAccess(void)
            g_instance_reads, g_instance_read_faults, g_instance_faults);
 }
 
-static long g_template_mutate = -1;
+static long g_bank_mutate = -1;
 
 
 
@@ -626,55 +624,38 @@ static uint8_t g_expected_image[1024];
 static size_t g_image_bytes;
 static uint16_t g_image_base = 384;
 
-static const uint16_t EE_TEMPLATES_AT = 1;
-static const uint16_t EE_TEMPLATE_RECORD = 24;
-static const uint16_t EE_TEMPLATE_COUNT = 16;
-static const uint16_t EE_TEMPLATES_BYTES = 384;
-static const uint16_t EE_CONTENT_BYTES = 23;
-static const uint8_t EE_TEMPLATE_LENGTH = 16;
+static const uint16_t EE_BANK_AT = 1;
+static const uint16_t EE_BANK_RECORD = 23;
+static const uint16_t EE_BANK_COUNT = 16;
+static const uint16_t EE_BANK_BYTES = 368;
 
-static const uint16_t EE_FACTORY_MASKS[EE_TEMPLATE_COUNT] = {
+static const uint16_t EE_FACTORY_MASKS[EE_BANK_COUNT] = {
     0x9111, 0x0810, 0x1249, 0xCCCC, 0xEEEE, 0x5454, 0x7FBF, 0xB733,
     0, 0, 0, 0, 0, 0, 0, 0,
 };
 
 static const uint16_t EE_VERSION_AT = 0;
 static const uint8_t BOOTSTRAP_BROKEN_VERSION = 0xFC;
-static const uint16_t BOOTSTRAP_BROKEN_TEMPLATE_AT = 0;
-static const uint8_t BOOTSTRAP_BROKEN_TEMPLATE_VALUE = 0x5A;
-static const uint8_t EE_EXPECTED_VERSION = 3;
-static const uint16_t EE_A1_LOW_MASK = 0x9111;
+static const uint16_t BOOTSTRAP_BROKEN_BANK_AT = 0;
+static const uint8_t BOOTSTRAP_BROKEN_BANK_VALUE = 0x5A;
+static const uint8_t EE_EXPECTED_VERSION = 4;
 static const double BOOTSTRAP_SLICE_MS = 250.0;
-static const double BOOTSTRAP_CEILING_MS = 10000.0;
+static const double BOOTSTRAP_CEILING_MS = 15000.0;
+static const double EEPROM_WRITE_SETTLE_MS = 4500.0;
 
-static int eepromTemplatesReadable(void)
+static int eepromBankReadable(void)
 {
-    return g_image_bytes >= (size_t)(EE_TEMPLATES_AT + EE_TEMPLATES_BYTES);
+    return g_image_bytes >= (size_t)(EE_BANK_AT + EE_BANK_BYTES);
 }
 
-static uint8_t eepromExpectedTemplateByte(uint16_t index, uint16_t offset)
+/* Le contenu d usine d un pattern du banc : le masque de seize pas sur les
+ * deux premiers octets, et rien d autre. Le banc ne porte aucune longueur. */
+static uint8_t eepromExpectedBankByte(uint16_t index, uint16_t offset)
 {
-    if (offset == EE_CONTENT_BYTES) return EE_TEMPLATE_LENGTH;
+    if (index >= EE_BANK_COUNT || offset >= EE_BANK_RECORD) return 0;
     if (offset == 0) return (uint8_t)(EE_FACTORY_MASKS[index] & 0xFF);
     if (offset == 1) return (uint8_t)((EE_FACTORY_MASKS[index] >> 8) & 0xFF);
     return 0;
-}
-
-static uint32_t eepromTemplateFactoryDiff(uint32_t *firstOut)
-{
-    uint32_t n = 0, first = 0xFFFFFFFFu;
-    for (uint16_t index = 0; index < EE_TEMPLATE_COUNT; ++index) {
-        for (uint16_t offset = 0; offset < EE_TEMPLATE_RECORD; ++offset) {
-            const uint32_t at = (uint32_t)EE_TEMPLATES_AT
-                + (uint32_t)index * EE_TEMPLATE_RECORD + offset;
-            if (g_image[at] != eepromExpectedTemplateByte(index, offset)) {
-                ++n;
-                if (first == 0xFFFFFFFFu) first = at;
-            }
-        }
-    }
-    if (firstOut) *firstOut = (first == 0xFFFFFFFFu) ? 0 : first;
-    return n;
 }
 
 /* L'EEPROM simulee n'est PAS g_image : AVR_IOCTL_EEPROM_SET copie le tampon
@@ -690,16 +671,16 @@ static int readSimulatedEeprom(avr_t *avr, uint8_t *out, uint32_t bytes)
     return avr_ioctl(avr, AVR_IOCTL_EEPROM_GET, &ee) == 0;
 }
 
-/* TEMPLATE_MUTATE visait la copie RAM de patternBank, que la v3 ne remplit plus.
- * Il vise maintenant la zone EEPROM des templates, cible du temoin B. L'EEPROM
- * simulee ne s'ecrit pas directement : GET, inversion, SET. */
-static int mutateEepromTemplates(avr_t *avr)
+/* BANK_MUTATE change un octet de la zone EEPROM du banc entre les deux
+ * lectures du parcours instances. L'EEPROM simulee ne s'ecrit pas
+ * directement : GET, inversion, SET. */
+static int mutateEepromBank(avr_t *avr)
 {
-    if (g_template_mutate < 0) return 0;
-    if ((uint32_t)g_template_mutate >= (uint32_t)EE_TEMPLATES_BYTES) return 0;
+    if (g_bank_mutate < 0) return 0;
+    if ((uint32_t)g_bank_mutate >= (uint32_t)EE_BANK_BYTES) return 0;
     static uint8_t buffer[sizeof(g_image)];
     if (!readSimulatedEeprom(avr, buffer, (uint32_t)g_image_bytes)) return 0;
-    const uint32_t at = (uint32_t)EE_TEMPLATES_AT + (uint32_t)g_template_mutate;
+    const uint32_t at = (uint32_t)EE_BANK_AT + (uint32_t)g_bank_mutate;
     buffer[at] = (uint8_t)(buffer[at] ^ 0xFF);
     avr_eeprom_desc_t ee;
     ee.ee = buffer;
@@ -708,11 +689,11 @@ static int mutateEepromTemplates(avr_t *avr)
     return avr_ioctl(avr, AVR_IOCTL_EEPROM_SET, &ee) == 0;
 }
 
-static uint32_t eepromTemplateDrift(const uint8_t *apres, uint32_t *firstOut)
+static uint32_t eepromBankDrift(const uint8_t *apres, uint32_t *firstOut)
 {
     uint32_t n = 0, first = 0xFFFFFFFFu;
-    for (uint32_t at = EE_TEMPLATES_AT;
-         at < (uint32_t)(EE_TEMPLATES_AT + EE_TEMPLATES_BYTES); ++at) {
+    for (uint32_t at = EE_BANK_AT;
+         at < (uint32_t)(EE_BANK_AT + EE_BANK_BYTES); ++at) {
         if (apres[at] != g_image_ref[at]) {
             ++n;
             if (first == 0xFFFFFFFFu) first = at;
@@ -732,51 +713,51 @@ struct ImageStorage {
     void write(uint16_t, uint8_t) {}
 };
 
+static flexseq::PatternBank g_expected_bank;
 static flexseq::SequencerEngine g_expected_engine;
 
 /* Le jumeau de simulation. Il predit l'etat RAM que le firmware devrait avoir,
- * en rejouant le contrat v3 sur l'image de REFERENCE, celle fournie a la machine
- * avant toute corruption. Il n'est pas un oracle du format : les oracles
- * independants sont les attentes litterales de run-eeprom-image-check.sh, des
- * temoins EEPROM et du parcours bootstrap. */
+ * en rejouant le contrat v4 sur l'image de REFERENCE, celle fournie a la machine
+ * avant toute corruption. Sur une image refusee, load() remet les defauts, qui
+ * sement le banc d'usine : c'est le meme repli que le firmware. Il n'est pas un
+ * oracle du format : les oracles independants sont les attentes litterales de
+ * run-eeprom-image-check.sh et du parcours bootstrap. */
 static const char *buildExpectedState()
 {
     static flexseq::Transport transport(g_expected_engine);
     static flexseq::UiController ui(g_expected_engine, transport);
     static flexseq::Preferences preferences;
-    flexseq::PersistentImageV3 image(g_expected_engine, ui, preferences);
+    g_expected_engine.setPatternBank(&g_expected_bank);
+    flexseq::PersistentImageV4 image(g_expected_engine, ui, preferences);
     flexseq::PersistenceScheduler scheduler;
 
     ImageStorage storage;
     if (scheduler.load(storage, image)) {
         return "image";
     }
-    /* Repli de bootstrap(), reproduit SANS ecrire. bootstrap() seme d'abord les
-     * templates depuis la table PROGMEM, puis les relit ; le jumeau compose donc
-     * directement factoryTemplateByte() et applyContentByte(). Lire ImageStorage
-     * ici rendrait 0xFF sur un parcours sans image EEPROM, comme "structure".
-     * load() a deja remis les defauts, donc selectedPattern vaut 0 : les six
-     * canaux prennent A1. Ce chemin n'est pas un oracle du contenu d'usine ; les
-     * oracles litteraux sont les temoins EEPROM et le parcours bootstrap. */
-    for (uint8_t ch = 0; ch < OBSERVED_CHANNEL_COUNT; ++ch) {
-        flexseq::Pattern *instance = g_expected_engine.instanceForChannel(ch);
-        const int8_t selected = g_expected_engine.getSelectedPattern(ch);
-        if (instance == NULL || selected < 0) continue;
-        for (uint8_t offset = 0; offset < flexseq::persist::v3::CONTENT_BYTES; ++offset) {
-            flexseq::persist::v3::applyContentByte(
-                *instance, offset,
-                flexseq::persist::v3::factoryTemplateByte((uint8_t)selected, offset));
-        }
-    }
     return "usine";
 }
 
+static int8_t playedPattern(int8_t channel)
+{
+    if (channel < 0 || channel >= (int8_t)OBSERVED_CHANNEL_COUNT) return NO_CHANNEL;
+    const int8_t selected = g_expected_engine.getSelectedPattern((uint8_t)channel);
+    return selected < 0 ? NO_CHANNEL : selected;
+}
+
+static uint16_t patternMask(const uint8_t *buffer, int8_t index)
+{
+    const uint8_t *pattern = patternOf(buffer, index);
+    if (pattern == NULL) { ++g_instance_faults; return 0; }
+    return (uint16_t)(pattern[0] | ((uint16_t)pattern[1] << 8));
+}
+
+/* La zone observee est le banc partage entier, seize patterns de 23 octets. */
 static void buildExpectedInstances(uint8_t *out)
 {
-    for (uint8_t ch = 0; ch < OBSERVED_CHANNEL_COUNT; ++ch) {
-        uint8_t *slot = mutableInstanceOf(out, (int8_t)ch);
-        if (slot == NULL) continue;
-        const flexseq::Pattern *source = g_expected_engine.instanceForChannel(ch);
+    for (uint8_t index = 0; index < OBSERVED_PATTERN_COUNT; ++index) {
+        uint8_t *slot = out + patternOffset((int8_t)index, 0);
+        const flexseq::Pattern *source = g_expected_bank.getPattern(index);
         if (source == NULL) {
             memset(slot, 0, PATTERN_BYTES);
             continue;
@@ -809,7 +790,10 @@ static uint16_t lowMaskOfInstance(const uint8_t *buffer, int8_t channel)
 
 static uint8_t byteOfInstance(const uint8_t *buffer, int8_t channel, size_t rank)
 {
-    const size_t offset = instanceOffset(observedChannel(channel), rank);
+    const int8_t channelSeen = observedChannel(channel);
+    const size_t offset = (channelSeen < 0 || channelSeen >= (int8_t)OBSERVED_CHANNEL_COUNT)
+        ? OUT_OF_BUFFER
+        : patternOffset(playedPattern(channelSeen), rank);
     if (buffer == NULL || offset >= OBSERVED_INSTANCE_BYTES) {
         ++g_instance_faults;
         return 0;
@@ -1077,8 +1061,8 @@ int main(int argc, char **argv)
         if (forced != NULL) g_base_force = strtol(forced, NULL, 0);
         const char *forcedChan = getenv("INSTANCE_CHANNEL_FORCE");
         if (forcedChan != NULL) g_channel_force = strtol(forcedChan, NULL, 0);
-        const char *tplMutate = getenv("TEMPLATE_MUTATE");
-        if (tplMutate != NULL) g_template_mutate = strtol(tplMutate, NULL, 0);
+        const char *bankMutate = getenv("BANK_MUTATE");
+        if (bankMutate != NULL) g_bank_mutate = strtol(bankMutate, NULL, 0);
     }
     atexit(reportInstanceAccess);
     const double boot_ms = (argc > 3) ? atof(argv[3]) : 1200.0;
@@ -1275,20 +1259,19 @@ int main(int argc, char **argv)
         }
 
         if (parcoursBootstrap) {
-            if (en <= (size_t)(EE_TEMPLATES_AT + BOOTSTRAP_BROKEN_TEMPLATE_AT)) {
+            if (en <= (size_t)(EE_BANK_AT + BOOTSTRAP_BROKEN_BANK_AT)) {
                 fprintf(stderr, "image trop courte pour le parcours bootstrap : %zu\n", en);
                 return 2;
             }
             g_image[EE_VERSION_AT] = BOOTSTRAP_BROKEN_VERSION;
-            g_image[EE_TEMPLATES_AT + BOOTSTRAP_BROKEN_TEMPLATE_AT] =
-                BOOTSTRAP_BROKEN_TEMPLATE_VALUE;
+            g_image[EE_BANK_AT + BOOTSTRAP_BROKEN_BANK_AT] = BOOTSTRAP_BROKEN_BANK_VALUE;
             g_expected_image[EE_VERSION_AT] = BOOTSTRAP_BROKEN_VERSION;
-            g_expected_image[EE_TEMPLATES_AT + BOOTSTRAP_BROKEN_TEMPLATE_AT] =
-                BOOTSTRAP_BROKEN_TEMPLATE_VALUE;
-            printf("boot_corruption    version %u a l offset %u, template %u a l offset %u\n",
+            g_expected_image[EE_BANK_AT + BOOTSTRAP_BROKEN_BANK_AT] =
+                BOOTSTRAP_BROKEN_BANK_VALUE;
+            printf("boot_corruption    version %u a l offset %u, banc %u a l offset %u\n",
                    BOOTSTRAP_BROKEN_VERSION, EE_VERSION_AT,
-                   BOOTSTRAP_BROKEN_TEMPLATE_VALUE,
-                   EE_TEMPLATES_AT + BOOTSTRAP_BROKEN_TEMPLATE_AT);
+                   BOOTSTRAP_BROKEN_BANK_VALUE,
+                   EE_BANK_AT + BOOTSTRAP_BROKEN_BANK_AT);
             printf("attendu_bootstrap  meme corruption appliquee au scenario du jumeau\n");
         }
 
@@ -1411,7 +1394,7 @@ int main(int argc, char **argv)
     const int controlOk =
         sizeof(flexseq::Pattern) == (size_t)PATTERN_BYTES
         && OBSERVED_INSTANCE_BYTES
-               == (size_t)(flexseq::SequencerEngine::CHANNEL_COUNT * PATTERN_BYTES)
+               == (size_t)(flexseq::PATTERN_COUNT * PATTERN_BYTES)
         && memcmp(expectedBytes, instancesAtStart, OBSERVED_INSTANCE_BYTES) == 0;
     printf("controle_source    %s\n", expectedSource);
     printf("inst_attendus     ");
@@ -1426,11 +1409,11 @@ int main(int argc, char **argv)
            (int)g_expected_engine.getChannelMode(0));
     printf("controle_usine     %d\n", controlOk);
     if (!controlOk) {
-        printf("controle_detail    Pattern %zu octets, attendu %d ; zone d instances"
-               " %zu octets, attendue %d\n",
+        printf("controle_detail    Pattern %zu octets, attendu %d ; banc observe"
+               " %zu octets, attendu %d\n",
                sizeof(flexseq::Pattern), PATTERN_BYTES,
                OBSERVED_INSTANCE_BYTES,
-               (int)(flexseq::SequencerEngine::CHANNEL_COUNT * PATTERN_BYTES));
+               (int)(flexseq::PATTERN_COUNT * PATTERN_BYTES));
         return 3;
     }
 
@@ -1799,11 +1782,9 @@ int main(int argc, char **argv)
         constexpr int8_t canalR11 = channelOfTab(ongletR11);
         constexpr int sortieR11 = canalR11;
         constexpr size_t rangR11 = STEP_BYTES + 2;
-        constexpr size_t offsetR11 = instanceOffset(canalR11, rangR11);
         static_assert(canalR11 == 3, "tab 4 drives channel 3");
         static_assert(sortieR11 == 3, "channel 3 is output 4");
         static_assert(rangR11 == 7, "the ratchet of step 5 is byte 7 of the record");
-        static_assert(offsetR11 == 76, "channel 3 byte 7 is buffer byte 76");
         const uint32_t pasActifs = activeStepsInInstance(expectedBytes, canalR11);
         uint32_t premier = 0, ecarts = 0, kept = 0, gaps = 0, dropped = 0, marque = 0;
 
@@ -1889,7 +1870,7 @@ int main(int argc, char **argv)
                    cran, (unsigned)(byteOfInstance(vu, canalR11, rangR11) >> 4),
                    (unsigned)byteOfInstance(vu, canalR11, rangR11),
                    ecarts, premier, g_twi_bytes - marque,
-                   (int)channelOfOffset(premier), (unsigned)byteOfOffset(premier));
+                   (int)patternOfOffset(premier), (unsigned)byteOfOffset(premier));
         }
 
         marque = g_twi_bytes;
@@ -1910,9 +1891,14 @@ int main(int argc, char **argv)
         // DESCENTE l'est deja, un cran par salve. La descente marche dans la
         // meme course sur le meme champ ; la remontee en une salve de 8 perdait
         // un cran, alors qu'une salve de 6 passe (voir rD_retour).
+        uint32_t filtreAvant = 0, filtreApres = 0;
+        const int filtreLisible = readSuppressedCounter(avr, &filtreAvant);
         if (!skipBGeste && r11CransSubdiv > 0)
             for (int i = 0; i < r11CransSubdiv; ++i)
                 shiftRotate(avr, 1, 1, harness::SUBDIV_BURST_LIMIT, false);
+        readSuppressedCounter(avr, &filtreApres);
+        printf("rD_temoin4         lisible %d avant %u apres %u\n",
+               filtreLisible, filtreAvant, filtreApres);
         run_for(avr, 2500.0);
         depart = g_ticks;
         run_for(avr, 20000.0);
@@ -2153,36 +2139,23 @@ int main(int argc, char **argv)
 
         run_for(avr, boot_ms);
 
-        const int luApresSetup = readSimulatedEeprom(avr, apres, (uint32_t)g_image_bytes);
-        const uint16_t reparAt = EE_TEMPLATES_AT + BOOTSTRAP_BROKEN_TEMPLATE_AT;
-        printf("boot_repare        lu %d octet %u valeur %u attendu %u\n",
-               luApresSetup, reparAt,
-               luApresSetup ? apres[reparAt] : 0,
-               eepromExpectedTemplateByte(0, BOOTSTRAP_BROKEN_TEMPLATE_AT));
-
-        uint32_t usinePremier = 0;
-        uint32_t usineEcarts = 0;
-        if (luApresSetup) {
-            for (uint16_t index = 0; index < EE_TEMPLATE_COUNT; ++index) {
-                for (uint16_t offset = 0; offset < EE_TEMPLATE_RECORD; ++offset) {
-                    const uint32_t at = (uint32_t)EE_TEMPLATES_AT
-                        + (uint32_t)index * EE_TEMPLATE_RECORD + offset;
-                    if (apres[at] != eepromExpectedTemplateByte(index, offset)) {
-                        ++usineEcarts;
-                        if (usineEcarts == 1) usinePremier = at;
-                    }
-                }
-            }
-        }
-        printf("boot_semis         lu %d ecarts %u premier %u\n",
-               luApresSetup, usineEcarts, usinePremier);
-
+        /* Le banc d'usine est seme en RAM des setup() ; l'EEPROM ne bouge pas
+         * avant le delai de calme. Le releve RAM vient donc en premier. */
         readInstances(avr, instances);
         printf("boot_instances    ");
         for (uint8_t c = 0; c < OBSERVED_CHANNEL_COUNT; ++c) {
-            printf(" %04x", lowMaskOfInstance(instances, (int8_t)c));
+            printf(" %04x", patternMask(instances, (int8_t)c));
         }
-        printf(" attendu %04x\n", EE_A1_LOW_MASK);
+        printf(" attendu");
+        for (uint8_t c = 0; c < OBSERVED_CHANNEL_COUNT; ++c) {
+            printf(" %04x", EE_FACTORY_MASKS[c]);
+        }
+        printf("\n");
+
+        const int luApresSetup = readSimulatedEeprom(avr, apres, (uint32_t)g_image_bytes);
+        printf("boot_eeprom_setup  lu %d version %u octet_casse %u\n",
+               luApresSetup, luApresSetup ? apres[EE_VERSION_AT] : 0,
+               luApresSetup ? apres[EE_BANK_AT + BOOTSTRAP_BROKEN_BANK_AT] : 0);
 
         double attendu = 0.0;
         int versionVue = 0;
@@ -2198,130 +2171,116 @@ int main(int argc, char **argv)
         }
         printf("boot_version       vue %d valeur %u attendu %u attente_ms %.0f plafond_ms %.0f\n",
                versionVue, versionLue, EE_EXPECTED_VERSION, attendu, BOOTSTRAP_CEILING_MS);
+
+        /* La version est le DERNIER octet du balayage : quand elle est la, le
+         * banc l'est aussi. */
+        const int luApresBalayage = readSimulatedEeprom(avr, apres, (uint32_t)g_image_bytes);
+        const uint16_t reparAt = EE_BANK_AT + BOOTSTRAP_BROKEN_BANK_AT;
+        printf("boot_repare        lu %d octet %u valeur %u attendu %u\n",
+               luApresBalayage, reparAt,
+               luApresBalayage ? apres[reparAt] : 0,
+               eepromExpectedBankByte(0, BOOTSTRAP_BROKEN_BANK_AT));
+
+        uint32_t usinePremier = 0;
+        uint32_t usineEcarts = 0;
+        if (luApresBalayage) {
+            for (uint16_t index = 0; index < EE_BANK_COUNT; ++index) {
+                for (uint16_t offset = 0; offset < EE_BANK_RECORD; ++offset) {
+                    const uint32_t at = (uint32_t)EE_BANK_AT
+                        + (uint32_t)index * EE_BANK_RECORD + offset;
+                    if (apres[at] != eepromExpectedBankByte(index, offset)) {
+                        ++usineEcarts;
+                        if (usineEcarts == 1) usinePremier = at;
+                    }
+                }
+            }
+        }
+        printf("boot_semis         lu %d ecarts %u premier %u\n",
+               luApresBalayage, usineEcarts, usinePremier);
         return 0;
     }
 
-// Lot 16E etape 5h : LOAD sur les BROCHES, et la question qui le precede.
+// PRD 5.0, amendment of 2026-09-15 : LOAD sur les BROCHES, sans question.
 //
-// L oracle n est pas un compte d octets : c est le MASQUE du canal, qui doit
-// devenir celui du template que le canal a selectionne. Le harnais le derive de
-// `flexseq::factoryStepMask()`, la table du domaine, et jamais d une copie.
+// Le banc est PARTAGE : charger un pattern ne copie rien, donc la RAM du banc ne
+// bouge pas au chargement. Le temoin du chargement est l EDITION qui suit : un
+// pas bascule sur le canal atteint le pattern CHARGE, et laisse intact celui que
+// le canal jouait. Les masques attendus sont des LITTERAUX cote script.
 //
-// Leviers de contre-epreuve : CHG_EXPECT_MASK fausse le masque attendu ;
-// CHG_CONFIRM_PRESSES abaisse a 1 le nombre d appuis apres la question.
+// Leviers de contre-epreuve : CHG_ROTATIONS change le nombre de crans vers le
+// pattern vise ; CHG_STEP change le pas bascule.
     if (parcoursChargement) {
         static uint8_t avant[OBSERVED_INSTANCE_BYTES];
-        static uint8_t charge1[OBSERVED_INSTANCE_BYTES];
+        static uint8_t charge[OBSERVED_INSTANCE_BYTES];
         static uint8_t edite[OBSERVED_INSTANCE_BYTES];
-        static uint8_t question[OBSERVED_INSTANCE_BYTES];
-        static uint8_t charge2[OBSERVED_INSTANCE_BYTES];
         constexpr int ongletCharge = 4;
         constexpr int8_t canalCharge = channelOfTab(ongletCharge);
         static_assert(canalCharge == 3, "tab 4 drives channel 3");
+        constexpr int8_t patternVise = 0;
 
-        // ⚠️ Le point de DEPART vient de l image prechargee, que le harnais
-        // connait ; les deux pas qui suivent sont des LITTERAUX.
         const int8_t depart = g_expected_engine.getSelectedPattern(canalCharge);
-        if (depart < 0 || depart + 2 >= (int8_t)flexseq::SequencerEngine::PATTERN_COUNT) {
-            fprintf(stderr, "le template de depart (%d) ne laisse pas deux crans\n",
-                    (int)depart);
-            return 3;
-        }
-        unsigned masque1 = flexseq::factoryStepMask((uint8_t)(depart + 1));
-        unsigned masque2 = flexseq::factoryStepMask((uint8_t)(depart + 2));
-        // Le levier ne fausse QUE le premier attendu : fausser les deux ferait
-        // mordre le garde de discrimination.
-        if (const char* e = getenv("CHG_EXPECT_MASK")) {
-            masque1 = (unsigned)strtoul(e, NULL, 16);
-        }
-        // Le nombre de crans pour atteindre YES. Zero laisse NO arme.
-        int yesDetents = 1;
-        if (const char* e = getenv("CHG_YES_DETENTS")) yesDetents = atoi(e);
-        if (yesDetents < 0 || yesDetents > 4) {
-            fprintf(stderr, "CHG_YES_DETENTS hors de 0..4\n");
+        int rotations = (int)depart - (int)patternVise;
+        if (const char* e = getenv("CHG_ROTATIONS")) rotations = atoi(e);
+        int pas = 5;
+        if (const char* e = getenv("CHG_STEP")) pas = atoi(e);
+        if (rotations < 0 || rotations > 15 || pas < 0 || pas > 35) {
+            fprintf(stderr, "CHG_ROTATIONS hors de 0..15 ou CHG_STEP hors de 0..35\n");
             return 2;
         }
 
         playPress(avr);
         run_for(avr, 1000.0);
         readInstances(avr, avant);
-        const unsigned masqueDepart = lowMaskOfInstance(avant, canalCharge);
-        printf("chg_depart         canal %d masque %04x attendus %04x %04x template %d\n",
-               (int)canalCharge, masqueDepart, masque1, masque2, (int)depart);
+        printf("chg_depart         canal %d joue %d masque %04x vise %d masque %04x crans %d pas %d\n",
+               (int)canalCharge, (int)depart, lowMaskOfInstance(avant, canalCharge),
+               (int)patternVise, patternMask(avant, patternVise), rotations, pas);
 
         setChannelModeToSeq(avr, ongletCharge);
         backToBar(avr);
         alignTab(avr, ongletCharge);
 
-        // 1. UNE COPIE PROPRE CHARGE SANS QUESTION.
+        // 1. UN APPUI COURT CHARGE, ET RIEN N EST COPIE.
         pressFor(avr, (double)PRESS_MS);                 // entre dans l onglet
         const int curseurEntree = highlightedLine();
         uint32_t marque = g_twi_bytes;
         pressFor(avr, (double)PRESS_MS);                 // ouvre le champ
-        rotate(avr, 1, 1);                               // choisit le nom suivant
+        rotate(avr, rotations, 0);                       // descend vers le pattern vise
         pressFor(avr, (double)PRESS_MS);                 // charge
         run_for(avr, 300.0);
-        readInstances(avr, charge1);
-        printf("chg_propre         curseur %d masque %04x twi %u\n",
-               curseurEntree, lowMaskOfInstance(charge1, canalCharge),
-               g_twi_bytes - marque);
+        readInstances(avr, charge);
+        uint32_t premier = 0;
+        const uint32_t ecartsCharge = instancesDiffCount(avant, charge, &premier);
+        printf("chg_charge         curseur %d ecarts %u twi %u\n",
+               curseurEntree, ecartsCharge, g_twi_bytes - marque);
 
-        // 2. UNE EDITION REND LA COPIE DIFFERENTE DU TEMPLATE.
+        // 2. L EDITION QUI SUIT ATTEINT LE PATTERN CHARGE, PAS L ANCIEN.
         backToBar(avr);
         alignTab(avr, ongletCharge);
         pressFor(avr, (double)PRESS_MS);
         rotate(avr, flexseq::UiController::SEQ_FIELD_INDEX_EDIT_ENTRY, 1);
         pressFor(avr, (double)PRESS_MS);                 // entre dans EDIT
-        pressFor(avr, (double)PRESS_MS);                 // bascule le pas 0
+        if (pas > 0) rotate(avr, pas, 1);                // va au pas vise
+        marque = g_twi_bytes;
+        pressFor(avr, (double)PRESS_MS);                 // bascule le pas
         pressFor(avr, (double)LONG_PRESS_MS);            // sort de EDIT
         run_for(avr, 300.0);
         readInstances(avr, edite);
-        printf("chg_edite          masque %04x\n",
-               lowMaskOfInstance(edite, canalCharge));
-
-        // 3. L APPUI COURT POSE LA QUESTION, ET NE CHARGE PAS.
-        backToBar(avr);
-        alignTab(avr, ongletCharge);
-        pressFor(avr, (double)PRESS_MS);
-        int crans = 0;
-        while (highlightedLine() != CURSEUR_SUR_LA_GRANDE_VALEUR
-               && crans < CURSOR_SEARCH_LIMIT) {
-            rotate(avr, 1, 1);
-            ++crans;
-        }
-        const int curseurQuestion = highlightedLine();
-        marque = g_twi_bytes;
-        pressFor(avr, (double)PRESS_MS);                 // ouvre le champ
-        rotate(avr, 1, 1);                               // choisit le nom suivant
-        pressFor(avr, (double)PRESS_MS);                 // demande
-        run_for(avr, 300.0);
-        readInstances(avr, question);
-        printf("chg_question       curseur %d crans %d masque %04x twi %u\n",
-               curseurQuestion, crans, lowMaskOfInstance(question, canalCharge),
+        const uint32_t ecartsEdit = instancesDiffCount(charge, edite, &premier);
+        printf("chg_edite          masque_vise %04x masque_ancien %04x ecarts %u pattern %d octet %u twi %u\n",
+               patternMask(edite, patternVise), lowMaskOfInstance(edite, canalCharge),
+               ecartsEdit, (int)patternOfOffset(premier), (unsigned)byteOfOffset(premier),
                g_twi_bytes - marque);
 
-        // 4. YES EXECUTE. NO est arme le premier, donc il faut un cran.
-        marque = g_twi_bytes;
-        rotate(avr, yesDetents, 1);
-        pressFor(avr, (double)PRESS_MS);
-        run_for(avr, 300.0);
-        readInstances(avr, charge2);
-        uint32_t premier = 0;
-        const uint32_t ecarts = instancesDiffCount(question, charge2, &premier);
-        printf("chg_confirme       crans %d masque %04x ecarts %u canal %d twi %u\n",
-               yesDetents, lowMaskOfInstance(charge2, canalCharge),
-               ecarts, (int)channelOfOffset(premier), g_twi_bytes - marque);
-
-        printf("chg_voisins       ");
+        printf("chg_autres        ");
         for (uint8_t c = 0; c < OBSERVED_CHANNEL_COUNT; ++c) {
-            if ((int8_t)c == canalCharge) continue;
-            printf(" %04x", lowMaskOfInstance(charge2, (int8_t)c));
+            if ((int8_t)c == canalCharge || (int8_t)c == patternVise) continue;
+            printf(" %04x", patternMask(edite, (int8_t)c));
         }
         printf("\n");
-        printf("chg_voisins_depart");
+        printf("chg_autres_depart ");
         for (uint8_t c = 0; c < OBSERVED_CHANNEL_COUNT; ++c) {
-            if ((int8_t)c == canalCharge) continue;
-            printf(" %04x", lowMaskOfInstance(avant, (int8_t)c));
+            if ((int8_t)c == canalCharge || (int8_t)c == patternVise) continue;
+            printf(" %04x", patternMask(avant, (int8_t)c));
         }
         printf("\n");
         printf("chg_temoin         lectures %lu echecs %lu fautes %lu\n",
@@ -2337,21 +2296,16 @@ int main(int argc, char **argv)
         constexpr int8_t canalInstances = channelOfTab(ongletInstances);
         constexpr size_t rangInstances = 0;
         static_assert(canalInstances == 3, "tab 4 drives channel 3");
-        static_assert(instanceOffset(canalInstances, rangInstances) == 69,
-                      "channel 3 byte 0 is buffer byte 69");
 
         playPress(avr);
         run_for(avr, 1000.0);
 
         readInstances(avr, avant);
 
-        uint32_t eepromUsinePremier = 0;
-        const uint32_t eepromUsineEcarts = eepromTemplateFactoryDiff(&eepromUsinePremier);
-
-        printf("inst_zone          templates_eeprom %u lisible %d octets %u"
-               " instances %zu\n",
-               EE_TEMPLATES_AT, eepromTemplatesReadable(),
-               EE_TEMPLATES_BYTES, OBSERVED_INSTANCE_BYTES);
+        printf("inst_zone          banc_eeprom %u lisible %d octets %u"
+               " observes %zu\n",
+               EE_BANK_AT, eepromBankReadable(),
+               EE_BANK_BYTES, OBSERVED_INSTANCE_BYTES);
 
         printf("inst_masques      ");
         for (uint8_t c = 0; c < OBSERVED_CHANNEL_COUNT; ++c) {
@@ -2385,30 +2339,31 @@ int main(int argc, char **argv)
 
         marque = g_twi_bytes;
         pressFor(avr, (double)PRESS_MS);
-        const int mute = mutateEepromTemplates(avr);
+        const int mute = mutateEepromBank(avr);
         readInstances(avr, apres);
-        if (mute) printf("inst_mutation      octet %ld de la zone EEPROM des templates\n",
-                         g_template_mutate);
+        if (mute) printf("inst_mutation      octet %ld de la zone EEPROM du banc\n",
+                         g_bank_mutate);
 
         uint32_t premier = 0;
         const uint32_t ecarts = instancesDiffCount(avant, apres, &premier);
         printf("inst_edit          canal_vise %d ecarts %u premier %u"
                " canal %d octet_instance %u twi %u\n",
                (int)canalInstances, ecarts, premier,
-               (int)channelOfOffset(premier), (unsigned)byteOfOffset(premier),
+               (int)patternOfOffset(premier), (unsigned)byteOfOffset(premier),
                g_twi_bytes - marque);
 
-        printf("inst_tpl_usine     ecarts %u premier %u lisible %d\n",
-               eepromUsineEcarts, eepromUsinePremier, eepromTemplatesReadable());
-
+        /* Le banc est du contenu vivant : l edition atteint l EEPROM apres le
+         * delai de calme, un octet et un seul. On attend qu il soit ecrit. */
+        run_for(avr, EEPROM_WRITE_SETTLE_MS);
         static uint8_t eepromApres[sizeof(g_image)];
-        const int eepromLu = eepromTemplatesReadable()
+        const int eepromLu = eepromBankReadable()
             && readSimulatedEeprom(avr, eepromApres, (uint32_t)g_image_bytes);
         uint32_t eepromDerivePremier = 0;
         const uint32_t eepromDeriveEcarts =
-            eepromLu ? eepromTemplateDrift(eepromApres, &eepromDerivePremier) : 0;
-        printf("inst_tpl_eeprom    ecarts %u premier %u lu %d\n",
-               eepromDeriveEcarts, eepromDerivePremier, eepromLu);
+            eepromLu ? eepromBankDrift(eepromApres, &eepromDerivePremier) : 0;
+        printf("inst_banc_eeprom   ecarts %u premier %u lu %d attendu_premier %u\n",
+               eepromDeriveEcarts, eepromDerivePremier, eepromLu,
+               (unsigned)(EE_BANK_AT + patternOffset(playedPattern(canalInstances), rangInstances)));
         return 0;
     }
 
@@ -2417,11 +2372,11 @@ int main(int argc, char **argv)
         constexpr int ongletA = 1;
         constexpr int8_t canalA = channelOfTab(ongletA);
         static_assert(canalA == 0, "tab 1 drives channel 0");
-        static_assert(instanceOffset(canalA, 0) == 0,
+        static_assert(patternOffset(0, 0) == 0,
                       "channel 0 starts at buffer byte 0");
-        static_assert(instanceOffset(canalA, STEP_BYTES + 2) == 7,
+        static_assert(patternOffset(0, STEP_BYTES + 2) == 7,
                       "the ratchet of step 5 is buffer byte 7 on channel 0");
-        static_assert(instanceOffset(canalA, STEP_BYTES + 4) == 9,
+        static_assert(patternOffset(0, STEP_BYTES + 4) == 9,
                       "the ratchet of step 9 is buffer byte 9 on channel 0");
         uint32_t premier = 0, ecarts = 0;
         uint32_t marque = 0;
@@ -2452,7 +2407,7 @@ int main(int argc, char **argv)
                " canal %d octet_instance %u\n",
                lowMaskOfInstance(vu, canalA), ecarts, premier,
                g_twi_bytes - marque,
-               (int)channelOfOffset(premier), (unsigned)byteOfOffset(premier));
+               (int)patternOfOffset(premier), (unsigned)byteOfOffset(premier));
         marque = g_twi_bytes;
         pressFor(avr, (double)PRESS_MS);
         readInstances(avr, vu);
@@ -2469,7 +2424,7 @@ int main(int argc, char **argv)
                " canal %d octet_instance %u\n",
                byteOfInstance(vu, canalA, STEP_BYTES + 2), ecarts, premier,
                g_twi_bytes - marque,
-               (int)channelOfOffset(premier), (unsigned)byteOfOffset(premier));
+               (int)patternOfOffset(premier), (unsigned)byteOfOffset(premier));
         marque = g_twi_bytes;
         shiftRotate(avr, 4, 0, harness::RATCHET_BURST_LIMIT, false);
         readInstances(avr, vu);
@@ -2497,7 +2452,7 @@ int main(int argc, char **argv)
                " canal %d octet_instance %u\n",
                byteOfInstance(vu, canalA, STEP_BYTES + 4), ecarts, premier,
                g_twi_bytes - marque,
-               (int)channelOfOffset(premier), (unsigned)byteOfOffset(premier));
+               (int)patternOfOffset(premier), (unsigned)byteOfOffset(premier));
         marque = g_twi_bytes;
         shiftRotate(avr, 5, 0, harness::RATCHET_BURST_LIMIT, false);
         readInstances(avr, vu);
@@ -2616,9 +2571,9 @@ int main(int argc, char **argv)
     constexpr int ongletPrincipal = 1;
     constexpr int8_t canalPrincipal = channelOfTab(ongletPrincipal);
     static_assert(canalPrincipal == 0, "tab 1 drives channel 0");
-    static_assert(instanceOffset(canalPrincipal, 0) == 0,
+    static_assert(patternOffset(0, 0) == 0,
                   "channel 0 starts at buffer byte 0");
-    static_assert(instanceOffset(canalPrincipal, STEP_BYTES) == 5,
+    static_assert(patternOffset(0, STEP_BYTES) == 5,
                   "the ratchet of step 0 is buffer byte 5 on channel 0");
 
     const int slotsBeforeEdit = tabBandSlotsWithInk();

@@ -745,6 +745,21 @@ void test_the_played_pattern_follows_the_cv_index_and_the_selector_does_not_move
     TEST_ASSERT_EQUAL_INT8(4, b.e.getSelectedPattern(0));
 }
 
+void test_the_const_overload_plays_the_cv_index_too() {
+    Bench b;
+    const SequencerEngine& frozen = b.e;
+    b.e.setChannelMode(0, MODE_SEQ);
+    TEST_ASSERT_TRUE(b.e.setSelectedPattern(0, 4));
+    TEST_ASSERT_TRUE(b.e.setCvDestination(0, flexseq::CV_SOURCE_1, flexseq::CV_DEST_PATTERN));
+    TEST_ASSERT_TRUE(b.e.setCvInput(flexseq::CV_SOURCE_1, CV_ZONE_PLUS_TEN));
+    b.e.start();
+    b.e.advance(STEP);
+    TEST_ASSERT_EQUAL_INT8(14, b.e.patternCvIndex(0));
+    TEST_ASSERT_EQUAL_PTR_MESSAGE(b.bank.getPattern(14), frozen.patternForChannel(0),
+                                  "the trigger sequencer reads through a const engine: it must play the CV index too");
+    TEST_ASSERT_EQUAL_PTR(b.e.patternForChannel(0), frozen.patternForChannel(0));
+}
+
 void test_the_ratchet_cached_at_the_boundary_comes_from_the_played_pattern() {
     Bench b;
     b.e.setChannelMode(0, MODE_SEQ);
@@ -890,6 +905,7 @@ int main() {
     RUN_TEST(test_a_load_is_a_change_of_selector_and_copies_nothing);
     RUN_TEST(test_without_a_pattern_routing_the_played_pattern_is_the_selected_one);
     RUN_TEST(test_the_played_pattern_follows_the_cv_index_and_the_selector_does_not_move);
+    RUN_TEST(test_the_const_overload_plays_the_cv_index_too);
     RUN_TEST(test_the_ratchet_cached_at_the_boundary_comes_from_the_played_pattern);
     RUN_TEST(test_the_pattern_modulation_reads_no_pattern_outside_seq);
     RUN_TEST(test_the_manual_entry_point_stops_at_the_interface_ceiling);

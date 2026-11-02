@@ -99,17 +99,17 @@ END_HEX="$("$AVR_NM" --radix=x "$ELF" | grep -E " _end$" | head -1 | cut -d' ' -
 END="$(printf '0x%x' $(( 0x$END_HEX - 0x800000 )))"
 printf '  %s✅%s symbole                %s_end %s%s\n' "$C_OK" "$C_0" "$C_DIM" "$END" "$C_0"
 
-# Temoin du chemin de chargement, utile seulement avec EE_IMAGE. loaded[] vit
-# dans ModulatedPatternState, apres les six Pattern et les six longueurs.
-# La course RESET (CV_PULSE_MV) porte son propre temoin, la broche de sortie :
-# son image route RESET et non PATTERN, donc loaded[] resterait vierge et le
-# temoin de modulation rougirait une course qui ne le concerne pas.
-LOADED_ADDR=""
+# Temoin du chemin de chargement, utile seulement avec EE_IMAGE : le banc
+# partage vit en RAM, et son premier pattern doit porter les octets que l image
+# prechargee lui donne. Sans ce releve, une image refusee rendrait le meme pic
+# et le vert serait faux. La course RESET (CV_PULSE_MV) et la course STEP
+# portent leur propre temoin, la broche de sortie.
+BANK_ADDR=""
 if [ -n "${EE_IMAGE:-}" ] && [ -z "${CV_PULSE_MV:-}" ] && [ -z "${CV_STEP_MV:-}" ]; then
-  STATE_HEX="$("$AVR_NM" --radix=x --demangle "$ELF" \
-    | grep -E "modulatedPatterns$" | head -1 | cut -d' ' -f1)"
-  if [ -n "$STATE_HEX" ]; then
-    LOADED_ADDR="$(printf '0x%x' $(( 0x$STATE_HEX - 0x800000 + 6 * 23 + 6 )))"
+  BANK_HEX="$("$AVR_NM" --radix=x --demangle "$ELF" \
+    | grep -E "patternBank$" | head -1 | cut -d' ' -f1)"
+  if [ -n "$BANK_HEX" ]; then
+    BANK_ADDR="$(printf '0x%x' $(( 0x$BANK_HEX - 0x800000 )))"
   fi
 fi
 
@@ -134,14 +134,14 @@ else
 fi
 
 progress "simulation ($DURATION s)"
-LOADED_ADDR="$LOADED_ADDR" \
+BANK_ADDR="$BANK_ADDR" \
   "$BIN" "$ROOT/.pio/build/nanoatmega328/firmware.hex" "$END" "$DURATION" "${EE_IMAGE:-}" \
   > "$LOG" 2>/dev/null || die "la sonde a echoue"
 printf '  %s✅%s simulation             %s%s s%s%s\n' "$C_OK" "$C_0" "$C_DIM" "$DURATION" \
   "${QUIET:+, sans injection}" "$C_0"
 
 RAM_RESERVE="$RAM_RESERVE" QUIET="${QUIET:-}" FORMAT_VERSION="$FORMAT_VERSION" \
-  EE_IMAGE="${EE_IMAGE:-}" LOADED="$LOADED_ADDR" \
+  EE_IMAGE="${EE_IMAGE:-}" BANK="$BANK_ADDR" BANK_OFFSET="$FLEXSEQ_BANK_OFFSET" \
   IMAGE_SIZE="$IMAGE_SIZE" SCAN_SIZE="$SCAN_SIZE" \
   VERSION_ADDRESS="$((BASE_ADDRESS + VERSION_OFFSET))" python3 - "$LOG" <<'PY'
 import os, re, sys
@@ -204,7 +204,7 @@ read_back = written is not None and written[2] == expected_size
 preloaded = bool(os.environ.get("EE_IMAGE"))
 persisted = (version is not None and version[1] == expected_address
              and version[2] == expected_version and read_back)
-loaded = re.search(r"loaded\[\]=([\d,]+)", txt)
+bank = re.search(r"bank_pattern0=([0-9a-f,]+)", txt)
 
 # Deux temoins sur la broche OUT1, quand la course l'exerce (CV_PULSE_MV).
 # D79 d'abord : PLAY est un reset global qui ARME, donc le step 0 actif sonne
@@ -263,17 +263,21 @@ if step:
           f" le step 0 relu a localStep 16 - k, sur la broche{Z}")
 
 if preloaded:
-    if os.environ.get("LOADED") and loaded is None:
-        print(f"  {mark(False)} Chargement          TEMOIN ABSENT — le releve de loaded[] n'a pas ete emis")
+    if os.environ.get("BANK") and bank is None:
+        print(f"  {mark(False)} Chargement          TEMOIN ABSENT — le releve du banc n'a pas ete emis")
         sys.exit(1)
-    if loaded is not None:
-        values = [int(v) for v in loaded[1].split(',')]
-        served = [v for v in values if v != 255]
-        print(f"  {mark(bool(served))} Chargement          "
-              f"loaded[] = {values}"
-              f"{DIM}  — au moins un canal doit porter un template{Z}")
-        if not served:
-            print(f"  {ERR}   Aucun canal n'a charge : la chaine mesuree n'inclut PAS "
+    if bank is not None:
+        seen = [int(v, 16) for v in bank[1].split(',')]
+        with open(os.environ["EE_IMAGE"], "rb") as handle:
+            image = handle.read()
+        at = int(os.environ["BANK_OFFSET"])
+        wanted = list(image[at:at + len(seen)])
+        same = seen == wanted
+        print(f"  {mark(same)} Chargement          "
+              f"banc[0] en RAM = {' '.join('%02x' % v for v in seen)}"
+              f"{DIM}  — attendu {' '.join('%02x' % v for v in wanted)}, les octets de l image prechargee{Z}")
+        if not same:
+            print(f"  {ERR}   Le banc ne porte pas l image : la chaine mesuree n'inclut PAS "
                   f"le chargement.{Z}")
             sys.exit(1)
     # Une image prechargee est acceptee par bootstrap(), qui n'ecrit alors rien.

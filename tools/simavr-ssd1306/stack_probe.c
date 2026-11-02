@@ -399,23 +399,24 @@ int main(int argc, char** argv)
 
     /* Temoin du chemin de chargement. Un pic identique ne dit PAS que la chaine
      * a ete empruntee : sans ce releve, une image refusee rendrait le meme
-     * chiffre et le vert serait faux. On lit donc l'etat de modulation dans la
-     * RAM simulee, a l'adresse que le shell a resolue sur l'ELF. */
-    const char* loaded_env = getenv("LOADED_ADDR");
-    if (loaded_env != NULL && loaded_env[0] != '\0') {
-        const uint16_t addr = (uint16_t)strtol(loaded_env, NULL, 0);
+     * chiffre et le vert serait faux. On lit donc les cinq octets de pas du
+     * premier pattern du banc dans la RAM simulee, a l'adresse que le shell a
+     * resolue sur l'ELF, et le shell les compare a l'image prechargee. */
+    const char* bank_env = getenv("BANK_ADDR");
+    if (bank_env != NULL && bank_env[0] != '\0') {
+        const uint16_t addr = (uint16_t)strtol(bank_env, NULL, 0);
         /* Format SANS indentation de deux espaces et sans nombre isole en fin de
          * ligne : le lecteur du rapport reconnait les vecteurs d'ISR a cette
          * forme-la, et un releve indente y serait compte comme un vecteur muet. */
-        printf("\n=== MODULATION ===\nloaded[]=");
-        for (int i = 0; i < 6; ++i)
-            printf("%s%u", i ? "," : "", avr->data[addr + i]);
+        printf("\n=== BANC ===\nbank_pattern0=");
+        for (int i = 0; i < 5; ++i)
+            printf("%s%02x", i ? "," : "", avr->data[addr + i]);
         printf("\n");
     }
 
     /* Temoin du chemin RESET, sur la broche. Format SANS indentation de deux
      * espaces ni nombre isole en fin de ligne, pour la meme raison que
-     * loaded[]. */
+     * le releve du banc. */
     if (g_pulse_mv > 0) {
         int before = 0, after = 0;
         double first_before_ms = -1.0, first_after_ms = -1.0;
