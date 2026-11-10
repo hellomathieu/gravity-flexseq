@@ -500,7 +500,8 @@ void UiController::adjustFieldValue(Field target, int8_t raw) {
                 index = static_cast<int8_t>(DEFAULT_SUBDIV_INDEX);
             }
             engine_.setSubdiv(ch, subdivAtIndex(clampIndex(
-                static_cast<uint8_t>(index), delta, SUBDIV_CHOICE_COUNT)));
+                static_cast<uint8_t>(index), static_cast<int16_t>(-delta),
+                SUBDIV_CHOICE_COUNT)));
             break;
         }
         case FIELD_MODE: {

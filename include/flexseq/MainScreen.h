@@ -216,9 +216,8 @@ inline void subdivLabel(int16_t subdiv, char* out) {
         out[1] = '\0';
         return;
     }
-    const bool multiply = subdiv < 0;
-    out[0] = multiply ? 'x' : '/';
-    writeUnsigned(out + 1, static_cast<uint16_t>(multiply ? -subdiv : subdiv));
+    out[0] = subdiv <= 1 ? 'x' : '/';
+    writeUnsigned(out + 1, static_cast<uint16_t>(subdiv < 0 ? -subdiv : subdiv));
 }
 
 inline void barLabel(uint8_t steps, char* out) {

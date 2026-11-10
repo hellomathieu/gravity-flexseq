@@ -576,7 +576,7 @@ export class UiController {
         if (channel < 0) break;
         let index = SUBDIVS.indexOf(this.engine.getSubdiv(channel));
         if (index < 0) index = SUBDIVS.indexOf(DEFAULT_SUBDIV);
-        const next = clampIndex(index, delta, SUBDIVS.length);
+        const next = clampIndex(index, -delta, SUBDIVS.length);
         this.engine.setSubdiv(channel, SUBDIVS[next]!);
         break;
       }

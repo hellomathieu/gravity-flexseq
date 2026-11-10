@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SUBDIVS, subdivToTicks, DEFAULT_SUBDIV } from "../src/domain/subdiv.js";
+import { SUBDIVS, subdivLabel, subdivToTicks, DEFAULT_SUBDIV } from "../src/domain/subdiv.js";
 
 describe("subdiv — SUBDIV -> ticksPerStep (libGravity 96 PPQN)", () => {
   it("maps unity (1) to a quarter note (96 ticks)", () => {
@@ -19,8 +19,16 @@ describe("subdiv — SUBDIV -> ticksPerStep (libGravity 96 PPQN)", () => {
     expect(subdivToTicks(-24)).toBe(4);
   });
 
-  it("default SUBDIV is /1 (quarter = 96 ticks)", () => {
+  it("default SUBDIV is x1 (quarter = 96 ticks)", () => {
     expect(subdivToTicks(DEFAULT_SUBDIV)).toBe(96);
+  });
+
+  it("labels the unity x1, a division /N and a multiplication xN", () => {
+    expect(subdivLabel(1)).toBe("x1");
+    expect(subdivLabel(2)).toBe("/2");
+    expect(subdivLabel(128)).toBe("/128");
+    expect(subdivLabel(-2)).toBe("x2");
+    expect(subdivLabel(-24)).toBe("x24");
   });
 
   it("matches libGravity CLOCK_MOD_PULSES for every official value", () => {

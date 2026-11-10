@@ -49,5 +49,5 @@ export function subdivToTicks(subdiv: number): number {
  * negatif = multiplication => `xN`.
  */
 export function subdivLabel(subdiv: number): string {
-  return subdiv > 0 ? `/${subdiv}` : `x${-subdiv}`;
+  return subdiv <= 1 ? `x${Math.abs(subdiv)}` : `/${subdiv}`;
 }

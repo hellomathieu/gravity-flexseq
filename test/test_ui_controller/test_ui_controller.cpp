@@ -586,25 +586,25 @@ void test_the_length_field_is_clamped_to_one_and_thirty_six() {
     TEST_ASSERT_EQUAL_UINT8(1, r.engine.getEffectiveLength(0));
 }
 
-void test_the_subdiv_field_walks_the_libgravity_list_and_clamps() {
+void test_a_turn_to_the_right_multiplies_the_subdiv_and_a_turn_to_the_left_divides_it() {
     Rig r;
     r.enterTab();
     r.gotoField(UiController::FIELD_SUBDIV);
-    TEST_ASSERT_EQUAL_INT16(flexseq::DEFAULT_SUBDIV, r.engine.getSubdiv(0));
+    TEST_ASSERT_EQUAL_INT16(1, r.engine.getSubdiv(0));
     r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
-    TEST_ASSERT_EQUAL_INT16(2, r.engine.getSubdiv(0));
-    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, -2);  // ecrete a un pas
-    TEST_ASSERT_EQUAL_INT16(flexseq::DEFAULT_SUBDIV, r.engine.getSubdiv(0));
+    TEST_ASSERT_EQUAL_INT16_MESSAGE(-2, r.engine.getSubdiv(0), "un cran a droite : x2");
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, -2);
+    TEST_ASSERT_EQUAL_INT16_MESSAGE(1, r.engine.getSubdiv(0), "un geste vaut un cran");
     r.ui.handle(UiController::EVENT_SHIFT_ROTATE, -1);
-    TEST_ASSERT_EQUAL_INT16(-2, r.engine.getSubdiv(0));
-    for (uint8_t i = 0; i < flexseq::SUBDIV_CHOICE_COUNT + 5; ++i) {
+    TEST_ASSERT_EQUAL_INT16_MESSAGE(2, r.engine.getSubdiv(0), "un cran a gauche : /2");
+    for (uint8_t i = 0; i < 30; ++i) {
         r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
     }
-    TEST_ASSERT_EQUAL_INT16(128, r.engine.getSubdiv(0));
-    for (uint8_t i = 0; i < flexseq::SUBDIV_CHOICE_COUNT + 5; ++i) {
+    TEST_ASSERT_EQUAL_INT16_MESSAGE(-24, r.engine.getSubdiv(0), "butee a droite : x24");
+    for (uint8_t i = 0; i < 30; ++i) {
         r.ui.handle(UiController::EVENT_SHIFT_ROTATE, -1);
     }
-    TEST_ASSERT_EQUAL_INT16(-24, r.engine.getSubdiv(0));
+    TEST_ASSERT_EQUAL_INT16_MESSAGE(128, r.engine.getSubdiv(0), "butee a gauche : /128");
 }
 
 // ⚠️ SEP a quitte l'onglet pour l'EN-TETE de l'ecran EDIT au lot 12 : un cran a
@@ -1106,7 +1106,7 @@ void test_shift_rotate_on_the_bar_changes_the_main_parameter() {
         Rig r;  // CLOCK : la SUBDIV
         r.engine.setChannelMode(0, flexseq::MODE_CLOCK);
         r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
-        TEST_ASSERT_EQUAL_INT16(2, r.engine.getSubdiv(0));
+        TEST_ASSERT_EQUAL_INT16(-2, r.engine.getSubdiv(0));
     }
     {
         Rig r;  // RANDOM : la chance de saut
@@ -1843,7 +1843,7 @@ int main(int, char**) {
     RUN_TEST(test_the_length_field_edits_the_base_and_never_the_derived_value);
     RUN_TEST(test_the_length_field_leaves_the_modulation_in_place);
     RUN_TEST(test_the_length_field_is_clamped_to_one_and_thirty_six);
-    RUN_TEST(test_the_subdiv_field_walks_the_libgravity_list_and_clamps);
+    RUN_TEST(test_a_turn_to_the_right_multiplies_the_subdiv_and_a_turn_to_the_left_divides_it);
     RUN_TEST(test_the_bar_length_field_walks_only_the_allowed_values);
     RUN_TEST(test_no_field_keeps_the_acceleration_not_even_the_tempo);
     RUN_TEST(test_a_long_turn_on_the_tempo_lands_on_the_bound);

@@ -131,7 +131,7 @@ describe('couche 1 — recettes de gestes contre le MODELE de reference, jamais 
     it('6. la recette change la DUREE DU STEP', () => {
       const { engine, driver } = rig();
       driver.goToTab(TAB_FIRST_CHANNEL);
-      driver.setSubdiv(1);
+      driver.setSubdiv(-1);
       const events = onsetTimeline(engine, 0, 192 * 30);
       const first = events.find((e) => e.step === 0)!;
       const next = events.find((e) => e.tick > first.tick && e.step === 5)!;
@@ -141,7 +141,7 @@ describe('couche 1 — recettes de gestes contre le MODELE de reference, jamais 
     it('7. la recette reste dans les 25 cadences legales', () => {
       const { engine, driver } = rig();
       driver.goToTab(TAB_FIRST_CHANNEL);
-      driver.setSubdiv(50);
+      driver.setSubdiv(-50);
       const events = onsetTimeline(engine, 0, 96 * 128 * 10);
       const first = events.find((e) => e.step === 5)!;
       const next = events.find((e) => e.tick > first.tick && e.step === 9)!;
@@ -187,7 +187,7 @@ describe('couche 1 — recettes de gestes contre le MODELE de reference, jamais 
     it('11. la recette SAUTE les codes que la cadence refuse et n en pose jamais un illegal', () => {
       const { engine, pattern, driver } = rig();
       driver.goToTab(TAB_FIRST_CHANNEL);
-      driver.setSubdiv(-8);
+      driver.setSubdiv(8);
       driver.enterEdit();
 
       const ticks = engine.getTicksPerStep(0);
@@ -250,13 +250,13 @@ describe('couche 1 — recettes de gestes contre le MODELE de reference, jamais 
     const recipes: Array<[string, number, (d: GestureDriver) => void]> = [
       ['4 LENGTH', 3, (d) => { d.goToTab(TAB_FIRST_CHANNEL); d.setLength(3); }],
       ['5 LENGTH au maximum', 30, (d) => { d.goToTab(TAB_FIRST_CHANNEL); d.setLength(30); }],
-      ['6 SUBDIV', 1, (d) => { d.goToTab(TAB_FIRST_CHANNEL); d.setSubdiv(1); }],
-      ['7 SUBDIV au bout', 50, (d) => { d.goToTab(TAB_FIRST_CHANNEL); d.setSubdiv(50); }],
+      ['6 SUBDIV', 1, (d) => { d.goToTab(TAB_FIRST_CHANNEL); d.setSubdiv(-1); }],
+      ['7 SUBDIV au bout', 50, (d) => { d.goToTab(TAB_FIRST_CHANNEL); d.setSubdiv(-50); }],
       ['8 step', 0, (d) => { d.goToTab(TAB_FIRST_CHANNEL); d.enterEdit(); d.toggleStep(3); }],
       ['9 ratchet', 5, (d) => { d.goToTab(TAB_FIRST_CHANNEL); d.enterEdit(); d.setRatchet(5, RATCHET_6); }],
       ['10 step inactif', 0, (d) => { d.goToTab(TAB_FIRST_CHANNEL); d.enterEdit(); d.setRatchet(4, RATCHET_6); }],
       ['11 cadence x24', 8, (d) => {
-        d.goToTab(TAB_FIRST_CHANNEL); d.setSubdiv(-8); d.enterEdit();
+        d.goToTab(TAB_FIRST_CHANNEL); d.setSubdiv(8); d.enterEdit();
         d.setRatchet(5, RATCHET_6); d.setRatchet(5, RATCHET_TRIPLET);
       }],
       ['12 triolet aller-retour', 12, (d) => {
@@ -282,7 +282,7 @@ describe('couche 1 — recettes de gestes contre le MODELE de reference, jamais 
     it('11 atteint bien x24, ou le code 6 ne tient pas dans un step', () => {
       const { engine, driver } = rig();
       driver.goToTab(TAB_FIRST_CHANNEL);
-      driver.setSubdiv(-8);
+      driver.setSubdiv(8);
       expect(engine.getTicksPerStep(0)).toBe(4);
       expect(ratchetFitsStep(RATCHET_6, 4)).toBe(false);
       expect(ratchetFitsStep(RATCHET_TRIPLET, 4)).toBe(true);

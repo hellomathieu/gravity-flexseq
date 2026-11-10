@@ -431,7 +431,9 @@ void test_a_seq_tab_draws_its_three_lines_at_the_geometry_of_the_original() {
 void test_subdiv_is_shown_the_gravity_way() {
     char text[6];
     flexseq::detail::subdivLabel(1, text);
-    TEST_ASSERT_EQUAL_STRING("/1", text);
+    TEST_ASSERT_EQUAL_STRING("x1", text);
+    flexseq::detail::subdivLabel(2, text);
+    TEST_ASSERT_EQUAL_STRING("/2", text);
     flexseq::detail::subdivLabel(128, text);
     TEST_ASSERT_EQUAL_STRING("/128", text);
     flexseq::detail::subdivLabel(-24, text);

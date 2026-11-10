@@ -100,7 +100,8 @@ describe("MainScreenDisplay — labels, mirrored from the C++ renderer", () => {
   });
 
   it("shows SUBDIV the Gravity way", () => {
-    expect(subdivLabel(1)).toBe("/1");
+    expect(subdivLabel(1)).toBe("x1");
+    expect(subdivLabel(2)).toBe("/2");
     expect(subdivLabel(128)).toBe("/128");
     expect(subdivLabel(-2)).toBe("x2");
     expect(subdivLabel(-24)).toBe("x24");

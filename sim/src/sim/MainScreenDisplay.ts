@@ -96,7 +96,7 @@ export function patternName(index: number): string {
 
 export function subdivLabel(subdiv: number): string {
   if (subdiv === 0) return "?";
-  return subdiv < 0 ? `x${-subdiv}` : `/${subdiv}`;
+  return subdiv <= 1 ? `x${Math.abs(subdiv)}` : `/${subdiv}`;
 }
 
 export function barLabel(steps: number): string {

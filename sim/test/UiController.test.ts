@@ -42,7 +42,6 @@ import {
   ChannelMode,
 } from "../src/domain/SequencerEngine.js";
 import { RATCHET_CODES, RATCHET_NONE, RATCHET_2, RATCHET_3, RATCHET_TRIPLET } from "../src/domain/Pattern.js";
-import { DEFAULT_SUBDIV, SUBDIVS } from "../src/domain/subdiv.js";
 import {
   CV_SOURCE_1,
   CV_SOURCE_2,
@@ -604,21 +603,21 @@ describe("UiController — inside a tab", () => {
     expect(ui.displayedPattern).toBe(15);
   });
 
-  it("the subdiv field walks the libGravity list and clamps", () => {
+  it("a turn to the right multiplies the subdiv and a turn to the left divides it", () => {
     const { ui, engine, enterTab, gotoField } = rig();
     enterTab();
     gotoField(UiField.Subdiv);
-    expect(engine.getSubdiv(0)).toBe(DEFAULT_SUBDIV);
+    expect(engine.getSubdiv(0)).toBe(1);
     ui.handle(UiEvent.ShiftRotate, 1);
-    expect(engine.getSubdiv(0)).toBe(2);
-    ui.handle(UiEvent.ShiftRotate, -2); // ecrete a un pas
-    expect(engine.getSubdiv(0)).toBe(DEFAULT_SUBDIV);
+    expect(engine.getSubdiv(0), "un cran a droite : x2").toBe(-2);
+    ui.handle(UiEvent.ShiftRotate, -2);
+    expect(engine.getSubdiv(0), "un geste vaut un cran").toBe(1);
     ui.handle(UiEvent.ShiftRotate, -1);
-    expect(engine.getSubdiv(0)).toBe(-2);
-    for (let i = 0; i < SUBDIVS.length + 5; i += 1) ui.handle(UiEvent.ShiftRotate, 1);
-    expect(engine.getSubdiv(0)).toBe(SUBDIVS[SUBDIVS.length - 1]);
-    for (let i = 0; i < SUBDIVS.length + 5; i += 1) ui.handle(UiEvent.ShiftRotate, -1);
-    expect(engine.getSubdiv(0)).toBe(SUBDIVS[0]);
+    expect(engine.getSubdiv(0), "un cran a gauche : /2").toBe(2);
+    for (let i = 0; i < 30; i += 1) ui.handle(UiEvent.ShiftRotate, 1);
+    expect(engine.getSubdiv(0), "butee a droite : x24").toBe(-24);
+    for (let i = 0; i < 30; i += 1) ui.handle(UiEvent.ShiftRotate, -1);
+    expect(engine.getSubdiv(0), "butee a gauche : /128").toBe(128);
   });
 
   it("the bar length field walks only the allowed values", () => {
@@ -880,7 +879,7 @@ describe("UiController — le parametre principal, edite depuis la barre avec SH
       const { ui, engine } = rig();
       engine.setChannelMode(0, ChannelMode.CLOCK);
       ui.handle(UiEvent.ShiftRotate, 1);
-      expect(engine.getSubdiv(0)).toBe(2);
+      expect(engine.getSubdiv(0)).toBe(-2);
     }
     {
       const { ui, engine } = rig();
