@@ -780,6 +780,8 @@ void test_shift_rotate_sets_the_ratchet_of_an_active_step_and_clamps() {
     r.enterEdit();
     r.ui.handle(UiController::EVENT_PRESS);  // le pas 0 devient actif
     r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_UINT8(8, r.engine.patternForChannel(0)->getRatchet(0));
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
     TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_2, r.engine.patternForChannel(0)->getRatchet(0));
     r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
     TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_3, r.engine.patternForChannel(0)->getRatchet(0));
@@ -799,7 +801,7 @@ void test_a_ratchet_edit_takes_effect_on_the_current_step_immediately() {
     r.ui.handle(UiController::EVENT_PRESS);  // le pas 0 devient actif
     r.engine.start();
     TEST_ASSERT_EQUAL_UINT16(SequencerEngine::PPQN, r.engine.currentStepTicks(0));
-    for (uint8_t i = 0; i < 5; ++i) {
+    for (uint8_t i = 0; i < 6; ++i) {
         r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 5);
     }
     TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_TRIPLET, r.engine.patternForChannel(0)->getRatchet(0));
@@ -814,7 +816,7 @@ void test_shift_rotate_in_edit_no_longer_changes_channel() {
     TEST_ASSERT_EQUAL_INT8_MESSAGE(0, r.ui.selectedChannel(),
         "rien dans l original ne change de channel depuis l editeur");
     TEST_ASSERT_EQUAL(UiController::LEVEL_EDIT, r.ui.level());
-    TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_2, r.engine.patternForChannel(0)->getRatchet(0));
+    TEST_ASSERT_EQUAL_UINT8(8, r.engine.patternForChannel(0)->getRatchet(0));
 }
 
 void test_shift_rotate_on_an_inactive_step_does_nothing() {

@@ -383,6 +383,32 @@ void test_an_inactive_triplet_is_drawn_at_every_rate() {
     TEST_ASSERT_TRUE(glyphIs(4, HOLLOW_TRIANGLE));
 }
 
+static const char* const RIGHT_HALF_DISC[5] = {"...#.", "...##", "...##", "...##", "...#."};
+
+void test_an_active_offbeat_step_is_the_right_half_of_a_disc() {
+    pattern.writeStep(4, true);
+    pattern.setRatchet(4, flexseq::RATCHET_OFFBEAT);
+    drawPatternScreen(canvas, model());
+    TEST_ASSERT_TRUE(glyphIs(4, RIGHT_HALF_DISC));
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, digitInk(4), "the half disc says it all, no digit");
+}
+
+void test_an_inactive_offbeat_step_is_a_plain_ring() {
+    pattern.setRatchet(4, flexseq::RATCHET_OFFBEAT);
+    drawPatternScreen(canvas, model());
+    TEST_ASSERT_TRUE(glyphIs(4, RING));
+    TEST_ASSERT_EQUAL_UINT8(0, digitInk(4));
+}
+
+void test_the_half_disc_is_drawn_at_the_fastest_rate() {
+    pattern.writeStep(4, true);
+    pattern.setRatchet(4, flexseq::RATCHET_OFFBEAT);
+    PatternScreenModel m = model();
+    m.ticksPerStep = 4;
+    drawPatternScreen(canvas, m);
+    TEST_ASSERT_TRUE(glyphIs(4, RIGHT_HALF_DISC));
+}
+
 void test_an_inactive_step_with_another_ratchet_is_a_plain_ring() {
     pattern.setRatchet(4, RATCHET_2);
     drawPatternScreen(canvas, model());
@@ -739,5 +765,8 @@ int main() {
     RUN_TEST(test_eight_bands_reunited_equal_the_whole_image);
     RUN_TEST(test_a_band_draws_only_the_row_it_contains);
     RUN_TEST(test_the_channel_editor_header_still_reads_sep);
+    RUN_TEST(test_an_active_offbeat_step_is_the_right_half_of_a_disc);
+    RUN_TEST(test_an_inactive_offbeat_step_is_a_plain_ring);
+    RUN_TEST(test_the_half_disc_is_drawn_at_the_fastest_rate);
     return UNITY_END();
 }

@@ -15,15 +15,6 @@ uint8_t barLengthAtIndex(uint8_t index) {
     return 6;
 }
 
-uint8_t ratchetAtIndex(uint8_t index) {
-    if (index == 0) return RATCHET_NONE;
-    if (index == 1) return RATCHET_2;
-    if (index == 2) return RATCHET_3;
-    if (index == 3) return RATCHET_4;
-    if (index == 4) return RATCHET_6;
-    return RATCHET_TRIPLET;
-}
-
 __attribute__((noinline))
 uint8_t wrapIndex(uint8_t current, int16_t delta, uint8_t count) {
     if (count == 0) {
@@ -599,7 +590,7 @@ void UiController::adjustRatchet(int8_t delta) {
     const uint16_t ticks = engine_.getTicksPerStep(static_cast<uint8_t>(channel));
 
     int8_t index = indexOfChoice(
-        ratchetAtIndex, RATCHET_CHOICE_COUNT, pattern->getRatchet(stepCursor_)
+        ratchetChoiceAt, RATCHET_CHOICE_COUNT, pattern->getRatchet(stepCursor_)
     );
     if (index < 0) {
         index = 0;
@@ -612,8 +603,8 @@ void UiController::adjustRatchet(int8_t delta) {
             return;
         }
         cursor = candidate;
-        if (ratchetFitsStep(ratchetAtIndex(cursor), ticks)) {
-            pattern->setRatchet(stepCursor_, ratchetAtIndex(cursor));
+        if (ratchetFitsStep(ratchetChoiceAt(cursor), ticks)) {
+            pattern->setRatchet(stepCursor_, ratchetChoiceAt(cursor));
             engine_.refreshTiming(static_cast<uint8_t>(channel));
             return;
         }

@@ -122,6 +122,25 @@ describe("OledDisplay — step glyphs", () => {
     expect(tri.painted.has(`${x - 2},${y + 2}`)).toBe(true);
   });
 
+  it("draws the right half of a disc for an active off-beat step", () => {
+    const half = recorder();
+    drawOled(half.ctx, {
+      title: "", ticksPerStep: 96,
+      cells: [cell(0, "active", 8)],
+      cursor: -1,
+      playhead: -1,
+    });
+    const { x, y } = C[0]!;
+    for (let dy = -2; dy <= 2; dy += 1) {
+      expect(half.painted.has(`${x + 1},${y + dy}`)).toBe(true);
+      expect(half.painted.has(`${x},${y + dy}`)).toBe(false);
+      expect(half.painted.has(`${x - 2},${y + dy}`)).toBe(false);
+    }
+    expect(half.painted.has(`${x + 2},${y}`)).toBe(true);
+    expect(half.painted.has(`${x + 2},${y - 2}`)).toBe(false);
+    expect(half.painted.has(`${x + 2},${y + 2}`)).toBe(false);
+  });
+
   it("draws a hollow triangle for an inactive TRIPLET step", () => {
     const tri = recorder();
     drawOled(tri.ctx, {

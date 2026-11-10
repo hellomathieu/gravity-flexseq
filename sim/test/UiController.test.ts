@@ -694,6 +694,8 @@ describe("UiController — EDIT PATTERN", () => {
     enterEdit();
     ui.handle(UiEvent.Press);
     ui.handle(UiEvent.ShiftRotate, 1);
+    expect(engine.patternForChannel(0)!.getRatchet(0)).toBe(8);
+    ui.handle(UiEvent.ShiftRotate, 1);
     expect(engine.patternForChannel(0)!.getRatchet(0)).toBe(RATCHET_2);
     ui.handle(UiEvent.ShiftRotate, 1);
     expect(engine.patternForChannel(0)!.getRatchet(0)).toBe(RATCHET_3);
@@ -709,7 +711,7 @@ describe("UiController — EDIT PATTERN", () => {
     ui.handle(UiEvent.Press);
     engine.start();
     expect(engine.currentStepTicks(0)).toBe(PPQN);
-    for (let i = 0; i < 5; ++i) ui.handle(UiEvent.ShiftRotate, 5);
+    for (let i = 0; i < 6; ++i) ui.handle(UiEvent.ShiftRotate, 5);
     expect(engine.patternForChannel(0)!.getRatchet(0)).toBe(RATCHET_TRIPLET);
     expect(engine.currentStepTicks(0)).toBe(2 * PPQN);
   });
@@ -721,7 +723,7 @@ describe("UiController — EDIT PATTERN", () => {
     ui.handle(UiEvent.ShiftRotate, 1);
     expect(ui.selectedChannel).toBe(0);
     expect(ui.level).toBe(UiLevel.Edit);
-    expect(engine.patternForChannel(0)!.getRatchet(0)).toBe(RATCHET_2);
+    expect(engine.patternForChannel(0)!.getRatchet(0)).toBe(8);
   });
 
   it("shift rotate on an inactive step does nothing", () => {

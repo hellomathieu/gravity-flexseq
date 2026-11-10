@@ -42,6 +42,7 @@ function panelModel(playhead = 0): PatternScreenPixelModel {
   ratchets[16] = RATCHET_4;
   ratchets[10] = RATCHET_TRIPLET;
   ratchets[3] = RATCHET_4;
+  ratchets[13] = 8;
   return {
     title: "EDIT PATTERN A1",
     steps,
@@ -64,13 +65,13 @@ const PANEL_ROWS: ReadonlyArray<readonly [number, number]> = [
   [2, 47], [3, 27], [4, 43], [5, 24], [6, 38], [10, 120], [14, 3], [15, 3],
   [16, 12], [17, 5], [18, 39], [19, 47], [20, 46], [21, 47], [22, 43],
   [23, 5], [24, 12], [25, 12], [26, 6], [27, 9], [28, 4], [29, 9], [31, 3],
-  [32, 3], [33, 3], [34, 3], [35, 25], [36, 29], [37, 33], [38, 31],
-  [39, 29], [40, 3], [41, 3], [42, 5], [43, 5], [44, 3], [45, 1], [46, 1],
+  [32, 3], [33, 3], [34, 3], [35, 23], [36, 26], [37, 30], [38, 28],
+  [39, 27], [40, 3], [41, 3], [42, 5], [43, 5], [44, 3], [45, 1], [46, 1],
   [48, 3], [49, 3], [50, 3], [51, 3], [52, 3], [53, 3], [54, 15], [55, 3],
   [56, 3], [57, 3], [58, 3], [59, 3], [60, 3],
 ];
 
-const PANEL_INK = 832;
+const PANEL_INK = 819;
 
 describe("l ecran EDIT, confronte au PANNEAU (risque 89)", () => {
   it("rend exactement l encre que le panneau recoit", () => {
@@ -191,6 +192,24 @@ describe("le rendu d un step, PRD 12.1", () => {
 
   it("un triolet inactif se dessine a toutes les cadences", () => {
     expect(glyphIs(one(false, RATCHET_TRIPLET, 4), HOLLOW_TRIANGLE)).toBe(true);
+  });
+
+  const RIGHT_HALF_DISC = ["...#.", "...##", "...##", "...##", "...#."];
+
+  it("un contretemps actif est la moitie droite d un disque, sans chiffre", () => {
+    const px = one(true, 8);
+    expect(glyphIs(px, RIGHT_HALF_DISC)).toBe(true);
+    expect(digitInk(px)).toBe(0);
+  });
+
+  it("un contretemps inactif est un anneau, sans chiffre", () => {
+    const px = one(false, 8);
+    expect(glyphIs(px, RING)).toBe(true);
+    expect(digitInk(px)).toBe(0);
+  });
+
+  it("le demi-disque se dessine a la cadence la plus rapide", () => {
+    expect(glyphIs(one(true, 8, 4), RIGHT_HALF_DISC)).toBe(true);
   });
 
   it("un step inactif avec un autre ratchet est un anneau, sans chiffre", () => {

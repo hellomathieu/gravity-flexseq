@@ -13,6 +13,7 @@ SequencerEngine::SequencerEngine()
       running_(false),
       stepped_(0),
       armed_(0),
+      offbeat_(0),
       bank_(nullptr) {
     for (uint8_t s = 0; s < CV_SOURCE_COUNT; ++s) {
         cvInput_[s] = 0;
@@ -69,6 +70,12 @@ void SequencerEngine::refreshStepTiming(uint8_t channel, bool resetSubOnset) {
     }
 
     c.triggers = triggers;
+    const uint8_t channelBit = static_cast<uint8_t>(1u << channel);
+    if (triggers > 1 && ratchetSkipsStepOnset(code)) {
+        offbeat_ = static_cast<uint8_t>(offbeat_ | channelBit);
+    } else {
+        offbeat_ = static_cast<uint8_t>(offbeat_ & ~channelBit);
+    }
     if (resetSubOnset) {
         c.subOnset = 0;
     } else if (c.subOnset >= c.triggers) {
@@ -146,7 +153,7 @@ void SequencerEngine::advance(uint16_t ticks) {
         const uint8_t channelBit = static_cast<uint8_t>(1u << ch);
         if ((armed_ & channelBit) != 0) {
             armed_ = static_cast<uint8_t>(armed_ & ~channelBit);
-            if (c.mode != MODE_CLOCK || c.offset == 0) {
+            if (stepEntryHasOnset(ch)) {
                 ++onsets_[ch];
             }
         }
@@ -181,7 +188,7 @@ void SequencerEngine::advance(uint16_t ticks) {
                 stepped_ = static_cast<uint8_t>(stepped_ | (1u << ch));
                 applyCvAtStepBoundary(ch);
                 refreshStepTiming(ch); // new step -> new duration / trigger count
-                if (c.mode != MODE_CLOCK || c.offset == 0) {
+                if (stepEntryHasOnset(ch)) {
                     ++onsets_[ch];     // the step's own onset
                 }
                 continue;
@@ -343,6 +350,7 @@ int8_t SequencerEngine::patternCvIndex(uint8_t channel) const {
 
 static_assert(CV_SOURCE_COUNT <= 8, "the source mask is one byte");
 static_assert(SequencerEngine::CHANNEL_COUNT <= 8, "armed_ is one byte");
+static_assert(SequencerEngine::CHANNEL_COUNT <= 8, "offbeat_ is one byte");
 
 void SequencerEngine::applyCvResetEvents(uint8_t sourceMask) {
     sourceMask =
@@ -567,7 +575,16 @@ uint8_t SequencerEngine::currentStepTriggers(uint8_t channel) const {
     if (!validChannel(channel)) {
         return 0;
     }
-    return channels_[channel].triggers;
+    const uint8_t skipped = (offbeat_ >> channel) & 1u;
+    return static_cast<uint8_t>(channels_[channel].triggers - skipped);
+}
+
+bool SequencerEngine::stepEntryHasOnset(uint8_t channel) const {
+    const ChannelState& c = channels_[channel];
+    if (c.mode == MODE_CLOCK) {
+        return c.offset == 0;
+    }
+    return ((offbeat_ >> channel) & 1u) == 0;
 }
 
 int8_t SequencerEngine::effectiveStep(uint8_t channel) const {

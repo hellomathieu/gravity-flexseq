@@ -5,9 +5,10 @@ export const RATCHET_3 = 3;
 export const RATCHET_4 = 4;
 export const RATCHET_6 = 6;
 export const RATCHET_TRIPLET = 7;
+export const RATCHET_OFFBEAT = 8;
 
 export const RATCHET_CODES: readonly number[] = [
-  RATCHET_NONE, RATCHET_2, RATCHET_3, RATCHET_4, RATCHET_6, RATCHET_TRIPLET,
+  RATCHET_NONE, RATCHET_OFFBEAT, RATCHET_2, RATCHET_3, RATCHET_4, RATCHET_6, RATCHET_TRIPLET,
 ];
 
 export function isValidRatchet(code: number): boolean {
@@ -25,10 +26,15 @@ export function ratchetFitsStep(code: number, ticksPerStep: number): boolean {
 
 export function ratchetTriggers(code: number): number {
   if (code === RATCHET_TRIPLET) return 3;
+  if (code === RATCHET_OFFBEAT) return 2;
   if (code === RATCHET_2 || code === RATCHET_3 || code === RATCHET_4 || code === RATCHET_6) {
     return code;
   }
   return 1;
+}
+
+export function ratchetSkipsStepOnset(code: number): boolean {
+  return code === RATCHET_OFFBEAT;
 }
 
 export function ratchetSpan(code: number): number {
@@ -37,6 +43,7 @@ export function ratchetSpan(code: number): number {
 
 export function ratchetLabel(code: number): string {
   if (code === RATCHET_TRIPLET) return "3T";
+  if (code === RATCHET_OFFBEAT) return "off";
   if (code === RATCHET_NONE) return "";
   return String(code);
 }

@@ -15,6 +15,9 @@ import {
 } from "../src/domain/UiController.js";
 import {
   ratchetFitsStep,
+  ratchetSkipsStepOnset,
+  isValidRatchet,
+  RATCHET_OFFBEAT,
   RATCHET_2,
   RATCHET_3,
   RATCHET_4,
@@ -226,6 +229,8 @@ describe("Le refus a la saisie", () => {
   it("saute les codes que la cadence refuse", () => {
     const r = editRig(-24);
     r.ui.handle(UiEvent.ShiftRotate, 1);
+    expect(r.pattern.getRatchet(0)).toBe(8);
+    r.ui.handle(UiEvent.ShiftRotate, 1);
     expect(r.pattern.getRatchet(0)).toBe(RATCHET_2);
     r.ui.handle(UiEvent.ShiftRotate, 1);
     expect(r.pattern.getRatchet(0)).toBe(RATCHET_TRIPLET);
@@ -233,7 +238,7 @@ describe("Le refus a la saisie", () => {
 
   it("n'en saute aucun a l'unite", () => {
     const r = editRig(1);
-    for (const code of [RATCHET_2, RATCHET_3, RATCHET_4, RATCHET_6, RATCHET_TRIPLET]) {
+    for (const code of [8, 2, 3, 4, 6, 7]) {
       r.ui.handle(UiEvent.ShiftRotate, 1);
       expect(r.pattern.getRatchet(0)).toBe(code);
     }
@@ -285,5 +290,87 @@ describe("Les quatre regles du 2026-08-23", () => {
     expect(r.pattern.readStep(7)).toBe(false);
     expect(r.pattern.getRatchet(0)).toBe(RATCHET_NONE);
     expect(r.pattern.getRatchet(7)).toBe(RATCHET_NONE);
+  });
+});
+
+describe("Le ratchet contretemps seul", () => {
+  function offbeatRig(subdiv: number, steps: number[], offbeatAt: number, length: number) {
+    const engine = new SequencerEngine();
+    engine.setPatternBank(new PatternBank());
+    const seq = new TriggerSequencer(engine);
+    engine.setChannelMode(0, ChannelMode.SEQ);
+    const pattern = engine.patternForChannel(0)!;
+    for (const step of steps) pattern.writeStep(step, true);
+    pattern.setRatchet(offbeatAt, RATCHET_OFFBEAT);
+    engine.setBaseLength(0, length);
+    engine.setSubdiv(0, subdiv);
+    engine.refreshTiming();
+    return { engine, seq, pattern };
+  }
+
+  function onsetTicks(r: { engine: SequencerEngine; seq: TriggerSequencer }, ticks: number): number[] {
+    r.engine.reset();
+    r.engine.start();
+    const out: number[] = [];
+    for (let t = 1; t <= ticks; ++t) {
+      r.engine.advance(1);
+      r.seq.update();
+      for (let n = 0; n < r.seq.triggerCount(0); ++n) out.push(t);
+    }
+    return out;
+  }
+
+  it("joue la seconde moitie de son pas, et rien d autre", () => {
+    const r = offbeatRig(1, [0, 1], 1, 4);
+    expect(onsetTicks(r, 4 * 96 - 1)).toEqual([1, 96 + 48]);
+  });
+
+  it("sur le premier pas, garde le depart silencieux", () => {
+    const r = offbeatRig(1, [0], 0, 2);
+    expect(onsetTicks(r, 4 * 96)).toEqual([48, 2 * 96 + 48]);
+  });
+
+  it("le pas qui suit un contretemps joue sur son temps", () => {
+    const r = offbeatRig(1, [0, 1], 0, 2);
+    expect(onsetTicks(r, 2 * 96 - 1)).toEqual([48, 96]);
+  });
+
+  it("garde la duree de son pas, a toutes les cadences", () => {
+    for (let i = 0; i < SUBDIVS.length; ++i) {
+      const r = offbeatRig(SUBDIVS[i]!, [0], 0, 2);
+      expect(r.engine.currentStepTicks(0)).toBe(STEP_TICKS[i]);
+      expect(ratchetFitsStep(RATCHET_OFFBEAT, STEP_TICKS[i]!)).toBe(true);
+      expect(r.engine.currentStepTriggers(0)).toBe(1);
+    }
+  });
+
+  it("tombe a la moitie du pas, a toutes les cadences", () => {
+    for (let i = 0; i < SUBDIVS.length; ++i) {
+      if (STEP_TICKS[i]! > 2000) continue;
+      const r = offbeatRig(SUBDIVS[i]!, [0], 0, 2);
+      expect(onsetTicks(r, 2 * STEP_TICKS[i]!)).toEqual([STEP_TICKS[i]! / 2]);
+    }
+  });
+
+  it("reste muet sur un pas inactif", () => {
+    const r = offbeatRig(1, [], 0, 2);
+    expect(onsetTicks(r, 4 * 96)).toEqual([]);
+  });
+
+  it("est ignore hors du mode SEQ", () => {
+    const r = offbeatRig(1, [0], 0, 2);
+    r.engine.setChannelMode(0, ChannelMode.CLOCK);
+    expect(onsetTicks(r, 2 * 96)).toEqual([1, 96, 192]);
+  });
+
+  it("porte le code 8, et c est un ratchet valide", () => {
+    expect(RATCHET_OFFBEAT).toBe(8);
+    expect(isValidRatchet(8)).toBe(true);
+    expect(isValidRatchet(1)).toBe(false);
+    expect(isValidRatchet(5)).toBe(false);
+    expect(isValidRatchet(9)).toBe(false);
+    expect(ratchetSkipsStepOnset(8)).toBe(true);
+    expect(ratchetSkipsStepOnset(2)).toBe(false);
+    expect(ratchetSkipsStepOnset(0)).toBe(false);
   });
 });

@@ -168,6 +168,7 @@ private:
     };
 
     bool validChannel(uint8_t channel) const { return channel < CHANNEL_COUNT; }
+    bool stepEntryHasOnset(uint8_t channel) const;
 
     int8_t cvZoneSum(uint8_t channel, uint8_t destination) const;
 
@@ -195,6 +196,7 @@ private:
     bool running_;
     uint8_t stepped_; // bitmask: channels that crossed a step in the last advance()
     uint8_t armed_;
+    uint8_t offbeat_;
     uint8_t onsets_[CHANNEL_COUNT];
     int16_t cvInput_[CV_SOURCE_COUNT];
     ChannelState channels_[CHANNEL_COUNT];

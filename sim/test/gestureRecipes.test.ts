@@ -253,13 +253,13 @@ describe('couche 1 — recettes de gestes contre le MODELE de reference, jamais 
       ['6 SUBDIV', 1, (d) => { d.goToTab(TAB_FIRST_CHANNEL); d.setSubdiv(1); }],
       ['7 SUBDIV au bout', 50, (d) => { d.goToTab(TAB_FIRST_CHANNEL); d.setSubdiv(50); }],
       ['8 step', 0, (d) => { d.goToTab(TAB_FIRST_CHANNEL); d.enterEdit(); d.toggleStep(3); }],
-      ['9 ratchet', 4, (d) => { d.goToTab(TAB_FIRST_CHANNEL); d.enterEdit(); d.setRatchet(5, RATCHET_6); }],
+      ['9 ratchet', 5, (d) => { d.goToTab(TAB_FIRST_CHANNEL); d.enterEdit(); d.setRatchet(5, RATCHET_6); }],
       ['10 step inactif', 0, (d) => { d.goToTab(TAB_FIRST_CHANNEL); d.enterEdit(); d.setRatchet(4, RATCHET_6); }],
       ['11 cadence x24', 8, (d) => {
         d.goToTab(TAB_FIRST_CHANNEL); d.setSubdiv(-8); d.enterEdit();
         d.setRatchet(5, RATCHET_6); d.setRatchet(5, RATCHET_TRIPLET);
       }],
-      ['12 triolet aller-retour', 10, (d) => {
+      ['12 triolet aller-retour', 12, (d) => {
         d.goToTab(TAB_FIRST_CHANNEL); d.enterEdit();
         d.setRatchet(9, RATCHET_TRIPLET); d.setRatchet(9, RATCHET_NONE);
       }],

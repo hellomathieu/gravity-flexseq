@@ -16,7 +16,7 @@
  */
 import type { CellView } from "./PatternView.js";
 import { textPixels, textWidth } from "./oledFont.js";
-import { RATCHET_NONE, RATCHET_TRIPLET, ratchetFitsStep } from "../domain/Pattern.js";
+import { RATCHET_NONE, RATCHET_OFFBEAT, RATCHET_TRIPLET, ratchetFitsStep } from "../domain/Pattern.js";
 
 export const OLED_W = 128;
 export const OLED_H = 64;
@@ -129,6 +129,12 @@ function drawRing(ctx: OledCtx, cx: number, cy: number): void {
   hline(ctx, x + 1, y + 4, 3);
 }
 
+function drawRightHalfDisc(ctx: OledCtx, cx: number, cy: number): void {
+  const y = cy - GLYPH_HALF;
+  ctx.fillRect(cx + 1, y, 1, 2 * GLYPH_HALF + 1);
+  ctx.fillRect(cx + 2, y + 1, 1, 2 * GLYPH_HALF - 1);
+}
+
 /** Disque plein : step actif. */
 function drawDisc(ctx: OledCtx, cx: number, cy: number): void {
   const x = cx - GLYPH_HALF;
@@ -203,7 +209,9 @@ export function drawOled(ctx: OledCtx, model: OledModel): void {
 
     if (cell.kind === "active") {
       if (cell.ratchet === RATCHET_TRIPLET) drawTriangle(ctx, cx, cy);
-      else drawDisc(ctx, cx, cy);
+      else if (cell.ratchet === RATCHET_OFFBEAT && ratchetFitsStep(cell.ratchet, model.ticksPerStep)) {
+        drawRightHalfDisc(ctx, cx, cy);
+      } else drawDisc(ctx, cx, cy);
     } else if (cell.ratchet === RATCHET_TRIPLET) {
       drawHollowTriangle(ctx, cx, cy);
     } else {

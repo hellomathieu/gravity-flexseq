@@ -434,7 +434,8 @@ void test_the_choice_list_skips_a_ratchet_the_rate_refuses() {
     r.pattern()->writeStep(0, true);
     r.enterEdit();
 
-    // Depuis RATCHET_NONE, un cran vers le haut donne RATCHET_2 : il tient.
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_UINT8(8, r.pattern()->getRatchet(0));
     r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
     TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_2, r.pattern()->getRatchet(0));
 
@@ -452,17 +453,149 @@ void test_the_choice_list_offers_everything_at_unity() {
     r.pattern()->writeStep(0, true);
     r.enterEdit();
 
-    const uint8_t expected[5] = {flexseq::RATCHET_2, flexseq::RATCHET_3,
-                                flexseq::RATCHET_4, flexseq::RATCHET_6,
-                                flexseq::RATCHET_TRIPLET};
-    for (uint8_t i = 0; i < 5; ++i) {
+    const uint8_t expected[6] = {8, 2, 3, 4, 6, 7};
+    for (uint8_t i = 0; i < 6; ++i) {
         r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
         TEST_ASSERT_EQUAL_UINT8_MESSAGE(expected[i], r.pattern()->getRatchet(0),
             "a l'unite, aucun code ne doit etre saute");
     }
 }
 
+namespace {
+uint8_t onsetTicks(Rig& r, uint16_t ticks, uint16_t* at, uint8_t maxCount) {
+    r.engine.reset();
+    r.engine.start();
+    uint8_t count = 0;
+    for (uint16_t t = 1; t <= ticks; ++t) {
+        r.engine.advance(1);
+        r.seq.update();
+        for (uint8_t n = 0; n < r.seq.triggerCount(0) && count < maxCount; ++n) {
+            at[count++] = t;
+        }
+    }
+    return count;
+}
+}  // namespace
+
+void test_the_offbeat_ratchet_plays_the_second_half_of_its_step_and_nothing_else() {
+    Rig r;
+    r.useSubdiv(1);
+    r.pattern()->writeStep(0, true);
+    r.pattern()->writeStep(1, true);
+    r.pattern()->setRatchet(1, flexseq::RATCHET_OFFBEAT);
+    r.engine.setBaseLength(0, 4);
+
+    uint16_t at[8];
+    const uint8_t count = onsetTicks(r, 4 * 96 - 1, at, 8);
+    TEST_ASSERT_EQUAL_UINT8(2, count);
+    TEST_ASSERT_EQUAL_UINT16(1, at[0]);
+    TEST_ASSERT_EQUAL_UINT16(96 + 48, at[1]);
+}
+
+void test_the_offbeat_ratchet_on_the_first_step_keeps_the_start_silent() {
+    Rig r;
+    r.useSubdiv(1);
+    r.pattern()->writeStep(0, true);
+    r.pattern()->setRatchet(0, flexseq::RATCHET_OFFBEAT);
+    r.engine.setBaseLength(0, 2);
+
+    uint16_t at[8];
+    const uint8_t count = onsetTicks(r, 4 * 96, at, 8);
+    TEST_ASSERT_EQUAL_UINT8(2, count);
+    TEST_ASSERT_EQUAL_UINT16(48, at[0]);
+    TEST_ASSERT_EQUAL_UINT16(2 * 96 + 48, at[1]);
+}
+
+void test_the_step_after_an_offbeat_step_plays_on_its_beat() {
+    Rig r;
+    r.useSubdiv(1);
+    r.pattern()->writeStep(0, true);
+    r.pattern()->writeStep(1, true);
+    r.pattern()->setRatchet(0, flexseq::RATCHET_OFFBEAT);
+    r.engine.setBaseLength(0, 2);
+
+    uint16_t at[8];
+    const uint8_t count = onsetTicks(r, 2 * 96 - 1, at, 8);
+    TEST_ASSERT_EQUAL_UINT8(2, count);
+    TEST_ASSERT_EQUAL_UINT16(48, at[0]);
+    TEST_ASSERT_EQUAL_UINT16(96, at[1]);
+}
+
+void test_the_offbeat_ratchet_keeps_the_duration_of_its_step() {
+    for (uint8_t i = 0; i < SUBDIV_COUNT; ++i) {
+        Rig r;
+        r.pattern()->writeStep(0, true);
+        r.pattern()->setRatchet(0, flexseq::RATCHET_OFFBEAT);
+        r.useSubdiv(SUBDIVS[i]);
+        TEST_ASSERT_EQUAL_UINT16(STEP_TICKS[i], r.engine.currentStepTicks(0));
+        TEST_ASSERT_TRUE(flexseq::ratchetFitsStep(flexseq::RATCHET_OFFBEAT, STEP_TICKS[i]));
+        TEST_ASSERT_EQUAL_UINT8(1, r.engine.currentStepTriggers(0));
+    }
+}
+
+void test_the_offbeat_ratchet_falls_at_half_the_step_at_every_subdiv() {
+    for (uint8_t i = 0; i < SUBDIV_COUNT; ++i) {
+        if (STEP_TICKS[i] > 2000) {
+            continue;
+        }
+        Rig r;
+        r.pattern()->writeStep(0, true);
+        r.pattern()->setRatchet(0, flexseq::RATCHET_OFFBEAT);
+        r.engine.setBaseLength(0, 2);
+        r.useSubdiv(SUBDIVS[i]);
+        uint16_t at[4];
+        const uint8_t count = onsetTicks(r, static_cast<uint16_t>(2 * STEP_TICKS[i]), at, 4);
+        TEST_ASSERT_EQUAL_UINT8(1, count);
+        TEST_ASSERT_EQUAL_UINT16(STEP_TICKS[i] / 2, at[0]);
+    }
+}
+
+void test_an_inactive_step_with_the_offbeat_ratchet_stays_silent() {
+    Rig r;
+    r.useSubdiv(1);
+    r.pattern()->setRatchet(0, flexseq::RATCHET_OFFBEAT);
+    r.engine.setBaseLength(0, 2);
+    uint16_t at[4];
+    TEST_ASSERT_EQUAL_UINT8(0, onsetTicks(r, 4 * 96, at, 4));
+}
+
+void test_the_offbeat_ratchet_is_ignored_outside_seq() {
+    Rig r;
+    r.useSubdiv(1);
+    r.pattern()->writeStep(0, true);
+    r.pattern()->setRatchet(0, flexseq::RATCHET_OFFBEAT);
+    r.engine.setBaseLength(0, 2);
+    r.engine.setChannelMode(0, flexseq::MODE_CLOCK);
+    uint16_t at[8];
+    const uint8_t count = onsetTicks(r, 2 * 96, at, 8);
+    TEST_ASSERT_EQUAL_UINT8(3, count);
+    TEST_ASSERT_EQUAL_UINT16(1, at[0]);
+    TEST_ASSERT_EQUAL_UINT16(96, at[1]);
+}
+
+void test_the_offbeat_code_is_eight_and_is_a_valid_ratchet() {
+    TEST_ASSERT_EQUAL_UINT8(8, flexseq::RATCHET_OFFBEAT);
+    TEST_ASSERT_TRUE(flexseq::isValidRatchet(8));
+    TEST_ASSERT_FALSE(flexseq::isValidRatchet(1));
+    TEST_ASSERT_FALSE(flexseq::isValidRatchet(5));
+    TEST_ASSERT_FALSE(flexseq::isValidRatchet(9));
+    TEST_ASSERT_TRUE(flexseq::ratchetSkipsStepOnset(8));
+    TEST_ASSERT_FALSE(flexseq::ratchetSkipsStepOnset(2));
+    TEST_ASSERT_FALSE(flexseq::ratchetSkipsStepOnset(0));
+}
+
 int main() {
+    UNITY_BEGIN();
+
+    RUN_TEST(test_the_offbeat_ratchet_plays_the_second_half_of_its_step_and_nothing_else);
+    RUN_TEST(test_the_offbeat_ratchet_on_the_first_step_keeps_the_start_silent);
+    RUN_TEST(test_the_step_after_an_offbeat_step_plays_on_its_beat);
+    RUN_TEST(test_the_offbeat_ratchet_keeps_the_duration_of_its_step);
+    RUN_TEST(test_the_offbeat_ratchet_falls_at_half_the_step_at_every_subdiv);
+    RUN_TEST(test_an_inactive_step_with_the_offbeat_ratchet_stays_silent);
+    RUN_TEST(test_the_offbeat_ratchet_is_ignored_outside_seq);
+    RUN_TEST(test_the_offbeat_code_is_eight_and_is_a_valid_ratchet);
+
     UNITY_BEGIN();
 
     RUN_TEST(test_every_subdiv_gives_its_documented_step_duration);

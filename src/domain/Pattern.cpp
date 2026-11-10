@@ -4,12 +4,20 @@ namespace flexseq {
 
 bool isValidRatchet(uint8_t code) {
     return code == RATCHET_NONE || code == RATCHET_2 || code == RATCHET_3 ||
-           code == RATCHET_4 || code == RATCHET_6 || code == RATCHET_TRIPLET;
+           code == RATCHET_4 || code == RATCHET_6 || code == RATCHET_TRIPLET ||
+           code == RATCHET_OFFBEAT;
+}
+
+bool ratchetSkipsStepOnset(uint8_t code) {
+    return code == RATCHET_OFFBEAT;
 }
 
 uint8_t ratchetTriggers(uint8_t code) {
     if (code == RATCHET_TRIPLET) {
         return 3;
+    }
+    if (code == RATCHET_OFFBEAT) {
+        return 2;
     }
     if (code == RATCHET_2 || code == RATCHET_3 || code == RATCHET_4 ||
         code == RATCHET_6) {

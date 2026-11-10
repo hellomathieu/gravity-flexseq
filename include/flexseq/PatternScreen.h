@@ -243,6 +243,15 @@ void drawDisc(Canvas& c, uint8_t cx, uint8_t cy) {
 
 // Triangle plein : step actif portant le TRIOLET (3 declenchements sur 2 unites).
 template <typename Canvas>
+void drawRightHalfDisc(Canvas& c, uint8_t cx, uint8_t cy) {
+    const uint8_t x = static_cast<uint8_t>(cx + 1);
+    const uint8_t y = static_cast<uint8_t>(cy - screen::GLYPH_HALF);
+    c.drawVLine(x, y, static_cast<uint8_t>(2 * screen::GLYPH_HALF + 1));
+    c.drawVLine(static_cast<uint8_t>(x + 1), static_cast<uint8_t>(y + 1),
+                static_cast<uint8_t>(2 * screen::GLYPH_HALF - 1));
+}
+
+template <typename Canvas>
 void drawTriangle(Canvas& c, uint8_t cx, uint8_t cy) {
     const uint8_t y = static_cast<uint8_t>(cy - screen::GLYPH_HALF);
     c.drawPixel(cx, y);
@@ -374,6 +383,9 @@ void drawPatternScreen(Canvas& canvas, const PatternScreenModel& model,
                 if (active) {
                     if (ratchet == RATCHET_TRIPLET) {
                         detail::drawTriangle(canvas, cx, static_cast<uint8_t>(cy));
+                    } else if (ratchet == RATCHET_OFFBEAT
+                               && ratchetFitsStep(ratchet, model.ticksPerStep)) {
+                        detail::drawRightHalfDisc(canvas, cx, static_cast<uint8_t>(cy));
                     } else {
                         detail::drawDisc(canvas, cx, static_cast<uint8_t>(cy));
                     }

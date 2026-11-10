@@ -42,6 +42,7 @@ import {
   ratchetFitsStep,
   ratchetSpan,
   ratchetTriggers,
+  ratchetSkipsStepOnset,
   RATCHET_NONE,
 } from "./Pattern.js";
 
@@ -122,8 +123,14 @@ interface ChannelState {
   pendingTicks: number;
   stepped: boolean; // a franchi une frontiere de step lors du dernier advance()
   armed: boolean;
+  offbeat: boolean;
   cvTarget: number[]; // destination de CV1 et CV2, persistee
   cvZone: number[]; // zone d'hysteresis courante, jamais persistee
+}
+
+function stepEntryHasOnset(c: ChannelState): boolean {
+  if (c.mode === ChannelMode.CLOCK) return c.offset === 0;
+  return !c.offbeat;
 }
 
 export class SequencerEngine {
@@ -154,6 +161,7 @@ export class SequencerEngine {
       pendingTicks: 0,
       stepped: false,
       armed: false,
+      offbeat: false,
       cvTarget: [DEFAULT_CV_DESTINATION, DEFAULT_CV_DESTINATION],
       cvZone: [0, 0],
     }));
@@ -183,6 +191,7 @@ export class SequencerEngine {
     if (!ratchetFitsStep(code, c.ticksPerStep)) triggers = 1;
 
     c.triggers = triggers;
+    c.offbeat = triggers > 1 && ratchetSkipsStepOnset(code);
     if (resetSubOnset) {
       c.subOnset = 0;
     } else if (c.subOnset >= c.triggers) {
@@ -229,7 +238,9 @@ export class SequencerEngine {
 
   /** Nombre de declenchements emis par le step courant. */
   currentStepTriggers(channel: number): number {
-    return this.channel(channel)?.triggers ?? 0;
+    const c = this.channel(channel);
+    if (!c) return 0;
+    return c.triggers - (c.offbeat ? 1 : 0);
   }
 
   /** Declenchements emis lors du DERNIER advance() (1 par step, N si ratchet). */
@@ -319,7 +330,7 @@ export class SequencerEngine {
       const c = this.channels[ch]!;
       if (c.armed) {
         c.armed = false;
-        if (c.mode !== ChannelMode.CLOCK || c.offset === 0) {
+        if (stepEntryHasOnset(c)) {
           this.onsets[ch] = (this.onsets[ch] ?? 0) + 1;
         }
       }
@@ -352,7 +363,7 @@ export class SequencerEngine {
           c.stepped = true;
           this.applyCvAtStepBoundary(ch);
           this.refreshStepTiming(ch); // nouveau step -> nouvelle duree
-          if (c.mode !== ChannelMode.CLOCK || c.offset === 0) {
+          if (stepEntryHasOnset(c)) {
             this.onsets[ch] = (this.onsets[ch] ?? 0) + 1;
           }
           continue;

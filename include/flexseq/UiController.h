@@ -104,7 +104,7 @@ public:
 
     static constexpr uint8_t STEP_COUNT = 36;
     static constexpr uint8_t BAR_LENGTH_CHOICE_COUNT = 5;
-    static constexpr uint8_t RATCHET_CHOICE_COUNT = 6;
+    static constexpr uint8_t RATCHET_CHOICE_COUNT = flexseq::RATCHET_CHOICE_COUNT;
 
     UiController(SequencerEngine& engine, Transport& transport);
 
