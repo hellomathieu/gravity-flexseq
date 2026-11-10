@@ -470,6 +470,8 @@ The rule applies to every place that sets the SUBDIV: the main line of a channel
 `x1` and `/1` name the same rate. The other sections of this document still write `/1`: read it as `x1` on the screen. ⚠️ The original firmware shows `/1`, so the label is one more named difference from the original. The rotation direction of the original for this field was **not compared**.
 
 Measured cost: Flash **+6 B**, RAM **+0 B**.
+
+✅ **The owner read the change on the module on 2026-11-10**, rack powered: the label `x1`, the turn to the right that multiplies up to `x24`, the turn to the left that divides down to `/128`, the two stops, and the same direction on a channel in `RANDOM` and on the `CONFIG PATTERN` page.
 ### 6.1.1 When a SUBDIV change applies — DECIDED on 2026-08-23
 > **Decision validated.** A change of SUBDIV takes effect **on the next beat** while the transport plays. When the transport is stopped, or when the master phase already sits on a beat, it takes effect **immediately**. The **chosen** value is visible at once: the screen and the EEPROM carry the choice without a wait.
 **The defect found on the module.** Two channels set to `/1` no longer fell together after one of them went through other rates and came back to `/1`. Measured on the reference model, after a return to `/1`: **0 ticks** through a division, **48 ticks** through `x2` or `x4`, and **64 ticks** through `x3`. At 120 BPM, 48 ticks make 250 ms and 64 ticks make 333 ms. The shift is audible and permanent.
@@ -1168,6 +1170,10 @@ title is 65 px of 128 and `SEP 3` is 22.
 ⚠️ **Two named consequences, accepted by the owner.**
 1. The cursor can sit on a step beyond the length, because the grid holds 36 steps. The counter then reads, for example, `20/12`. The step is editable and it is not played.
 2. The denominator is the base and not the derived length. Under a Length CV the channel can play more steps than the denominator says.
+
+Measured cost: Flash **+490 B**, RAM **+5 B**, stack peak 213 to **217 B**. The loop pass on the `EDIT` screen with the transport running stays at **6.46 ms** at the 90th percentile.
+
+✅ **The owner read the header on the module on 2026-11-10**, rack powered: the title, the counter that follows the cursor and stays still during the playback, the selection of `SEP` and then of the length, the stop on the left, the open length that changes the grid, the same length on the `CONFIG PATTERN` page, and `CV PAT.` with `-/` on the read-only screen.
 
 — *the previous wording, partly replaced:*
 **Three screens**, exactly those of the original:
