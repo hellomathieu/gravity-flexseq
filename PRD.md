@@ -988,11 +988,11 @@ The reason `PPQN` disappears in INT and in MIDI is not cosmetic: in those two mo
 **THE RENDER OF A STEP — validated on 2026-08-23.** Five cases, in this order of priority:
 - **active plus triplet**: a **filled** triangle;
 - **active, another ratchet**: a filled disc **and the digit** under the step;
-- **inactive plus triplet**: an **empty** triangle, and it is the only glyph to create;
+- **inactive plus triplet**: an **empty** triangle, the outline of the filled one on the same 5 × 5 grid. It was the only glyph to create;
 - **inactive, every other case**: a ring;
 - **the digit is never drawn on an inactive step**, and never when the rate of the channel makes the ratchet impossible (§6.3.1).
 **The asymmetry is wanted**: a triplet acts on the time even when it is off, so to hide it would mislead. A ratchet `2/3/4/6` that is off acts on nothing, so to show it would clutter. The screen then shows exactly what has an effect.
-**A cost to plan**: `PatternScreenModel` does not carry the rate of the channel today. It needs **one more field** to apply the last rule.
+✅ **IMPLEMENTED on 2026-11-10, lot 22.** `PatternScreenModel` carries the rate of the channel in one more field, `ticksPerStep`, and the renderer asks `ratchetFitsStep()`, the predicate the engine and the input already share (§6.3.1). The model of the `EDIT` screen is built by `editScreenModelOf()`, which the native tests compile. Measured cost: **Flash +144 B, RAM +2 B, stack +2 B**.
 **The measure separation goes down into EDIT PATTERN**: it is a reading aid of the grid, a FlexSeq addition the original does not have.
 **The glyph on the right of the bar is `▶`**, as in the original, and not the `■` written further down.
 **Our own glyphs draw the large pattern name**, as they already draw the ratchet digits. Ten are enough: `A`, `B` and `1` to `8`. About 500 B estimated against 2646 for `logisoso26`, and no GPLv3 data.

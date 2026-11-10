@@ -132,6 +132,13 @@ npm run typecheck # tsc --noEmit
       modulation buffer are gone. The EEPROM format is version 4, 434 bytes, the
       bank included. Measured on the AVR: RAM +69 B, Flash −1262 B against the
       firmware of 2026-09-15 morning.
+- [x] **2026-11-10 revision — the render of a step, lot 22 (PRD §12.1).** An
+      inactive triplet is a hollow triangle. The ratchet digit is drawn on an
+      active step only, and only when the rate of the channel accepts the
+      ratchet. Both renderers follow, `PatternScreenPixels.ts` and
+      `OledDisplay.ts`, and the model of the `EDIT` screen is built by
+      `editScreenModelOf()` in `sim/src/sim/EditScreenModel.ts`, the mirror of
+      the C++ function of the same name.
 - [ ] Real Transport layer (clock/MIDI); C++ port of the engine.
 - [ ] avr8js backend, wired onto the same `SimBackend` seam.
 
