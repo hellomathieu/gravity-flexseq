@@ -71,7 +71,7 @@ void SequencerEngine::refreshStepTiming(uint8_t channel, bool resetSubOnset) {
 
     c.triggers = triggers;
     const uint8_t channelBit = static_cast<uint8_t>(1u << channel);
-    if (triggers > 1 && ratchetSkipsStepOnset(code)) {
+    if (ratchetSkipsStepOnset(code) && (triggers > 1 || ratchetPauseUnits(code) != 0)) {
         offbeat_ = static_cast<uint8_t>(offbeat_ | channelBit);
     } else {
         offbeat_ = static_cast<uint8_t>(offbeat_ & ~channelBit);

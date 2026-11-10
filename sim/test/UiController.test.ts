@@ -699,7 +699,7 @@ describe("UiController — EDIT PATTERN", () => {
     ui.handle(UiEvent.ShiftRotate, 1);
     expect(engine.patternForChannel(0)!.getRatchet(0)).toBe(RATCHET_3);
     for (let i = 0; i < RATCHET_CODES.length + 3; i += 1) ui.handle(UiEvent.ShiftRotate, 1);
-    expect(engine.patternForChannel(0)!.getRatchet(0)).toBe(RATCHET_TRIPLET);
+    expect(engine.patternForChannel(0)!.getRatchet(0), "la liste s arrete sur la pause de quatre").toBe(11);
     for (let i = 0; i < RATCHET_CODES.length + 3; i += 1) ui.handle(UiEvent.ShiftRotate, -1);
     expect(engine.patternForChannel(0)!.getRatchet(0)).toBe(RATCHET_NONE);
   });

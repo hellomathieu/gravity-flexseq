@@ -6,9 +6,13 @@ export const RATCHET_4 = 4;
 export const RATCHET_6 = 6;
 export const RATCHET_TRIPLET = 7;
 export const RATCHET_OFFBEAT = 8;
+export const RATCHET_PAUSE_2 = 9;
+export const RATCHET_PAUSE_3 = 10;
+export const RATCHET_PAUSE_4 = 11;
 
 export const RATCHET_CODES: readonly number[] = [
   RATCHET_NONE, RATCHET_OFFBEAT, RATCHET_2, RATCHET_3, RATCHET_4, RATCHET_6, RATCHET_TRIPLET,
+  RATCHET_PAUSE_2, RATCHET_PAUSE_3, RATCHET_PAUSE_4,
 ];
 
 export function isValidRatchet(code: number): boolean {
@@ -33,17 +37,25 @@ export function ratchetTriggers(code: number): number {
   return 1;
 }
 
+export function ratchetPauseUnits(code: number): number {
+  if (code < RATCHET_PAUSE_2 || code > RATCHET_PAUSE_4) return 0;
+  return code - RATCHET_PAUSE_2 + 2;
+}
+
 export function ratchetSkipsStepOnset(code: number): boolean {
-  return code === RATCHET_OFFBEAT;
+  return code === RATCHET_OFFBEAT || ratchetPauseUnits(code) !== 0;
 }
 
 export function ratchetSpan(code: number): number {
-  return code === RATCHET_TRIPLET ? 2 : 1;
+  if (code === RATCHET_TRIPLET) return 2;
+  const pause = ratchetPauseUnits(code);
+  return pause !== 0 ? pause : 1;
 }
 
 export function ratchetLabel(code: number): string {
   if (code === RATCHET_TRIPLET) return "3T";
   if (code === RATCHET_OFFBEAT) return "off";
+  if (ratchetPauseUnits(code) !== 0) return `P${ratchetPauseUnits(code)}`;
   if (code === RATCHET_NONE) return "";
   return String(code);
 }

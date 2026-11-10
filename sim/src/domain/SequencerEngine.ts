@@ -43,6 +43,7 @@ import {
   ratchetSpan,
   ratchetTriggers,
   ratchetSkipsStepOnset,
+  ratchetPauseUnits,
   RATCHET_NONE,
 } from "./Pattern.js";
 
@@ -191,7 +192,7 @@ export class SequencerEngine {
     if (!ratchetFitsStep(code, c.ticksPerStep)) triggers = 1;
 
     c.triggers = triggers;
-    c.offbeat = triggers > 1 && ratchetSkipsStepOnset(code);
+    c.offbeat = ratchetSkipsStepOnset(code) && (triggers > 1 || ratchetPauseUnits(code) !== 0);
     if (resetSubOnset) {
       c.subOnset = 0;
     } else if (c.subOnset >= c.triggers) {

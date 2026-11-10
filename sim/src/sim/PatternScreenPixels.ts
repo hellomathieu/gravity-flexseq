@@ -8,7 +8,7 @@
  */
 import { OLED_H, OLED_W } from "./OledDisplay.js";
 import { VELVETSCREEN, glyphFor, textWidth } from "./oledFont.js";
-import { RATCHET_NONE, RATCHET_2, RATCHET_3, RATCHET_4, RATCHET_6, RATCHET_TRIPLET, RATCHET_OFFBEAT, ratchetFitsStep } from "../domain/Pattern.js";
+import { RATCHET_NONE, RATCHET_2, RATCHET_3, RATCHET_4, RATCHET_6, RATCHET_TRIPLET, RATCHET_OFFBEAT, ratchetFitsStep, ratchetPauseUnits } from "../domain/Pattern.js";
 
 export const PER_ROW = 12;
 export const GRID_ROWS = 3;
@@ -299,7 +299,8 @@ export function renderPatternScreen(model: PatternScreenPixelModel): Render {
     }
     const active = model.steps[i] ?? false;
     const ratchet = model.ratchets[i] ?? RATCHET_NONE;
-    if (active) {
+    const pause = ratchetPauseUnits(ratchet);
+    if (active && pause === 0) {
       if (ratchet === RATCHET_TRIPLET) drawTriangle(ink, cx, cy);
       else if (ratchet === RATCHET_OFFBEAT && ratchetFitsStep(ratchet, model.ticksPerStep)) {
         drawRightHalfDisc(ink, cx, cy);
@@ -309,7 +310,9 @@ export function renderPatternScreen(model: PatternScreenPixelModel): Render {
     } else {
       drawRing(ink, cx, cy);
     }
-    if (active && ratchet !== RATCHET_NONE && ratchet !== RATCHET_TRIPLET
+    if (pause !== 0) {
+      drawRatchetDigit(ink, cx, cy, pause);
+    } else if (active && ratchet !== RATCHET_NONE && ratchet !== RATCHET_TRIPLET
         && ratchetFitsStep(ratchet, model.ticksPerStep)) {
       drawRatchetDigit(ink, cx, cy, ratchet);
     }

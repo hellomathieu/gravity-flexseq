@@ -5,11 +5,11 @@ namespace flexseq {
 bool isValidRatchet(uint8_t code) {
     return code == RATCHET_NONE || code == RATCHET_2 || code == RATCHET_3 ||
            code == RATCHET_4 || code == RATCHET_6 || code == RATCHET_TRIPLET ||
-           code == RATCHET_OFFBEAT;
+           code == RATCHET_OFFBEAT || ratchetPauseUnits(code) != 0;
 }
 
 bool ratchetSkipsStepOnset(uint8_t code) {
-    return code == RATCHET_OFFBEAT;
+    return code == RATCHET_OFFBEAT || ratchetPauseUnits(code) != 0;
 }
 
 uint8_t ratchetTriggers(uint8_t code) {
@@ -26,8 +26,19 @@ uint8_t ratchetTriggers(uint8_t code) {
     return 1;
 }
 
+uint8_t ratchetPauseUnits(uint8_t code) {
+    if (code < RATCHET_PAUSE_2 || code > RATCHET_PAUSE_4) {
+        return 0;
+    }
+    return static_cast<uint8_t>(code - RATCHET_PAUSE_2 + 2);
+}
+
 uint8_t ratchetSpan(uint8_t code) {
-    return (code == RATCHET_TRIPLET) ? 2 : 1;
+    if (code == RATCHET_TRIPLET) {
+        return 2;
+    }
+    const uint8_t pause = ratchetPauseUnits(code);
+    return pause != 0 ? pause : 1;
 }
 
 bool ratchetFitsStep(uint8_t code, uint16_t ticksPerStep) {

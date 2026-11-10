@@ -431,8 +431,10 @@ void drawPatternScreen(Canvas& canvas, const PatternScreenModel& model,
                 ratchet = model.pattern->getRatchet(i);
             }
 
+            const uint8_t pause = ratchetPauseUnits(ratchet);
+
             if (glyphs) {
-                if (active) {
+                if (active && pause == 0) {
                     if (ratchet == RATCHET_TRIPLET) {
                         detail::drawTriangle(canvas, cx, static_cast<uint8_t>(cy));
                     } else if (ratchet == RATCHET_OFFBEAT
@@ -448,8 +450,10 @@ void drawPatternScreen(Canvas& canvas, const PatternScreenModel& model,
                 }
             }
 
-            if (digits && active && ratchet != RATCHET_NONE && ratchet != RATCHET_TRIPLET
-                && ratchetFitsStep(ratchet, model.ticksPerStep)) {
+            if (digits && pause != 0) {
+                detail::drawRatchetDigit(canvas, cx, static_cast<uint8_t>(cy), pause);
+            } else if (digits && active && ratchet != RATCHET_NONE && ratchet != RATCHET_TRIPLET
+                       && ratchetFitsStep(ratchet, model.ticksPerStep)) {
                 detail::drawRatchetDigit(canvas, cx, static_cast<uint8_t>(cy), ratchet);
             }
         }

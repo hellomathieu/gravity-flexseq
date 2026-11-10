@@ -578,14 +578,145 @@ void test_the_offbeat_code_is_eight_and_is_a_valid_ratchet() {
     TEST_ASSERT_TRUE(flexseq::isValidRatchet(8));
     TEST_ASSERT_FALSE(flexseq::isValidRatchet(1));
     TEST_ASSERT_FALSE(flexseq::isValidRatchet(5));
-    TEST_ASSERT_FALSE(flexseq::isValidRatchet(9));
+    TEST_ASSERT_FALSE(flexseq::isValidRatchet(12));
+    TEST_ASSERT_FALSE(flexseq::isValidRatchet(15));
     TEST_ASSERT_TRUE(flexseq::ratchetSkipsStepOnset(8));
     TEST_ASSERT_FALSE(flexseq::ratchetSkipsStepOnset(2));
     TEST_ASSERT_FALSE(flexseq::ratchetSkipsStepOnset(0));
 }
 
+void test_the_pause_codes_are_nine_ten_and_eleven() {
+    TEST_ASSERT_EQUAL_UINT8(9, flexseq::RATCHET_PAUSE_2);
+    TEST_ASSERT_EQUAL_UINT8(10, flexseq::RATCHET_PAUSE_3);
+    TEST_ASSERT_EQUAL_UINT8(11, flexseq::RATCHET_PAUSE_4);
+    for (uint8_t code = 9; code <= 11; ++code) {
+        TEST_ASSERT_TRUE_MESSAGE(flexseq::isValidRatchet(code), "une pause est un code valide");
+        TEST_ASSERT_EQUAL_UINT8_MESSAGE(code - 7, flexseq::ratchetSpan(code),
+            "une pause dure 2, 3 ou 4 unites");
+        TEST_ASSERT_EQUAL_UINT8(code - 7, flexseq::ratchetPauseUnits(code));
+        TEST_ASSERT_EQUAL_UINT8(1, flexseq::ratchetTriggers(code));
+        TEST_ASSERT_TRUE_MESSAGE(flexseq::ratchetSkipsStepOnset(code), "une pause n emet rien");
+    }
+    TEST_ASSERT_EQUAL_UINT8(0, flexseq::ratchetPauseUnits(0));
+    TEST_ASSERT_EQUAL_UINT8(0, flexseq::ratchetPauseUnits(7));
+    TEST_ASSERT_EQUAL_UINT8(0, flexseq::ratchetPauseUnits(8));
+    TEST_ASSERT_EQUAL_UINT8(0, flexseq::ratchetPauseUnits(12));
+    TEST_ASSERT_EQUAL_UINT8(2, flexseq::ratchetSpan(7));
+    TEST_ASSERT_EQUAL_UINT8(1, flexseq::ratchetSpan(8));
+}
+
+void test_a_pause_step_is_silent_and_delays_the_next_step() {
+    Rig r;
+    r.useSubdiv(1);
+    r.pattern()->writeStep(0, true);
+    r.pattern()->writeStep(1, true);
+    r.pattern()->writeStep(2, true);
+    r.pattern()->setRatchet(1, flexseq::RATCHET_PAUSE_3);
+    r.engine.setBaseLength(0, 4);
+
+    uint16_t at[8];
+    const uint8_t count = onsetTicks(r, 96 + 3 * 96 + 95, at, 8);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(2, count, "le pas en pause n emet rien");
+    TEST_ASSERT_EQUAL_UINT16(1, at[0]);
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(96 + 3 * 96, at[1],
+        "le pas suivant attend les trois unites de la pause");
+}
+
+void test_a_pause_on_the_first_step_keeps_the_start_silent_and_lengthens_the_pattern() {
+    Rig r;
+    r.useSubdiv(1);
+    r.pattern()->writeStep(0, true);
+    r.pattern()->writeStep(1, true);
+    r.pattern()->setRatchet(0, flexseq::RATCHET_PAUSE_2);
+    r.engine.setBaseLength(0, 2);
+
+    uint16_t at[8];
+    const uint8_t count = onsetTicks(r, 2 * 288 + 95, at, 8);
+    TEST_ASSERT_EQUAL_UINT8(2, count);
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(192, at[0], "le depart est muet pendant deux unites");
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(288 + 192, at[1],
+        "le pattern de deux pas dure trois unites : il s allonge d une unite");
+}
+
+void test_a_pause_lasts_its_units_and_emits_nothing_at_every_subdiv() {
+    const uint8_t codes[3] = {flexseq::RATCHET_PAUSE_2, flexseq::RATCHET_PAUSE_3,
+                              flexseq::RATCHET_PAUSE_4};
+    for (uint8_t i = 0; i < SUBDIV_COUNT; ++i) {
+        for (uint8_t k = 0; k < 3; ++k) {
+            Rig r;
+            r.pattern()->writeStep(0, true);
+            r.pattern()->setRatchet(0, codes[k]);
+            r.useSubdiv(SUBDIVS[i]);
+            TEST_ASSERT_EQUAL_UINT16(static_cast<uint16_t>(STEP_TICKS[i] * (k + 2)),
+                                     r.engine.currentStepTicks(0));
+            TEST_ASSERT_TRUE_MESSAGE(flexseq::ratchetFitsStep(codes[k], STEP_TICKS[i]),
+                "une pause tient a toutes les cadences");
+            TEST_ASSERT_EQUAL_UINT8(0, r.engine.currentStepTriggers(0));
+        }
+    }
+}
+
+void test_an_inactive_pause_step_keeps_its_units() {
+    Rig r;
+    r.useSubdiv(1);
+    r.pattern()->writeStep(0, true);
+    r.pattern()->writeStep(2, true);
+    r.pattern()->setRatchet(1, flexseq::RATCHET_PAUSE_2);
+    r.engine.setBaseLength(0, 4);
+
+    uint16_t at[8];
+    const uint8_t count = onsetTicks(r, 96 + 192 + 95, at, 8);
+    TEST_ASSERT_EQUAL_UINT8(2, count);
+    TEST_ASSERT_EQUAL_UINT16(1, at[0]);
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(96 + 192, at[1],
+        "la duree appartient au code, comme pour le triolet");
+}
+
+void test_a_pause_is_ignored_outside_seq() {
+    Rig r;
+    r.useSubdiv(1);
+    r.pattern()->writeStep(0, true);
+    r.pattern()->setRatchet(0, flexseq::RATCHET_PAUSE_4);
+    r.engine.setBaseLength(0, 2);
+    r.engine.setChannelMode(0, flexseq::MODE_CLOCK);
+    uint16_t at[8];
+    const uint8_t count = onsetTicks(r, 2 * 96, at, 8);
+    TEST_ASSERT_EQUAL_UINT8(3, count);
+    TEST_ASSERT_EQUAL_UINT16(1, at[0]);
+    TEST_ASSERT_EQUAL_UINT16(96, at[1]);
+}
+
+void test_the_choice_list_ends_with_the_three_pauses_at_every_rate() {
+    TEST_ASSERT_EQUAL_UINT8(10, flexseq::RATCHET_CHOICE_COUNT);
+    TEST_ASSERT_EQUAL_UINT8(7, flexseq::ratchetChoiceAt(6));
+    TEST_ASSERT_EQUAL_UINT8(9, flexseq::ratchetChoiceAt(7));
+    TEST_ASSERT_EQUAL_UINT8(10, flexseq::ratchetChoiceAt(8));
+    TEST_ASSERT_EQUAL_UINT8(11, flexseq::ratchetChoiceAt(9));
+    TEST_ASSERT_EQUAL_INT8(6, flexseq::ratchetChoiceIndexOf(flexseq::RATCHET_TRIPLET));
+
+    Rig r;
+    r.useSubdiv(-24);
+    r.pattern()->writeStep(0, true);
+    r.pattern()->setRatchet(0, flexseq::RATCHET_TRIPLET);
+    r.enterEdit();
+    const uint8_t expected[4] = {9, 10, 11, 11};
+    for (uint8_t i = 0; i < 4; ++i) {
+        r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+        TEST_ASSERT_EQUAL_UINT8_MESSAGE(expected[i], r.pattern()->getRatchet(0),
+            "apres le triolet : pause 2, 3, 4, puis la butee, meme a x24");
+    }
+}
+
 int main() {
     UNITY_BEGIN();
+
+    RUN_TEST(test_the_pause_codes_are_nine_ten_and_eleven);
+    RUN_TEST(test_a_pause_step_is_silent_and_delays_the_next_step);
+    RUN_TEST(test_a_pause_on_the_first_step_keeps_the_start_silent_and_lengthens_the_pattern);
+    RUN_TEST(test_a_pause_lasts_its_units_and_emits_nothing_at_every_subdiv);
+    RUN_TEST(test_an_inactive_pause_step_keeps_its_units);
+    RUN_TEST(test_a_pause_is_ignored_outside_seq);
+    RUN_TEST(test_the_choice_list_ends_with_the_three_pauses_at_every_rate);
 
     RUN_TEST(test_the_offbeat_ratchet_plays_the_second_half_of_its_step_and_nothing_else);
     RUN_TEST(test_the_offbeat_ratchet_on_the_first_step_keeps_the_start_silent);

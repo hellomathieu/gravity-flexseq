@@ -47,6 +47,8 @@ function panelModel(playhead = 0): PatternScreenPixelModel {
   ratchets[10] = RATCHET_TRIPLET;
   ratchets[3] = RATCHET_4;
   ratchets[13] = 8;
+  ratchets[17] = 10;
+  ratchets[19] = 9;
   return {
     title: "EDIT PAT. A1",
     steps,
@@ -73,13 +75,13 @@ const PANEL_ROWS: ReadonlyArray<readonly [number, number]> = [
   [2, 42], [3, 25], [4, 40], [5, 23], [6, 39], [10, 120], [14, 3], [15, 3],
   [16, 12], [17, 5], [18, 39], [19, 47], [20, 46], [21, 47], [22, 43],
   [23, 5], [24, 12], [25, 12], [26, 6], [27, 9], [28, 4], [29, 9], [31, 3],
-  [32, 3], [33, 3], [34, 3], [35, 23], [36, 26], [37, 30], [38, 28],
-  [39, 27], [40, 3], [41, 3], [42, 5], [43, 5], [44, 3], [45, 1], [46, 1],
+  [32, 3], [33, 3], [34, 3], [35, 23], [36, 23], [37, 27], [38, 25],
+  [39, 27], [40, 3], [41, 3], [42, 11], [43, 7], [44, 9], [45, 3], [46, 7],
   [48, 3], [49, 3], [50, 3], [51, 3], [52, 3], [53, 3], [54, 15], [55, 3],
   [56, 3], [57, 3], [58, 3], [59, 3], [60, 3],
 ];
 
-const PANEL_INK = 809;
+const PANEL_INK = 822;
 
 describe("l ecran EDIT, confronte au PANNEAU (risque 89)", () => {
   it("rend exactement l encre que le panneau recoit", () => {
@@ -218,6 +220,21 @@ describe("le rendu d un step, PRD 12.1", () => {
     const px = one(false, 8);
     expect(glyphIs(px, RING)).toBe(true);
     expect(digitInk(px)).toBe(0);
+  });
+
+  it("un pas en pause est un anneau avec son chiffre, actif ou non", () => {
+    const active = one(true, 9);
+    expect(glyphIs(active, RING), "une pause active est un anneau vide").toBe(true);
+    expect(digitInk(active), "avec le chiffre 2 dessous").toBe(11);
+    const inactive = one(false, 11);
+    expect(glyphIs(inactive, RING)).toBe(true);
+    expect(digitInk(inactive), "avec le chiffre 4 dessous").toBe(9);
+  });
+
+  it("le chiffre d une pause se dessine a la cadence la plus rapide", () => {
+    const px = one(true, 10, 4);
+    expect(glyphIs(px, RING)).toBe(true);
+    expect(digitInk(px)).toBe(11);
   });
 
   it("le demi-disque se dessine a la cadence la plus rapide", () => {

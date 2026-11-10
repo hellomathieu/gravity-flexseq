@@ -88,6 +88,8 @@ void setup() {
     pattern->setRatchet(10, flexseq::RATCHET_TRIPLET);
     pattern->setRatchet(3, flexseq::RATCHET_4);
     pattern->setRatchet(13, flexseq::RATCHET_OFFBEAT);
+    pattern->setRatchet(17, flexseq::RATCHET_PAUSE_3);
+    pattern->setRatchet(19, flexseq::RATCHET_PAUSE_2);
 
     engine.setSelectedPattern(CH, 0);
     engine.setBaseLength(CH, 20);   // steps 20..23 -> simples points

@@ -400,6 +400,27 @@ void test_an_inactive_offbeat_step_is_a_plain_ring() {
     TEST_ASSERT_EQUAL_UINT8(0, digitInk(4));
 }
 
+void test_a_pause_step_is_a_ring_with_its_digit_active_or_not() {
+    pattern.writeStep(4, true);
+    pattern.setRatchet(4, flexseq::RATCHET_PAUSE_2);
+    pattern.setRatchet(6, flexseq::RATCHET_PAUSE_4);
+    drawPatternScreen(canvas, model());
+    TEST_ASSERT_TRUE_MESSAGE(glyphIs(4, RING), "une pause active est un anneau vide");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(11, digitInk(4), "avec le chiffre 2 dessous");
+    TEST_ASSERT_TRUE_MESSAGE(glyphIs(6, RING), "une pause inactive aussi");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(9, digitInk(6), "avec le chiffre 4 dessous");
+}
+
+void test_the_digit_of_a_pause_is_drawn_at_the_fastest_rate() {
+    pattern.writeStep(4, true);
+    pattern.setRatchet(4, flexseq::RATCHET_PAUSE_3);
+    PatternScreenModel m = model();
+    m.ticksPerStep = 4;
+    drawPatternScreen(canvas, m);
+    TEST_ASSERT_TRUE(glyphIs(4, RING));
+    TEST_ASSERT_EQUAL_UINT8(11, digitInk(4));
+}
+
 void test_the_half_disc_is_drawn_at_the_fastest_rate() {
     pattern.writeStep(4, true);
     pattern.setRatchet(4, flexseq::RATCHET_OFFBEAT);
@@ -870,6 +891,8 @@ int main() {
     RUN_TEST(test_the_channel_editor_header_still_reads_sep);
     RUN_TEST(test_an_active_offbeat_step_is_the_right_half_of_a_disc);
     RUN_TEST(test_an_inactive_offbeat_step_is_a_plain_ring);
+    RUN_TEST(test_a_pause_step_is_a_ring_with_its_digit_active_or_not);
+    RUN_TEST(test_the_digit_of_a_pause_is_drawn_at_the_fastest_rate);
     RUN_TEST(test_the_half_disc_is_drawn_at_the_fastest_rate);
     return UNITY_END();
 }

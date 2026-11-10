@@ -13,6 +13,9 @@ enum : uint8_t {
     RATCHET_6 = 6,
     RATCHET_TRIPLET = 7,
     RATCHET_OFFBEAT = 8,
+    RATCHET_PAUSE_2 = 9,
+    RATCHET_PAUSE_3 = 10,
+    RATCHET_PAUSE_4 = 11,
 };
 
 bool isValidRatchet(uint8_t code);
@@ -21,12 +24,13 @@ bool ratchetSkipsStepOnset(uint8_t code);
 uint8_t ratchetTriggers(uint8_t code);
 
 uint8_t ratchetSpan(uint8_t code);
+uint8_t ratchetPauseUnits(uint8_t code);
 
 constexpr uint8_t MIN_SLOT_TICKS = 2;
 
 bool ratchetFitsStep(uint8_t code, uint16_t ticksPerStep);
 
-constexpr uint8_t RATCHET_CHOICE_COUNT = 7;
+constexpr uint8_t RATCHET_CHOICE_COUNT = 10;
 
 inline uint8_t ratchetChoiceAt(uint8_t index) {
     if (index == 0) return RATCHET_NONE;
@@ -35,7 +39,8 @@ inline uint8_t ratchetChoiceAt(uint8_t index) {
     if (index == 3) return RATCHET_3;
     if (index == 4) return RATCHET_4;
     if (index == 5) return RATCHET_6;
-    return RATCHET_TRIPLET;
+    if (index == 6) return RATCHET_TRIPLET;
+    return static_cast<uint8_t>(RATCHET_PAUSE_2 + index - 7);
 }
 
 inline int8_t ratchetChoiceIndexOf(uint8_t code) {
