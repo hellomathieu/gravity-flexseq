@@ -33,6 +33,12 @@ static const uint8_t DIAGNOSTIC_MEASURES_THE_POLICY = burst::NO_EMPIRICAL_LIMIT;
 // 24 alors que le lot F l'a portee a 36 : R10 visait le step 28 en croyant viser
 // le 4, et R12 posait son triolet sur le step 33. Mesure du 2026-08-31.
 static const int GRID_MODULO = (int)flexseq::screen::GRID_STEPS;
+#include <flexseq/Pattern.h>
+static const int DETENTS_BEFORE_RATCHET_2 =
+    (int)flexseq::ratchetChoiceIndexOf(flexseq::RATCHET_2) - 1;
+static const int DETENTS_TO_RATCHET_4 = (int)flexseq::ratchetChoiceIndexOf(flexseq::RATCHET_4);
+static const int DETENTS_TO_RATCHET_6 = (int)flexseq::ratchetChoiceIndexOf(flexseq::RATCHET_6);
+static const int DETENTS_TO_TRIPLET = (int)flexseq::ratchetChoiceIndexOf(flexseq::RATCHET_TRIPLET);
 #include <flexseq/Transport.h>
 #include <flexseq/UiController.h>
 
@@ -1862,7 +1868,8 @@ int main(int argc, char **argv)
 
         for (int cran = 1; cran <= 3; ++cran) {
             marque = g_twi_bytes;
-            if (!skipBGeste) shiftRotate(avr, 1, 1, harness::RATCHET_BURST_LIMIT, false);
+            const int crans = cran == 1 ? 1 + DETENTS_BEFORE_RATCHET_2 : 1;
+            if (!skipBGeste) shiftRotate(avr, crans, 1, harness::RATCHET_BURST_LIMIT, false);
             readInstances(avr, vu);
             ecarts = instancesDiffCount(vu, expectedBytes, &premier);
             printf("rD_cran%d           nibble %02x octet %02x ecarts %u premier %u twi %u"
@@ -1874,7 +1881,7 @@ int main(int argc, char **argv)
         }
 
         marque = g_twi_bytes;
-        if (!skipBGeste) shiftRotate(avr, 6, 0, harness::RATCHET_BURST_LIMIT, false);
+        if (!skipBGeste) shiftRotate(avr, DETENTS_TO_TRIPLET, 0, harness::RATCHET_BURST_LIMIT, false);
         readInstances(avr, vu);
         ecarts = instancesDiffCount(vu, expectedBytes, &premier);
         printf("rD_retour          nibble %02x octet %02x ecarts %u twi %u\n",
@@ -2417,7 +2424,7 @@ int main(int argc, char **argv)
 
         rotate(avr, 2, 1);
         marque = g_twi_bytes;
-        shiftRotate(avr, 4, 1, harness::STEP_BURST_LIMIT, false);
+        shiftRotate(avr, DETENTS_TO_RATCHET_6, 1, harness::STEP_BURST_LIMIT, false);
         readInstances(avr, vu);
         ecarts = instancesDiffCount(vu, expectedBytes, &premier);
         printf("rA_r9_pose         octet6 %02x ecarts %u premier %u twi %u"
@@ -2426,7 +2433,7 @@ int main(int argc, char **argv)
                g_twi_bytes - marque,
                (int)patternOfOffset(premier), (unsigned)byteOfOffset(premier));
         marque = g_twi_bytes;
-        shiftRotate(avr, 4, 0, harness::RATCHET_BURST_LIMIT, false);
+        shiftRotate(avr, DETENTS_TO_RATCHET_6, 0, harness::RATCHET_BURST_LIMIT, false);
         readInstances(avr, vu);
         ecarts = instancesDiffCount(vu, expectedBytes, &premier);
         printf("rA_r9_retour       octet6 %02x ecarts %u twi %u\n",
@@ -2445,7 +2452,7 @@ int main(int argc, char **argv)
 
         rotate(avr, (9 - r10Step + GRID_MODULO) % GRID_MODULO, 1);
         marque = g_twi_bytes;
-        shiftRotate(avr, 5, 1, harness::RATCHET_BURST_LIMIT, false);
+        shiftRotate(avr, DETENTS_TO_TRIPLET, 1, harness::RATCHET_BURST_LIMIT, false);
         readInstances(avr, vu);
         ecarts = instancesDiffCount(vu, expectedBytes, &premier);
         printf("rA_r12_pose        octet8 %02x ecarts %u premier %u twi %u"
@@ -2454,7 +2461,7 @@ int main(int argc, char **argv)
                g_twi_bytes - marque,
                (int)patternOfOffset(premier), (unsigned)byteOfOffset(premier));
         marque = g_twi_bytes;
-        shiftRotate(avr, 5, 0, harness::RATCHET_BURST_LIMIT, false);
+        shiftRotate(avr, DETENTS_TO_TRIPLET, 0, harness::RATCHET_BURST_LIMIT, false);
         readInstances(avr, vu);
         ecarts = instancesDiffCount(vu, expectedBytes, &premier);
         printf("rA_r12_retour      octet8 %02x ecarts %u twi %u\n",
@@ -2597,7 +2604,7 @@ int main(int argc, char **argv)
     printf("ratchet_avant      %02x\n", byteOfInstance(instancesBeforeShift, canalPrincipal, STEP_BYTES));
 
     twiMark = g_twi_bytes;
-    const double heldMs = skipShift ? 192.0 : shiftRotate(avr, 3, 1, harness::RATCHET_BURST_LIMIT, false);
+    const double heldMs = skipShift ? 192.0 : shiftRotate(avr, DETENTS_TO_RATCHET_4, 1, harness::RATCHET_BURST_LIMIT, false);
     static uint8_t instancesAfterShift[OBSERVED_INSTANCE_BYTES];
     readInstances(avr, instancesAfterShift);
     printf("shift_maintien_ms  %.1f\n", heldMs);
@@ -2609,14 +2616,14 @@ int main(int argc, char **argv)
            && lowMaskOfInstance(instancesAfterShift, canalPrincipal) == 0x9111 ? 1 : 0);
 
     twiMark = g_twi_bytes;
-    shiftRotate(avr, 2, 1, harness::RATCHET_BURST_LIMIT, false);
+    shiftRotate(avr, DETENTS_TO_TRIPLET - DETENTS_TO_RATCHET_4, 1, harness::RATCHET_BURST_LIMIT, false);
     static uint8_t instancesTriplet[OBSERVED_INSTANCE_BYTES];
     readInstances(avr, instancesTriplet);
     printf("triolet_pose       %02x twi %u\n",
            byteOfInstance(instancesTriplet, canalPrincipal, STEP_BYTES) & 0x0F, g_twi_bytes - twiMark);
 
     twiMark = g_twi_bytes;
-    shiftRotate(avr, 5, 0, harness::RATCHET_BURST_LIMIT, false);
+    shiftRotate(avr, DETENTS_TO_TRIPLET, 0, harness::RATCHET_BURST_LIMIT, false);
     static uint8_t instancesNoRatchet[OBSERVED_INSTANCE_BYTES];
     readInstances(avr, instancesNoRatchet);
     printf("triolet_retire     %02x twi %u\n",

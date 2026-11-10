@@ -634,8 +634,8 @@ MUTANT3
   expect_verdict "b. classe 3 -> FAIL" FAIL 1 1 "*" EXPECT_RATCHET_APRES=05
   WITNESS_INVAL="$(grep '⛔' "$WORK/class.log" \
     | grep -cE 'temoin I2C|maintien de SHIFT|entree dans EDIT|temoin du pointeur|temoin des instances|controle d usine|echantillons' | tr -d ' ')"
-  if [ "$WITNESS_INVAL" = "0" ] && grep -q '❌ trois crans sous SHIFT' "$WORK/class.log" \
-     && ! grep -q '⛔ trois crans sous SHIFT' "$WORK/class.log"; then
+  if [ "$WITNESS_INVAL" = "0" ] && grep -q '❌ quatre crans sous SHIFT' "$WORK/class.log" \
+     && ! grep -q '⛔ quatre crans sous SHIFT' "$WORK/class.log"; then
     ok "b. le defaut est a la racine" "aucun temoin necessaire INVALID : le FAIL est decidable"
   else
     selfbad "b. le defaut est a la racine" "temoins necessaires INVALID=$WITNESS_INVAL"
@@ -1087,14 +1087,14 @@ fi
 W_P23=$(( W_SHIFT_TWI * W_SHIFT_HOLD * W_PTR * W_INSTANCES * W_FACTORY * W_EDIT ))
 P23_OK=0
 if [ "$W_P23" != "1" ]; then
-  inval "trois crans sous SHIFT" "temoins amont invalides : l effet n est pas attribuable au firmware"
+  inval "quatre crans sous SHIFT" "temoins amont invalides : l effet n est pas attribuable au firmware"
   inval "aucun parasite SHIFT" "temoins amont invalides : l effet n est pas attribuable au firmware"
 else
   if [ "$R_AVANT" = "00" ] && [ "$R_APRES" = "${EXPECT_RATCHET_APRES:-04}" ]; then
-    ok "trois crans sous SHIFT" "ratchet du step 0 : $R_AVANT -> $R_APRES, soit trois codes plus loin"
+    ok "quatre crans sous SHIFT" "ratchet du step 0 : $R_AVANT -> $R_APRES, soit quatre codes plus loin"
     P23_OK=1
   else
-    bad "trois crans sous SHIFT" "ratchet $R_AVANT -> $R_APRES (attendu 00 -> ${EXPECT_RATCHET_APRES:-04})"
+    bad "quatre crans sous SHIFT" "ratchet $R_AVANT -> $R_APRES (attendu 00 -> ${EXPECT_RATCHET_APRES:-04})"
   fi
   if [ "$MASQUES" = "1" ]; then
     ok "aucun parasite SHIFT" "les steps du pattern sont intacts : aucun effacement"
@@ -2460,7 +2460,7 @@ if [ "$INVAL_COUNT" -gt 0 ]; then
 fi
 printf '  %s✅ P2.1 : un cran = un pas. Sens MESURE : A-d-abord = +1, B-d-abord = -1.%s\n' "$C_OK" "$C_0"
 printf '  %s✅ P2.2 : 5 ms sans effet, 60 ms = appui court, 900 ms = appui long, retour exact.%s\n' "$C_OK" "$C_0"
-printf '  %s✅ P2.3 : SHIFT tenu, trois crans, ratchet 00 -> 04, pattern intact, maintien sous 750 ms.%s\n' "$C_OK" "$C_0"
+printf '  %s✅ P2.3 : SHIFT tenu, quatre crans, ratchet 00 -> 04, pattern intact, maintien sous 750 ms.%s\n' "$C_OK" "$C_0"
 printf '  %s✅ P2.4 : controle d usine octet pour octet, triolet pose et retire, step bascule et rebascule.%s\n' "$C_OK" "$C_0"
 printf '  %s✅ P2.5 : LENGTH et SUBDIV verifies sur les sorties, report au temps respecte, aucune contagion.%s\n' "$C_OK" "$C_0"
 printf '  %s✅ FRACT : shiftRotate long decoupe en salves, chaque maintien mesure et sous 750 ms, pattern intact.%s\n' "$C_OK" "$C_0"
