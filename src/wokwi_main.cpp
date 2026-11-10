@@ -58,6 +58,7 @@ void beginFrame() {
     model.cursor = CURSOR;
     model.playhead = engine.effectiveStep(CH);
     model.barLength = static_cast<uint8_t>(engine.getBarLength(CH));
+    model.ticksPerStep = engine.getTicksPerStep(CH);
 
     screen.begin(gravity.display, model);
 }
@@ -82,6 +83,8 @@ void setup() {
     pattern->setRatchet(8, flexseq::RATCHET_3);
     pattern->setRatchet(16, flexseq::RATCHET_4);
     pattern->setRatchet(15, flexseq::RATCHET_TRIPLET); // tient 2 unites
+    pattern->setRatchet(10, flexseq::RATCHET_TRIPLET);
+    pattern->setRatchet(3, flexseq::RATCHET_4);
 
     engine.setSelectedPattern(CH, 0);
     engine.setBaseLength(CH, 20);   // steps 20..23 -> simples points

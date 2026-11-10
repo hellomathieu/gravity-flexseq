@@ -283,6 +283,68 @@ void test_the_edit_cursor_hides_under_a_pattern_routing() {
     TEST_ASSERT_EQUAL_INT8(1, flexseq::editCursorFor(r.ui));
 }
 
+void test_the_edit_model_carries_the_rate_of_the_channel() {
+    EditRig r;
+    r.enterEditOf(0);
+    TEST_ASSERT_EQUAL_UINT16(96, flexseq::editScreenModelOf(r.ui, r.engine, 0, r.title).ticksPerStep);
+    TEST_ASSERT_TRUE(r.engine.setSubdiv(0, -24));
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(4,
+        flexseq::editScreenModelOf(r.ui, r.engine, 0, r.title).ticksPerStep,
+        "the screen needs the rate to know which ratchet the engine refuses");
+}
+
+void test_the_edit_model_reads_the_rate_of_its_own_channel() {
+    EditRig r;
+    TEST_ASSERT_TRUE(r.engine.setSubdiv(0, -24));
+    TEST_ASSERT_TRUE(r.engine.setSubdiv(3, -4));
+    r.enterEditOf(3);
+    TEST_ASSERT_EQUAL_UINT16(24, flexseq::editScreenModelOf(r.ui, r.engine, 3, r.title).ticksPerStep);
+}
+
+void test_the_edit_model_shows_the_played_pattern_and_the_state_of_the_channel() {
+    EditRig r;
+    r.engine.setSelectedPattern(0, 4);
+    r.engine.setBaseLength(0, 20);
+    r.engine.setBarLength(0, 3);
+    r.enterEditOf(0);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    const flexseq::PatternScreenModel m = flexseq::editScreenModelOf(r.ui, r.engine, 0, r.title);
+    TEST_ASSERT_EQUAL_PTR(r.title, m.title);
+    TEST_ASSERT_EQUAL_UINT8(0, m.titleWidth);
+    TEST_ASSERT_EQUAL_PTR(r.bank.getPattern(4), m.pattern);
+    TEST_ASSERT_EQUAL_UINT8(20, m.length);
+    TEST_ASSERT_EQUAL_UINT8(3, m.barLength);
+    TEST_ASSERT_EQUAL_INT8(2, m.cursor);
+    TEST_ASSERT_EQUAL_INT8(0, m.playhead);
+    TEST_ASSERT_FALSE(m.sepSelected);
+    TEST_ASSERT_FALSE(m.sepOpen);
+}
+
+void test_the_edit_model_follows_the_playhead() {
+    EditRig r;
+    r.enterEditOf(0);
+    r.engine.start();
+    r.engine.advance(96);
+    r.engine.advance(96);
+    TEST_ASSERT_EQUAL_INT8(2, flexseq::editScreenModelOf(r.ui, r.engine, 0, r.title).playhead);
+}
+
+void test_the_edit_model_marks_the_header_field_and_its_open_state() {
+    EditRig r;
+    r.enterEditOf(0);
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    TEST_ASSERT_TRUE(r.ui.isOnHeader());
+    flexseq::PatternScreenModel m = flexseq::editScreenModelOf(r.ui, r.engine, 0, r.title);
+    TEST_ASSERT_TRUE(m.sepSelected);
+    TEST_ASSERT_FALSE(m.sepOpen);
+    TEST_ASSERT_EQUAL_INT8(-1, m.cursor);
+    r.ui.handle(UiController::EVENT_PRESS);
+    m = flexseq::editScreenModelOf(r.ui, r.engine, 0, r.title);
+    TEST_ASSERT_TRUE(m.sepSelected);
+    TEST_ASSERT_TRUE(m.sepOpen);
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_the_model_shows_the_editable_length_and_not_the_derived_one);
@@ -301,5 +363,10 @@ int main() {
     RUN_TEST(test_the_title_refuses_an_invalid_channel_and_leaves_the_buffer_alone);
     RUN_TEST(test_the_edit_cursor_follows_the_step_and_hides_on_the_header);
     RUN_TEST(test_the_edit_cursor_hides_under_a_pattern_routing);
+    RUN_TEST(test_the_edit_model_carries_the_rate_of_the_channel);
+    RUN_TEST(test_the_edit_model_reads_the_rate_of_its_own_channel);
+    RUN_TEST(test_the_edit_model_shows_the_played_pattern_and_the_state_of_the_channel);
+    RUN_TEST(test_the_edit_model_follows_the_playhead);
+    RUN_TEST(test_the_edit_model_marks_the_header_field_and_its_open_state);
     return UNITY_END();
 }

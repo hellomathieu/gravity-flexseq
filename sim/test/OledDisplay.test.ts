@@ -6,7 +6,7 @@ import {
   OLED_W,
   type OledCtx,
 } from "../src/sim/OledDisplay.js";
-import { RATCHET_NONE, RATCHET_3, RATCHET_TRIPLET } from "../src/domain/Pattern.js";
+import { RATCHET_NONE, RATCHET_2, RATCHET_3, RATCHET_TRIPLET } from "../src/domain/Pattern.js";
 
 /**
  * Mock ctx modelisant vraiment le 1-bit : l'encre ajoute le pixel, la couleur
@@ -74,7 +74,7 @@ describe("OledDisplay — step glyphs", () => {
 
   it("draws nothing below the grid", () => {
     const { ctx, painted } = recorder();
-    drawOled(ctx, { title: "", cells: [], cursor: -1, playhead: -1 });
+    drawOled(ctx, { title: "", ticksPerStep: 96, cells: [], cursor: -1, playhead: -1 });
     for (const key of painted) {
       expect(Number(key.split(",")[1])).toBeLessThanOrEqual(GRID_BOTTOM_Y);
     }
@@ -82,7 +82,7 @@ describe("OledDisplay — step glyphs", () => {
 
   it("draws a filled disc for an active step", () => {
     const { ctx, painted } = recorder();
-    drawOled(ctx, { title: "", cells: [cell(0, "active")], cursor: -1, playhead: -1 });
+    drawOled(ctx, { title: "", ticksPerStep: 96, cells: [cell(0, "active")], cursor: -1, playhead: -1 });
     const { x, y } = C[0]!;
     expect(has(painted, x, y)).toBe(true); // centre plein
     expect(has(painted, x - 2, y)).toBe(true); // 5 px de large
@@ -91,7 +91,7 @@ describe("OledDisplay — step glyphs", () => {
 
   it("draws a hollow ring for an inactive step", () => {
     const { ctx, painted } = recorder();
-    drawOled(ctx, { title: "", cells: [cell(0, "inactive")], cursor: -1, playhead: -1 });
+    drawOled(ctx, { title: "", ticksPerStep: 96, cells: [cell(0, "inactive")], cursor: -1, playhead: -1 });
     const { x, y } = C[0]!;
     expect(has(painted, x, y)).toBe(false); // centre vide
     expect(has(painted, x - 2, y)).toBe(true); // bords presents
@@ -100,7 +100,7 @@ describe("OledDisplay — step glyphs", () => {
 
   it("draws a single dot beyond LENGTH", () => {
     const { ctx, painted } = recorder();
-    drawOled(ctx, { title: "", cells: [cell(0, "beyond")], cursor: -1, playhead: -1 });
+    drawOled(ctx, { title: "", ticksPerStep: 96, cells: [cell(0, "beyond")], cursor: -1, playhead: -1 });
     const { x, y } = C[0]!;
     expect(has(painted, x, y)).toBe(true);
     expect(has(painted, x - 2, y)).toBe(false); // rien d'autre
@@ -110,7 +110,7 @@ describe("OledDisplay — step glyphs", () => {
   it("draws a triangle for a TRIPLET step instead of a disc", () => {
     const tri = recorder();
     drawOled(tri.ctx, {
-      title: "",
+      title: "", ticksPerStep: 96,
       cells: [cell(0, "active", RATCHET_TRIPLET)],
       cursor: -1,
       playhead: -1,
@@ -122,16 +122,58 @@ describe("OledDisplay — step glyphs", () => {
     expect(tri.painted.has(`${x - 2},${y + 2}`)).toBe(true);
   });
 
+  it("draws a hollow triangle for an inactive TRIPLET step", () => {
+    const tri = recorder();
+    drawOled(tri.ctx, {
+      title: "", ticksPerStep: 96,
+      cells: [cell(0, "inactive", RATCHET_TRIPLET)],
+      cursor: -1,
+      playhead: -1,
+    });
+    const { x, y } = C[0]!;
+    const rows = ["..#..", ".#.#.", ".#.#.", "#...#", "#####"];
+    for (let r = 0; r < 5; ++r) {
+      for (let c = 0; c < 5; ++c) {
+        expect(tri.painted.has(`${x - 2 + c},${y - 2 + r}`), `row ${r} col ${c}`).toBe(rows[r]![c] === "#");
+      }
+    }
+  });
+
+  const digitInk = (p: Set<string>) => {
+    let n = 0;
+    const { x, y } = C[0]!;
+    for (let r = 0; r < 5; ++r) for (let c = 0; c < 3; ++c) if (p.has(`${x - 1 + c},${y + 5 + r}`)) n++;
+    return n;
+  };
+
+  it("draws no ratchet digit under an inactive step", () => {
+    const r = recorder();
+    drawOled(r.ctx, { title: "", ticksPerStep: 96, cells: [cell(0, "inactive", RATCHET_2)], cursor: -1, playhead: -1 });
+    expect(digitInk(r.painted)).toBe(0);
+    const on = recorder();
+    drawOled(on.ctx, { title: "", ticksPerStep: 96, cells: [cell(0, "active", RATCHET_2)], cursor: -1, playhead: -1 });
+    expect(digitInk(on.painted)).toBe(11);
+  });
+
+  it("draws no ratchet digit when the rate of the channel refuses the ratchet", () => {
+    const refused = recorder();
+    drawOled(refused.ctx, { title: "", ticksPerStep: 4, cells: [cell(0, "active", RATCHET_3)], cursor: -1, playhead: -1 });
+    expect(digitInk(refused.painted)).toBe(0);
+    const accepted = recorder();
+    drawOled(accepted.ctx, { title: "", ticksPerStep: 6, cells: [cell(0, "active", RATCHET_3)], cursor: -1, playhead: -1 });
+    expect(digitInk(accepted.painted)).toBe(11);
+  });
+
   it("prints the ratchet digit under the step (but not for the triplet)", () => {
     const withDigit = recorder();
     drawOled(withDigit.ctx, {
-      title: "",
+      title: "", ticksPerStep: 96,
       cells: [cell(0, "active", RATCHET_3)],
       cursor: -1,
       playhead: -1,
     });
     const plain = recorder();
-    drawOled(plain.ctx, { title: "", cells: [cell(0, "active")], cursor: -1, playhead: -1 });
+    drawOled(plain.ctx, { title: "", ticksPerStep: 96, cells: [cell(0, "active")], cursor: -1, playhead: -1 });
 
     const below = (p: Set<string>) => {
       let n = 0;
@@ -151,7 +193,7 @@ describe("OledDisplay — measure separation (graphical only)", () => {
 
   it("draws a bar every N steps, inside each row", () => {
     const { ctx, painted } = recorder();
-    drawOled(ctx, { title: "", cells: [], cursor: -1, playhead: -1, barLength: 4 });
+    drawOled(ctx, { title: "", ticksPerStep: 96, cells: [], cursor: -1, playhead: -1, barLength: 4 });
     expect(hasBar(painted, 4)).toBe(true);
     expect(hasBar(painted, 8)).toBe(true);
     expect(hasBar(painted, 16)).toBe(true);
@@ -160,20 +202,20 @@ describe("OledDisplay — measure separation (graphical only)", () => {
 
   it("never draws a bar at a row edge", () => {
     const { ctx, painted } = recorder();
-    drawOled(ctx, { title: "", cells: [], cursor: -1, playhead: -1, barLength: 4 });
+    drawOled(ctx, { title: "", ticksPerStep: 96, cells: [], cursor: -1, playhead: -1, barLength: 4 });
     expect(hasBar(painted, 12)).toBe(false); // debut de la 2e ligne
   });
 
   it("draws no bar when the separation is none", () => {
     const { ctx, painted } = recorder();
-    drawOled(ctx, { title: "", cells: [], cursor: -1, playhead: -1, barLength: 0 });
+    drawOled(ctx, { title: "", ticksPerStep: 96, cells: [], cursor: -1, playhead: -1, barLength: 0 });
     for (let k = 1; k < 24; ++k) expect(hasBar(painted, k), `k=${k}`).toBe(false);
   });
 
   it("separations of 2, 3 and 6 all land inside the rows", () => {
     for (const n of [2, 3, 6]) {
       const { ctx, painted } = recorder();
-      drawOled(ctx, { title: "", cells: [], cursor: -1, playhead: -1, barLength: n });
+      drawOled(ctx, { title: "", ticksPerStep: 96, cells: [], cursor: -1, playhead: -1, barLength: n });
       expect(hasBar(painted, n), `bar ${n}`).toBe(true);
       expect(hasBar(painted, 12), `bar ${n} at row wrap`).toBe(false);
     }
@@ -183,7 +225,7 @@ describe("OledDisplay — measure separation (graphical only)", () => {
 describe("OledDisplay — cursor & playhead", () => {
   it("frames the edited step with a 9x9 box", () => {
     const { ctx, painted } = recorder();
-    drawOled(ctx, { title: "", cells: [], cursor: 5, playhead: -1 });
+    drawOled(ctx, { title: "", ticksPerStep: 96, cells: [], cursor: 5, playhead: -1 });
     const { x, y } = C[5]!;
     expect(painted.has(`${x - 4},${y - 4}`)).toBe(true);
     expect(painted.has(`${x + 4},${y - 4}`)).toBe(true);
@@ -192,7 +234,7 @@ describe("OledDisplay — cursor & playhead", () => {
 
   it("marks the played step by clearing the centre of an active glyph", () => {
     const lit = recorder();
-    drawOled(lit.ctx, { title: "", cells: [cell(3, "active")], cursor: -1, playhead: 3 });
+    drawOled(lit.ctx, { title: "", ticksPerStep: 96, cells: [cell(3, "active")], cursor: -1, playhead: 3 });
     const { x, y } = C[3]!;
     // le pixel central est efface (dessine en couleur papier)
     expect(lit.painted.has(`${x},${y}`)).toBe(false);
@@ -201,7 +243,7 @@ describe("OledDisplay — cursor & playhead", () => {
 
   it("marks the played step by inking the centre of an inactive glyph", () => {
     const { ctx, painted } = recorder();
-    drawOled(ctx, { title: "", cells: [cell(3, "inactive")], cursor: -1, playhead: 3 });
+    drawOled(ctx, { title: "", ticksPerStep: 96, cells: [cell(3, "inactive")], cursor: -1, playhead: 3 });
     const { x, y } = C[3]!;
     expect(painted.has(`${x},${y}`)).toBe(true);
   });

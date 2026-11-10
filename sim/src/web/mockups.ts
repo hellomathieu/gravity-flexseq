@@ -72,6 +72,8 @@ function editModel(over: Partial<PatternScreenPixelModel> = {}): PatternScreenPi
   ratchets[8] = RATCHET_3;
   ratchets[15] = RATCHET_TRIPLET;
   ratchets[16] = RATCHET_4;
+  ratchets[10] = RATCHET_TRIPLET;
+  ratchets[3] = RATCHET_4;
   return {
     title: "EDIT PATTERN A1",
     steps,
@@ -82,6 +84,7 @@ function editModel(over: Partial<PatternScreenPixelModel> = {}): PatternScreenPi
     barLength: 3,
     sepSelected: false,
     sepOpen: false,
+    ticksPerStep: 96,
     ...over,
   };
 }

@@ -28,6 +28,7 @@ export interface SimBackend {
   setSubdiv(channel: number, subdiv: number): boolean;
   /** Separation de mesure (graphique) : une barre tous les N steps. */
   getBarLength(channel: number): number;
+  getTicksPerStep(channel: number): number;
   setBarLength(channel: number, steps: number): boolean;
   view(channel: number): CellView[];
   toggleStep(channel: number, index: number): void;
@@ -99,6 +100,10 @@ export class TsReferenceBackend implements SimBackend {
 
   getBarLength(channel: number): number {
     return this.engine.getBarLength(channel);
+  }
+
+  getTicksPerStep(channel: number): number {
+    return this.engine.getTicksPerStep(channel);
   }
 
   setBarLength(channel: number, steps: number): boolean {

@@ -16,7 +16,7 @@
  */
 import type { CellView } from "./PatternView.js";
 import { textPixels, textWidth } from "./oledFont.js";
-import { RATCHET_NONE, RATCHET_TRIPLET } from "../domain/Pattern.js";
+import { RATCHET_NONE, RATCHET_TRIPLET, ratchetFitsStep } from "../domain/Pattern.js";
 
 export const OLED_W = 128;
 export const OLED_H = 64;
@@ -85,6 +85,7 @@ export interface OledModel {
   cells: CellView[];
   /** Step en cours d'edition : cadre 9x9. -1 pour masquer. */
   cursor: number;
+  ticksPerStep: number;
   /** Step joue : pixel central inverse. -1 pour masquer. */
   playhead?: number;
   /**
@@ -149,6 +150,18 @@ function drawTriangle(ctx: OledCtx, cx: number, cy: number): void {
   hline(ctx, cx - 2, y + 4, 5);
 }
 
+function drawHollowTriangle(ctx: OledCtx, cx: number, cy: number): void {
+  const y = cy - GLYPH_HALF;
+  px(ctx, cx, y);
+  px(ctx, cx - 1, y + 1);
+  px(ctx, cx + 1, y + 1);
+  px(ctx, cx - 1, y + 2);
+  px(ctx, cx + 1, y + 2);
+  px(ctx, cx - 2, y + 3);
+  px(ctx, cx + 2, y + 3);
+  hline(ctx, cx - 2, y + 4, 5);
+}
+
 function frame(ctx: OledCtx, cx: number, cy: number): void {
   const x = cx - SELECT_HALF;
   const y = cy - SELECT_HALF;
@@ -191,12 +204,14 @@ export function drawOled(ctx: OledCtx, model: OledModel): void {
     if (cell.kind === "active") {
       if (cell.ratchet === RATCHET_TRIPLET) drawTriangle(ctx, cx, cy);
       else drawDisc(ctx, cx, cy);
+    } else if (cell.ratchet === RATCHET_TRIPLET) {
+      drawHollowTriangle(ctx, cx, cy);
     } else {
       drawRing(ctx, cx, cy);
     }
 
-    // Ratchet chiffre sous le step (le triolet a deja son triangle).
-    if (cell.ratchet !== RATCHET_NONE && cell.ratchet !== RATCHET_TRIPLET) {
+    if (cell.kind === "active" && cell.ratchet !== RATCHET_NONE && cell.ratchet !== RATCHET_TRIPLET
+        && ratchetFitsStep(cell.ratchet, model.ticksPerStep)) {
       const rows = DIGITS[cell.ratchet];
       if (rows) {
         for (let r = 0; r < DIGIT_H; ++r) {

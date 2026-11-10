@@ -160,6 +160,7 @@ struct PatternScreenModel {
     uint8_t barLength; // separation de mesure (0 = aucune) : GRAPHIQUE seule
     bool sepSelected;  // le curseur est monte dans l'en-tete, sur le champ
     bool sepOpen;      // et la rotation fait defiler sa valeur
+    uint16_t ticksPerStep;
 };
 
 namespace detail {
@@ -251,9 +252,18 @@ void drawTriangle(Canvas& c, uint8_t cx, uint8_t cy) {
     c.drawHLine(cx - 2, y + 4, 5);
 }
 
-}  // namespace detail
-
-namespace detail {
+template <typename Canvas>
+void drawHollowTriangle(Canvas& c, uint8_t cx, uint8_t cy) {
+    const uint8_t y = static_cast<uint8_t>(cy - screen::GLYPH_HALF);
+    c.drawPixel(cx, y);
+    c.drawPixel(cx - 1, y + 1);
+    c.drawPixel(cx + 1, y + 1);
+    c.drawPixel(cx - 1, y + 2);
+    c.drawPixel(cx + 1, y + 2);
+    c.drawPixel(cx - 2, y + 3);
+    c.drawPixel(cx + 2, y + 3);
+    c.drawHLine(cx - 2, y + 4, 5);
+}
 
 }  // namespace detail
 
@@ -367,13 +377,15 @@ void drawPatternScreen(Canvas& canvas, const PatternScreenModel& model,
                     } else {
                         detail::drawDisc(canvas, cx, static_cast<uint8_t>(cy));
                     }
+                } else if (ratchet == RATCHET_TRIPLET) {
+                    detail::drawHollowTriangle(canvas, cx, static_cast<uint8_t>(cy));
                 } else {
                     detail::drawRing(canvas, cx, static_cast<uint8_t>(cy));
                 }
             }
 
-            // Chiffre de ratchet sous le step (le triolet a deja son triangle).
-            if (digits && ratchet != RATCHET_NONE && ratchet != RATCHET_TRIPLET) {
+            if (digits && active && ratchet != RATCHET_NONE && ratchet != RATCHET_TRIPLET
+                && ratchetFitsStep(ratchet, model.ticksPerStep)) {
                 detail::drawRatchetDigit(canvas, cx, static_cast<uint8_t>(cy), ratchet);
             }
         }

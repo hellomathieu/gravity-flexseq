@@ -24,7 +24,8 @@ import {
 
 /**
  * Le modele que `env:wokwi` fige, releve dans `src/wokwi_main.cpp` : dix steps
- * actifs, cinq ratchets dont un triolet, longueur 20 donc les steps 20 a 35 en
+ * actifs, sept ratchets dont un triolet actif, un triolet inactif au step 10 et
+ * un ratchet 4 inactif au step 3, longueur 20 donc les steps 20 a 35 en
  * simple point, curseur sur le step 5, separation de mesure en 3.
  *
  * Le playhead est pose sur le step 0, qui est ACTIF : son pixel central est donc
@@ -39,6 +40,8 @@ function panelModel(playhead = 0): PatternScreenPixelModel {
   ratchets[8] = RATCHET_3;
   ratchets[15] = RATCHET_TRIPLET;
   ratchets[16] = RATCHET_4;
+  ratchets[10] = RATCHET_TRIPLET;
+  ratchets[3] = RATCHET_4;
   return {
     title: "EDIT PATTERN A1",
     steps,
@@ -49,6 +52,7 @@ function panelModel(playhead = 0): PatternScreenPixelModel {
     barLength: 3,
     sepSelected: false,
     sepOpen: false,
+    ticksPerStep: 96,
   };
 }
 
@@ -58,7 +62,7 @@ function panelModel(playhead = 0): PatternScreenPixelModel {
  */
 const PANEL_ROWS: ReadonlyArray<readonly [number, number]> = [
   [2, 47], [3, 27], [4, 43], [5, 24], [6, 38], [10, 120], [14, 3], [15, 3],
-  [16, 12], [17, 5], [18, 41], [19, 47], [20, 46], [21, 47], [22, 41],
+  [16, 12], [17, 5], [18, 39], [19, 47], [20, 46], [21, 47], [22, 43],
   [23, 5], [24, 12], [25, 12], [26, 6], [27, 9], [28, 4], [29, 9], [31, 3],
   [32, 3], [33, 3], [34, 3], [35, 25], [36, 29], [37, 33], [38, 31],
   [39, 29], [40, 3], [41, 3], [42, 5], [43, 5], [44, 3], [45, 1], [46, 1],
@@ -128,6 +132,91 @@ describe("la grille des 36 steps", () => {
 
   it("le filet de l en-tete est complet", () => {
     expect(renderPatternScreen(panelModel(-1)).rows[HEADER_LINE_Y]).toBe(HEADER_LINE_W);
+  });
+});
+
+describe("le rendu d un step, PRD 12.1", () => {
+  const FILLED_TRIANGLE = ["..#..", ".###.", ".###.", "#####", "#####"];
+  const HOLLOW_TRIANGLE = ["..#..", ".#.#.", ".#.#.", "#...#", "#####"];
+  const RING = [".###.", "#...#", "#...#", "#...#", ".###."];
+  const DISC = [".###.", "#####", "#####", "#####", ".###."];
+
+  function one(active: boolean, ratchet: number, ticksPerStep = 96): Set<string> {
+    const steps = new Array<boolean>(GRID_STEPS).fill(false);
+    steps[4] = active;
+    const ratchets = new Array<number>(GRID_STEPS).fill(RATCHET_NONE);
+    ratchets[4] = ratchet;
+    return renderPatternScreen({
+      title: null,
+      steps,
+      ratchets,
+      length: 24,
+      cursor: -1,
+      playhead: -1,
+      barLength: 0,
+      sepSelected: false,
+      sepOpen: false,
+      ticksPerStep,
+    }).pixels;
+  }
+
+  function glyphIs(px: Set<string>, rows: string[]): boolean {
+    const cx = colX(4);
+    const cy = rowCY(4);
+    for (let r = 0; r < 5; ++r) {
+      for (let c = 0; c < 5; ++c) {
+        if (px.has(`${cx - 2 + c},${cy - 2 + r}`) !== (rows[r]![c] === "#")) return false;
+      }
+    }
+    return true;
+  }
+
+  function digitInk(px: Set<string>): number {
+    const cx = colX(4);
+    const y0 = rowCY(4) + 5;
+    let n = 0;
+    for (let r = 0; r < 5; ++r) for (let c = 0; c < 3; ++c) if (px.has(`${cx - 1 + c},${y0 + r}`)) ++n;
+    return n;
+  }
+
+  it("un triolet actif est un triangle plein", () => {
+    expect(glyphIs(one(true, RATCHET_TRIPLET), FILLED_TRIANGLE)).toBe(true);
+  });
+
+  it("un triolet inactif est un triangle vide, sans chiffre", () => {
+    const px = one(false, RATCHET_TRIPLET);
+    expect(glyphIs(px, HOLLOW_TRIANGLE)).toBe(true);
+    expect(digitInk(px)).toBe(0);
+  });
+
+  it("un triolet inactif se dessine a toutes les cadences", () => {
+    expect(glyphIs(one(false, RATCHET_TRIPLET, 4), HOLLOW_TRIANGLE)).toBe(true);
+  });
+
+  it("un step inactif avec un autre ratchet est un anneau, sans chiffre", () => {
+    const px = one(false, RATCHET_2);
+    expect(glyphIs(px, RING)).toBe(true);
+    expect(digitInk(px)).toBe(0);
+  });
+
+  it("le chiffre revient quand le step devient actif", () => {
+    const px = one(true, RATCHET_2);
+    expect(glyphIs(px, DISC)).toBe(true);
+    expect(digitInk(px)).toBe(11);
+  });
+
+  it("le chiffre n est pas dessine quand la cadence refuse le ratchet", () => {
+    const px = one(true, RATCHET_3, 4);
+    expect(glyphIs(px, DISC)).toBe(true);
+    expect(digitInk(px)).toBe(0);
+  });
+
+  it("le chiffre est dessine a la premiere cadence qui accepte le ratchet", () => {
+    expect(digitInk(one(true, RATCHET_3, 6))).toBe(11);
+  });
+
+  it("un ratchet 2 garde son chiffre a la cadence la plus rapide", () => {
+    expect(digitInk(one(true, RATCHET_2, 4))).toBe(11);
   });
 });
 

@@ -137,6 +137,7 @@ static PatternScreenModel model(uint8_t length = 24, int8_t cursor = -1,
     m.cursor = cursor;
     m.playhead = playhead;
     m.barLength = bar;
+    m.ticksPerStep = 96;
     return m;
 }
 
@@ -280,6 +281,7 @@ void test_ratchet_digit_is_drawn_under_the_step() {
 }
 
 void test_ratchet_digit_is_3x5_and_clears_the_cursor_frame() {
+    pattern.writeStep(0, true);
     pattern.setRatchet(0, RATCHET_6);
     drawPatternScreen(canvas, model(24, 0)); // curseur SUR le step
     const uint8_t cx = screen::colX(0), cy = screen::rowCY(0);
@@ -301,6 +303,7 @@ void test_each_ratchet_digit_has_a_distinct_pattern() {
     for (uint8_t i = 0; i < 4; ++i) {
         canvas.reset();
         pattern.clear();
+        pattern.writeStep(0, true);
         pattern.setRatchet(0, codes[i]);
         drawPatternScreen(canvas, model());
         ink[i] = canvas.inkCount();
@@ -308,6 +311,7 @@ void test_each_ratchet_digit_has_a_distinct_pattern() {
     // "3" (11 px) et "2" (11 px) ont la meme densite : on compare les formes
     canvas.reset();
     pattern.clear();
+    pattern.writeStep(0, true);
     pattern.setRatchet(0, 2);
     drawPatternScreen(canvas, model());
     const uint8_t cx = screen::colX(0);
@@ -325,14 +329,103 @@ void test_triplet_has_no_digit() {
         "seuls l etiquette SEP et sa valeur emploient une police"); // le triangle suffit
 }
 
-void test_ratchet_digit_shows_on_an_inactive_step_too() {
+static bool glyphIs(uint8_t step, const char* const rows[5]) {
+    const uint8_t cx = screen::colX(step);
+    const uint8_t cy = static_cast<uint8_t>(screen::rowCY(step));
+    for (uint8_t r = 0; r < 5; ++r) {
+        for (uint8_t c = 0; c < 5; ++c) {
+            const bool want = rows[r][c] == '#';
+            if (canvas.at(static_cast<uint8_t>(cx - 2 + c), static_cast<uint8_t>(cy - 2 + r)) != want) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+static uint8_t digitInk(uint8_t step) {
+    const uint8_t cx = screen::colX(step);
+    const uint8_t y0 = static_cast<uint8_t>(screen::rowCY(step) + screen::DIGIT_DY);
+    uint8_t n = 0;
+    for (uint8_t r = 0; r < screen::DIGIT_H; ++r) {
+        for (uint8_t c = 0; c < screen::DIGIT_W; ++c) {
+            if (canvas.at(static_cast<uint8_t>(cx - 1 + c), static_cast<uint8_t>(y0 + r))) ++n;
+        }
+    }
+    return n;
+}
+
+static const char* const FILLED_TRIANGLE[5] = {"..#..", ".###.", ".###.", "#####", "#####"};
+static const char* const HOLLOW_TRIANGLE[5] = {"..#..", ".#.#.", ".#.#.", "#...#", "#####"};
+static const char* const RING[5] = {".###.", "#...#", "#...#", "#...#", ".###."};
+static const char* const DISC[5] = {".###.", "#####", "#####", "#####", ".###."};
+
+void test_an_active_triplet_is_a_filled_triangle() {
+    pattern.writeStep(4, true);
+    pattern.setRatchet(4, RATCHET_TRIPLET);
+    drawPatternScreen(canvas, model());
+    TEST_ASSERT_TRUE(glyphIs(4, FILLED_TRIANGLE));
+}
+
+void test_an_inactive_triplet_is_a_hollow_triangle() {
+    pattern.setRatchet(4, RATCHET_TRIPLET);
+    drawPatternScreen(canvas, model());
+    TEST_ASSERT_TRUE_MESSAGE(glyphIs(4, HOLLOW_TRIANGLE),
+        "a triplet rest keeps its two units, so the screen must show it");
+    TEST_ASSERT_EQUAL_UINT8(0, digitInk(4));
+}
+
+void test_an_inactive_triplet_is_drawn_at_every_rate() {
+    pattern.setRatchet(4, RATCHET_TRIPLET);
+    PatternScreenModel m = model();
+    m.ticksPerStep = 4;
+    drawPatternScreen(canvas, m);
+    TEST_ASSERT_TRUE(glyphIs(4, HOLLOW_TRIANGLE));
+}
+
+void test_an_inactive_step_with_another_ratchet_is_a_plain_ring() {
     pattern.setRatchet(4, RATCHET_2);
     drawPatternScreen(canvas, model());
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(2, canvas.strCalls,
-        "seuls l etiquette SEP et sa valeur emploient une police"); // chiffres dessines, pas ecrits
-    const uint8_t cx = screen::colX(4);
-    const uint8_t y0 = static_cast<uint8_t>(screen::rowCY(4) + screen::DIGIT_DY);
-    TEST_ASSERT_TRUE(canvas.at(cx - 1, y0)); // "2" : ligne haute pleine
+    TEST_ASSERT_TRUE(glyphIs(4, RING));
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, digitInk(4),
+        "a ratchet on an inactive step acts on nothing, so its digit is not drawn");
+}
+
+void test_the_digit_returns_when_the_step_becomes_active() {
+    pattern.setRatchet(4, RATCHET_2);
+    pattern.writeStep(4, true);
+    drawPatternScreen(canvas, model());
+    TEST_ASSERT_TRUE(glyphIs(4, DISC));
+    TEST_ASSERT_EQUAL_UINT8(11, digitInk(4));
+}
+
+void test_the_digit_is_not_drawn_when_the_rate_refuses_the_ratchet() {
+    pattern.writeStep(4, true);
+    pattern.setRatchet(4, RATCHET_3);
+    PatternScreenModel m = model();
+    m.ticksPerStep = 4;
+    drawPatternScreen(canvas, m);
+    TEST_ASSERT_TRUE(glyphIs(4, DISC));
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, digitInk(4),
+        "at x24 a step holds 4 ticks and a ratchet 3 needs 6, so the engine plays one trigger");
+}
+
+void test_the_digit_is_drawn_at_the_first_rate_that_accepts_the_ratchet() {
+    pattern.writeStep(4, true);
+    pattern.setRatchet(4, RATCHET_3);
+    PatternScreenModel m = model();
+    m.ticksPerStep = 6;
+    drawPatternScreen(canvas, m);
+    TEST_ASSERT_EQUAL_UINT8(11, digitInk(4));
+}
+
+void test_a_ratchet_two_keeps_its_digit_at_the_fastest_rate() {
+    pattern.writeStep(4, true);
+    pattern.setRatchet(4, RATCHET_2);
+    PatternScreenModel m = model();
+    m.ticksPerStep = 4;
+    drawPatternScreen(canvas, m);
+    TEST_ASSERT_EQUAL_UINT8(11, digitInk(4));
 }
 
 /*
@@ -619,7 +712,14 @@ int main() {
     RUN_TEST(test_ratchet_digit_is_3x5_and_clears_the_cursor_frame);
     RUN_TEST(test_each_ratchet_digit_has_a_distinct_pattern);
     RUN_TEST(test_triplet_has_no_digit);
-    RUN_TEST(test_ratchet_digit_shows_on_an_inactive_step_too);
+    RUN_TEST(test_an_active_triplet_is_a_filled_triangle);
+    RUN_TEST(test_an_inactive_triplet_is_a_hollow_triangle);
+    RUN_TEST(test_an_inactive_triplet_is_drawn_at_every_rate);
+    RUN_TEST(test_an_inactive_step_with_another_ratchet_is_a_plain_ring);
+    RUN_TEST(test_the_digit_returns_when_the_step_becomes_active);
+    RUN_TEST(test_the_digit_is_not_drawn_when_the_rate_refuses_the_ratchet);
+    RUN_TEST(test_the_digit_is_drawn_at_the_first_rate_that_accepts_the_ratchet);
+    RUN_TEST(test_a_ratchet_two_keeps_its_digit_at_the_fastest_rate);
 
     RUN_TEST(test_bars_are_drawn_every_n_steps_inside_each_row);
     RUN_TEST(test_bar_stays_visible_next_to_the_cursor_frame);

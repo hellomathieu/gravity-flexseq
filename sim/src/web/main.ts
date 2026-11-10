@@ -166,6 +166,7 @@ function drawOledScreen(): void {
     cursor: state.cursor,
     playhead: backend.effectiveStep(state.channel),
     barLength: backend.getBarLength(state.channel),
+    ticksPerStep: backend.getTicksPerStep(state.channel),
   });
 }
 

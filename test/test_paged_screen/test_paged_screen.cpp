@@ -187,6 +187,7 @@ PatternScreenModel modelOf(const Pattern& pattern) {
     model.cursor = 0;
     model.playhead = 0;
     model.barLength = 4;
+    model.ticksPerStep = 96;
     return model;
 }
 

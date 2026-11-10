@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include <flexseq/MainScreen.h>
+#include <flexseq/PatternScreen.h>
 #include <flexseq/SequencerEngine.h>
 #include <flexseq/UiController.h>
 
@@ -38,6 +39,22 @@ inline int8_t editCursorFor(const UiController& ui) {
         return -1;
     }
     return static_cast<int8_t>(ui.stepCursor());
+}
+
+inline PatternScreenModel editScreenModelOf(const UiController& ui, const SequencerEngine& engine,
+                                            uint8_t channel, const char* title) {
+    PatternScreenModel model{};
+    model.title = title;
+    model.titleWidth = 0;
+    model.pattern = engine.patternForChannel(channel);
+    model.length = engine.getEffectiveLength(channel);
+    model.sepSelected = ui.isOnHeader();
+    model.sepOpen = model.sepSelected && ui.fieldOpen();
+    model.cursor = editCursorFor(ui);
+    model.playhead = engine.effectiveStep(channel);
+    model.barLength = static_cast<uint8_t>(engine.getBarLength(channel));
+    model.ticksPerStep = engine.getTicksPerStep(channel);
+    return model;
 }
 
 }  // namespace flexseq

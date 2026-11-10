@@ -17,6 +17,7 @@ import {
   editCursorFor,
   editTitleFor,
 } from "../src/domain/EditTitle.js";
+import { editScreenModelOf } from "../src/sim/EditScreenModel.js";
 
 /*
  * PRD 5.0, amendment of 2026-09-15 — the EDIT title names the pattern the
@@ -114,5 +115,70 @@ describe("le curseur de l ecran EDIT", () => {
     expect(editCursorFor(r.ui)).toBe(-1);
     r.engine.setCvDestination(0, CV_SOURCE_1, CvDestination.NONE);
     expect(editCursorFor(r.ui)).toBe(1);
+  });
+});
+
+describe("le modele de l ecran EDIT", () => {
+  it("porte la cadence du canal", () => {
+    const r = rig();
+    r.enterEditOf(0);
+    expect(editScreenModelOf(r.ui, r.engine, 0, "T").ticksPerStep).toBe(96);
+    expect(r.engine.setSubdiv(0, -24)).toBe(true);
+    expect(editScreenModelOf(r.ui, r.engine, 0, "T").ticksPerStep).toBe(4);
+  });
+
+  it("lit la cadence de SON canal", () => {
+    const r = rig();
+    expect(r.engine.setSubdiv(0, -24)).toBe(true);
+    expect(r.engine.setSubdiv(3, -4)).toBe(true);
+    r.enterEditOf(3);
+    expect(editScreenModelOf(r.ui, r.engine, 3, "T").ticksPerStep).toBe(24);
+  });
+
+  it("montre le pattern joue et l etat du canal", () => {
+    const r = rig();
+    r.engine.setSelectedPattern(0, 4);
+    r.engine.setBaseLength(0, 20);
+    r.engine.setBarLength(0, 3);
+    expect(r.bank.getPattern(4)!.writeStep(7, true)).toBe(true);
+    expect(r.bank.getPattern(4)!.setRatchet(7, 3)).toBe(true);
+    r.enterEditOf(0);
+    r.ui.handle(UiEvent.Rotate, 1);
+    r.ui.handle(UiEvent.Rotate, 1);
+    const m = editScreenModelOf(r.ui, r.engine, 0, "EDIT PATTERN A5");
+    expect(m.title).toBe("EDIT PATTERN A5");
+    expect(m.steps[7]).toBe(true);
+    expect(m.steps[6]).toBe(false);
+    expect(m.ratchets[7]).toBe(3);
+    expect(m.length).toBe(20);
+    expect(m.barLength).toBe(3);
+    expect(m.cursor).toBe(2);
+    expect(m.playhead).toBe(0);
+    expect(m.sepSelected).toBe(false);
+    expect(m.sepOpen).toBe(false);
+  });
+
+  it("suit le playhead", () => {
+    const r = rig();
+    r.enterEditOf(0);
+    r.engine.start();
+    r.engine.advance(96);
+    r.engine.advance(96);
+    expect(editScreenModelOf(r.ui, r.engine, 0, "T").playhead).toBe(2);
+  });
+
+  it("marque le champ du bandeau et son ouverture", () => {
+    const r = rig();
+    r.enterEditOf(0);
+    r.ui.handle(UiEvent.Rotate, -1);
+    expect(r.ui.isOnHeader).toBe(true);
+    let m = editScreenModelOf(r.ui, r.engine, 0, "T");
+    expect(m.sepSelected).toBe(true);
+    expect(m.sepOpen).toBe(false);
+    expect(m.cursor).toBe(-1);
+    r.ui.handle(UiEvent.Press);
+    m = editScreenModelOf(r.ui, r.engine, 0, "T");
+    expect(m.sepSelected).toBe(true);
+    expect(m.sepOpen).toBe(true);
   });
 });

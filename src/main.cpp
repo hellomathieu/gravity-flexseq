@@ -75,18 +75,7 @@ void beginEditFrame(uint8_t channel) {
     flexseq::probe::writeReport(uiTitle);
 #endif
 
-    flexseq::PatternScreenModel model{};
-    model.title = uiTitle;
-    model.titleWidth = 0;
-    model.pattern = engine.patternForChannel(channel);
-    model.length = engine.getEffectiveLength(channel);
-    model.sepSelected = ui.isOnHeader();
-    model.sepOpen = model.sepSelected && ui.fieldOpen();
-    model.cursor = flexseq::editCursorFor(ui);
-    model.playhead = engine.effectiveStep(channel);
-    model.barLength = static_cast<uint8_t>(engine.getBarLength(channel));
-
-    uiScreen.begin(gravity.display, model);
+    uiScreen.begin(gravity.display, flexseq::editScreenModelOf(ui, engine, channel, uiTitle));
 }
 
 void beginMainFrame() {
