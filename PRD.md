@@ -519,6 +519,10 @@ The codes are `9`, `10` and `11` in the ratchet nibble, so the EEPROM format doe
 **The choice list becomes: none, `OFF-BEAT`, 2, 3, 4, 6, `TRIPLET`, `PAUSE 2`, `PAUSE 3`, `PAUSE 4`.** The three codes sit at the end, so no existing detent count moves.
 
 Measured cost: Flash **+126 B**, RAM **+0 B**, stack peak **214 B**.
+
+**`PAUSE 1` — SET ASIDE by the owner on 2026-11-10.** A silence of one unit already exists: it is an inactive step. A code `PAUSE 1` would do what a short press on an active step does. It would cost one of the four free codes and one more digit to draw.
+
+✅ **The owner read the pauses on the module on 2026-11-10**, rack powered: the three choices after the triplet, the stop of the list, the ring with its digit, the silent step, the next step that waits, the channel that falls behind another channel, and the removal of the pause.
 **A triplet on an INACTIVE step keeps its two units and emits nothing**: it is a **triplet rest**. A ratchet `2/3/4/6` on an inactive step has no effect at all, because its duration is one unit. In both cases the pattern **keeps** the code, and it becomes active again with the step.
 ### 6.3.1 Placement of the sub-onsets — DECIDED on 2026-08-23
 A ratchet N cuts **one** step into N slots, and the triplet cuts **two** steps into 3. At 96 PPQN a step is worth `ticksPerStep` (§6.1): **4 ticks at `x24`**, 96 at `/1`, and 12288 at `/128`. The slots therefore do not always fall on a whole tick.
