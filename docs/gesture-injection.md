@@ -178,18 +178,24 @@ Counted on the reference model, not estimated: the number of **consecutive**
 | 6 SUBDIV changes the step duration | 1 | 1 | no |
 | **7 SUBDIV stays within the 25 legal rates** | **50** | **12 + 12 + 12 + 12 + 2** | **yes** |
 | 8 a step toggles, and no other | 0 | — | no |
-| 9 a ratchet lands on an active step | 4 | 4 | no |
+| 9 a ratchet lands on an active step | 5 | 5 | no |
 | 10 an inactive step refuses the ratchet | 0 | — | no |
 | 11 the refused codes are skipped | 8, then 2 | 8 / 2 | no |
-| 12 the triplet goes on and comes off | 10 in one run | 10 | no |
+| 12 the triplet goes on and comes off | 12 in one run | 12 | no |
 | 13 channel, LENGTH, back | 3 | 3 | no |
 
 **Two recipes out of thirteen need more than one burst**, and both are the
 saturation cases: recipe 5 walks LENGTH to its clamp, recipe 7 walks SUBDIV to
 the end of its 25 rates. Recipe 12 is the one to watch: its two `setRatchet`
 calls are contiguous in the event log, so a translator that groups consecutive
-`ShiftRotate` events into one hold sees **10** detents — under the ceiling, but
-only by two.
+`ShiftRotate` events into one hold sees **12** detents — exactly the ceiling.
+
+⚠️ **These counts moved on 2026-11-10, with the off-beat ratchet of PRD §6.3.**
+The choice list is now none, off-beat, 2, 3, 4, 6, triplet, so every ratchet
+above the off-beat costs one detent more. Recipe 9 went from 4 to 5, and recipe
+12 went from 10 to 12, which leaves **no margin** under the ceiling of 12. The
+harness no longer holds these counts: it reads `ratchetChoiceIndexOf()` from
+`include/flexseq/Pattern.h`.
 
 **Recipe 11 reaches `x24` in a single burst, and its refusal costs zero
 detents.** Its `setSubdiv(-8)` is **eight positions in the list of 25 rates**,
@@ -210,7 +216,7 @@ nearer. See `docs/open-risks.md` line 87.
 `GestureDriver.setRatchet()` then tests `ratchetFitsStep()` **before** rotating,
 so a code the rate refuses returns `applied: false` without emitting a single
 event: at 4 ticks per step, `RATCHET_6` costs zero detents and the triplet costs
-two. Whether the **firmware** skips the refused codes the same way is **not
+three, since the off-beat ratchet of 2026-11-10 fits every rate. Whether the **firmware** skips the refused codes the same way is **not
 established here**. The model says so; P2.6 is what will read it off the
 module's binary.
 
@@ -296,8 +302,8 @@ Run inside the EDIT screen, on step 0 of A1, which the factory mask makes active
 
 | Observation | Value |
 |---|---|
-| ratchet nibble of step 0 | **00 → 04**, three codes further |
-| SHIFT held | **192 ms**, under the 750 ms threshold |
+| ratchet nibble of step 0 | **00 → 04**, four codes further since 2026-11-10 (three before the off-beat ratchet) |
+| SHIFT held | **246 ms** since 2026-11-10, under the 750 ms threshold (192 ms before) |
 | I2C traffic | 3120 bytes |
 | pattern steps | **unchanged**, mask still `0x9111` |
 
