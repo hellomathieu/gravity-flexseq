@@ -100,6 +100,34 @@ constexpr uint8_t MAIN_BOX_W = 55;
 constexpr uint8_t MAIN_VALUE_BASELINE_Y = 28;
 constexpr uint8_t MAIN_LABEL_BASELINE_Y = 41;
 
+constexpr uint8_t SETTINGS_LINE_COUNT = 4;
+constexpr uint8_t SETTINGS_LABEL_X = 8;
+constexpr uint8_t SETTINGS_LINE_0_BASELINE_Y = 18;
+constexpr uint8_t SETTINGS_LINE_SPACING_Y = 10;
+
+constexpr uint8_t DONE_BOX_X = 32;
+constexpr uint8_t DONE_BOX_Y = 15;
+constexpr uint8_t DONE_BOX_W = 64;
+constexpr uint8_t DONE_BOX_H = 29;
+constexpr uint8_t DONE_SHADOW = 2;
+constexpr uint8_t DONE_BASELINE_Y = 32;
+
+static_assert(SETTINGS_LINE_0_BASELINE_Y >= FONT_VELVETSCREEN_HEIGHT + 1,
+              "the cursor box of the first settings line must fit the screen");
+static_assert(SETTINGS_LINE_SPACING_Y >= FONT_VELVETSCREEN_HEIGHT + 3,
+              "the cursor boxes of two settings lines must not touch");
+static_assert(SETTINGS_LINE_0_BASELINE_Y
+                  + (SETTINGS_LINE_COUNT - 1) * SETTINGS_LINE_SPACING_Y + 1 < RULE_Y,
+              "the last settings line must clear the rule");
+static_assert(DONE_BOX_X + DONE_BOX_W / 2 == screen::WIDTH / 2,
+              "the done box is centred on the screen");
+static_assert(DONE_BOX_Y + DONE_BOX_H + DONE_SHADOW <= RULE_Y,
+              "the done box and its shadow must clear the rule");
+static_assert(DONE_BASELINE_Y > DONE_BOX_Y + FONT_VELVETSCREEN_HEIGHT,
+              "the done text must sit inside its box");
+static_assert(DONE_BASELINE_Y < DONE_BOX_Y + DONE_BOX_H - 1,
+              "the done text must sit inside its box");
+
 static_assert(LINE_1_BASELINE_Y == LINE_0_BASELINE_Y + LINE_SPACING_Y,
               "the three lines of the original are evenly spaced");
 static_assert(LINE_2_BASELINE_Y == LINE_0_BASELINE_Y + 2 * LINE_SPACING_Y,
@@ -255,6 +283,32 @@ FLEXSEQ_LABEL(LBL_PPQN, "PPQN:");
 FLEXSEQ_LABEL(LBL_INT, "INT");
 FLEXSEQ_LABEL(LBL_EXT, "EXT");
 FLEXSEQ_LABEL(LBL_MIDI, "MIDI");
+FLEXSEQ_LABEL(LBL_CALIBRATE, "CALIBRATE CV INS");
+FLEXSEQ_LABEL(LBL_ROTATE_SCREEN, "ROTATE SCREEN");
+FLEXSEQ_LABEL(LBL_REVERSE_ENCODER, "REVERSE ENCODER");
+FLEXSEQ_LABEL(LBL_FACTORY_RESET, "FACTORY RESET");
+FLEXSEQ_LABEL(LBL_SURE_NO, "SURE: NO");
+FLEXSEQ_LABEL(LBL_SURE_YES, "SURE: YES");
+FLEXSEQ_LABEL(LBL_DONE, "DONE");
+
+constexpr uint8_t SETTINGS_SCRATCH = 17;
+static_assert(sizeof(LBL_CALIBRATE) <= SETTINGS_SCRATCH,
+              "the settings scratch must hold the longest label");
+static_assert(sizeof(LBL_REVERSE_ENCODER) <= SETTINGS_SCRATCH,
+              "the settings scratch must hold the longest label");
+
+inline const char* settingsLabel(const MainScreenModel& model, uint8_t line) {
+    switch (line) {
+        case 0: return LBL_CALIBRATE;
+        case 1: return LBL_ROTATE_SCREEN;
+        case 2: return LBL_REVERSE_ENCODER;
+        default: break;
+    }
+    if (model.insideTab && model.fieldOpen && model.cursor == line) {
+        return model.confirmYes ? LBL_SURE_YES : LBL_SURE_NO;
+    }
+    return LBL_FACTORY_RESET;
+}
 
 inline const char* clockModeText(uint8_t source) {
     switch (clockModeOf(source)) {
@@ -557,6 +611,57 @@ void drawLegacyChannel(Canvas& canvas, const Band& band, const MainScreenModel& 
 
 }  // namespace detail
 
+namespace detail {
+
+template <typename Canvas>
+void drawSettingsPage(Canvas& canvas, const Band& band, const MainScreenModel& model) {
+    namespace ms = mainscreen;
+    char scratch[SETTINGS_SCRATCH];
+
+    if (model.settingsDone) {
+        if (!touches(band, ms::DONE_BOX_Y,
+                     ms::DONE_BOX_Y + ms::DONE_BOX_H + ms::DONE_SHADOW - 1)) {
+            return;
+        }
+        canvas.drawFrame(ms::DONE_BOX_X, ms::DONE_BOX_Y, ms::DONE_BOX_W, ms::DONE_BOX_H);
+        canvas.drawBox(static_cast<uint8_t>(ms::DONE_BOX_X + ms::DONE_SHADOW),
+                       static_cast<uint8_t>(ms::DONE_BOX_Y + ms::DONE_BOX_H),
+                       ms::DONE_BOX_W, ms::DONE_SHADOW);
+        canvas.drawBox(static_cast<uint8_t>(ms::DONE_BOX_X + ms::DONE_BOX_W),
+                       static_cast<uint8_t>(ms::DONE_BOX_Y + ms::DONE_SHADOW),
+                       ms::DONE_SHADOW, ms::DONE_BOX_H);
+        const char* text = label(LBL_DONE, scratch);
+        const uint8_t w = static_cast<uint8_t>(canvas.getStrWidth(text));
+        canvas.drawStr(static_cast<uint8_t>((screen::WIDTH - w) / 2),
+                       ms::DONE_BASELINE_Y, text);
+        return;
+    }
+
+    for (uint8_t line = 0; line < ms::SETTINGS_LINE_COUNT; ++line) {
+        const uint8_t base = static_cast<uint8_t>(
+            ms::SETTINGS_LINE_0_BASELINE_Y + line * ms::SETTINGS_LINE_SPACING_Y);
+        const int16_t top = static_cast<int16_t>(base) - (FONT_VELVETSCREEN_HEIGHT + 1);
+        if (!touches(band, top, static_cast<int16_t>(base) + 1)) {
+            continue;
+        }
+        const char* text = label(settingsLabel(model, line), scratch);
+        if (model.insideTab && model.cursor == line) {
+            const uint8_t w = static_cast<uint8_t>(canvas.getStrWidth(text));
+            canvas.drawBox(static_cast<uint8_t>(ms::SETTINGS_LABEL_X - 1),
+                           static_cast<uint8_t>(base - FONT_VELVETSCREEN_HEIGHT - 1),
+                           static_cast<uint8_t>(w + 2),
+                           static_cast<uint8_t>(FONT_VELVETSCREEN_HEIGHT + 2));
+            canvas.setDrawColor(0);
+            canvas.drawStr(ms::SETTINGS_LABEL_X, base, text);
+            canvas.setDrawColor(1);
+        } else {
+            canvas.drawStr(ms::SETTINGS_LABEL_X, base, text);
+        }
+    }
+}
+
+}  // namespace detail
+
 template <typename Canvas>
 void drawMainScreen(Canvas& canvas, const MainScreenModel& model,
                     Band band = Band{0, screen::HEIGHT - 1}) {
@@ -564,6 +669,8 @@ void drawMainScreen(Canvas& canvas, const MainScreenModel& model,
 
     if (detail::usesLegacyLayout(model)) {
         detail::drawLegacyChannel(canvas, band, model);
+    } else {
+        detail::drawSettingsPage(canvas, band, model);
     }
 
     if (touches(band, ms::RULE_Y, ms::RULE_Y)) {

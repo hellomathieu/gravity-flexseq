@@ -7,6 +7,7 @@ import {
   mainValueOf,
   modText,
   renderMainScreen,
+  settingsLabel,
 } from "../src/sim/MainScreenPixels.js";
 import { MainParameter, mainScreenModelOf, type MainScreenModel } from "../src/domain/MainScreenModel.js";
 import { SequencerEngine } from "../src/domain/SequencerEngine.js";
@@ -70,6 +71,8 @@ const PANEL_MODEL: MainScreenModel = {
   cv1Target: 0,
   cv2Target: 0,
   configPage: false,
+  settingsDone: false,
+  confirmYes: false,
   tempo: 120,
   clockSource: 0,
   running: true,
@@ -656,5 +659,95 @@ describe("l onglet horloge : MODE et PPQN, deux vues de l octet de source", () =
     let frameInk = 0;
     for (let x = 0; x < 60; x += 1) if (offClock.pixels.has(`${x},${top}`)) frameInk += 1;
     expect(frameInk).toBe(0);
+  });
+});
+
+describe("la page des reglages", () => {
+  const settings = (extra: Partial<MainScreenModel> = {}): MainScreenModel => ({
+    ...PANEL_MODEL,
+    tab: 7,
+    insideTab: false,
+    cursor: 0,
+    mainParameter: MainParameter.None,
+    running: false,
+    ...extra,
+  });
+  const inkOfRows = (rows: number[], from: number, to: number) => {
+    let n = 0;
+    for (let y = from; y <= to; y += 1) n += rows[y]!;
+    return n;
+  };
+
+  const PANEL_SETTINGS: ReadonlyArray<
+    readonly [string, number, boolean, number, ReadonlyArray<readonly [number, number]>]
+  > = [
+    ["le curseur sur la premiere ligne", 0, false, 1094, [[12, 72], [13, 41], [14, 49], [15, 41], [16, 49], [17, 42], [18, 72], [23, 35], [24, 19], [25, 32], [26, 19], [27, 29], [33, 43], [34, 23], [35, 41], [36, 23], [37, 39], [43, 35], [44, 18], [45, 29], [46, 17], [47, 25], [52, 120], [56, 12], [57, 12], [58, 34], [59, 21], [60, 36], [61, 19], [62, 35], [63, 12]]],
+    ["l ecran non retourne, apres ROTATE SCREEN", 1, false, 1039, [[13, 31], [14, 23], [15, 31], [16, 23], [17, 30], [22, 63], [23, 28], [24, 44], [25, 31], [26, 44], [27, 34], [28, 63], [33, 43], [34, 23], [35, 41], [36, 23], [37, 39], [43, 35], [44, 18], [45, 29], [46, 17], [47, 25], [52, 120], [56, 12], [57, 12], [58, 34], [59, 21], [60, 36], [61, 19], [62, 35], [63, 12]]],
+    ["l encadre DONE, apres CALIBRATE CV INS", 0, true, 714, [[15, 64], [16, 2], [17, 4], [18, 4], [19, 4], [20, 4], [21, 4], [22, 4], [23, 4], [24, 4], [25, 4], [26, 4], [27, 15], [28, 12], [29, 15], [30, 12], [31, 15], [32, 4], [33, 4], [34, 4], [35, 4], [36, 4], [37, 4], [38, 4], [39, 4], [40, 4], [41, 4], [42, 4], [43, 66], [44, 64], [45, 64], [52, 120], [56, 12], [57, 12], [58, 34], [59, 21], [60, 36], [61, 19], [62, 35], [63, 12]]],
+  ];
+
+  it("rend l encre que le PANNEAU du firmware de production recoit, rangee par rangee", () => {
+    for (const [name, cursor, settingsDone, ink, expected] of PANEL_SETTINGS) {
+      const r = renderMainScreen(
+        settings({ insideTab: true, cursor, fieldCount: 4, settingsDone, tempo: 120 }),
+      );
+      expect(r.count, name).toBe(ink);
+      const rows = r.rows.map((n, y) => [y, n] as const).filter(([, n]) => n > 0);
+      expect(rows, name).toEqual(expected);
+    }
+  });
+
+  it("porte les quatre entrees de l original, dans l ordre", () => {
+    expect(settingsLabel(settings(), 0)).toBe("CALIBRATE CV INS");
+    expect(settingsLabel(settings(), 1)).toBe("ROTATE SCREEN");
+    expect(settingsLabel(settings(), 2)).toBe("REVERSE ENCODER");
+    expect(settingsLabel(settings(), 3)).toBe("FACTORY RESET");
+  });
+
+  it("encre les quatre lignes aux lignes de base 18, 28, 38 et 48, et rien au-dessus", () => {
+    const rows = renderMainScreen(settings()).rows;
+    expect(inkOfRows(rows, 0, 12)).toBe(0);
+    for (const base of [18, 28, 38, 48]) {
+      expect(inkOfRows(rows, base - 5, base - 1), `ligne ${base}`).toBeGreaterThan(20);
+      expect(rows[base], `sous la ligne ${base}`).toBe(0);
+    }
+    expect(inkOfRows(rows, 49, 51)).toBe(0);
+  });
+
+  it("le curseur inverse sa ligne, et elle seule", () => {
+    const plain = renderMainScreen(settings()).rows;
+    for (let cursor = 0; cursor < 4; cursor += 1) {
+      const marked = renderMainScreen(settings({ insideTab: true, cursor })).rows;
+      for (let line = 0; line < 4; line += 1) {
+        const base = 18 + line * 10;
+        const a = inkOfRows(plain, base - 6, base);
+        const b = inkOfRows(marked, base - 6, base);
+        if (line === cursor) expect(b, `ligne ${line}`).toBeGreaterThan(a);
+        else expect(b, `ligne ${line}`).toBe(a);
+      }
+    }
+  });
+
+  it("FACTORY RESET pose sa question un mot a la fois, et NO vient d abord", () => {
+    const open = settings({ insideTab: true, cursor: 3, fieldOpen: true });
+    expect(settingsLabel(open, 3)).toBe("SURE: NO");
+    expect(settingsLabel({ ...open, confirmYes: true }, 3)).toBe("SURE: YES");
+    expect(settingsLabel({ ...open, cursor: 2, confirmYes: true }, 3)).toBe("FACTORY RESET");
+    expect(settingsLabel(settings({ cursor: 3, fieldOpen: true }), 3)).toBe("FACTORY RESET");
+  });
+
+  it("DONE remplace les quatre lignes par un encadre centre avec son ombre", () => {
+    const r = renderMainScreen(settings({ insideTab: true, settingsDone: true }));
+    const has = (x: number, y: number) => r.pixels.has(`${x},${y}`);
+    expect(has(32, 15) && has(95, 15) && has(32, 43) && has(95, 43)).toBe(true);
+    expect(has(33, 16)).toBe(false);
+    expect(has(34, 44) && has(97, 45) && has(96, 17)).toBe(true);
+    expect(has(32, 44)).toBe(false);
+    expect(has(96, 15)).toBe(false);
+    for (let y = 0; y < 52; y += 1) {
+      for (let x = 0; x < 32; x += 1) expect(has(x, y), `${x},${y}`).toBe(false);
+    }
+    expect(inkOfRows(r.rows, 46, 51)).toBe(0);
+    expect(inkOfRows(r.rows, 27, 31)).toBeGreaterThan(5 * 4);
   });
 });

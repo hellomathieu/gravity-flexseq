@@ -5,7 +5,7 @@ import {
 } from "./FactoryPatterns.js";
 import { PATTERN_COUNT, type PatternBank } from "./PatternBank.js";
 import { isValidRatchet, Pattern, RATCHET_NONE } from "./Pattern.js";
-import { CV_SOURCE_1, CV_SOURCE_2 } from "./CvDestination.js";
+import { CV_SOURCE_1, CV_SOURCE_2, CvDestination } from "./CvDestination.js";
 import {
   CHANNEL_COUNT,
   ChannelMode,
@@ -517,6 +517,8 @@ export class PersistentImageV4 implements ScannedImage {
       this.engine.setChannelMode(channel, DEFAULT_CHANNEL_MODE);
       this.engine.setOffset(channel, 0);
       this.engine.setSkipChance(channel, 0);
+      this.engine.setCvDestination(channel, CV_SOURCE_1, CvDestination.NONE);
+      this.engine.setCvDestination(channel, CV_SOURCE_2, CvDestination.NONE);
     }
     this.ui.setTempo(DEFAULT_TEMPO);
     this.ui.setClockSource(0);

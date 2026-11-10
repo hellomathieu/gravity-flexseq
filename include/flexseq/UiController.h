@@ -45,6 +45,18 @@ public:
         FIELD_MOD,
         FIELD_CONFIG,
         FIELD_PPQN,
+        FIELD_CALIBRATE,
+        FIELD_ROTATE_SCREEN,
+        FIELD_REVERSE_ENCODER,
+        FIELD_FACTORY_RESET,
+    };
+
+    enum SettingsAction : uint8_t {
+        SETTINGS_NONE,
+        SETTINGS_CALIBRATE,
+        SETTINGS_ROTATE_SCREEN,
+        SETTINGS_REVERSE_ENCODER,
+        SETTINGS_FACTORY_RESET,
     };
 
     static constexpr uint8_t TAB_COUNT = 8;
@@ -58,6 +70,7 @@ public:
     static constexpr uint8_t CHANNEL_TAB_FIELDS = 3;
     static constexpr uint8_t SEQ_CHANNEL_TAB_FIELDS = 4;
     static constexpr uint8_t CONFIG_PAGE_FIELDS = 3;
+    static constexpr uint8_t SETTINGS_TAB_FIELDS = 4;
 
     // PRD 5.0 amendement 1quater : la grande valeur reprend la PREMIERE
     // position, et elle porte le NOM du template. Un outil qui lit ces index les
@@ -73,6 +86,11 @@ public:
 
     static constexpr uint8_t CLOCK_FIELD_INDEX_MODE_INT = 1;
     static constexpr uint8_t CLOCK_FIELD_INDEX_MODE_EXTERNAL = 0;
+
+    static constexpr uint8_t SETTINGS_FIELD_INDEX_CALIBRATE = 0;
+    static constexpr uint8_t SETTINGS_FIELD_INDEX_ROTATE_SCREEN = 1;
+    static constexpr uint8_t SETTINGS_FIELD_INDEX_REVERSE_ENCODER = 2;
+    static constexpr uint8_t SETTINGS_FIELD_INDEX_FACTORY_RESET = 3;
 
 
     static constexpr uint8_t CLOCK_SOURCE_COUNT = CLOCK_SOURCE_VALUE_COUNT;
@@ -120,6 +138,10 @@ public:
     bool isOnHeader() const { return onHeader_; }
     bool isOnConfigPage() const { return onConfigPage_; }
 
+    bool doneShown() const { return doneShown_; }
+    bool confirmYes() const { return confirmYes_; }
+    SettingsAction takeSettingsAction();
+
     uint8_t revision() const { return revision_; }
 
     uint16_t tempo() const { return tempo_; }
@@ -144,6 +166,7 @@ private:
     void clearPattern();
     void postPatternLoad();
     void browsePattern(int8_t delta);
+    void pressSettingsField();
 
     Pattern* currentPattern() const;
 
@@ -161,6 +184,9 @@ private:
     uint16_t tempo_;
     uint8_t clockSource_;
     uint8_t revision_;
+    uint8_t pendingSettingsAction_;
+    bool doneShown_;
+    bool confirmYes_;
 };
 
 }  // namespace flexseq

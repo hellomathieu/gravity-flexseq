@@ -41,6 +41,7 @@ struct FakeDisplay {
     FakeDisplay() { reset(); }
 
     void reset() {
+        rotated = true;
         memset(buffer, 0, sizeof(buffer));
         memset(panel, 0, sizeof(panel));
         memset(sent, 0, sizeof(sent));
@@ -131,7 +132,7 @@ struct FakeDisplay {
         // Le tampon et le panneau sont en coordonnees d'AFFICHAGE, comme le
         // materiel : la rotation U8G2_R2 s'applique donc ICI, avant le decoupage
         // et avant l'ecriture. C'est l'ordre reel de U8g2.
-        const uint8_t dy = static_cast<uint8_t>(screen::HEIGHT - 1 - y);
+        const uint8_t dy = rotated ? static_cast<uint8_t>(screen::HEIGHT - 1 - y) : y;
         if (clipped && (dy < page * 8 || dy > page * 8 + 7)) return;
         buffer[dy][x] = (color != 0);
     }
@@ -164,6 +165,7 @@ struct FakeDisplay {
     // Le double modelise DEUX polices : 5 px par caractere pour les etiquettes,
     // 13 pour le gros parametre. Sans cela un test de centrage mesurerait faux.
     bool bigFont = false;
+    bool rotated = true;
 
     void setFont(const uint8_t* font) { bigFont = (font == flexseq::FONT_STK_L); }
 
@@ -629,6 +631,35 @@ void test_the_main_screen_leaves_ink(void) {
     TEST_ASSERT_TRUE_MESSAGE(display.ops > 0, "l'ecran principal n'a rien dessine");
 }
 
+namespace {
+uint16_t inkOfAPatternFrame(bool rotatedDisplay, bool flipped) {
+    reset();
+    display.rotated = rotatedDisplay;
+    paged.setFlipped(flipped);
+    for (uint8_t step = 0; step < 36; step += 3) {
+        source.writeStep(step, true);
+    }
+    paged.begin(display, modelOf(source));
+    finishFrame();
+    return display.ink();
+}
+}  // namespace
+
+void test_an_unrotated_display_keeps_the_whole_image_the_other_way_up(void) {
+    const uint16_t rotated = inkOfAPatternFrame(true, true);
+    TEST_ASSERT_TRUE(display.panel[screen::HEIGHT - 1 - screen::HEADER_LINE_Y][64]);
+    const uint16_t unrotated = inkOfAPatternFrame(false, false);
+    TEST_ASSERT_TRUE(display.panel[screen::HEADER_LINE_Y][64]);
+    TEST_ASSERT_TRUE(rotated > 0);
+    TEST_ASSERT_EQUAL_UINT16(rotated, unrotated);
+}
+
+void test_a_band_conversion_that_ignores_the_rotation_loses_ink(void) {
+    const uint16_t matched = inkOfAPatternFrame(false, false);
+    const uint16_t mismatched = inkOfAPatternFrame(false, true);
+    TEST_ASSERT_TRUE(mismatched < matched);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_begin_renders_and_sends_the_first_band);
@@ -652,5 +683,7 @@ int main(int, char**) {
     RUN_TEST(test_the_main_screen_never_skips_even_on_a_second_frame);
     RUN_TEST(test_switching_screen_forces_a_full_frame);
     RUN_TEST(test_the_main_screen_leaves_ink);
+    RUN_TEST(test_an_unrotated_display_keeps_the_whole_image_the_other_way_up);
+    RUN_TEST(test_a_band_conversion_that_ignores_the_rotation_loses_ink);
     return UNITY_END();
 }

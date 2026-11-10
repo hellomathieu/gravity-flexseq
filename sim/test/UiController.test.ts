@@ -21,6 +21,7 @@ import {
   UiController,
   UiEvent,
   UiField,
+  SettingsAction,
   UiLevel,
 } from "../src/domain/UiController.js";
 import { Transport } from "../src/domain/Transport.js";
@@ -130,12 +131,117 @@ describe("UiController — tab bar", () => {
     expect(ui.field, "MODE est la ligne 1 des trois").toBe(UiField.Mode);
   });
 
-  it("press does nothing on the settings tab while it is deferred", () => {
+  it("the settings tab holds the four entries of the original", () => {
     const { ui, gotoTab, enterTab } = rig();
     gotoTab(TAB_SETTINGS);
-    expect(ui.fieldCount).toBe(0);
+    expect(ui.fieldCount).toBe(4);
+    expect(ui.fieldAt(0)).toBe(UiField.Calibrate);
+    expect(ui.fieldAt(1)).toBe(UiField.RotateScreen);
+    expect(ui.fieldAt(2)).toBe(UiField.ReverseEncoder);
+    expect(ui.fieldAt(3)).toBe(UiField.FactoryReset);
+    expect(ui.fieldAt(4)).toBe(UiField.None);
     enterTab();
-    expect(ui.level).toBe(UiLevel.TabBar);
+    expect(ui.level).toBe(UiLevel.Tab);
+    expect(ui.takeSettingsAction()).toBe(SettingsAction.None);
+  });
+
+  const settingsField = (index: number) => {
+    const r = rig();
+    r.gotoTab(TAB_SETTINGS);
+    r.enterTab();
+    for (let i = 0; i < index; i += 1) r.ui.handle(UiEvent.Rotate, 1);
+    expect(r.ui.cursor).toBe(index);
+    return r.ui;
+  };
+
+  it("calibrate asks for the action once and shows done", () => {
+    const ui = settingsField(0);
+    ui.handle(UiEvent.Press);
+    expect(ui.doneShown).toBe(true);
+    expect(ui.fieldOpen).toBe(false);
+    expect(ui.takeSettingsAction()).toBe(SettingsAction.Calibrate);
+    expect(ui.takeSettingsAction()).toBe(SettingsAction.None);
+  });
+
+  it("rotate screen asks for the action and shows no done", () => {
+    const ui = settingsField(1);
+    ui.handle(UiEvent.Press);
+    expect(ui.doneShown).toBe(false);
+    expect(ui.fieldOpen).toBe(false);
+    expect(ui.takeSettingsAction()).toBe(SettingsAction.RotateScreen);
+  });
+
+  it("reverse encoder asks for the action and shows done", () => {
+    const ui = settingsField(2);
+    ui.handle(UiEvent.Press);
+    expect(ui.doneShown).toBe(true);
+    expect(ui.takeSettingsAction()).toBe(SettingsAction.ReverseEncoder);
+  });
+
+  it("the press that clears done does nothing else", () => {
+    const ui = settingsField(0);
+    ui.handle(UiEvent.Press);
+    ui.takeSettingsAction();
+    ui.handle(UiEvent.Rotate, 1);
+    expect(ui.doneShown).toBe(true);
+    expect(ui.cursor).toBe(0);
+    ui.handle(UiEvent.Press);
+    expect(ui.doneShown).toBe(false);
+    expect(ui.takeSettingsAction()).toBe(SettingsAction.None);
+    expect(ui.level).toBe(UiLevel.Tab);
+    ui.handle(UiEvent.Press);
+    expect(ui.doneShown).toBe(true);
+    ui.handle(UiEvent.LongPress);
+    expect(ui.doneShown).toBe(false);
+    expect(ui.level).toBe(UiLevel.Tab);
+  });
+
+  it("factory reset asks first, and no comes first", () => {
+    const ui = settingsField(3);
+    ui.handle(UiEvent.Press);
+    expect(ui.fieldOpen).toBe(true);
+    expect(ui.confirmYes).toBe(false);
+    expect(ui.takeSettingsAction()).toBe(SettingsAction.None);
+    ui.handle(UiEvent.Press);
+    expect(ui.fieldOpen).toBe(false);
+    expect(ui.doneShown).toBe(false);
+    expect(ui.takeSettingsAction()).toBe(SettingsAction.None);
+  });
+
+  it("factory reset runs on yes only", () => {
+    const ui = settingsField(3);
+    ui.handle(UiEvent.Press);
+    ui.handle(UiEvent.Rotate, 1);
+    expect(ui.confirmYes).toBe(true);
+    expect(ui.cursor).toBe(3);
+    ui.handle(UiEvent.Rotate, 1);
+    expect(ui.confirmYes).toBe(true);
+    ui.handle(UiEvent.Rotate, -1);
+    expect(ui.confirmYes).toBe(false);
+    ui.handle(UiEvent.Rotate, 1);
+    ui.handle(UiEvent.Press);
+    expect(ui.fieldOpen).toBe(false);
+    expect(ui.doneShown).toBe(true);
+    expect(ui.takeSettingsAction()).toBe(SettingsAction.FactoryReset);
+  });
+
+  it("a long press cancels the factory reset question", () => {
+    const ui = settingsField(3);
+    ui.handle(UiEvent.Press);
+    ui.handle(UiEvent.Rotate, 1);
+    ui.handle(UiEvent.LongPress);
+    expect(ui.fieldOpen).toBe(false);
+    expect(ui.level).toBe(UiLevel.Tab);
+    expect(ui.takeSettingsAction()).toBe(SettingsAction.None);
+    ui.handle(UiEvent.Press);
+    expect(ui.confirmYes, "the question starts again at NO").toBe(false);
+  });
+
+  it("shift rotation never answers the factory reset question", () => {
+    const ui = settingsField(3);
+    ui.handle(UiEvent.ShiftRotate, 1);
+    expect(ui.confirmYes).toBe(false);
+    expect(ui.fieldOpen).toBe(false);
   });
 
   it("the internal clock exposes the tempo then the mode and owns no channel", () => {

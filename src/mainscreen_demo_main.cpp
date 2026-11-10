@@ -18,7 +18,9 @@ flexseq::Transport transport(engine);
 flexseq::UiController ui(engine, transport);
 
 constexpr uint8_t DEMO_CHANNEL = 1;
-#if defined(FLEXSEQ_DEMO_CLOCK_SOURCE)
+#if defined(FLEXSEQ_DEMO_SETTINGS)
+constexpr uint8_t DEMO_TAB = flexseq::UiController::TAB_SETTINGS;
+#elif defined(FLEXSEQ_DEMO_CLOCK_SOURCE)
 constexpr uint8_t DEMO_TAB = flexseq::UiController::TAB_CLOCK;
 #else
 constexpr uint8_t DEMO_TAB = flexseq::UiController::TAB_FIRST_CHANNEL + DEMO_CHANNEL;

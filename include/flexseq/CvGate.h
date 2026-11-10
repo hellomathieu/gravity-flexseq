@@ -144,6 +144,10 @@ inline int16_t calibratedFromRaw(uint16_t raw, int16_t low, int16_t high, int16_
     return static_cast<int16_t>(value);
 }
 
+inline int16_t calibrationOffsetAfter(int16_t currentOffset, int16_t readingAtRest) {
+    return static_cast<int16_t>(currentOffset + readingAtRest);
+}
+
 }  // namespace flexseq
 
 #endif // FLEXSEQ_CV_GATE_H

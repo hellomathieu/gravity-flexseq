@@ -1129,6 +1129,34 @@ void test_the_v4_defaults_seed_the_factory_bank_and_clear_the_free_slots() {
     TEST_ASSERT_EQUAL_UINT16(UiController::DEFAULT_TEMPO, r.ui.tempo());
 }
 
+void test_the_v4_defaults_clear_the_cv_routing_and_the_three_settings() {
+    RigV4 r;
+    r.engine.setCvDestination(2, flexseq::CV_SOURCE_1, flexseq::CV_DEST_PATTERN);
+    r.engine.setCvDestination(2, flexseq::CV_SOURCE_2, flexseq::CV_DEST_RESET);
+    r.engine.setCvDestination(5, flexseq::CV_SOURCE_2, flexseq::CV_DEST_STEP);
+    r.prefs.rotateScreen = 0;
+    r.prefs.reverseEncoder = 0;
+    r.prefs.cvCalibration[0] = -39;
+    r.prefs.cvCalibration[1] = 41;
+    r.ui.setTempo(77);
+    r.ui.setClockSource(3);
+
+    r.image.resetToDefaults();
+
+    for (uint8_t channel = 0; channel < 6; ++channel) {
+        TEST_ASSERT_EQUAL(flexseq::CV_DEST_NONE,
+                          r.engine.getCvDestination(channel, flexseq::CV_SOURCE_1));
+        TEST_ASSERT_EQUAL(flexseq::CV_DEST_NONE,
+                          r.engine.getCvDestination(channel, flexseq::CV_SOURCE_2));
+    }
+    TEST_ASSERT_EQUAL_UINT8(1, r.prefs.rotateScreen);
+    TEST_ASSERT_EQUAL_UINT8(1, r.prefs.reverseEncoder);
+    TEST_ASSERT_EQUAL_INT16(0, r.prefs.cvCalibration[0]);
+    TEST_ASSERT_EQUAL_INT16(0, r.prefs.cvCalibration[1]);
+    TEST_ASSERT_EQUAL_UINT16(120, r.ui.tempo());
+    TEST_ASSERT_EQUAL_UINT8(0, r.ui.clockSource());
+}
+
 void test_the_v4_defaults_reset_the_mode_the_offset_and_the_skip_chance() {
     eeprom.reset();
     eeprom.cell[384] = 0xFF;
@@ -1342,6 +1370,7 @@ int main() {
     RUN_TEST(test_the_patterns_survive_with_their_ratchets);
     RUN_TEST(test_a_wrong_version_byte_returns_the_defaults);
     RUN_TEST(test_a_blank_eeprom_returns_the_defaults);
+    RUN_TEST(test_the_v4_defaults_clear_the_cv_routing_and_the_three_settings);
     RUN_TEST(test_the_version_byte_is_written_first_and_kept);
     RUN_TEST(test_no_byte_below_384_or_above_687_is_ever_touched);
     RUN_TEST(test_nothing_is_written_before_the_quiet_delay);

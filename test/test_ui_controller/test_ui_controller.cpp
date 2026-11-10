@@ -125,13 +125,129 @@ void test_press_enters_a_tab_that_has_fields() {
         "MODE est la ligne 1 des trois");
 }
 
-void test_press_does_nothing_on_the_settings_tab_while_it_is_deferred() {
+void test_the_settings_tab_holds_the_four_entries_of_the_original() {
     Rig r;
     r.gotoTab(UiController::TAB_SETTINGS);
-    TEST_ASSERT_EQUAL_UINT8(0, r.ui.fieldCount());
+    TEST_ASSERT_EQUAL_UINT8(4, r.ui.fieldCount());
+    TEST_ASSERT_EQUAL(UiController::FIELD_CALIBRATE, r.ui.fieldAt(0));
+    TEST_ASSERT_EQUAL(UiController::FIELD_ROTATE_SCREEN, r.ui.fieldAt(1));
+    TEST_ASSERT_EQUAL(UiController::FIELD_REVERSE_ENCODER, r.ui.fieldAt(2));
+    TEST_ASSERT_EQUAL(UiController::FIELD_FACTORY_RESET, r.ui.fieldAt(3));
+    TEST_ASSERT_EQUAL(UiController::FIELD_NONE, r.ui.fieldAt(4));
     r.enterTab();
-    TEST_ASSERT_EQUAL(UiController::LEVEL_TAB_BAR, r.ui.level());
+    TEST_ASSERT_EQUAL(UiController::LEVEL_TAB, r.ui.level());
+    TEST_ASSERT_EQUAL(UiController::SETTINGS_NONE, r.ui.takeSettingsAction());
 }
+
+namespace {
+void gotoSettingsField(Rig& r, uint8_t index) {
+    r.gotoTab(UiController::TAB_SETTINGS);
+    r.enterTab();
+    for (uint8_t i = 0; i < index; ++i) {
+        r.ui.handle(UiController::EVENT_ROTATE, 1);
+    }
+    TEST_ASSERT_EQUAL_UINT8(index, r.ui.cursor());
+}
+}  // namespace
+
+void test_calibrate_asks_for_the_action_once_and_shows_done() {
+    Rig r;
+    gotoSettingsField(r, 0);
+    r.ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_TRUE(r.ui.doneShown());
+    TEST_ASSERT_FALSE(r.ui.fieldOpen());
+    TEST_ASSERT_EQUAL(UiController::SETTINGS_CALIBRATE, r.ui.takeSettingsAction());
+    TEST_ASSERT_EQUAL(UiController::SETTINGS_NONE, r.ui.takeSettingsAction());
+}
+
+void test_rotate_screen_asks_for_the_action_and_shows_no_done() {
+    Rig r;
+    gotoSettingsField(r, 1);
+    r.ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_FALSE(r.ui.doneShown());
+    TEST_ASSERT_FALSE(r.ui.fieldOpen());
+    TEST_ASSERT_EQUAL(UiController::SETTINGS_ROTATE_SCREEN, r.ui.takeSettingsAction());
+}
+
+void test_reverse_encoder_asks_for_the_action_and_shows_done() {
+    Rig r;
+    gotoSettingsField(r, 2);
+    r.ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_TRUE(r.ui.doneShown());
+    TEST_ASSERT_EQUAL(UiController::SETTINGS_REVERSE_ENCODER, r.ui.takeSettingsAction());
+}
+
+void test_the_press_that_clears_done_does_nothing_else() {
+    Rig r;
+    gotoSettingsField(r, 0);
+    r.ui.handle(UiController::EVENT_PRESS);
+    r.ui.takeSettingsAction();
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_TRUE(r.ui.doneShown());
+    TEST_ASSERT_EQUAL_UINT8(0, r.ui.cursor());
+    r.ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_FALSE(r.ui.doneShown());
+    TEST_ASSERT_EQUAL(UiController::SETTINGS_NONE, r.ui.takeSettingsAction());
+    TEST_ASSERT_EQUAL(UiController::LEVEL_TAB, r.ui.level());
+    r.ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_TRUE(r.ui.doneShown());
+    r.ui.handle(UiController::EVENT_LONG_PRESS);
+    TEST_ASSERT_FALSE(r.ui.doneShown());
+    TEST_ASSERT_EQUAL(UiController::LEVEL_TAB, r.ui.level());
+}
+
+void test_factory_reset_asks_first_and_no_comes_first() {
+    Rig r;
+    gotoSettingsField(r, 3);
+    r.ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_TRUE(r.ui.fieldOpen());
+    TEST_ASSERT_FALSE(r.ui.confirmYes());
+    TEST_ASSERT_EQUAL(UiController::SETTINGS_NONE, r.ui.takeSettingsAction());
+    r.ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_FALSE(r.ui.fieldOpen());
+    TEST_ASSERT_FALSE(r.ui.doneShown());
+    TEST_ASSERT_EQUAL(UiController::SETTINGS_NONE, r.ui.takeSettingsAction());
+}
+
+void test_factory_reset_runs_on_yes_only() {
+    Rig r;
+    gotoSettingsField(r, 3);
+    r.ui.handle(UiController::EVENT_PRESS);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_TRUE(r.ui.confirmYes());
+    TEST_ASSERT_EQUAL_UINT8(3, r.ui.cursor());
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_TRUE(r.ui.confirmYes());
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    TEST_ASSERT_FALSE(r.ui.confirmYes());
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    r.ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_FALSE(r.ui.fieldOpen());
+    TEST_ASSERT_TRUE(r.ui.doneShown());
+    TEST_ASSERT_EQUAL(UiController::SETTINGS_FACTORY_RESET, r.ui.takeSettingsAction());
+}
+
+void test_a_long_press_cancels_the_factory_reset_question() {
+    Rig r;
+    gotoSettingsField(r, 3);
+    r.ui.handle(UiController::EVENT_PRESS);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    r.ui.handle(UiController::EVENT_LONG_PRESS);
+    TEST_ASSERT_FALSE(r.ui.fieldOpen());
+    TEST_ASSERT_EQUAL(UiController::LEVEL_TAB, r.ui.level());
+    TEST_ASSERT_EQUAL(UiController::SETTINGS_NONE, r.ui.takeSettingsAction());
+    r.ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_FALSE_MESSAGE(r.ui.confirmYes(), "the question starts again at NO");
+}
+
+void test_shift_rotation_never_answers_the_factory_reset_question() {
+    Rig r;
+    gotoSettingsField(r, 3);
+    r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+    TEST_ASSERT_FALSE(r.ui.confirmYes());
+    TEST_ASSERT_FALSE(r.ui.fieldOpen());
+}
+
 
 void test_the_internal_clock_exposes_the_tempo_then_the_mode() {
     Rig r;
@@ -1691,7 +1807,15 @@ int main(int, char**) {
     RUN_TEST(test_rotate_wraps_at_both_ends_of_the_tab_bar);
     RUN_TEST(test_an_accelerated_delta_moves_one_tab_not_three);
     RUN_TEST(test_press_enters_a_tab_that_has_fields);
-    RUN_TEST(test_press_does_nothing_on_the_settings_tab_while_it_is_deferred);
+    RUN_TEST(test_the_settings_tab_holds_the_four_entries_of_the_original);
+    RUN_TEST(test_calibrate_asks_for_the_action_once_and_shows_done);
+    RUN_TEST(test_rotate_screen_asks_for_the_action_and_shows_no_done);
+    RUN_TEST(test_reverse_encoder_asks_for_the_action_and_shows_done);
+    RUN_TEST(test_the_press_that_clears_done_does_nothing_else);
+    RUN_TEST(test_factory_reset_asks_first_and_no_comes_first);
+    RUN_TEST(test_factory_reset_runs_on_yes_only);
+    RUN_TEST(test_a_long_press_cancels_the_factory_reset_question);
+    RUN_TEST(test_shift_rotation_never_answers_the_factory_reset_question);
     RUN_TEST(test_the_internal_clock_exposes_the_tempo_then_the_mode);
     RUN_TEST(test_the_external_clock_exposes_the_mode_then_the_ppqn);
     RUN_TEST(test_the_midi_clock_exposes_the_mode_alone);

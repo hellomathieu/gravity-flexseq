@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <libGravity.h>
 
+#include <flexseq/CvGate.h>
 #include <flexseq/CvSampler.h>
 #include <flexseq/EepromStorage.h>
 #if FLEXSEQ_ENCODER_PROBE
@@ -93,6 +94,51 @@ void beginUiFrame(const flexseq::UiFrameChoice& choice) {
     }
 }
 
+void configureCv(uint8_t channel, const AnalogInput& input) {
+    flexseq::cv::configure(channel, input.GetCalibrationLow(), input.GetCalibrationHigh(),
+                           preferences.cvCalibration[channel]);
+}
+
+void applyPreferences() {
+    const bool flipped = preferences.rotateScreen != 0;
+    gravity.display.setDisplayRotation(flipped ? U8G2_R2 : U8G2_R0);
+    uiScreen.setFlipped(flipped);
+    flexseq::input::setReversed(preferences.reverseEncoder != 0);
+    noInterrupts();
+    configureCv(flexseq::cv::CV1, gravity.cv1);
+    configureCv(flexseq::cv::CV2, gravity.cv2);
+    interrupts();
+}
+
+void calibrateCv(uint8_t channel) {
+    preferences.cvCalibration[channel] = flexseq::calibrationOffsetAfter(
+        preferences.cvCalibration[channel], flexseq::cv::latestCalibrated(channel));
+}
+
+void serviceSettings() {
+    switch (ui.takeSettingsAction()) {
+        case flexseq::UiController::SETTINGS_NONE:
+            return;
+        case flexseq::UiController::SETTINGS_CALIBRATE:
+            calibrateCv(flexseq::cv::CV1);
+            calibrateCv(flexseq::cv::CV2);
+            break;
+        case flexseq::UiController::SETTINGS_ROTATE_SCREEN:
+            preferences.rotateScreen = preferences.rotateScreen ? 0 : 1;
+            break;
+        case flexseq::UiController::SETTINGS_REVERSE_ENCODER:
+            preferences.reverseEncoder = preferences.reverseEncoder ? 0 : 1;
+            break;
+        case flexseq::UiController::SETTINGS_FACTORY_RESET:
+            if (engine.isRunning()) {
+                transport.stop();
+            }
+            persistentImage.resetToDefaults();
+            break;
+    }
+    applyPreferences();
+}
+
 }  // namespace
 
 namespace flexseq {
@@ -111,11 +157,6 @@ void setup() {
     // Echantillonnage du CV SOUS INTERRUPTION. FlexSeq prend la propriete du
     // convertisseur : voir include/flexseq/CvSampler.h. La calibration est lue
     // sur les objets de libGravity, qui la detiennent.
-    flexseq::cv::configure(flexseq::cv::CV1, gravity.cv1.GetCalibrationLow(),
-                           gravity.cv1.GetCalibrationHigh(), gravity.cv1.GetOffset());
-    flexseq::cv::configure(flexseq::cv::CV2, gravity.cv2.GetCalibrationLow(),
-                           gravity.cv2.GetCalibrationHigh(), gravity.cv2.GetOffset());
-    flexseq::cv::start();
 
     flexseq::input::begin(ui);
 
@@ -124,6 +165,9 @@ void setup() {
     // le premier demarrage, pas a la premiere edition. Voir PRD 11.1.
     engine.setPatternBank(&patternBank);
     flexseq::bootstrap(eeprom, persistentImage, persistence, millis());
+
+    applyPreferences();
+    flexseq::cv::start();
 
     flexseq::probe::instanceBase = patternBank.getPattern(0);
 
@@ -135,6 +179,18 @@ void setup() {
     // uClock.clockMe() — c'est notre callback qui doit le faire. Le tempo et la
     // source chargés depuis l'EEPROM sont appliqués ici.
     flexseq::transport::begin(ui, transport);
+
+#if defined(FLEXSEQ_START_IN_SETTINGS)
+    ui.handle(flexseq::UiController::EVENT_ROTATE, -1);
+    ui.handle(flexseq::UiController::EVENT_ROTATE, -1);
+    ui.handle(flexseq::UiController::EVENT_PRESS);
+    for (uint8_t i = 0; i < FLEXSEQ_START_IN_SETTINGS; ++i) {
+        ui.handle(flexseq::UiController::EVENT_ROTATE, 1);
+    }
+#if defined(FLEXSEQ_SETTINGS_PRESS)
+    ui.handle(flexseq::UiController::EVENT_PRESS);
+#endif
+#endif
 
 #if FLEXSEQ_START_ON_CLOCK_TAB
     ui.handle(flexseq::UiController::EVENT_ROTATE, -1);
@@ -251,6 +307,7 @@ void loop() {
     if (uiScreen.busy()) {
         uiScreen.advance(gravity.display);
     } else {
+        serviceSettings();
         // Le playhead ne se lit QUE sur l'ecran EDIT : l'ecran principal ne
         // porte aucun element qui varie dans le temps. Le redessiner a chaque
         // step y coutait huit bandes sans rien changer a l'image, et privait la

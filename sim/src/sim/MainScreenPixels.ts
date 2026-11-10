@@ -48,6 +48,16 @@ import {
   tabSlotX,
   patternName,
   subdivLabel,
+  SETTINGS_LINE_COUNT,
+  SETTINGS_LABEL_X,
+  SETTINGS_LINE_0_BASELINE_Y,
+  SETTINGS_LINE_SPACING_Y,
+  DONE_BOX_X,
+  DONE_BOX_Y,
+  DONE_BOX_W,
+  DONE_BOX_H,
+  DONE_SHADOW,
+  DONE_BASELINE_Y,
 } from "./MainScreenDisplay.js";
 import { MainParameter, type MainScreenModel } from "../domain/MainScreenModel.js";
 import { ChannelMode } from "../domain/SequencerEngine.js";
@@ -347,6 +357,48 @@ function drawLegacyChannel(ink: Ink, model: MainScreenModel): void {
   }
 }
 
+export const SETTINGS_LABELS = [
+  "CALIBRATE CV INS",
+  "ROTATE SCREEN",
+  "REVERSE ENCODER",
+  "FACTORY RESET",
+] as const;
+export const LBL_SURE_NO = "SURE: NO";
+export const LBL_SURE_YES = "SURE: YES";
+export const LBL_DONE = "DONE";
+
+export function settingsLabel(model: MainScreenModel, line: number): string {
+  if (line < 3) return SETTINGS_LABELS[line]!;
+  if (model.insideTab && model.fieldOpen && model.cursor === line) {
+    return model.confirmYes ? LBL_SURE_YES : LBL_SURE_NO;
+  }
+  return SETTINGS_LABELS[3];
+}
+
+function drawSettingsPage(ink: Ink, model: MainScreenModel): void {
+  if (model.settingsDone) {
+    ink.drawFrame(DONE_BOX_X, DONE_BOX_Y, DONE_BOX_W, DONE_BOX_H);
+    ink.drawBox(DONE_BOX_X + DONE_SHADOW, DONE_BOX_Y + DONE_BOX_H, DONE_BOX_W, DONE_SHADOW);
+    ink.drawBox(DONE_BOX_X + DONE_BOX_W, DONE_BOX_Y + DONE_SHADOW, DONE_SHADOW, DONE_BOX_H);
+    const w = textWidth(LBL_DONE, VELVETSCREEN);
+    ink.drawStr(Math.floor((OLED_W - w) / 2), DONE_BASELINE_Y, LBL_DONE, VELVETSCREEN);
+    return;
+  }
+  for (let line = 0; line < SETTINGS_LINE_COUNT; ++line) {
+    const base = SETTINGS_LINE_0_BASELINE_Y + line * SETTINGS_LINE_SPACING_Y;
+    const text = settingsLabel(model, line);
+    if (model.insideTab && model.cursor === line) {
+      const w = textWidth(text, VELVETSCREEN);
+      ink.drawBox(SETTINGS_LABEL_X - 1, base - VELVETSCREEN_HEIGHT - 1, w + 2, VELVETSCREEN_HEIGHT + 2);
+      ink.setDrawColor(0);
+      ink.drawStr(SETTINGS_LABEL_X, base, text, VELVETSCREEN);
+      ink.setDrawColor(1);
+    } else {
+      ink.drawStr(SETTINGS_LABEL_X, base, text, VELVETSCREEN);
+    }
+  }
+}
+
 export interface Render {
   pixels: Set<string>;
   count: number;
@@ -356,6 +408,7 @@ export interface Render {
 export function renderMainScreen(model: MainScreenModel): Render {
   const ink = new Ink();
   if (usesLegacyLayout(model)) drawLegacyChannel(ink, model);
+  else drawSettingsPage(ink, model);
 
   ink.drawHLine(RULE_X, RULE_Y, RULE_W);
 

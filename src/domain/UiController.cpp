@@ -95,7 +95,10 @@ UiController::UiController(SequencerEngine& engine, Transport& transport)
       patternBrowse_(NO_BROWSE),
       tempo_(DEFAULT_TEMPO),
       clockSource_(0),
-      revision_(0) {}
+      revision_(0),
+      pendingSettingsAction_(SETTINGS_NONE),
+      doneShown_(false),
+      confirmYes_(false) {}
 
 bool UiController::isChannelTab() const {
     return currentTab_ >= TAB_FIRST_CHANNEL
@@ -173,7 +176,7 @@ uint8_t UiController::fieldCount() const {
         // aucun pattern.
         return isLegacyModeTab() ? CHANNEL_TAB_FIELDS : SEQ_CHANNEL_TAB_FIELDS;
     }
-    return 0;
+    return SETTINGS_TAB_FIELDS;
 }
 
 UiController::Field UiController::fieldAt(uint8_t index) const {
@@ -186,6 +189,9 @@ UiController::Field UiController::fieldAt(uint8_t index) const {
             return index == CLOCK_FIELD_INDEX_MODE_INT ? FIELD_CLOCK_MODE : FIELD_TEMPO;
         }
         return index == CLOCK_FIELD_INDEX_MODE_EXTERNAL ? FIELD_CLOCK_MODE : FIELD_PPQN;
+    }
+    if (currentTab_ == TAB_SETTINGS) {
+        return static_cast<Field>(FIELD_CALIBRATE + index);
     }
     if (onConfigPage_) {
         switch (index) {
@@ -226,6 +232,12 @@ void UiController::handle(Event event, int8_t delta) {
         return;
     }
     if (event == EVENT_SHIFT_PRESS || event == EVENT_SHIFT_PLAY_PRESS) {
+        return;
+    }
+    if (doneShown_) {
+        if (event == EVENT_PRESS || event == EVENT_LONG_PRESS) {
+            doneShown_ = false;
+        }
         return;
     }
     switch (level_) {
@@ -291,7 +303,9 @@ void UiController::handleTab(Event event, int8_t delta) {
             }
             break;
         case EVENT_PRESS:
-            if (fieldOpen_) {
+            if (currentTab_ == TAB_SETTINGS) {
+                pressSettingsField();
+            } else if (fieldOpen_) {
                 if (field() == FIELD_PATTERN) {
                     postPatternLoad();
                 }
@@ -370,6 +384,40 @@ void UiController::handleEdit(Event event, int8_t delta) {
     }
 }
 
+static_assert(UiController::FIELD_FACTORY_RESET - UiController::FIELD_CALIBRATE
+                  == UiController::SETTINGS_TAB_FIELDS - 1,
+              "the four settings fields must be contiguous");
+static_assert(UiController::SETTINGS_FACTORY_RESET - UiController::SETTINGS_CALIBRATE
+                  == UiController::FIELD_FACTORY_RESET - UiController::FIELD_CALIBRATE,
+              "the settings actions must follow the order of the settings fields");
+
+void UiController::pressSettingsField() {
+    const Field target = field();
+    if (target == FIELD_FACTORY_RESET) {
+        if (!fieldOpen_) {
+            fieldOpen_ = true;
+            confirmYes_ = false;
+            return;
+        }
+        fieldOpen_ = false;
+        if (!confirmYes_) {
+            return;
+        }
+        pendingSettingsAction_ = SETTINGS_FACTORY_RESET;
+        doneShown_ = true;
+        return;
+    }
+    pendingSettingsAction_ = static_cast<uint8_t>(
+        SETTINGS_CALIBRATE + (target - FIELD_CALIBRATE));
+    doneShown_ = target != FIELD_ROTATE_SCREEN;
+}
+
+UiController::SettingsAction UiController::takeSettingsAction() {
+    const SettingsAction action = static_cast<SettingsAction>(pendingSettingsAction_);
+    pendingSettingsAction_ = SETTINGS_NONE;
+    return action;
+}
+
 bool UiController::setTempo(uint16_t bpm) {
     if (bpm < MIN_TEMPO || bpm > MAX_TEMPO) {
         return false;
@@ -427,6 +475,12 @@ void UiController::adjustFieldValue(Field target, int8_t raw) {
             cursor_ = next == CLOCK_MODE_INT
                 ? CLOCK_FIELD_INDEX_MODE_INT
                 : CLOCK_FIELD_INDEX_MODE_EXTERNAL;
+        }
+        return;
+    }
+    if (target == FIELD_FACTORY_RESET) {
+        if (fieldOpen_ && delta != 0) {
+            confirmYes_ = delta > 0;
         }
         return;
     }

@@ -71,6 +71,16 @@ M	main_box_width	32	both	MAIN_BOX_W	55
 M	main_value_baseline_y	33	both	MAIN_VALUE_BASELINE_Y	28
 M	main_label_baseline_y	34	both	MAIN_LABEL_BASELINE_Y	41
 M	line_spacing_y	35	both	LINE_SPACING_Y	11
+M	settings_line_count	47	both	SETTINGS_LINE_COUNT	4
+M	settings_label_x	48	both	SETTINGS_LABEL_X	8
+M	settings_line_0_baseline_y	49	both	SETTINGS_LINE_0_BASELINE_Y	18
+M	settings_line_spacing_y	50	both	SETTINGS_LINE_SPACING_Y	10
+M	done_box_x	51	both	DONE_BOX_X	32
+M	done_box_y	52	both	DONE_BOX_Y	15
+M	done_box_width	53	both	DONE_BOX_W	64
+M	done_box_height	54	both	DONE_BOX_H	29
+M	done_shadow	55	both	DONE_SHADOW	2
+M	done_baseline_y	56	both	DONE_BASELINE_Y	32
 F	label_font_height	0	both	FONT_VELVETSCREEN_HEIGHT	5
 F	main_font_height	1	both	FONT_STK_L_HEIGHT	23
 F	label_font_glyphs	2	both	FONT_VELVETSCREEN_GLYPHS	52

@@ -64,6 +64,18 @@ export const MAIN_BOX_W = 55;
 export const MAIN_VALUE_BASELINE_Y = 28;
 export const MAIN_LABEL_BASELINE_Y = 41;
 
+export const SETTINGS_LINE_COUNT = 4;
+export const SETTINGS_LABEL_X = 8;
+export const SETTINGS_LINE_0_BASELINE_Y = 18;
+export const SETTINGS_LINE_SPACING_Y = 10;
+
+export const DONE_BOX_X = 32;
+export const DONE_BOX_Y = 15;
+export const DONE_BOX_W = 64;
+export const DONE_BOX_H = 29;
+export const DONE_SHADOW = 2;
+export const DONE_BASELINE_Y = 32;
+
 // L etat d un emplacement sur l onglet PATTERNS : un carre a gauche de
 // l etiquette, PLEIN quand il porte quelque chose, CREUX quand il est libre.
 

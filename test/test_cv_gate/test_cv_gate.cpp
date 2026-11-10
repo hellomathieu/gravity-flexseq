@@ -201,6 +201,33 @@ void test_an_unconfigured_gate_never_fires(void) {
     }
 }
 
+void test_a_calibration_brings_the_reading_at_rest_to_zero() {
+    const uint16_t rawAtRest = 500;
+    const int16_t before = calibratedFromRaw(rawAtRest, -566, 512, 0);
+    TEST_ASSERT_EQUAL_INT16(-40, before);
+    const int16_t offset = flexseq::calibrationOffsetAfter(0, before);
+    TEST_ASSERT_EQUAL_INT16(-40, offset);
+    TEST_ASSERT_EQUAL_INT16(0, calibratedFromRaw(rawAtRest, -566, 512, offset));
+}
+
+void test_a_second_calibration_at_rest_changes_nothing() {
+    const uint16_t rawAtRest = 500;
+    const int16_t first = flexseq::calibrationOffsetAfter(
+        0, calibratedFromRaw(rawAtRest, -566, 512, 0));
+    const int16_t second = flexseq::calibrationOffsetAfter(
+        first, calibratedFromRaw(rawAtRest, -566, 512, first));
+    TEST_ASSERT_EQUAL_INT16(first, second);
+}
+
+void test_a_calibration_follows_a_rest_point_that_moved() {
+    const int16_t first = flexseq::calibrationOffsetAfter(
+        0, calibratedFromRaw(500, -566, 512, 0));
+    const int16_t second = flexseq::calibrationOffsetAfter(
+        first, calibratedFromRaw(560, -566, 512, first));
+    TEST_ASSERT_EQUAL_INT16(24, second);
+    TEST_ASSERT_EQUAL_INT16(0, calibratedFromRaw(560, -566, 512, second));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_a_new_gate_is_low_and_has_no_event);
@@ -222,5 +249,8 @@ int main(int, char**) {
     RUN_TEST(test_inverted_input_ignores_a_rise);
     RUN_TEST(test_equal_thresholds_leave_the_gate_inert);
     RUN_TEST(test_an_unconfigured_gate_never_fires);
+    RUN_TEST(test_a_calibration_brings_the_reading_at_rest_to_zero);
+    RUN_TEST(test_a_second_calibration_at_rest_changes_nothing);
+    RUN_TEST(test_a_calibration_follows_a_rest_point_that_moved);
     return UNITY_END();
 }

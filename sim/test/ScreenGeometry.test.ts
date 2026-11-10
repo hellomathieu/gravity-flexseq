@@ -116,6 +116,16 @@ function production(family: Family, index: number): number | undefined {
       44: md.TRANSPORT_STOP_X,
       45: md.TRANSPORT_PLAY_X,
       46: md.TRANSPORT_STOP_W,
+      47: md.SETTINGS_LINE_COUNT,
+      48: md.SETTINGS_LABEL_X,
+      49: md.SETTINGS_LINE_0_BASELINE_Y,
+      50: md.SETTINGS_LINE_SPACING_Y,
+      51: md.DONE_BOX_X,
+      52: md.DONE_BOX_Y,
+      53: md.DONE_BOX_W,
+      54: md.DONE_BOX_H,
+      55: md.DONE_SHADOW,
+      56: md.DONE_BASELINE_Y,
     };
     return table[index];
   }

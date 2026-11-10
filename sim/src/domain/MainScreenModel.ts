@@ -35,6 +35,8 @@ export interface MainScreenModel {
   cv1Target: number;
   cv2Target: number;
   configPage: boolean;
+  settingsDone: boolean;
+  confirmYes: boolean;
 
   tempo: number;
   clockSource: number;
@@ -76,6 +78,8 @@ export function mainScreenModelOf(ui: UiController, engine: SequencerEngine): Ma
     cv1Target: CvDestination.NONE,
     cv2Target: CvDestination.NONE,
     configPage: ui.isOnConfigPage,
+    settingsDone: ui.doneShown,
+    confirmYes: ui.confirmYes,
     tempo: ui.tempo,
     clockSource: ui.clockSource,
     running: engine.isRunning,

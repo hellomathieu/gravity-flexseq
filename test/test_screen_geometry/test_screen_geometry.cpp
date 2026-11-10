@@ -180,6 +180,16 @@ bool production(char family, int index, int& out) {
             case 44: out = ms::TRANSPORT_STOP_X; return true;
             case 45: out = ms::TRANSPORT_PLAY_X; return true;
             case 46: out = ms::TRANSPORT_STOP_W; return true;
+            case 47: out = ms::SETTINGS_LINE_COUNT; return true;
+            case 48: out = ms::SETTINGS_LABEL_X; return true;
+            case 49: out = ms::SETTINGS_LINE_0_BASELINE_Y; return true;
+            case 50: out = ms::SETTINGS_LINE_SPACING_Y; return true;
+            case 51: out = ms::DONE_BOX_X; return true;
+            case 52: out = ms::DONE_BOX_Y; return true;
+            case 53: out = ms::DONE_BOX_W; return true;
+            case 54: out = ms::DONE_BOX_H; return true;
+            case 55: out = ms::DONE_SHADOW; return true;
+            case 56: out = ms::DONE_BASELINE_Y; return true;
             default: return false;
         }
     }

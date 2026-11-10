@@ -46,6 +46,8 @@ MainScreenModel mainScreenModelOf(const UiController& ui, const SequencerEngine&
         ? static_cast<uint8_t>(engine.getCvDestination(ch, CV_SOURCE_2))
         : static_cast<uint8_t>(CV_DEST_NONE);
     model.configPage = ui.isOnConfigPage();
+    model.settingsDone = ui.doneShown();
+    model.confirmYes = ui.confirmYes();
     model.tempo = ui.tempo();
     model.clockSource = ui.clockSource();
     model.running = engine.isRunning();

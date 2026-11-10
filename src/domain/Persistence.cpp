@@ -382,6 +382,8 @@ void PersistentImageV4::resetToDefaults() {
         engine_.setChannelMode(channel, DEFAULT_CHANNEL_MODE);
         engine_.setOffset(channel, 0);
         engine_.setSkipChance(channel, 0);
+        engine_.setCvDestination(channel, CV_SOURCE_1, CV_DEST_NONE);
+        engine_.setCvDestination(channel, CV_SOURCE_2, CV_DEST_NONE);
     }
     ui_.setTempo(UiController::DEFAULT_TEMPO);
     ui_.setClockSource(0);

@@ -40,6 +40,9 @@ struct MainScreenModel {
 
     bool configPage;
 
+    bool settingsDone;
+    bool confirmYes;
+
     uint16_t tempo;
     uint8_t clockSource;
     bool running;

@@ -71,6 +71,8 @@ function channelTab(tab = 1): MainScreenModel {
     cv1Target: 0,
     cv2Target: 0,
     configPage: false,
+    settingsDone: false,
+    confirmYes: false,
     tempo: 120,
     clockSource: 0,
     running: true,

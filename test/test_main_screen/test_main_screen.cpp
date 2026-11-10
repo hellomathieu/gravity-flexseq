@@ -23,7 +23,7 @@ namespace {
 struct Call {
     uint8_t x;
     uint8_t y;
-    char text[16];   // SUBDIVISION et SKIP CHANCE font onze caracteres
+    char text[20];
     bool big;
     uint8_t color;
 };
@@ -550,16 +550,101 @@ void test_the_cursor_of_the_clock_tab_follows_the_mode() {
     TEST_ASSERT_TRUE(inverted(5, 0, "MODE:", ms::LINE_0_BASELINE_Y));
 }
 
-void test_the_settings_tab_is_empty_while_it_is_deferred() {
+void test_the_settings_tab_draws_the_four_entries_of_the_original() {
     canvas.reset();
     drawMainScreen(canvas, settingsTab());
-    TEST_ASSERT_NULL(canvas.find("LEN"));
-    TEST_ASSERT_NULL(canvas.find("SRC"));
-    // La barre d'onglets et le filet restent la : seul le contenu manque.
-    TEST_ASSERT_EQUAL_UINT16(0, canvas.inkInRows(ms::HEADLINE_BOX_Y, ms::ROW_B_BOX_Y - 1));
+    const char* const labels[] = {
+        "CALIBRATE CV INS", "ROTATE SCREEN", "REVERSE ENCODER", "FACTORY RESET"};
+    const uint8_t baselines[] = {18, 28, 38, 48};
+    for (uint8_t line = 0; line < 4; ++line) {
+        const Call* c = canvas.findOnBaseline(labels[line], baselines[line]);
+        TEST_ASSERT_NOT_NULL(c);
+        TEST_ASSERT_EQUAL_UINT8(8, c->x);
+        TEST_ASSERT_FALSE(c->big);
+        TEST_ASSERT_EQUAL_UINT8(1, c->color);
+    }
+    TEST_ASSERT_NULL(canvas.find("DONE"));
+    TEST_ASSERT_NULL(canvas.find("SETTINGS"));
     TEST_ASSERT_TRUE(canvas.at(ms::RULE_X, ms::RULE_Y));
     TEST_ASSERT_TRUE(canvas.inkInRows(ms::TAB_TOP_Y, ms::TAB_BASELINE_Y) > 0);
 }
+
+void test_the_settings_cursor_inverts_its_line_and_no_other() {
+    const char* const labels[] = {
+        "CALIBRATE CV INS", "ROTATE SCREEN", "REVERSE ENCODER", "FACTORY RESET"};
+    for (uint8_t cursor = 0; cursor < 4; ++cursor) {
+        canvas.reset();
+        MainScreenModel m = settingsTab();
+        m.insideTab = true;
+        m.cursor = cursor;
+        drawMainScreen(canvas, m);
+        for (uint8_t line = 0; line < 4; ++line) {
+            const Call* c = canvas.find(labels[line]);
+            TEST_ASSERT_NOT_NULL(c);
+            TEST_ASSERT_EQUAL_UINT8(line == cursor ? 0 : 1, c->color);
+        }
+    }
+    canvas.reset();
+    MainScreenModel onBar = settingsTab();
+    onBar.cursor = 0;
+    drawMainScreen(canvas, onBar);
+    TEST_ASSERT_EQUAL_UINT8(1, canvas.find("CALIBRATE CV INS")->color);
+}
+
+void test_the_factory_reset_line_asks_one_word_at_a_time() {
+    canvas.reset();
+    MainScreenModel m = settingsTab();
+    m.insideTab = true;
+    m.cursor = 3;
+    m.fieldOpen = true;
+    drawMainScreen(canvas, m);
+    TEST_ASSERT_NOT_NULL(canvas.findOnBaseline("SURE: NO", 48));
+    TEST_ASSERT_NULL(canvas.find("SURE: YES"));
+    TEST_ASSERT_NULL(canvas.find("FACTORY RESET"));
+
+    canvas.reset();
+    m.confirmYes = true;
+    drawMainScreen(canvas, m);
+    TEST_ASSERT_NOT_NULL(canvas.findOnBaseline("SURE: YES", 48));
+    TEST_ASSERT_NULL(canvas.find("SURE: NO"));
+
+    canvas.reset();
+    m.cursor = 2;
+    drawMainScreen(canvas, m);
+    TEST_ASSERT_NOT_NULL(canvas.find("FACTORY RESET"));
+    TEST_ASSERT_NULL(canvas.find("SURE: YES"));
+}
+
+void test_done_replaces_the_four_lines_with_a_centred_box() {
+    canvas.reset();
+    MainScreenModel m = settingsTab();
+    m.insideTab = true;
+    m.settingsDone = true;
+    drawMainScreen(canvas, m);
+    const Call* done = canvas.findOnBaseline("DONE", 32);
+    TEST_ASSERT_NOT_NULL(done);
+    TEST_ASSERT_EQUAL_UINT8((128 - 4 * 5) / 2, done->x);
+    TEST_ASSERT_NULL(canvas.find("CALIBRATE CV INS"));
+    TEST_ASSERT_NULL(canvas.find("ROTATE SCREEN"));
+    TEST_ASSERT_NULL(canvas.find("REVERSE ENCODER"));
+    TEST_ASSERT_NULL(canvas.find("FACTORY RESET"));
+    TEST_ASSERT_TRUE(canvas.at(32, 15));
+    TEST_ASSERT_TRUE(canvas.at(95, 15));
+    TEST_ASSERT_TRUE(canvas.at(32, 43));
+    TEST_ASSERT_TRUE(canvas.at(95, 43));
+    TEST_ASSERT_FALSE(canvas.at(33, 16));
+    TEST_ASSERT_TRUE(canvas.at(97, 45));
+    TEST_ASSERT_TRUE(canvas.at(34, 44));
+    TEST_ASSERT_FALSE(canvas.at(32, 44));
+    TEST_ASSERT_FALSE(canvas.at(96, 15));
+    for (uint8_t x = 0; x < 32; ++x) {
+        for (uint8_t y = 0; y < ms::RULE_Y; ++y) {
+            TEST_ASSERT_FALSE(canvas.at(x, y));
+        }
+    }
+    TEST_ASSERT_EQUAL_UINT16(0, canvas.inkInRows(46, ms::RULE_Y - 1));
+}
+
 
 /*
  * Curseur et champ ouvert
@@ -1102,7 +1187,10 @@ int main() {
     RUN_TEST(test_the_external_clock_shows_ext_in_the_large_font_and_the_ppqn_line);
     RUN_TEST(test_the_midi_clock_shows_midi_in_the_large_font_and_one_line);
     RUN_TEST(test_the_cursor_of_the_clock_tab_follows_the_mode);
-    RUN_TEST(test_the_settings_tab_is_empty_while_it_is_deferred);
+    RUN_TEST(test_the_settings_tab_draws_the_four_entries_of_the_original);
+    RUN_TEST(test_the_settings_cursor_inverts_its_line_and_no_other);
+    RUN_TEST(test_the_factory_reset_line_asks_one_word_at_a_time);
+    RUN_TEST(test_done_replaces_the_four_lines_with_a_centred_box);
 
     RUN_TEST(test_the_cursor_marks_the_line_it_is_on_and_no_other);
     RUN_TEST(test_the_cursor_on_the_big_value_marks_no_line);

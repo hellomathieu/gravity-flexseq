@@ -63,6 +63,18 @@ export enum UiField {
   Mod,
   Config,
   Ppqn,
+  Calibrate,
+  RotateScreen,
+  ReverseEncoder,
+  FactoryReset,
+}
+
+export enum SettingsAction {
+  None,
+  Calibrate,
+  RotateScreen,
+  ReverseEncoder,
+  FactoryReset,
 }
 
 export const TAB_COUNT = 8;
@@ -76,6 +88,7 @@ export const CLOCK_TAB_FIELDS_MIDI = 1;
 export const CHANNEL_TAB_FIELDS = 3;
 export const SEQ_CHANNEL_TAB_FIELDS = 4;
 export const CONFIG_PAGE_FIELDS = 3;
+export const SETTINGS_TAB_FIELDS = 4;
 
 // PRD 5.0 amendement 1quater : la grande valeur reprend la PREMIERE position,
 // et elle porte le NOM du template.
@@ -94,6 +107,11 @@ export const CONFIG_FIELD_INDEX_MOD = 2;
 
 export const CLOCK_FIELD_INDEX_MODE_INT = 1;
 export const CLOCK_FIELD_INDEX_MODE_EXTERNAL = 0;
+
+export const SETTINGS_FIELD_INDEX_CALIBRATE = 0;
+export const SETTINGS_FIELD_INDEX_ROTATE_SCREEN = 1;
+export const SETTINGS_FIELD_INDEX_REVERSE_ENCODER = 2;
+export const SETTINGS_FIELD_INDEX_FACTORY_RESET = 3;
 
 export const CLOCK_SOURCE_COUNT = CLOCK_SOURCE_VALUE_COUNT;
 export const CLOCK_SOURCE_INTERNAL = CLOCK_SOURCE_INT;
@@ -138,6 +156,9 @@ export class UiController {
   private source = 0;
   private rev = 0;
   private browse = NO_BROWSE;
+  private pendingSettingsAction = SettingsAction.None;
+  private done = false;
+  private confirm = false;
 
   constructor(
     private readonly engine: SequencerEngine,
@@ -166,6 +187,38 @@ export class UiController {
 
   get isOnHeader(): boolean {
     return this.header;
+  }
+
+  get doneShown(): boolean {
+    return this.done;
+  }
+
+  get confirmYes(): boolean {
+    return this.confirm;
+  }
+
+  takeSettingsAction(): SettingsAction {
+    const action = this.pendingSettingsAction;
+    this.pendingSettingsAction = SettingsAction.None;
+    return action;
+  }
+
+  private pressSettingsField(): void {
+    const target = this.field;
+    if (target === UiField.FactoryReset) {
+      if (!this.open) {
+        this.open = true;
+        this.confirm = false;
+        return;
+      }
+      this.open = false;
+      if (!this.confirm) return;
+      this.pendingSettingsAction = SettingsAction.FactoryReset;
+      this.done = true;
+      return;
+    }
+    this.pendingSettingsAction = SettingsAction.Calibrate + (target - UiField.Calibrate);
+    this.done = target !== UiField.RotateScreen;
   }
 
   get isOnConfigPage(): boolean {
@@ -226,7 +279,7 @@ export class UiController {
       // aucun pattern.
       return this.isLegacyModeTab ? CHANNEL_TAB_FIELDS : SEQ_CHANNEL_TAB_FIELDS;
     }
-    return 0;
+    return SETTINGS_TAB_FIELDS;
   }
 
   fieldAt(index: number): UiField {
@@ -237,6 +290,7 @@ export class UiController {
       }
       return index === CLOCK_FIELD_INDEX_MODE_EXTERNAL ? UiField.ClockMode : UiField.Ppqn;
     }
+    if (this.tab === TAB_SETTINGS) return UiField.Calibrate + index;
     if (this.configPage) {
       switch (index) {
         case CONFIG_FIELD_INDEX_LENGTH:
@@ -315,6 +369,10 @@ export class UiController {
       return;
     }
     if (event === UiEvent.ShiftPress || event === UiEvent.ShiftPlayPress) return;
+    if (this.done) {
+      if (event === UiEvent.Press || event === UiEvent.LongPress) this.done = false;
+      return;
+    }
 
     switch (this.currentLevel) {
       case UiLevel.TabBar:
@@ -374,7 +432,9 @@ export class UiController {
         }
         break;
       case UiEvent.Press:
-        if (this.open) {
+        if (this.tab === TAB_SETTINGS) {
+          this.pressSettingsField();
+        } else if (this.open) {
           if (this.field === UiField.Pattern) this.postPatternLoad();
           this.open = false;
         } else if (this.field === UiField.EditEntry) {
@@ -490,6 +550,9 @@ export class UiController {
         }
         break;
       }
+      case UiField.FactoryReset:
+        if (this.open && delta !== 0) this.confirm = delta > 0;
+        break;
       case UiField.Ppqn:
         this.source = clockSourceOf(
           ClockMode.EXT,

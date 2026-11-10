@@ -59,7 +59,12 @@ public:
     PagedScreen()
         : busy_(false), row_(0), tiles_(1), full_(true), sinceFull_(FULL_REFRESH_EVERY),
           headerHash_(0), drawnHeaderHash_(0), headerEverDrawn_(false),
-          mode_(MODE_PATTERN) {}
+          mode_(MODE_PATTERN), flipped_(true) {}
+
+    void setFlipped(bool flipped) {
+        flipped_ = flipped;
+        sinceFull_ = FULL_REFRESH_EVERY;
+    }
 
     // Vrai tant qu'une image reste a terminer.
     bool busy() const { return busy_; }
@@ -186,6 +191,9 @@ private:
         if (d1 >= screen::HEIGHT) {
             d1 = screen::HEIGHT - 1;
         }
+        if (!flipped_) {
+            return Band{static_cast<uint8_t>(d0), static_cast<uint8_t>(d1)};
+        }
         return Band{static_cast<uint8_t>(screen::HEIGHT - 1 - d1),
                     static_cast<uint8_t>(screen::HEIGHT - 1 - d0)};
     }
@@ -231,6 +239,7 @@ private:
     bool headerEverDrawn_;
     MainScreenModel main_;
     Mode mode_;
+    bool flipped_;
 };
 
 }  // namespace flexseq

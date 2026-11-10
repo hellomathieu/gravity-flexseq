@@ -839,6 +839,32 @@ describe("Persistence — the version 4 scan and boot", () => {
     expect(r.ui.tempo).toBe(DEFAULT_TEMPO);
   });
 
+  it("the defaults clear the cv routing and the three settings", () => {
+    const r = rigV4();
+    r.engine.setCvDestination(2, CV_SOURCE_1, CvDestination.PATTERN);
+    r.engine.setCvDestination(2, CV_SOURCE_2, CvDestination.RESET);
+    r.engine.setCvDestination(5, CV_SOURCE_2, CvDestination.STEP);
+    r.prefs.rotateScreen = 0;
+    r.prefs.reverseEncoder = 0;
+    r.prefs.cvCalibration[0] = -39;
+    r.prefs.cvCalibration[1] = 41;
+    r.ui.setTempo(77);
+    r.ui.setClockSource(3);
+
+    r.image.resetToDefaults();
+
+    for (let channel = 0; channel < 6; channel += 1) {
+      expect(r.engine.getCvDestination(channel, CV_SOURCE_1)).toBe(CvDestination.NONE);
+      expect(r.engine.getCvDestination(channel, CV_SOURCE_2)).toBe(CvDestination.NONE);
+    }
+    expect(r.prefs.rotateScreen).toBe(1);
+    expect(r.prefs.reverseEncoder).toBe(1);
+    expect(r.prefs.cvCalibration[0]).toBe(0);
+    expect(r.prefs.cvCalibration[1]).toBe(0);
+    expect(r.ui.tempo).toBe(120);
+    expect(r.ui.clockSource).toBe(0);
+  });
+
   it("the defaults reset the mode, the offset and the skip chance", () => {
     const eeprom = new FakeEeprom();
     eeprom.cell[384] = 0xff;

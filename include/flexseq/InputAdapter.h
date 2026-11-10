@@ -11,6 +11,7 @@ namespace input {
 
 void begin(UiController& controller);
 void process(uint32_t nowMs);
+void setReversed(bool reversed);
 
 EncoderFilter& filter();
 bool shiftHeld();

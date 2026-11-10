@@ -90,13 +90,17 @@ void onPlayPress() {
 
 }  // namespace
 
+void setReversed(bool reversed) {
+    gravity.encoder.SetReverseDirection(reversed);
+}
+
 void begin(UiController& c) {
     controller = &c;
     encoderFilter.reset();
     rotatedWhileEncoderHeld = false;
     rotatedWhileShiftHeld = false;
 
-    gravity.encoder.SetReverseDirection(true);
+    setReversed(true);
     gravity.encoder.AttachRotateHandler(onRotate);
     gravity.encoder.AttachPressRotateHandler(onRotateWhileEncoderHeld);
     gravity.encoder.AttachPressHandler(onEncoderPress);
