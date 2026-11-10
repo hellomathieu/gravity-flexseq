@@ -1748,14 +1748,14 @@ int main(int argc, char **argv)
                 pressFor(avr, (double)PRESS_MS);
                 gotoConfigField(avr, flexseq::UiController::CONFIG_FIELD_INDEX_SUBDIV);
                 if (!skipBGeste) {
-                    shiftRotate(avr, 50, 1, harness::SUBDIV_BURST_LIMIT, false);
-                    if (r7CransRetour > 0) shiftRotate(avr, r7CransRetour, 0, harness::SUBDIV_BURST_LIMIT, false);
+                    shiftRotate(avr, 50, 0, harness::SUBDIV_BURST_LIMIT, false);
+                    if (r7CransRetour > 0) shiftRotate(avr, r7CransRetour, 1, harness::SUBDIV_BURST_LIMIT, false);
                 }
                 twiGeste = g_twi_bytes - marque;
             } else if (etape == 4) {
                 marque = g_twi_bytes;
-                if (!skipBGeste) { shiftRotate(avr, 24, 0, harness::SUBDIV_BURST_LIMIT, false);
-                                   shiftRotate(avr, 8, 1, harness::SUBDIV_BURST_LIMIT, false); }
+                if (!skipBGeste) { shiftRotate(avr, 24, 1, harness::SUBDIV_BURST_LIMIT, false);
+                                   shiftRotate(avr, 8, 0, harness::SUBDIV_BURST_LIMIT, false); }
                 twiGeste = g_twi_bytes - marque;
             }
 
@@ -1820,7 +1820,7 @@ int main(int argc, char **argv)
         pressFor(avr, (double)PRESS_MS);
         gotoConfigField(avr, flexseq::UiController::CONFIG_FIELD_INDEX_SUBDIV);
         if (!skipBGeste && cransPalier > 0)
-            shiftRotate(avr, cransPalier, 0, harness::SUBDIV_BURST_LIMIT, false);
+            shiftRotate(avr, cransPalier, 1, harness::SUBDIV_BURST_LIMIT, false);
         printf("rD_nav_subdiv      onglet %d twi %u crans %d palier %d\n",
                selectedTab(), g_twi_bytes - marque, r11CransSubdiv, cransPalier);
 
@@ -1835,7 +1835,7 @@ int main(int argc, char **argv)
 
         marque = g_twi_bytes;
         if (!skipBGeste && r11CransSubdiv > 0)
-            shiftRotate(avr, 1, 0, harness::SUBDIV_BURST_LIMIT, false);
+            shiftRotate(avr, 1, 1, harness::SUBDIV_BURST_LIMIT, false);
 
         run_for(avr, 2500.0);
         depart = g_ticks;
@@ -1902,7 +1902,7 @@ int main(int argc, char **argv)
         const int filtreLisible = readSuppressedCounter(avr, &filtreAvant);
         if (!skipBGeste && r11CransSubdiv > 0)
             for (int i = 0; i < r11CransSubdiv; ++i)
-                shiftRotate(avr, 1, 1, harness::SUBDIV_BURST_LIMIT, false);
+                shiftRotate(avr, 1, 0, harness::SUBDIV_BURST_LIMIT, false);
         readSuppressedCounter(avr, &filtreApres);
         printf("rD_temoin4         lisible %d avant %u apres %u\n",
                filtreLisible, filtreAvant, filtreApres);
@@ -1990,13 +1990,13 @@ int main(int argc, char **argv)
                     ? flexseq::UiController::CONFIG_FIELD_INDEX_LENGTH
                     : (uint8_t)r2Rotations);
                 if (!skipBGeste)
-                    shiftRotate(avr, 1, etape == 1 ? 1 : 0,
+                    shiftRotate(avr, 1, 1,
                                 harness::limitForField(champ), false);
                 twiGeste = g_twi_bytes - marque;
             } else if (etape == 2 || etape == 4) {
                 marque = g_twi_bytes;
                 if (!skipBGeste)
-                    shiftRotate(avr, 1, etape == 2 ? 0 : 1,
+                    shiftRotate(avr, 1, 0,
                                 harness::limitForField(
                                     etape == 2 ? flexseq::UiController::FIELD_LENGTH
                                                : flexseq::UiController::FIELD_SUBDIV),
@@ -2068,7 +2068,7 @@ int main(int argc, char **argv)
 
             for (int etape = 0; etape < 2; ++etape) {
                 marque = g_twi_bytes;
-                if (!skipBGeste) shiftRotate(avr, 1, etape == 0 ? 0 : 1, harness::SUBDIV_BURST_LIMIT, false);
+                if (!skipBGeste) shiftRotate(avr, 1, etape == 0 ? 1 : 0, harness::SUBDIV_BURST_LIMIT, false);
                 const uint32_t twiGeste = g_twi_bytes - marque;
                 run_for(avr, 2000.0);
                 const uint32_t depart = g_ticks;
@@ -2487,7 +2487,7 @@ int main(int argc, char **argv)
         int cumule = 0;
         for (int etape = 0; etape < 3; ++etape) {
             const uint32_t twiBefore = g_twi_bytes;
-            shiftRotate(avr, marche[etape], 0, harness::SUBDIV_BURST_LIMIT, false);
+            shiftRotate(avr, marche[etape], 1, harness::SUBDIV_BURST_LIMIT, false);
             cumule += marche[etape];
             run_for(avr, 2000.0);
             const uint32_t from = g_ticks;
@@ -2535,7 +2535,7 @@ int main(int argc, char **argv)
         rotate(avr, 1, 1);
         const uint32_t tickSubdivGesture = g_ticks;
         const uint32_t twiBeforeSubdiv = g_twi_bytes;
-        shiftRotate(avr, 1, 1, harness::SUBDIV_BURST_LIMIT, false);
+        shiftRotate(avr, 1, 0, harness::SUBDIV_BURST_LIMIT, false);
         const uint32_t expectedBoundary = ((tickSubdivGesture / 96) + 1) * 96;
         run_for(avr, 9000.0);
         const uint32_t applyTick = firstOnsetWithGap(&g_out[0], tickSubdivGesture, 32);
