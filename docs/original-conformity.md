@@ -55,14 +55,14 @@ Each row below carries the original's line, so the reading can be checked.
 
 | Element | Original | FlexSeq | Verdict |
 |---|---|---|---|
-| Main parameter | `bpm` in the **large font** `stkL`, label `BPM` below in `velvetscreen` (`UI.ino:88-108`) | tempo in the single 5x7 font, no label | **omission** — line 29 |
-| Main parameter, EXT or MIDI | shows `EXT` or `MIDI` in place of the number (`UI.ino:81-86`) | absent | **omission** |
-| `MODE` | `INT` / `EXT` / `MIDI` (`UI.ino:31,51-56`) | absent | **omission** — line 27, lot 17 |
+| Main parameter | `bpm` in the **large font** `stkL`, label `BPM` below in `velvetscreen` (`UI.ino:88-108`) | the tempo in `stkL`, label `BPM` below in `velvetscreen`, since lot 17a of 2026-11-10 | **conform** |
+| Main parameter, EXT or MIDI | shows `EXT` or `MIDI` in place of the number (`UI.ino:81-86`) | same, with no label below, since lot 17a | **conform** |
+| `MODE` | `INT` / `EXT` / `MIDI` (`UI.ino:31,51-56`) | same, since lot 17a of 2026-11-10. The list stops at both ends | **conform** |
 | `MOD` | `OFF` / `CV1` / `CV2`, internal clock only (`UI.ino:33,57-62`) | absent | **omission** — line 27, lot 17 |
-| `PPQN` | `24` or `4`, external clock only (`UI.ino:34,63-66`) | fused into `SRC` | **decided 2026-08-23**: the separate field returns, with the **four** libGravity rates |
+| `PPQN` | `24` or `4`, external clock only (`UI.ino:34,63-66`) | a separate field in `EXT` only, with `24`, `4`, `2` and `1`, since lot 17a of 2026-11-10 | **decided addition**, 2026-08-23: the **four** libGravity rates. A change of mode to `EXT` always starts at `24`, because the single source byte holds no rate in `INT` and `MIDI` |
 | `RANGE` | `bpmModulationRange` 1 to 5, shown x10 (`UI.ino:35,67-68`) | absent, and no EEPROM byte | **omission** — line 27, lot 17 |
-| Field count | 1, 2 or 3 according to the mode (`UI.ino:20-27`) | 1, fixed | **omission** — the layout is fixed at PRD §12.1: INT gives `MOD` then `RANGE`, EXT gives `PPQN`, MIDI gives none |
-| `SRC` | does not exist | 6 values, MIDI included | **replaced** by `MODE` plus `PPQN`, 2026-08-23. The two extra rates survive as `PPQN` values |
+| Field count | 1, 2 or 3 according to the mode (`UI.ino:20-27`) | 1 in `INT`, 2 in `EXT`, 1 in `MIDI`, since lot 17a | **conform for `MODE` and `PPQN`**. `MOD` and `RANGE` stay absent: lot 17b is out of the scope, PRD §5.0 |
+| `SRC` | does not exist | removed on 2026-11-10 by lot 17a | **no divergence any more**. `MODE` plus `PPQN` replace it, and the two extra rates survive as `PPQN` values |
 
 ## Screen 0 — a channel tab
 
