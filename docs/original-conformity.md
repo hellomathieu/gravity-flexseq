@@ -68,12 +68,12 @@ Each row below carries the original's line, so the reading can be checked.
 
 | Element | Original | FlexSeq | Verdict |
 |---|---|---|---|
-| Main parameter, CLOCK | value `/N` or `xN`, label `SUBDIVISION` (`UI.ino:190-200,213-219`) | same, in `stkL`, since 2026-09-04 | **conform** — lot 11 |
+| Main parameter, CLOCK | value `/N` or `xN`, label `SUBDIVISION` (`UI.ino:190-200,213-219`) | same, in `stkL`, since 2026-09-04. The unity reads `x1` and not `/1` since 2026-11-10 | **conform, except the label of the unity** — an assumed difference, PRD §6.1 |
 | Main parameter, RAND | value `N0%`, label `SKIP CHANCE` | same, in `stkL`, since 2026-09-04 | **conform** — lot 11 |
 | Main parameter, SEQ | value `A1` to `B8`, label `PATTERN` | pattern name, and the SEQ tab keeps the FlexSeq layout | conform in content, not in size — **lot 12**, by decision 2 of PRD §12.1 |
 | `MODE` | `CLOCK` / `RAND` / `SEQ` (`UI.ino:126,145-150`) | same, line 1 in the three modes, since 2026-09-04 | **conform** — lot 11. It is also what makes the mode reversible: PRD §12.1 decision 10 |
 | Field 2, CLOCK | label `OFFSET:`, value `offset/pulsesPerStep` (`UI.ino:128,151-159`) | same, since 2026-09-04 | **conform** — lot 11. The bound is `ticksPerStep - 1` capped by 255, applied by the engine |
-| Field 2, RAND | label `SUBDIV:`, value `/N` or `xN` (`UI.ino:130,160-165`) | same, since 2026-09-04 | **conform** — lot 11 |
+| Field 2, RAND | label `SUBDIV:`, value `/N` or `xN` (`UI.ino:130,160-165`) | same, since 2026-09-04. The unity reads `x1` and not `/1` since 2026-11-10 | **conform, except the label of the unity** — an assumed difference, PRD §6.1 |
 | Field 2, SEQ | label `EDIT PATTERN`, a filled box as the entry marker (`UI.ino:132,174-178`) | an entry field | conform |
 | `MOD` | `OFF` / `CV1` / `CV2` (`UI.ino:134,166-172`) | line 3 drawn since 2026-09-04, navigable, and it always reads `OFF` | **partial** — the field exists, the mechanism is lot 13. Its destinations depend on the mode: PRD §10.2 |
 | `LEN` | does not exist, 16 steps fixed | present | **addition**, PRD §1 |

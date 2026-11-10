@@ -458,6 +458,18 @@ Mapping, validated, tested, and it reproduces `CLOCK_MOD_PULSES` exactly:
 - `x2` → 48 · `x4` → 24, which is 1/16 and the historical step of the sequencer, and no longer the default · `x8` → 12 · … · `x24` → 4.
 Each channel holds its own SUBDIV. The exposed list follows the list of libGravity, 25 values, `x24 … x2`, `/1`, `/2 … /128`, and it **replaces** the historical Sitka list of 20 values.
 ⚠️ **THE ORDER of this list is normative, stated on 2026-08-22**, because §11.1 persists the **index** and not the value. The chosen order is the one written above, **from the fastest to the slowest**. `x24` sits at index 0, and `/1` sits at **index 8**. It is the order of the TypeScript reference model (`sim/src/domain/subdiv.ts`), and the C++ was aligned on it (`include/flexseq/Subdiv.h`, `src/domain/Subdiv.cpp`). It is **not** the order of the raw libGravity table (`CLOCK_MOD`), which is the reverse: from the slowest to the fastest, with the unit at index 16. The **set** of the 25 values is identical in both cases. Only the order differs, and the order is what counts as soon as an index goes into the EEPROM. The table is in `PROGMEM` on AVR: **0 B of RAM**.
+✅ **THE ROTATION DIRECTION AND THE LABEL OF THE UNITY CHANGE — decided by the owner on 2026-11-10.**
+- A turn of the encoder **to the right multiplies**: the channel plays faster, towards `x24`.
+- A turn of the encoder **to the left divides**: the channel plays slower, towards `/128`.
+- The unity is shown as **`x1`**. It was shown as `/1`.
+
+The rule applies to every place that sets the SUBDIV: the main line of a channel in `CLOCK`, the second line of a channel in `RANDOM`, the `CONFIG PATTERN` page of a channel in `SEQ`, and `SHIFT` plus a rotation. The list stops at both ends, as before.
+
+**Nothing moves below the screen and the gesture.** The value of the unity stays `1`, 96 ticks. The order of the list above stays normative, and the EEPROM format keeps the same index. An image written before this decision reads back unchanged. The controller reverses the sign of the rotation for this field only.
+
+`x1` and `/1` name the same rate. The other sections of this document still write `/1`: read it as `x1` on the screen. ⚠️ The original firmware shows `/1`, so the label is one more named difference from the original. The rotation direction of the original for this field was **not compared**.
+
+Measured cost: Flash **+6 B**, RAM **+0 B**.
 ### 6.1.1 When a SUBDIV change applies — DECIDED on 2026-08-23
 > **Decision validated.** A change of SUBDIV takes effect **on the next beat** while the transport plays. When the transport is stopped, or when the master phase already sits on a beat, it takes effect **immediately**. The **chosen** value is visible at once: the screen and the EEPROM carry the choice without a wait.
 **The defect found on the module.** Two channels set to `/1` no longer fell together after one of them went through other rates and came back to `/1`. Measured on the reference model, after a return to `/1`: **0 ticks** through a division, **48 ticks** through `x2` or `x4`, and **64 ticks** through `x3`. At 120 BPM, 48 ticks make 250 ms and 64 ticks make 333 ms. The shift is audible and permanent.
