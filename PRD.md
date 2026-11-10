@@ -1150,6 +1150,24 @@ gesture — the value is read rather than inferred from the bars. Measured: the
 title is 65 px of 128 and `SEP 3` is 22.
 
 ⚠️ **THE TITLE IS FLUSH LEFT SINCE 2026-09-09, at `x = 4`.** It was centred, so it floated between the edge of the screen and `SEP`. It now sits on the column of the rule that underlines it. And **`SEP` carries its colon**, `SEP:`, like every other label of the interface. Measured in `velvetscreen`: `SEP:` is 16 px and `SEP` is 14 px, so the label grows by 2 px. The title keeps its 65 px, and it now ends at `x = 68` against the label at `x = 102`. ⚠️ **AND THE FRAME OF THE OPEN VALUE CLEARS IT BY 2 px ON EACH SIDE, since 2026-09-13.** It cleared it by 1 px, so the frame touched the digit on all four sides and the two read as one mark. The owner read that on the module. `SEP_FRAME_PAD` is 2, the frame runs from `x = 118` to `x = 125`, and the columns 119 and 124 stay empty beside the digit. **Measured: RAM +0 bytes, Flash +0 bytes.** ⚠️ **The frame does NOT grow upward or downward**, and a measurement says why: a clearance of 1 px above and below needs 9 rows, and the band holds 8. The header must stay in band 0, which two `static_assert` hold.
+✅ **THE HEADER OF `EDIT` CARRIES A STEP COUNTER AND THE LENGTH — decided by the owner on 2026-11-10.** The header holds three items, from left to right:
+- **the title**, `EDIT PAT. A1`. The read-only screen of §5.0 reads `CV PAT. A1`. The title was `EDIT PATTERN A1`, and the decision of 2026-08-20 to keep it whole is superseded: the shorter title makes room for the counter;
+- **the counter**, `2/12`: a step number, a slash, and the length of the channel;
+- **`SEP:`**, unchanged.
+
+**The step number counts from 1, and it is always the step under the cursor.** It does not follow the playback: the played step is read on the grid, as before. An edit stays possible while the transport runs, as in the original. The read-only screen has no cursor, so its counter reads `-/12`.
+
+⚠️ **The owner first chose a counter that follows the played step while the transport runs, and the measurement refused it on 2026-11-10.** The header then changes at every step, so its band is drawn and sent at every step. The band holds text, and text is the costly part of a frame. Measured on the `EDIT` screen with the transport running: the loop pass went from **6.48 ms to 12.74 ms** at the 90th percentile, against a budget of 12 ms, and a pass of 13.27 ms came with **every** frame, against one frame in 16 before. A trigger could then leave up to 13 ms late once per step. Two savings were tried and returned 0.09 ms together. The owner chose the cursor.
+
+**The denominator is the length of the CHANNEL, and it is a field.** It shows and edits `baseLength`, the value the `LENGTH` line of the `CONFIG PATTERN` page edits (§5.2, ADR 0009). The two fields are two paths to one value. It stays adjustable on the read-only screen, because the length belongs to the channel and not to the pattern.
+
+**The gesture.** From the first step, one detent to the left selects `SEP`, and one more selects the length. A turn to the right goes back: the length, `SEP`, then the first step. A short press opens the selected field, a turn then changes its value, and a short press closes it. A long press leaves the header. The length is the stop on the left.
+
+**The selection.** A selected and closed length inverts the whole counter. An open length inverts the denominator alone. `SEP` keeps its own render.
+
+⚠️ **Two named consequences, accepted by the owner.**
+1. The cursor can sit on a step beyond the length, because the grid holds 36 steps. The counter then reads, for example, `20/12`. The step is editable and it is not played.
+2. The denominator is the base and not the derived length. Under a Length CV the channel can play more steps than the denominator says.
 
 — *the previous wording, partly replaced:*
 **Three screens**, exactly those of the original:
@@ -1284,6 +1302,7 @@ The footer was **aligned left** at x = 4, like the header rule: to centre it wou
 >
 > **Measured gain, with a correct render on both sides** (§14): the median pass **8.52 → 6.48 ms**, and the whole frame **74.0 → 59.1 ms**. That is −24 % and −20 %, and not the factor of 2 announced first. The **worst** pass hardly moves, 16.16 → 15.32 ms: the **title** carried it, and the spacing does not make the title cheaper, because it does not avoid it. Cost: **+522 B of Flash, 0 B of RAM**. A test verifies the property: the union of the 8 bands renders **exactly** the complete image, pixel for pixel.
 >
+> ⚠️ **SUPERSEDED on 2026-11-10: the title is `EDIT PAT. A1`, see the header decision of that date above.** The paragraph below is kept as history.
 > **THE HEADER STAYS EXPLICIT — decided 2026-08-20.** `EDIT PATTERN A1` is kept whole. Its rasterisation cost 8.8 ms per frame (§14), and the owner of the PRD **set aside** two paths: to shorten the header, where 9 characters or fewer would have been enough to hold the budget, but at the price of the clarity. And to put the rendered band in a **RAM cache** of 128 B, refused because the RAM must stay available for features.
 >
 > **The skip of the unchanged band (2026-08-20).** The chosen solution costs **no RAM**: the title changes only when the selected pattern changes, so its band is neither cleared, nor drawn, nor sent while it is identical. The SSD1306 is a screen with memory, so a band that is not sent keeps showing what it showed. The condition is **geometric** — a band entirely above the header rule can hold the title only — so it is tied to the layout. **ADR 0001** details two design points: the clear-draw-send cycle is **indivisible**, and one frame in sixteen is rendered whole, as a net against a defect of our own logic. Gain: the routine pass **15.4 → 8.44 ms**, and the frame **56 → 44.2 ms**, for **+9 B of RAM and +160 B of Flash**. The baseline of the title moves from 8 to **7**, so that it fits inside a single band. Its width is measured once per frame only.
