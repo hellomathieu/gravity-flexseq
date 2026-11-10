@@ -23,17 +23,6 @@ import {
   MAIN_CENTRE_X,
   MAIN_LABEL_BASELINE_Y,
   MAIN_VALUE_BASELINE_Y,
-  HEADLINE_BASELINE_Y,
-  HEADLINE_BOX_H,
-  HEADLINE_BOX_W,
-  HEADLINE_BOX_X,
-  HEADLINE_BOX_Y,
-  COL_LEFT_X,
-  COL_RIGHT_X,
-  COL_W,
-  ROW_A_BOX_Y,
-  ROW_B_BOX_Y,
-  ROW_BOX_H,
   RULE_W,
   RULE_X,
   RULE_Y,
@@ -55,23 +44,20 @@ import {
   TAB_LAST_CHANNEL,
   TAB_SETTINGS,
   TAB_SLOT_W,
-  TAB_TOP_Y,
-  TEXT_INSET,
-  GLYPH_SIZE,
   tabCentreX,
   tabSlotX,
-  barLabel,
-  headlineOf,
   patternName,
-  sourceLabel,
   subdivLabel,
 } from "./MainScreenDisplay.js";
 import { MainParameter, type MainScreenModel } from "../domain/MainScreenModel.js";
 import { ChannelMode } from "../domain/SequencerEngine.js";
 import { CvDestination } from "../domain/CvDestination.js";
+import { ClockMode, clockModeOf, ppqnAtIndex, ppqnIndexOf } from "../domain/ClockSource.js";
 import { STK_L, VELVETSCREEN, glyphFor, textWidth, type Font } from "./oledFont.js";
 
 export const LBL_MODE = "MODE:";
+export const LBL_BPM = "BPM";
+export const LBL_PPQN = "PPQN:";
 export const LBL_OFFSET = "OFFSET:";
 export const LBL_SUBDIV_FIELD = "SUBDIV:";
 export const LBL_MOD = "MOD:";
@@ -164,7 +150,23 @@ function skipText(skipChance: number): string {
   return `${skipChance}0%`;
 }
 
+export function clockModeText(source: number): string {
+  switch (clockModeOf(source)) {
+    case ClockMode.INT:
+      return "INT";
+    case ClockMode.EXT:
+      return "EXT";
+    default:
+      return "MIDI";
+  }
+}
+
 export function mainValueOf(model: MainScreenModel): string {
+  if (model.tab === TAB_CLOCK) {
+    return clockModeOf(model.clockSource) === ClockMode.INT
+      ? writeUnsigned(model.tempo)
+      : clockModeText(model.clockSource);
+  }
   if (model.configPage || model.mainParameter === MainParameter.Pattern) {
     return patternName(model.patternIndex);
   }
@@ -185,7 +187,12 @@ export function isChannelTab(model: MainScreenModel): boolean {
 
 // PRD 5.0 amendement 1quater. Les trois lignes de l original suivent donc d un
 // rang, et le numero d une ligne N EST PLUS l index du curseur.
+export function usesLegacyLayout(model: MainScreenModel): boolean {
+  return isChannelTab(model) || model.tab === TAB_CLOCK;
+}
+
 export function bigValueTakesCursor(model: MainScreenModel): boolean {
+  if (model.tab === TAB_CLOCK) return clockModeOf(model.clockSource) === ClockMode.INT;
   return isChannelTab(model) && !model.configPage && model.mode === ChannelMode.SEQ;
 }
 
@@ -199,7 +206,10 @@ export function patternFieldIsOpen(model: MainScreenModel): boolean {
     && model.cursor === 0;
 }
 
-export function mainLabelOf(model: MainScreenModel): string {
+export function mainLabelOf(model: MainScreenModel): string | null {
+  if (model.tab === TAB_CLOCK) {
+    return clockModeOf(model.clockSource) === ClockMode.INT ? LBL_BPM : null;
+  }
   if (model.configPage || model.mainParameter === MainParameter.Pattern) {
     return LBL_PATTERN;
   }
@@ -240,7 +250,16 @@ export function modText(model: MainScreenModel): string {
 
 // La grande valeur prend la PREMIERE position du curseur sur un canal en SEQ —
 // PRD 5.0 amendement 1bis. Les trois lignes de l original suivent donc d un
-export function legacyLine(model: MainScreenModel, index: number): [string, string] {
+export function clockLine(model: MainScreenModel, index: number): [string, string] | null {
+  if (index === 0) return [LBL_MODE, clockModeText(model.clockSource)];
+  if (index === 1 && clockModeOf(model.clockSource) === ClockMode.EXT) {
+    return [LBL_PPQN, writeUnsigned(ppqnAtIndex(ppqnIndexOf(model.clockSource)))];
+  }
+  return null;
+}
+
+export function legacyLine(model: MainScreenModel, index: number): [string, string] | null {
+  if (model.tab === TAB_CLOCK) return clockLine(model, index);
   if (model.configPage) return configLine(model, index);
   if (index === 0) return [LBL_MODE, modeText(model.mode)];
   if (model.mode === ChannelMode.SEQ) {
@@ -263,28 +282,6 @@ function drawSettingsGlyph(ink: Ink, cx: number, topY: number): void {
   ink.drawHLine(x + 1, topY + TAB_GLYPH_H - 1, 1);
 }
 
-function drawLabelledField(
-  ink: Ink,
-  x: number,
-  y: number,
-  label: string,
-  value: string | null,
-  framed: boolean,
-  inverted: boolean,
-): void {
-  if (inverted) {
-    ink.drawBox(x, y, COL_W, ROW_BOX_H);
-    ink.setDrawColor(0);
-  } else if (framed) {
-    ink.drawFrame(x, y, COL_W, ROW_BOX_H);
-  }
-  const textX = x + TEXT_INSET;
-  const baseline = y + 7;
-  const used = ink.drawStr(textX, baseline, label, VELVETSCREEN);
-  if (value !== null) ink.drawStr(textX + used + 4, baseline, value, VELVETSCREEN);
-  if (inverted) ink.setDrawColor(1);
-}
-
 function drawLegacyChannel(ink: Ink, model: MainScreenModel): void {
   const value = mainValueOf(model);
   if (value !== "") {
@@ -299,23 +296,27 @@ function drawLegacyChannel(ink: Ink, model: MainScreenModel): void {
   }
 
   const mainLabel = mainLabelOf(model);
-  const lw = textWidth(mainLabel, VELVETSCREEN);
-  const labelX = MAIN_CENTRE_X - Math.floor(lw / 2);
-  // Le curseur sur la grande valeur : l etiquette s inverse.
-  if (bigValueTakesCursor(model) && model.insideTab && model.cursor === 0
-      && !model.fieldOpen) {
-    ink.drawBox(labelX - 1, MAIN_LABEL_BASELINE_Y - VELVETSCREEN_HEIGHT - 1,
-                lw + 2, VELVETSCREEN_HEIGHT + 2);
-    ink.setDrawColor(0);
-    ink.drawStr(labelX, MAIN_LABEL_BASELINE_Y, mainLabel, VELVETSCREEN);
-    ink.setDrawColor(1);
-  } else {
-    ink.drawStr(labelX, MAIN_LABEL_BASELINE_Y, mainLabel, VELVETSCREEN);
+  if (mainLabel !== null) {
+    const lw = textWidth(mainLabel, VELVETSCREEN);
+    const labelX = MAIN_CENTRE_X - Math.floor(lw / 2);
+    // Le curseur sur la grande valeur : l etiquette s inverse.
+    if (bigValueTakesCursor(model) && model.insideTab && model.cursor === 0
+        && !model.fieldOpen) {
+      ink.drawBox(labelX - 1, MAIN_LABEL_BASELINE_Y - VELVETSCREEN_HEIGHT - 1,
+                  lw + 2, VELVETSCREEN_HEIGHT + 2);
+      ink.setDrawColor(0);
+      ink.drawStr(labelX, MAIN_LABEL_BASELINE_Y, mainLabel, VELVETSCREEN);
+      ink.setDrawColor(1);
+    } else {
+      ink.drawStr(labelX, MAIN_LABEL_BASELINE_Y, mainLabel, VELVETSCREEN);
+    }
   }
 
   for (let line = 0; line < 3; ++line) {
     const base = LINE_0_BASELINE_Y + line * LINE_SPACING_Y;
-    const [text, lineValue] = legacyLine(model, line);
+    const entry = legacyLine(model, line);
+    if (entry === null) continue;
+    const [text, lineValue] = entry;
     const onCursor = model.insideTab && model.cursor === cursorOfLine(model, line);
     const labelW = textWidth(text, VELVETSCREEN);
     if (onCursor && !model.fieldOpen) {
@@ -354,46 +355,7 @@ export interface Render {
 
 export function renderMainScreen(model: MainScreenModel): Render {
   const ink = new Ink();
-  const legacy = isChannelTab(model);
-  const cursorOnHeadline = model.insideTab && model.cursor === 0;
-
-  if (!legacy) {
-    const headline = headlineOf(model);
-    if (headline !== "") {
-      const w = textWidth(headline, VELVETSCREEN);
-      ink.drawStr(
-        Math.floor((OLED_W - w) / 2),
-        HEADLINE_BASELINE_Y,
-        headline,
-        VELVETSCREEN,
-      );
-    }
-    if (cursorOnHeadline) {
-      ink.drawFrame(HEADLINE_BOX_X, HEADLINE_BOX_Y, HEADLINE_BOX_W, HEADLINE_BOX_H);
-      if (model.fieldOpen) {
-        ink.drawFrame(
-          HEADLINE_BOX_X + 1,
-          HEADLINE_BOX_Y + 1,
-          HEADLINE_BOX_W - 2,
-          HEADLINE_BOX_H - 2,
-        );
-      }
-    }
-  }
-
-  if (model.tab === 0) {
-    drawLabelledField(
-      ink,
-      COL_LEFT_X,
-      ROW_A_BOX_Y,
-      "SRC",
-      sourceLabel(model.clockSource),
-      model.insideTab && model.cursor === 1,
-      model.insideTab && model.cursor === 1 && model.fieldOpen,
-    );
-  } else if (legacy) {
-    drawLegacyChannel(ink, model);
-  }
+  if (usesLegacyLayout(model)) drawLegacyChannel(ink, model);
 
   ink.drawHLine(RULE_X, RULE_Y, RULE_W);
 

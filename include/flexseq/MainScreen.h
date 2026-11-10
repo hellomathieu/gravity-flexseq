@@ -9,6 +9,7 @@
 #endif
 
 #include <flexseq/ChannelMode.h>
+#include <flexseq/ClockSource.h>
 #include <flexseq/CvDestination.h>
 #include <flexseq/MainScreenModel.h>
 #include <flexseq/OriginalFonts.h>
@@ -201,25 +202,6 @@ inline void barLabel(uint8_t steps, char* out) {
     writeUnsigned(out, steps);
 }
 
-inline const char* sourceLabel(uint8_t source) {
-    if (source == 0) return "INT";
-    if (source == 1) return "EXT24";
-    if (source == 2) return "EXT4";
-    if (source == 3) return "EXT2";
-    if (source == 4) return "EXT1";
-    return "MIDI";
-}
-
-inline void headlineOf(const MainScreenModel& model, char* out) {
-    if (model.tab == mainscreen::TAB_CLOCK) {
-        writeUnsigned(out, model.tempo);
-    } else if (model.tab >= mainscreen::TAB_SETTINGS) {
-        out[0] = '\0';
-    } else {
-        patternName(model.patternIndex, out);
-    }
-}
-
 template <typename Canvas>
 void drawSettingsGlyph(Canvas& canvas, uint8_t cx, uint8_t topY) {
     const uint8_t x = static_cast<uint8_t>(cx - mainscreen::TAB_WIDE_GLYPH_W / 2);
@@ -250,7 +232,7 @@ inline bool isChannelTab(const MainScreenModel& model) {
 
 // Les onglets qui prennent les trois lignes de l original : les six canaux.
 inline bool usesLegacyLayout(const MainScreenModel& model) {
-    return isChannelTab(model);
+    return isChannelTab(model) || model.tab == mainscreen::TAB_CLOCK;
 }
 
 // La grande valeur prend la PREMIERE position du curseur sur un canal en SEQ —
@@ -268,6 +250,19 @@ FLEXSEQ_LABEL(LBL_SUBDIVISION, "SUBDIVISION");
 FLEXSEQ_LABEL(LBL_SKIP_CHANCE, "SKIP CHANCE");
 FLEXSEQ_LABEL(LBL_LENGTH, "LENGTH:");
 FLEXSEQ_LABEL(LBL_PATTERN, "PATTERN");
+FLEXSEQ_LABEL(LBL_BPM, "BPM");
+FLEXSEQ_LABEL(LBL_PPQN, "PPQN:");
+FLEXSEQ_LABEL(LBL_INT, "INT");
+FLEXSEQ_LABEL(LBL_EXT, "EXT");
+FLEXSEQ_LABEL(LBL_MIDI, "MIDI");
+
+inline const char* clockModeText(uint8_t source) {
+    switch (clockModeOf(source)) {
+        case CLOCK_MODE_INT: return LBL_INT;
+        case CLOCK_MODE_EXT: return LBL_EXT;
+        default:             return LBL_MIDI;
+    }
+}
 
 inline const char* modeText(uint8_t mode) {
     switch (static_cast<ChannelMode>(mode)) {
@@ -285,6 +280,14 @@ inline void skipText(uint8_t skipChance, char* out) {
 }
 
 inline void mainValueOf(const MainScreenModel& model, char* out) {
+    if (model.tab == mainscreen::TAB_CLOCK) {
+        if (clockModeOf(model.clockSource) == CLOCK_MODE_INT) {
+            writeUnsigned(out, model.tempo);
+        } else {
+            copyLabel(clockModeText(model.clockSource), out);
+        }
+        return;
+    }
     if (model.configPage || model.mainParameter == MAIN_PATTERN) {
         patternName(model.patternIndex, out);
         return;
@@ -313,6 +316,9 @@ inline void mainValueOf(const MainScreenModel& model, char* out) {
 // separees du meme etat finissent par diverger, et l ecran montre alors autre
 // chose que ce que le curseur designe.
 inline bool bigValueTakesCursor(const MainScreenModel& model) {
+    if (model.tab == mainscreen::TAB_CLOCK) {
+        return clockModeOf(model.clockSource) == CLOCK_MODE_INT;
+    }
     return isChannelTab(model) && !model.configPage
         && model.mode == static_cast<uint8_t>(MODE_SEQ);
 }
@@ -329,6 +335,9 @@ inline bool patternFieldIsOpen(const MainScreenModel& model) {
 }
 
 inline const char* mainLabelOf(const MainScreenModel& model) {
+    if (model.tab == mainscreen::TAB_CLOCK) {
+        return clockModeOf(model.clockSource) == CLOCK_MODE_INT ? LBL_BPM : nullptr;
+    }
     if (model.configPage || model.mainParameter == MAIN_PATTERN) {
         return LBL_PATTERN;
     }
@@ -375,8 +384,27 @@ inline void configLine(const MainScreenModel& model, uint8_t index,
     modText(model, value);
 }
 
+inline void clockLine(const MainScreenModel& model, uint8_t index,
+                      const char** out, char* value) {
+    if (index == 0) {
+        *out = LBL_MODE;
+        copyLabel(clockModeText(model.clockSource), value);
+        return;
+    }
+    if (index == 1 && clockModeOf(model.clockSource) == CLOCK_MODE_EXT) {
+        *out = LBL_PPQN;
+        writeUnsigned(value, ppqnAtIndex(ppqnIndexOf(model.clockSource)));
+        return;
+    }
+    *out = nullptr;
+}
+
 inline void legacyLine(const MainScreenModel& model, uint8_t index,
                        const char** out, char* value) {
+    if (model.tab == mainscreen::TAB_CLOCK) {
+        clockLine(model, index, out, value);
+        return;
+    }
     if (model.configPage) {
         configLine(model, index, out, value);
         return;
@@ -422,29 +450,6 @@ static_assert(sizeof(LBL_CLOCK) <= VALUE_SCRATCH,
 static_assert(3 + 1 + 5 + 1 <= VALUE_SCRATCH,
               "offset/ticksPerStep : trois chiffres, une barre, cinq chiffres, le zero final");
 
-template <typename Canvas>
-void drawLabelledField(Canvas& canvas, const Band& band, uint8_t x, uint8_t y,
-                       const char* label, const char* value, bool framed, bool inverted) {
-    if (!touches(band, y, static_cast<int16_t>(y + mainscreen::ROW_BOX_H - 1))) {
-        return;
-    }
-    if (inverted) {
-        canvas.drawBox(x, y, mainscreen::COL_W, mainscreen::ROW_BOX_H);
-        canvas.setDrawColor(0);
-    } else if (framed) {
-        canvas.drawFrame(x, y, mainscreen::COL_W, mainscreen::ROW_BOX_H);
-    }
-    const uint8_t textX = static_cast<uint8_t>(x + mainscreen::TEXT_INSET);
-    const uint8_t baseline = static_cast<uint8_t>(y + 7);
-    const uint8_t used = canvas.drawStr(textX, baseline, label);
-    if (value != nullptr) {
-        canvas.drawStr(static_cast<uint8_t>(textX + used + 4), baseline, value);
-    }
-    if (inverted) {
-        canvas.setDrawColor(1);
-    }
-}
-
 }  // namespace detail
 
 namespace detail {
@@ -478,10 +483,12 @@ void drawLegacyChannel(Canvas& canvas, const Band& band, const MainScreenModel& 
 
     const int16_t labelTop =
         static_cast<int16_t>(ms::MAIN_LABEL_BASELINE_Y) - (FONT_VELVETSCREEN_HEIGHT - 1);
-    if (touches(band, labelTop, ms::MAIN_LABEL_BASELINE_Y)) {
+    const char* flashMainLabel = mainLabelOf(model);
+    if (flashMainLabel != nullptr
+        && touches(band, labelTop, ms::MAIN_LABEL_BASELINE_Y)) {
         canvas.setFont(FONT_VELVETSCREEN);
         char scratch[14];
-        const char* text = label(mainLabelOf(model), scratch);
+        const char* text = label(flashMainLabel, scratch);
         const uint8_t w = static_cast<uint8_t>(canvas.getStrWidth(text));
         const uint8_t textX = static_cast<uint8_t>(ms::MAIN_CENTRE_X - w / 2);
         // Le curseur sur la grande valeur : l etiquette s inverse, comme la
@@ -514,6 +521,9 @@ void drawLegacyChannel(Canvas& canvas, const Band& band, const MainScreenModel& 
         canvas.setFont(FONT_VELVETSCREEN);
         const char* flashLabel = nullptr;
         legacyLine(model, line, &flashLabel, value);
+        if (flashLabel == nullptr) {
+            continue;
+        }
         char scratch[10];
         const char* text = label(flashLabel, scratch);
         const bool onCursor =
@@ -552,39 +562,7 @@ void drawMainScreen(Canvas& canvas, const MainScreenModel& model,
                     Band band = Band{0, screen::HEIGHT - 1}) {
     namespace ms = mainscreen;
 
-    const bool legacy = detail::usesLegacyLayout(model);
-
-    const bool cursorOnHeadline = model.insideTab && model.cursor == 0;
-    if (!legacy
-        && touches(band, ms::HEADLINE_BOX_Y, ms::HEADLINE_BOX_Y + ms::HEADLINE_BOX_H - 1)) {
-        char headline[6];
-        detail::headlineOf(model, headline);
-        if (headline[0] != '\0') {
-            const uint8_t w = static_cast<uint8_t>(canvas.getStrWidth(headline));
-            canvas.drawStr(static_cast<uint8_t>((screen::WIDTH - w) / 2),
-                           ms::HEADLINE_BASELINE_Y, headline);
-        }
-        if (cursorOnHeadline) {
-            if (model.fieldOpen) {
-                canvas.drawFrame(ms::HEADLINE_BOX_X, ms::HEADLINE_BOX_Y,
-                                 ms::HEADLINE_BOX_W, ms::HEADLINE_BOX_H);
-                canvas.drawFrame(static_cast<uint8_t>(ms::HEADLINE_BOX_X + 1),
-                                 static_cast<uint8_t>(ms::HEADLINE_BOX_Y + 1),
-                                 static_cast<uint8_t>(ms::HEADLINE_BOX_W - 2),
-                                 static_cast<uint8_t>(ms::HEADLINE_BOX_H - 2));
-            } else {
-                canvas.drawFrame(ms::HEADLINE_BOX_X, ms::HEADLINE_BOX_Y,
-                                 ms::HEADLINE_BOX_W, ms::HEADLINE_BOX_H);
-            }
-        }
-    }
-
-    if (model.tab == 0) {
-        detail::drawLabelledField(canvas, band, ms::COL_LEFT_X, ms::ROW_A_BOX_Y,
-                                  "SRC", detail::sourceLabel(model.clockSource),
-                                  model.insideTab && model.cursor == 1,
-                                  model.insideTab && model.cursor == 1 && model.fieldOpen);
-    } else if (legacy) {
+    if (detail::usesLegacyLayout(model)) {
         detail::drawLegacyChannel(canvas, band, model);
     }
 

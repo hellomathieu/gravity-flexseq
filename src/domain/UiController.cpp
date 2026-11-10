@@ -159,7 +159,11 @@ void UiController::postPatternLoad() {
 
 uint8_t UiController::fieldCount() const {
     if (currentTab_ == TAB_CLOCK) {
-        return CLOCK_TAB_FIELDS;
+        switch (clockModeOf(clockSource_)) {
+            case CLOCK_MODE_INT: return CLOCK_TAB_FIELDS_INT;
+            case CLOCK_MODE_EXT: return CLOCK_TAB_FIELDS_EXT;
+            default:             return CLOCK_TAB_FIELDS_MIDI;
+        }
     }
     if (isChannelTab()) {
         if (onConfigPage_) {
@@ -177,7 +181,11 @@ UiController::Field UiController::fieldAt(uint8_t index) const {
         return FIELD_NONE;
     }
     if (currentTab_ == TAB_CLOCK) {
-        return index == 0 ? FIELD_TEMPO : FIELD_CLOCK_SOURCE;
+        const ClockMode mode = clockModeOf(clockSource_);
+        if (mode == CLOCK_MODE_INT) {
+            return index == CLOCK_FIELD_INDEX_MODE_INT ? FIELD_CLOCK_MODE : FIELD_TEMPO;
+        }
+        return index == CLOCK_FIELD_INDEX_MODE_EXTERNAL ? FIELD_CLOCK_MODE : FIELD_PPQN;
     }
     if (onConfigPage_) {
         switch (index) {
@@ -386,7 +394,7 @@ void UiController::adjustField(int8_t delta) {
 
 UiController::Field UiController::mainField() const {
     if (currentTab_ == TAB_CLOCK) {
-        return FIELD_TEMPO;
+        return clockModeOf(clockSource_) == CLOCK_MODE_INT ? FIELD_TEMPO : FIELD_NONE;
     }
     const int8_t channel = selectedChannel();
     if (channel < 0) {
@@ -410,8 +418,21 @@ void UiController::adjustFieldValue(Field target, int8_t raw) {
         ));
         return;
     }
-    if (target == FIELD_CLOCK_SOURCE) {
-        clockSource_ = clampIndex(clockSource_, delta, CLOCK_SOURCE_COUNT);
+    if (target == FIELD_CLOCK_MODE) {
+        const ClockMode current = clockModeOf(clockSource_);
+        const ClockMode next = static_cast<ClockMode>(clampIndex(
+            static_cast<uint8_t>(current), delta, CLOCK_MODE_COUNT));
+        if (next != current) {
+            clockSource_ = clockSourceOf(next, 0);
+            cursor_ = next == CLOCK_MODE_INT
+                ? CLOCK_FIELD_INDEX_MODE_INT
+                : CLOCK_FIELD_INDEX_MODE_EXTERNAL;
+        }
+        return;
+    }
+    if (target == FIELD_PPQN) {
+        clockSource_ = clockSourceOf(CLOCK_MODE_EXT, clampIndex(
+            ppqnIndexOf(clockSource_), delta, PPQN_CHOICE_COUNT));
         return;
     }
 

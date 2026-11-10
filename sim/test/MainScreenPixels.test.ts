@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { legacyLine, mainLabelOf, modText, renderMainScreen } from "../src/sim/MainScreenPixels.js";
+import {
+  bigValueTakesCursor,
+  cursorOfLine,
+  legacyLine,
+  mainLabelOf,
+  mainValueOf,
+  modText,
+  renderMainScreen,
+} from "../src/sim/MainScreenPixels.js";
 import { MainParameter, mainScreenModelOf, type MainScreenModel } from "../src/domain/MainScreenModel.js";
 import { SequencerEngine } from "../src/domain/SequencerEngine.js";
 import { Transport } from "../src/domain/Transport.js";
@@ -318,8 +326,8 @@ describe("l onglet d un canal en SEQ", () => {
   });
 
   it("EDIT et CONFIG sont des entrees : elles ne portent aucune valeur", () => {
-    expect(legacyLine(seq, 1)[1]).toBe("");
-    expect(legacyLine(seq, 2)[1]).toBe("");
+    expect(legacyLine(seq, 1)?.[1]).toBe("");
+    expect(legacyLine(seq, 2)?.[1]).toBe("");
   });
 });
 
@@ -546,3 +554,107 @@ describe("la surbrillance suit le champ, pas le numero de ligne", () => {
 // l action au lieu de nommer le parametre. C est le seul signal qui separe
 // « le curseur est ici » de « le champ est ouvert ».
 
+
+describe("l onglet horloge : MODE et PPQN, deux vues de l octet de source", () => {
+  const clock = (clockSource: number, extra: Partial<MainScreenModel> = {}): MainScreenModel => ({
+    ...PANEL_MODEL,
+    tab: 0,
+    mainParameter: clockSource === 0 ? MainParameter.Tempo : MainParameter.None,
+    tempo: 240,
+    clockSource,
+    running: false,
+    ...extra,
+  });
+
+  it("en INT, la grande valeur est le tempo, et son etiquette est BPM", () => {
+    expect(mainValueOf(clock(0))).toBe("240");
+    expect(mainLabelOf(clock(0))).toBe("BPM");
+  });
+
+  it("en EXT et en MIDI, le nom du mode prend la place du nombre, sans etiquette", () => {
+    for (const source of [1, 2, 3, 4]) {
+      expect(mainValueOf(clock(source))).toBe("EXT");
+      expect(mainLabelOf(clock(source))).toBeNull();
+    }
+    expect(mainValueOf(clock(5))).toBe("MIDI");
+    expect(mainLabelOf(clock(5))).toBeNull();
+  });
+
+  it("le nombre de lignes suit le mode : une en INT, deux en EXT, une en MIDI", () => {
+    expect(legacyLine(clock(0), 0)).toEqual(["MODE:", "INT"]);
+    expect(legacyLine(clock(0), 1)).toBeNull();
+    expect(legacyLine(clock(0), 2)).toBeNull();
+    expect(legacyLine(clock(1), 0)).toEqual(["MODE:", "EXT"]);
+    expect(legacyLine(clock(1), 2)).toBeNull();
+    expect(legacyLine(clock(5), 0)).toEqual(["MODE:", "MIDI"]);
+    expect(legacyLine(clock(5), 1)).toBeNull();
+  });
+
+  it("PPQN porte les quatre cadences de l entree, dans l ordre 24, 4, 2, 1", () => {
+    expect(legacyLine(clock(1), 1)).toEqual(["PPQN:", "24"]);
+    expect(legacyLine(clock(2), 1)).toEqual(["PPQN:", "4"]);
+    expect(legacyLine(clock(3), 1)).toEqual(["PPQN:", "2"]);
+    expect(legacyLine(clock(4), 1)).toEqual(["PPQN:", "1"]);
+  });
+
+  it("la grande valeur ne prend le curseur qu en INT", () => {
+    expect(bigValueTakesCursor(clock(0))).toBe(true);
+    expect(bigValueTakesCursor(clock(1))).toBe(false);
+    expect(bigValueTakesCursor(clock(5))).toBe(false);
+    expect(cursorOfLine(clock(0), 0)).toBe(1);
+    expect(cursorOfLine(clock(1), 0)).toBe(0);
+    expect(cursorOfLine(clock(1), 1)).toBe(1);
+  });
+
+  it("les trois grandes valeurs tiennent a gauche de la colonne des champs", () => {
+    for (const model of [clock(0, { tempo: 300 }), clock(1), clock(5)]) {
+      const px = renderMainScreen(model).pixels;
+      let left = 0;
+      let between = 0;
+      for (let y = 0; y <= 28; y += 1) {
+        for (let x = 0; x < 61; x += 1) if (px.has(`${x},${y}`)) left += 1;
+        if (px.has(`60,${y}`) || px.has(`61,${y}`)) between += 1;
+      }
+      expect(left).toBeGreaterThan(40);
+      expect(between).toBe(0);
+    }
+  });
+
+  const PANEL_CLOCK: ReadonlyArray<readonly [number, number, number, number]> = [
+    [0, 1, 2, 888],
+    [2, 1, 2, 880],
+    [5, 0, 1, 915],
+  ];
+  const PANEL_CLOCK_ROWS: Record<number, ReadonlyArray<readonly [number, number]>> = {
+    0: [[2, 24], [3, 19], [4, 19], [5, 35], [6, 44], [7, 44], [8, 46], [9, 19], [10, 18], [11, 14], [12, 12], [13, 13], [14, 15], [15, 17], [16, 19], [17, 19], [18, 17], [19, 15], [20, 13], [21, 12], [22, 12], [23, 12], [24, 14], [25, 33], [26, 31], [27, 29], [36, 8], [37, 8], [38, 9], [39, 5], [40, 6], [52, 120], [56, 12], [57, 12], [58, 26], [59, 26], [60, 26], [61, 26], [62, 27], [63, 12]],
+    2: [[3, 20], [4, 14], [5, 49], [6, 43], [7, 51], [8, 12], [9, 14], [10, 14], [11, 12], [12, 14], [13, 36], [14, 33], [15, 31], [16, 32], [17, 29], [18, 31], [19, 38], [20, 12], [21, 14], [22, 14], [23, 12], [24, 14], [25, 21], [26, 21], [27, 21], [52, 120], [56, 12], [57, 12], [58, 25], [59, 24], [60, 23], [61, 24], [62, 26], [63, 12]],
+    5: [[2, 24], [3, 20], [4, 22], [5, 39], [6, 44], [7, 43], [8, 44], [9, 22], [10, 22], [11, 24], [12, 24], [13, 22], [14, 23], [15, 23], [16, 21], [17, 21], [18, 21], [19, 19], [20, 19], [21, 18], [22, 19], [23, 18], [24, 19], [25, 23], [26, 22], [27, 21], [52, 120], [56, 12], [57, 12], [58, 25], [59, 24], [60, 23], [61, 24], [62, 26], [63, 12]],
+  };
+
+  it("rend l encre que le PANNEAU recoit, rangee par rangee, dans les trois modes", () => {
+    for (const [source, cursor, fieldCount, ink] of PANEL_CLOCK) {
+      const r = renderMainScreen(
+        clock(source, { tempo: 120, running: true, insideTab: true, cursor, fieldCount }),
+      );
+      expect(r.count, `source ${source}`).toBe(ink);
+      const rows = r.rows.map((n, y) => [y, n] as const).filter(([, n]) => n > 0);
+      expect(rows, `source ${source}`).toEqual(PANEL_CLOCK_ROWS[source]);
+    }
+  });
+
+  it("n ecrit plus le champ SRC ni le titre centre", () => {
+    const rows = renderMainScreen(clock(5)).rows;
+    for (let y = 31; y < 52; y += 1) expect(rows[y], `rangee ${y}`).toBe(0);
+  });
+
+  it("le champ ouvert encadre le tempo, comme le nom d un pattern", () => {
+    const closed = renderMainScreen(clock(0, { insideTab: true, cursor: 0 })).count;
+    const open = renderMainScreen(clock(0, { insideTab: true, cursor: 0, fieldOpen: true })).count;
+    expect(open).not.toBe(closed);
+    const offClock = renderMainScreen(clock(1, { insideTab: true, cursor: 0, fieldOpen: true }));
+    const top = 28 - 22 - 2;
+    let frameInk = 0;
+    for (let x = 0; x < 60; x += 1) if (offClock.pixels.has(`${x},${top}`)) frameInk += 1;
+    expect(frameInk).toBe(0);
+  });
+});

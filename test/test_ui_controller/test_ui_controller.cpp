@@ -133,13 +133,150 @@ void test_press_does_nothing_on_the_settings_tab_while_it_is_deferred() {
     TEST_ASSERT_EQUAL(UiController::LEVEL_TAB_BAR, r.ui.level());
 }
 
-void test_the_clock_tab_exposes_tempo_then_source() {
+void test_the_internal_clock_exposes_the_tempo_then_the_mode() {
     Rig r;
     r.gotoTab(UiController::TAB_CLOCK);
-    TEST_ASSERT_EQUAL_UINT8(UiController::CLOCK_TAB_FIELDS, r.ui.fieldCount());
+    TEST_ASSERT_EQUAL_UINT8(2, r.ui.fieldCount());
     TEST_ASSERT_EQUAL(UiController::FIELD_TEMPO, r.ui.fieldAt(0));
-    TEST_ASSERT_EQUAL(UiController::FIELD_CLOCK_SOURCE, r.ui.fieldAt(1));
+    TEST_ASSERT_EQUAL(UiController::FIELD_CLOCK_MODE, r.ui.fieldAt(1));
+    TEST_ASSERT_EQUAL(UiController::FIELD_NONE, r.ui.fieldAt(2));
+    TEST_ASSERT_EQUAL(UiController::FIELD_TEMPO, r.ui.mainField());
     TEST_ASSERT_EQUAL_INT8(-1, r.ui.selectedChannel());
+}
+
+void test_the_external_clock_exposes_the_mode_then_the_ppqn() {
+    for (uint8_t source = 1; source <= 4; ++source) {
+        Rig r;
+        r.gotoTab(UiController::TAB_CLOCK);
+        TEST_ASSERT_TRUE(r.ui.setClockSource(source));
+        TEST_ASSERT_EQUAL_UINT8(2, r.ui.fieldCount());
+        TEST_ASSERT_EQUAL(UiController::FIELD_CLOCK_MODE, r.ui.fieldAt(0));
+        TEST_ASSERT_EQUAL(UiController::FIELD_PPQN, r.ui.fieldAt(1));
+        TEST_ASSERT_EQUAL(UiController::FIELD_NONE, r.ui.fieldAt(2));
+        TEST_ASSERT_EQUAL(UiController::FIELD_NONE, r.ui.mainField());
+    }
+}
+
+void test_the_midi_clock_exposes_the_mode_alone() {
+    Rig r;
+    r.gotoTab(UiController::TAB_CLOCK);
+    TEST_ASSERT_TRUE(r.ui.setClockSource(5));
+    TEST_ASSERT_EQUAL_UINT8(1, r.ui.fieldCount());
+    TEST_ASSERT_EQUAL(UiController::FIELD_CLOCK_MODE, r.ui.fieldAt(0));
+    TEST_ASSERT_EQUAL(UiController::FIELD_NONE, r.ui.fieldAt(1));
+    TEST_ASSERT_EQUAL(UiController::FIELD_NONE, r.ui.mainField());
+}
+
+void test_the_mode_and_the_ppqn_are_two_views_of_the_source_byte() {
+    const uint8_t modes[] = {0, 1, 1, 1, 1, 2};
+    const uint8_t rates[] = {0, 24, 4, 2, 1, 0};
+    for (uint8_t source = 0; source < 6; ++source) {
+        TEST_ASSERT_EQUAL_UINT8(modes[source], flexseq::clockModeOf(source));
+        if (modes[source] == 1) {
+            TEST_ASSERT_EQUAL_UINT8(rates[source],
+                flexseq::ppqnAtIndex(flexseq::ppqnIndexOf(source)));
+            TEST_ASSERT_EQUAL_UINT8(source, flexseq::clockSourceOf(
+                flexseq::CLOCK_MODE_EXT, flexseq::ppqnIndexOf(source)));
+        } else {
+            TEST_ASSERT_EQUAL_UINT8(0, flexseq::ppqnIndexOf(source));
+        }
+    }
+    TEST_ASSERT_EQUAL_UINT8(0, flexseq::clockSourceOf(flexseq::CLOCK_MODE_INT, 3));
+    TEST_ASSERT_EQUAL_UINT8(5, flexseq::clockSourceOf(flexseq::CLOCK_MODE_MIDI, 3));
+    TEST_ASSERT_EQUAL_UINT8(1, flexseq::clockSourceOf(flexseq::CLOCK_MODE_EXT, 4));
+    TEST_ASSERT_EQUAL_UINT8(6, UiController::CLOCK_SOURCE_COUNT);
+}
+
+void test_the_mode_field_walks_int_ext_midi_and_stops_at_both_ends() {
+    Rig r;
+    r.gotoTab(UiController::TAB_CLOCK);
+    r.enterTab();
+    r.gotoField(UiController::FIELD_CLOCK_MODE);
+    r.ui.handle(UiController::EVENT_PRESS);
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    TEST_ASSERT_EQUAL_UINT8(0, r.ui.clockSource());
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_UINT8(1, r.ui.clockSource());
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_UINT8(5, r.ui.clockSource());
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_UINT8(5, r.ui.clockSource());
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    TEST_ASSERT_EQUAL_UINT8(1, r.ui.clockSource());
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    TEST_ASSERT_EQUAL_UINT8(0, r.ui.clockSource());
+}
+
+void test_the_cursor_follows_the_mode_field_when_the_mode_moves_it() {
+    Rig r;
+    r.gotoTab(UiController::TAB_CLOCK);
+    r.enterTab();
+    r.gotoField(UiController::FIELD_CLOCK_MODE);
+    TEST_ASSERT_EQUAL_UINT8(1, r.ui.cursor());
+    r.ui.handle(UiController::EVENT_PRESS);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_UINT8(0, r.ui.cursor());
+    TEST_ASSERT_EQUAL(UiController::FIELD_CLOCK_MODE, r.ui.field());
+    TEST_ASSERT_TRUE(r.ui.fieldOpen());
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_UINT8(0, r.ui.cursor());
+    TEST_ASSERT_EQUAL(UiController::FIELD_CLOCK_MODE, r.ui.field());
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    TEST_ASSERT_EQUAL_UINT8(0, r.ui.clockSource());
+    TEST_ASSERT_EQUAL_UINT8(1, r.ui.cursor());
+    TEST_ASSERT_EQUAL(UiController::FIELD_CLOCK_MODE, r.ui.field());
+}
+
+void test_the_ppqn_field_walks_24_4_2_1_and_never_leaves_the_external_mode() {
+    Rig r;
+    r.gotoTab(UiController::TAB_CLOCK);
+    TEST_ASSERT_TRUE(r.ui.setClockSource(1));
+    r.enterTab();
+    r.gotoField(UiController::FIELD_PPQN);
+    r.ui.handle(UiController::EVENT_PRESS);
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    TEST_ASSERT_EQUAL_UINT8(1, r.ui.clockSource());
+    for (uint8_t expected = 2; expected <= 4; ++expected) {
+        r.ui.handle(UiController::EVENT_ROTATE, 1);
+        TEST_ASSERT_EQUAL_UINT8(expected, r.ui.clockSource());
+    }
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_UINT8(4, r.ui.clockSource());
+    TEST_ASSERT_EQUAL(UiController::FIELD_PPQN, r.ui.field());
+}
+
+void test_a_mode_that_does_not_change_keeps_the_ppqn() {
+    Rig r;
+    r.gotoTab(UiController::TAB_CLOCK);
+    TEST_ASSERT_TRUE(r.ui.setClockSource(3));
+    r.enterTab();
+    r.gotoField(UiController::FIELD_CLOCK_MODE);
+    r.ui.handle(UiController::EVENT_PRESS);
+    r.ui.handle(UiController::EVENT_ROTATE, 0);
+    TEST_ASSERT_EQUAL_UINT8(3, r.ui.clockSource());
+}
+
+void test_entering_the_external_mode_starts_at_24_ppqn() {
+    Rig r;
+    r.gotoTab(UiController::TAB_CLOCK);
+    TEST_ASSERT_TRUE(r.ui.setClockSource(5));
+    r.enterTab();
+    r.ui.handle(UiController::EVENT_PRESS);
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    TEST_ASSERT_EQUAL_UINT8(1, r.ui.clockSource());
+}
+
+void test_shift_rotation_on_the_bar_leaves_the_tempo_alone_off_the_internal_clock() {
+    const uint8_t sources[] = {1, 5};
+    for (uint8_t i = 0; i < 2; ++i) {
+        Rig r;
+        r.gotoTab(UiController::TAB_CLOCK);
+        TEST_ASSERT_TRUE(r.ui.setClockSource(sources[i]));
+        r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
+        TEST_ASSERT_EQUAL_UINT16(120, r.ui.tempo());
+        TEST_ASSERT_EQUAL_UINT8(sources[i], r.ui.clockSource());
+    }
 }
 
 void test_the_other_gestures_do_nothing_on_the_tab_bar() {
@@ -247,17 +384,17 @@ void test_tempo_is_clamped_to_the_musical_range() {
     TEST_ASSERT_EQUAL_UINT16(UiController::MIN_TEMPO, r.ui.tempo());
 }
 
-void test_the_clock_source_field_never_reaches_the_sentinel() {
+void test_the_clock_fields_never_reach_the_sentinel() {
     Rig r;
     r.gotoTab(UiController::TAB_CLOCK);
     r.enterTab();
-    r.gotoField(UiController::FIELD_CLOCK_SOURCE);
-    for (uint8_t i = 0; i < UiController::CLOCK_SOURCE_COUNT + 5; ++i) {
+    r.gotoField(UiController::FIELD_CLOCK_MODE);
+    for (uint8_t i = 0; i < 11; ++i) {
         r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
-        TEST_ASSERT_TRUE(r.ui.clockSource() < UiController::CLOCK_SOURCE_COUNT);
+        TEST_ASSERT_TRUE(r.ui.clockSource() < 6);
     }
-    TEST_ASSERT_EQUAL_UINT8(UiController::CLOCK_SOURCE_COUNT - 1, r.ui.clockSource());
-    for (uint8_t i = 0; i < UiController::CLOCK_SOURCE_COUNT + 5; ++i) {
+    TEST_ASSERT_EQUAL_UINT8(5, r.ui.clockSource());
+    for (uint8_t i = 0; i < 11; ++i) {
         r.ui.handle(UiController::EVENT_SHIFT_ROTATE, -1);
     }
     TEST_ASSERT_EQUAL_UINT8(0, r.ui.clockSource());
@@ -383,11 +520,10 @@ void test_no_field_keeps_the_acceleration_not_even_the_tempo() {
     TEST_ASSERT_EQUAL_UINT16_MESSAGE(UiController::DEFAULT_TEMPO + 1, r.ui.tempo(),
         "un cran vaut un BPM, l acceleration a disparu du tempo aussi");
 
-    r.gotoField(UiController::FIELD_CLOCK_SOURCE);
-    const uint8_t before = r.ui.clockSource();
+    r.gotoField(UiController::FIELD_CLOCK_MODE);
     r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 3);
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(before + 1, r.ui.clockSource(),
-        "la source est une liste courte : un cran vaut un pas");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, r.ui.clockSource(),
+        "le mode est une liste courte : un cran vaut un pas");
 }
 
 void test_a_long_turn_on_the_tempo_lands_on_the_bound() {
@@ -1556,7 +1692,16 @@ int main(int, char**) {
     RUN_TEST(test_an_accelerated_delta_moves_one_tab_not_three);
     RUN_TEST(test_press_enters_a_tab_that_has_fields);
     RUN_TEST(test_press_does_nothing_on_the_settings_tab_while_it_is_deferred);
-    RUN_TEST(test_the_clock_tab_exposes_tempo_then_source);
+    RUN_TEST(test_the_internal_clock_exposes_the_tempo_then_the_mode);
+    RUN_TEST(test_the_external_clock_exposes_the_mode_then_the_ppqn);
+    RUN_TEST(test_the_midi_clock_exposes_the_mode_alone);
+    RUN_TEST(test_the_mode_and_the_ppqn_are_two_views_of_the_source_byte);
+    RUN_TEST(test_the_mode_field_walks_int_ext_midi_and_stops_at_both_ends);
+    RUN_TEST(test_the_cursor_follows_the_mode_field_when_the_mode_moves_it);
+    RUN_TEST(test_the_ppqn_field_walks_24_4_2_1_and_never_leaves_the_external_mode);
+    RUN_TEST(test_a_mode_that_does_not_change_keeps_the_ppqn);
+    RUN_TEST(test_entering_the_external_mode_starts_at_24_ppqn);
+    RUN_TEST(test_shift_rotation_on_the_bar_leaves_the_tempo_alone_off_the_internal_clock);
     RUN_TEST(test_the_other_gestures_do_nothing_on_the_tab_bar);
 
     RUN_TEST(test_rotate_moves_the_field_cursor_and_wraps);
@@ -1567,7 +1712,7 @@ int main(int, char**) {
     RUN_TEST(test_shift_rotate_changes_the_value_without_opening_the_field);
     RUN_TEST(test_the_tempo_range_is_the_one_the_module_announces);
     RUN_TEST(test_tempo_is_clamped_to_the_musical_range);
-    RUN_TEST(test_the_clock_source_field_never_reaches_the_sentinel);
+    RUN_TEST(test_the_clock_fields_never_reach_the_sentinel);
     RUN_TEST(test_the_displayed_name_is_clamped_to_the_bank);
     RUN_TEST(test_the_length_field_edits_the_base_and_never_the_derived_value);
     RUN_TEST(test_the_length_field_leaves_the_modulation_in_place);

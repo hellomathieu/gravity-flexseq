@@ -17,8 +17,15 @@ flexseq::PatternBank patternBank;
 flexseq::Transport transport(engine);
 flexseq::UiController ui(engine, transport);
 
-constexpr uint8_t DEMO_TAB = 2;
-#if defined(FLEXSEQ_DEMO_MOD)
+constexpr uint8_t DEMO_CHANNEL = 1;
+#if defined(FLEXSEQ_DEMO_CLOCK_SOURCE)
+constexpr uint8_t DEMO_TAB = flexseq::UiController::TAB_CLOCK;
+#else
+constexpr uint8_t DEMO_TAB = flexseq::UiController::TAB_FIRST_CHANNEL + DEMO_CHANNEL;
+#endif
+#if defined(FLEXSEQ_DEMO_CLOCK_SOURCE)
+constexpr uint8_t DEMO_CURSOR = 1;
+#elif defined(FLEXSEQ_DEMO_MOD)
 constexpr uint8_t DEMO_CURSOR = flexseq::UiController::SEQ_FIELD_INDEX_CONFIG;
 #else
 constexpr uint8_t DEMO_CURSOR = 2;
@@ -75,17 +82,20 @@ void setup() {
     gravity.display.setFont(flexseq::FONT_VELVETSCREEN);
 
 #if defined(FLEXSEQ_DEMO_MODE_SEQ)
-    engine.setChannelMode(DEMO_TAB - 1, flexseq::MODE_SEQ);
+    engine.setChannelMode(DEMO_CHANNEL, flexseq::MODE_SEQ);
 #endif
-    engine.setSelectedPattern(DEMO_TAB - 1, 9);
-    engine.setBaseLength(DEMO_TAB - 1, 20);
-    engine.setSubdiv(DEMO_TAB - 1, -4);
-    engine.setBarLength(DEMO_TAB - 1, 3);
+    engine.setSelectedPattern(DEMO_CHANNEL, 9);
+    engine.setBaseLength(DEMO_CHANNEL, 20);
+    engine.setSubdiv(DEMO_CHANNEL, -4);
+    engine.setBarLength(DEMO_CHANNEL, 3);
 
 #if defined(FLEXSEQ_DEMO_MOD)
-    engine.setChannelMode(DEMO_TAB - 1, flexseq::MODE_SEQ);
-    engine.setCvDestination(DEMO_TAB - 1, flexseq::CV_SOURCE_1, flexseq::CV_DEST_PATTERN);
-    engine.setCvDestination(DEMO_TAB - 1, flexseq::CV_SOURCE_2, flexseq::CV_DEST_LENGTH);
+    engine.setChannelMode(DEMO_CHANNEL, flexseq::MODE_SEQ);
+    engine.setCvDestination(DEMO_CHANNEL, flexseq::CV_SOURCE_1, flexseq::CV_DEST_PATTERN);
+    engine.setCvDestination(DEMO_CHANNEL, flexseq::CV_SOURCE_2, flexseq::CV_DEST_LENGTH);
+#endif
+#if defined(FLEXSEQ_DEMO_CLOCK_SOURCE)
+    ui.setClockSource(FLEXSEQ_DEMO_CLOCK_SOURCE);
 #endif
     while (ui.currentTab() != DEMO_TAB) {
         ui.handle(flexseq::UiController::EVENT_ROTATE, 1);

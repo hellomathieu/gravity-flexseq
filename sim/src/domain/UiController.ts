@@ -18,6 +18,16 @@ import {
   type SequencerEngine,
 } from "./SequencerEngine.js";
 import { PATTERN_COUNT } from "./PatternBank.js";
+import {
+  CLOCK_MODE_COUNT,
+  CLOCK_SOURCE_INT,
+  CLOCK_SOURCE_VALUE_COUNT,
+  ClockMode,
+  clockModeOf,
+  clockSourceOf,
+  PPQN_CHOICE_COUNT,
+  ppqnIndexOf,
+} from "./ClockSource.js";
 import { DEFAULT_SUBDIV, SUBDIVS } from "./subdiv.js";
 import type { Transport } from "./Transport.js";
 
@@ -41,7 +51,7 @@ export enum UiLevel {
 export enum UiField {
   None,
   Tempo,
-  ClockSource,
+  ClockMode,
   Pattern,
   Length,
   Subdiv,
@@ -52,6 +62,7 @@ export enum UiField {
   Offset,
   Mod,
   Config,
+  Ppqn,
 }
 
 export const TAB_COUNT = 8;
@@ -59,7 +70,9 @@ export const TAB_CLOCK = 0;
 export const TAB_FIRST_CHANNEL = 1;
 export const TAB_SETTINGS = 7;
 
-export const CLOCK_TAB_FIELDS = 2;
+export const CLOCK_TAB_FIELDS_INT = 2;
+export const CLOCK_TAB_FIELDS_EXT = 2;
+export const CLOCK_TAB_FIELDS_MIDI = 1;
 export const CHANNEL_TAB_FIELDS = 3;
 export const SEQ_CHANNEL_TAB_FIELDS = 4;
 export const CONFIG_PAGE_FIELDS = 3;
@@ -79,8 +92,11 @@ export const CONFIG_FIELD_INDEX_LENGTH = 0;
 export const CONFIG_FIELD_INDEX_SUBDIV = 1;
 export const CONFIG_FIELD_INDEX_MOD = 2;
 
-export const CLOCK_SOURCE_COUNT = 6;
-export const CLOCK_SOURCE_INTERNAL = 0;
+export const CLOCK_FIELD_INDEX_MODE_INT = 1;
+export const CLOCK_FIELD_INDEX_MODE_EXTERNAL = 0;
+
+export const CLOCK_SOURCE_COUNT = CLOCK_SOURCE_VALUE_COUNT;
+export const CLOCK_SOURCE_INTERNAL = CLOCK_SOURCE_INT;
 export const MIN_TEMPO = 20;
 export const MAX_TEMPO = 300;
 export const DEFAULT_TEMPO = 120;
@@ -194,7 +210,16 @@ export class UiController {
   }
 
   get fieldCount(): number {
-    if (this.tab === TAB_CLOCK) return CLOCK_TAB_FIELDS;
+    if (this.tab === TAB_CLOCK) {
+      switch (clockModeOf(this.source)) {
+        case ClockMode.INT:
+          return CLOCK_TAB_FIELDS_INT;
+        case ClockMode.EXT:
+          return CLOCK_TAB_FIELDS_EXT;
+        default:
+          return CLOCK_TAB_FIELDS_MIDI;
+      }
+    }
     if (this.isChannelTab) {
       if (this.configPage) return CONFIG_PAGE_FIELDS;
       // La grande valeur n existe qu en SEQ : les deux autres modes ne lisent
@@ -207,7 +232,10 @@ export class UiController {
   fieldAt(index: number): UiField {
     if (index < 0 || index >= this.fieldCount) return UiField.None;
     if (this.tab === TAB_CLOCK) {
-      return index === 0 ? UiField.Tempo : UiField.ClockSource;
+      if (clockModeOf(this.source) === ClockMode.INT) {
+        return index === CLOCK_FIELD_INDEX_MODE_INT ? UiField.ClockMode : UiField.Tempo;
+      }
+      return index === CLOCK_FIELD_INDEX_MODE_EXTERNAL ? UiField.ClockMode : UiField.Ppqn;
     }
     if (this.configPage) {
       switch (index) {
@@ -426,7 +454,9 @@ export class UiController {
   }
 
   get mainField(): UiField {
-    if (this.tab === TAB_CLOCK) return UiField.Tempo;
+    if (this.tab === TAB_CLOCK) {
+      return clockModeOf(this.source) === ClockMode.INT ? UiField.Tempo : UiField.None;
+    }
     const channel = this.selectedChannel;
     if (channel < 0) return UiField.None;
     switch (this.engine.getChannelMode(channel)) {
@@ -450,8 +480,21 @@ export class UiController {
       case UiField.Tempo:
         this.currentTempo = clampRange(this.currentTempo + delta, MIN_TEMPO, MAX_TEMPO);
         break;
-      case UiField.ClockSource:
-        this.source = clampIndex(this.source, delta, CLOCK_SOURCE_COUNT);
+      case UiField.ClockMode: {
+        const current = clockModeOf(this.source);
+        const next = clampIndex(current, delta, CLOCK_MODE_COUNT) as ClockMode;
+        if (next !== current) {
+          this.source = clockSourceOf(next, 0);
+          this.fieldCursor =
+            next === ClockMode.INT ? CLOCK_FIELD_INDEX_MODE_INT : CLOCK_FIELD_INDEX_MODE_EXTERNAL;
+        }
+        break;
+      }
+      case UiField.Ppqn:
+        this.source = clockSourceOf(
+          ClockMode.EXT,
+          clampIndex(ppqnIndexOf(this.source), delta, PPQN_CHOICE_COUNT),
+        );
         break;
       case UiField.Pattern: {
         if (channel < 0) break;

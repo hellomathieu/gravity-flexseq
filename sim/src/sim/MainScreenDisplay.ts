@@ -4,6 +4,7 @@ export {
   type MainScreenModel,
 } from "../domain/MainScreenModel.js";
 import type { MainScreenModel } from "../domain/MainScreenModel.js";
+import { ClockMode, clockModeOf, ppqnAtIndex, ppqnIndexOf } from "../domain/ClockSource.js";
 import { GLYPH_HEIGHT, textPixels, textWidth } from "./oledFont.js";
 import { INK, OLED_H, OLED_W, PAPER, type OledCtx } from "./OledDisplay.js";
 
@@ -66,7 +67,6 @@ export const MAIN_LABEL_BASELINE_Y = 41;
 // L etat d un emplacement sur l onglet PATTERNS : un carre a gauche de
 // l etiquette, PLEIN quand il porte quelque chose, CREUX quand il est libre.
 
-export const CLOCK_SOURCE_LABELS = ["INT", "EXT24", "EXT4", "EXT2", "EXT1", "MIDI"] as const;
 
 
 export function tabSlotX(tab: number): number {
@@ -91,12 +91,23 @@ export function barLabel(steps: number): string {
   return steps === 0 ? "-" : String(steps);
 }
 
-export function sourceLabel(source: number): string {
-  return CLOCK_SOURCE_LABELS[source] ?? "MIDI";
+export function clockModeLabel(source: number): string {
+  switch (clockModeOf(source)) {
+    case ClockMode.INT:
+      return "INT";
+    case ClockMode.EXT:
+      return "EXT";
+    default:
+      return "MIDI";
+  }
 }
 
 export function headlineOf(model: MainScreenModel): string {
-  if (model.tab === TAB_CLOCK) return String(model.tempo);
+  if (model.tab === TAB_CLOCK) {
+    return clockModeOf(model.clockSource) === ClockMode.INT
+      ? String(model.tempo)
+      : clockModeLabel(model.clockSource);
+  }
   if (model.tab >= TAB_SETTINGS) return "";
   return patternName(model.patternIndex);
 }
@@ -159,7 +170,9 @@ export function drawMainScreenOled(ctx: OledCtx, model: MainScreenModel): void {
     const top = HEADLINE_BOX_Y + Math.floor((HEADLINE_BOX_H - GLYPH_HEIGHT * HEADLINE_SCALE) / 2);
     blit(ctx, headline, Math.round((OLED_W - w) / 2), top, HEADLINE_SCALE);
   }
-  if (model.insideTab && model.cursor === 0) {
+  const headlineTakesCursor =
+    model.tab !== TAB_CLOCK || clockModeOf(model.clockSource) === ClockMode.INT;
+  if (headlineTakesCursor && model.insideTab && model.cursor === 0) {
     frame(ctx, HEADLINE_BOX_X, HEADLINE_BOX_Y, HEADLINE_BOX_W, HEADLINE_BOX_H);
     if (model.fieldOpen) {
       frame(ctx, HEADLINE_BOX_X + 1, HEADLINE_BOX_Y + 1, HEADLINE_BOX_W - 2, HEADLINE_BOX_H - 2);
@@ -169,8 +182,15 @@ export function drawMainScreenOled(ctx: OledCtx, model: MainScreenModel): void {
   const onField = (index: number) => model.insideTab && model.cursor === index;
 
   if (model.tab === 0) {
-    labelledField(ctx, COL_LEFT_X, ROW_A_BOX_Y, "SRC", sourceLabel(model.clockSource),
-                  onField(1), onField(1) && model.fieldOpen);
+    const mode = clockModeOf(model.clockSource);
+    const modeAt = mode === ClockMode.INT ? 1 : 0;
+    labelledField(ctx, COL_LEFT_X, ROW_A_BOX_Y, "MODE", clockModeLabel(model.clockSource),
+                  onField(modeAt), onField(modeAt) && model.fieldOpen);
+    if (mode === ClockMode.EXT) {
+      labelledField(ctx, COL_RIGHT_X, ROW_A_BOX_Y, "PPQN",
+                    String(ppqnAtIndex(ppqnIndexOf(model.clockSource))),
+                    onField(1), onField(1) && model.fieldOpen);
+    }
   } else if (model.tab >= TAB_FIRST_CHANNEL && model.tab <= TAB_LAST_CHANNEL) {
     labelledField(ctx, COL_LEFT_X, ROW_A_BOX_Y, "LEN", String(model.length),
                   onField(1), onField(1) && model.fieldOpen);

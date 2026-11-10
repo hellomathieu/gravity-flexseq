@@ -24,6 +24,8 @@ struct Call {
     uint8_t x;
     uint8_t y;
     char text[16];   // SUBDIVISION et SKIP CHANCE font onze caracteres
+    bool big;
+    uint8_t color;
 };
 
 struct RecordingCanvas {
@@ -76,6 +78,8 @@ struct RecordingCanvas {
             Call& c = calls[callCount++];
             c.x = x;
             c.y = y;
+            c.big = bigFont;
+            c.color = color;
             strncpy(c.text, s, sizeof(c.text) - 1);
             c.text[sizeof(c.text) - 1] = '\0';
         }
@@ -464,29 +468,86 @@ void test_every_pattern_of_the_bank_has_a_distinct_name() {
  * Onglet horloge et onglet reglages
  */
 
-void test_the_clock_tab_shows_the_tempo_big_and_the_source() {
+void test_the_clock_tab_shows_the_tempo_in_the_large_font_with_its_label() {
+    canvas.reset();
+    MainScreenModel m = clockTab();
+    m.tempo = 240;
+    drawMainScreen(canvas, m);
+
+    const Call* value = canvas.findOnBaseline("240", ms::MAIN_VALUE_BASELINE_Y);
+    TEST_ASSERT_NOT_NULL(value);
+    TEST_ASSERT_TRUE(value->big);
+    const Call* label = canvas.findOnBaseline("BPM", ms::MAIN_LABEL_BASELINE_Y);
+    TEST_ASSERT_NOT_NULL(label);
+    const Call* mode = canvas.findOnBaseline("MODE:", ms::LINE_0_BASELINE_Y);
+    TEST_ASSERT_NOT_NULL(mode);
+    TEST_ASSERT_EQUAL_UINT8(ms::LINE_LABEL_X, mode->x);
+    const Call* modeValue = canvas.findOnBaseline("INT", ms::LINE_0_BASELINE_Y);
+    TEST_ASSERT_NOT_NULL(modeValue);
+    TEST_ASSERT_EQUAL_UINT8(ms::LINE_VALUE_X, modeValue->x);
+    TEST_ASSERT_NULL(canvas.find("PPQN:"));
+    TEST_ASSERT_NULL(canvas.find("SRC"));
+}
+
+void test_the_external_clock_shows_ext_in_the_large_font_and_the_ppqn_line() {
+    const uint8_t sources[] = {1, 2, 3, 4};
+    const char* const rates[] = {"24", "4", "2", "1"};
+    for (uint8_t i = 0; i < 4; ++i) {
+        canvas.reset();
+        MainScreenModel m = clockTab();
+        m.tempo = 240;
+        m.clockSource = sources[i];
+        drawMainScreen(canvas, m);
+
+        const Call* big = canvas.findOnBaseline("EXT", ms::MAIN_VALUE_BASELINE_Y);
+        TEST_ASSERT_NOT_NULL(big);
+        TEST_ASSERT_TRUE(big->big);
+        TEST_ASSERT_NULL(canvas.find("240"));
+        TEST_ASSERT_NULL(canvas.find("BPM"));
+        TEST_ASSERT_NOT_NULL(canvas.findOnBaseline("EXT", ms::LINE_0_BASELINE_Y));
+        TEST_ASSERT_NOT_NULL(canvas.findOnBaseline("PPQN:", ms::LINE_1_BASELINE_Y));
+        const Call* rate = canvas.findOnBaseline(rates[i], ms::LINE_1_BASELINE_Y);
+        TEST_ASSERT_NOT_NULL(rate);
+        TEST_ASSERT_EQUAL_UINT8(ms::LINE_VALUE_X, rate->x);
+    }
+}
+
+void test_the_midi_clock_shows_midi_in_the_large_font_and_one_line() {
     canvas.reset();
     MainScreenModel m = clockTab();
     m.tempo = 240;
     m.clockSource = 5;
     drawMainScreen(canvas, m);
 
-    const Call* headline = canvas.findOnBaseline("240", ms::HEADLINE_BASELINE_Y);
-    TEST_ASSERT_NOT_NULL(headline);
-    TEST_ASSERT_NOT_NULL(canvas.find("SRC"));
-    TEST_ASSERT_NOT_NULL(canvas.find("MIDI"));
-    TEST_ASSERT_NULL_MESSAGE(canvas.find("LEN"), "aucun reglage de channel dans l'onglet horloge");
+    const Call* big = canvas.findOnBaseline("MIDI", ms::MAIN_VALUE_BASELINE_Y);
+    TEST_ASSERT_NOT_NULL(big);
+    TEST_ASSERT_TRUE(big->big);
+    TEST_ASSERT_NOT_NULL(canvas.findOnBaseline("MIDI", ms::LINE_0_BASELINE_Y));
+    TEST_ASSERT_NULL(canvas.find("240"));
+    TEST_ASSERT_NULL(canvas.find("BPM"));
+    TEST_ASSERT_NULL(canvas.find("PPQN:"));
 }
 
-void test_the_six_clock_sources_have_distinct_labels() {
-    for (uint8_t a = 0; a < 6; ++a) {
-        for (uint8_t b = static_cast<uint8_t>(a + 1); b < 6; ++b) {
-            TEST_ASSERT_TRUE(strcmp(flexseq::detail::sourceLabel(a),
-                                    flexseq::detail::sourceLabel(b)) != 0);
-        }
-    }
-    TEST_ASSERT_EQUAL_STRING("INT", flexseq::detail::sourceLabel(0));
-    TEST_ASSERT_EQUAL_STRING("MIDI", flexseq::detail::sourceLabel(5));
+void test_the_cursor_of_the_clock_tab_follows_the_mode() {
+    auto inverted = [](uint8_t source, uint8_t cursor, const char* text, uint8_t baseline) {
+        canvas.reset();
+        MainScreenModel m = clockTab();
+        m.clockSource = source;
+        m.insideTab = true;
+        m.cursor = cursor;
+        drawMainScreen(canvas, m);
+        const Call* c = canvas.findOnBaseline(text, baseline);
+        TEST_ASSERT_NOT_NULL(c);
+        return c->color == 0;
+    };
+    TEST_ASSERT_TRUE(inverted(0, 0, "BPM", ms::MAIN_LABEL_BASELINE_Y));
+    TEST_ASSERT_FALSE(inverted(0, 0, "MODE:", ms::LINE_0_BASELINE_Y));
+    TEST_ASSERT_TRUE(inverted(0, 1, "MODE:", ms::LINE_0_BASELINE_Y));
+    TEST_ASSERT_FALSE(inverted(0, 1, "BPM", ms::MAIN_LABEL_BASELINE_Y));
+    TEST_ASSERT_TRUE(inverted(1, 0, "MODE:", ms::LINE_0_BASELINE_Y));
+    TEST_ASSERT_TRUE(inverted(1, 1, "PPQN:", ms::LINE_1_BASELINE_Y));
+    TEST_ASSERT_FALSE(inverted(1, 1, "MODE:", ms::LINE_0_BASELINE_Y));
+    TEST_ASSERT_TRUE(inverted(5, 0, "MODE:", ms::LINE_0_BASELINE_Y));
 }
 
 void test_the_settings_tab_is_empty_while_it_is_deferred() {
@@ -992,13 +1053,6 @@ void test_the_cursor_on_the_big_value_inverts_its_label() {
         "le curseur pose sur la grande valeur encre davantage");
 }
 
-void test_the_settings_tab_headline_stays_empty() {
-    flexseq::MainScreenModel m{};
-    m.tab = flexseq::mainscreen::TAB_SETTINGS;
-    char out[6];
-    flexseq::detail::headlineOf(m, out);
-    TEST_ASSERT_EQUAL_STRING("", out);
-}
 
 
 int main() {
@@ -1044,8 +1098,10 @@ int main() {
     RUN_TEST(test_a_separation_of_none_is_shown_as_a_dash);
     RUN_TEST(test_every_pattern_of_the_bank_has_a_distinct_name);
 
-    RUN_TEST(test_the_clock_tab_shows_the_tempo_big_and_the_source);
-    RUN_TEST(test_the_six_clock_sources_have_distinct_labels);
+    RUN_TEST(test_the_clock_tab_shows_the_tempo_in_the_large_font_with_its_label);
+    RUN_TEST(test_the_external_clock_shows_ext_in_the_large_font_and_the_ppqn_line);
+    RUN_TEST(test_the_midi_clock_shows_midi_in_the_large_font_and_one_line);
+    RUN_TEST(test_the_cursor_of_the_clock_tab_follows_the_mode);
     RUN_TEST(test_the_settings_tab_is_empty_while_it_is_deferred);
 
     RUN_TEST(test_the_cursor_marks_the_line_it_is_on_and_no_other);
@@ -1059,7 +1115,6 @@ int main() {
     RUN_TEST(test_the_rule_band_carries_the_rule_and_no_text);
     RUN_TEST(test_the_cursor_on_the_big_value_inverts_its_label);
     RUN_TEST(test_the_open_field_frames_the_name);
-    RUN_TEST(test_the_settings_tab_headline_stays_empty);
 
     return UNITY_END();
 }

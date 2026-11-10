@@ -15,7 +15,7 @@ import {
   drawMainScreenOled,
   headlineOf,
   patternName,
-  sourceLabel,
+  clockModeLabel,
   subdivLabel,
   barLabel,
   tabCentreX,
@@ -109,16 +109,17 @@ describe("MainScreenDisplay — labels, mirrored from the C++ renderer", () => {
     expect(barLabel(6)).toBe("6");
   });
 
-  it("gives the six clock sources distinct labels", () => {
-    const labels = new Set(Array.from({ length: 6 }, (_, i) => sourceLabel(i)));
-    expect(labels.size).toBe(6);
-    expect(sourceLabel(0)).toBe("INT");
-    expect(sourceLabel(5)).toBe("MIDI");
+  it("names the three clock modes, and the four external rates share one name", () => {
+    expect(clockModeLabel(0)).toBe("INT");
+    for (const source of [1, 2, 3, 4]) expect(clockModeLabel(source)).toBe("EXT");
+    expect(clockModeLabel(5)).toBe("MIDI");
   });
 
   it("makes the headline the pattern name, the tempo, or nothing", () => {
     expect(headlineOf(channelTab(1))).toBe("A1");
     expect(headlineOf({ ...channelTab(0), tempo: 240 })).toBe("240");
+    expect(headlineOf({ ...channelTab(0), tempo: 240, clockSource: 2 })).toBe("EXT");
+    expect(headlineOf({ ...channelTab(0), tempo: 240, clockSource: 5 })).toBe("MIDI");
     expect(headlineOf(channelTab(TAB_COUNT - 1))).toBe("");
   });
 

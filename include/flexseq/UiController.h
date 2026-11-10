@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+#include <flexseq/ClockSource.h>
 #include <flexseq/Pattern.h>
 #include <flexseq/SequencerEngine.h>
 #include <flexseq/Transport.h>
@@ -32,7 +33,7 @@ public:
     enum Field : uint8_t {
         FIELD_NONE,
         FIELD_TEMPO,
-        FIELD_CLOCK_SOURCE,
+        FIELD_CLOCK_MODE,
         FIELD_PATTERN,
         FIELD_LENGTH,
         FIELD_SUBDIV,
@@ -43,6 +44,7 @@ public:
         FIELD_OFFSET,
         FIELD_MOD,
         FIELD_CONFIG,
+        FIELD_PPQN,
     };
 
     static constexpr uint8_t TAB_COUNT = 8;
@@ -50,7 +52,9 @@ public:
     static constexpr uint8_t TAB_FIRST_CHANNEL = 1;
     static constexpr uint8_t TAB_SETTINGS = 7;
 
-    static constexpr uint8_t CLOCK_TAB_FIELDS = 2;
+    static constexpr uint8_t CLOCK_TAB_FIELDS_INT = 2;
+    static constexpr uint8_t CLOCK_TAB_FIELDS_EXT = 2;
+    static constexpr uint8_t CLOCK_TAB_FIELDS_MIDI = 1;
     static constexpr uint8_t CHANNEL_TAB_FIELDS = 3;
     static constexpr uint8_t SEQ_CHANNEL_TAB_FIELDS = 4;
     static constexpr uint8_t CONFIG_PAGE_FIELDS = 3;
@@ -67,9 +71,12 @@ public:
     static constexpr uint8_t CONFIG_FIELD_INDEX_SUBDIV = 1;
     static constexpr uint8_t CONFIG_FIELD_INDEX_MOD = 2;
 
+    static constexpr uint8_t CLOCK_FIELD_INDEX_MODE_INT = 1;
+    static constexpr uint8_t CLOCK_FIELD_INDEX_MODE_EXTERNAL = 0;
 
-    static constexpr uint8_t CLOCK_SOURCE_COUNT = 6;
-    static constexpr uint8_t CLOCK_SOURCE_INTERNAL = 0;
+
+    static constexpr uint8_t CLOCK_SOURCE_COUNT = CLOCK_SOURCE_VALUE_COUNT;
+    static constexpr uint8_t CLOCK_SOURCE_INTERNAL = CLOCK_SOURCE_INT;
     static constexpr uint16_t MIN_TEMPO = 20;
     static constexpr uint16_t MAX_TEMPO = 300;
 #ifndef FLEXSEQ_DEFAULT_TEMPO

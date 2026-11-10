@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   CHANNEL_TAB_FIELDS,
   CLOCK_SOURCE_COUNT,
-  CLOCK_TAB_FIELDS,
   DEFAULT_TEMPO,
   MAX_TEMPO,
   MIN_TEMPO,
@@ -25,6 +24,13 @@ import {
   UiLevel,
 } from "../src/domain/UiController.js";
 import { Transport } from "../src/domain/Transport.js";
+import {
+  ClockMode,
+  clockModeOf,
+  clockSourceOf,
+  ppqnAtIndex,
+  ppqnIndexOf,
+} from "../src/domain/ClockSource.js";
 import { PATTERN_COUNT } from "../src/domain/PatternBank.js";
 import {
   CHANNEL_COUNT,
@@ -132,13 +138,147 @@ describe("UiController — tab bar", () => {
     expect(ui.level).toBe(UiLevel.TabBar);
   });
 
-  it("the clock tab exposes tempo then source and owns no channel", () => {
+  it("the internal clock exposes the tempo then the mode and owns no channel", () => {
     const { ui, gotoTab } = rig();
     gotoTab(TAB_CLOCK);
-    expect(ui.fieldCount).toBe(CLOCK_TAB_FIELDS);
+    expect(ui.fieldCount).toBe(2);
     expect(ui.fieldAt(0)).toBe(UiField.Tempo);
-    expect(ui.fieldAt(1)).toBe(UiField.ClockSource);
+    expect(ui.fieldAt(1)).toBe(UiField.ClockMode);
+    expect(ui.fieldAt(2)).toBe(UiField.None);
+    expect(ui.mainField).toBe(UiField.Tempo);
     expect(ui.selectedChannel).toBe(-1);
+  });
+
+  it("the external clock exposes the mode then the ppqn", () => {
+    for (const source of [1, 2, 3, 4]) {
+      const { ui, gotoTab } = rig();
+      gotoTab(TAB_CLOCK);
+      expect(ui.setClockSource(source)).toBe(true);
+      expect(ui.fieldCount).toBe(2);
+      expect(ui.fieldAt(0)).toBe(UiField.ClockMode);
+      expect(ui.fieldAt(1)).toBe(UiField.Ppqn);
+      expect(ui.fieldAt(2)).toBe(UiField.None);
+      expect(ui.mainField).toBe(UiField.None);
+    }
+  });
+
+  it("the midi clock exposes the mode alone", () => {
+    const { ui, gotoTab } = rig();
+    gotoTab(TAB_CLOCK);
+    expect(ui.setClockSource(5)).toBe(true);
+    expect(ui.fieldCount).toBe(1);
+    expect(ui.fieldAt(0)).toBe(UiField.ClockMode);
+    expect(ui.fieldAt(1)).toBe(UiField.None);
+    expect(ui.mainField).toBe(UiField.None);
+  });
+
+  it("the mode and the ppqn are two views of the source byte", () => {
+    const modes = [0, 1, 1, 1, 1, 2];
+    const rates = [0, 24, 4, 2, 1, 0];
+    for (let source = 0; source < 6; source += 1) {
+      expect(clockModeOf(source)).toBe(modes[source]);
+      if (modes[source] === 1) {
+        expect(ppqnAtIndex(ppqnIndexOf(source))).toBe(rates[source]);
+        expect(clockSourceOf(ClockMode.EXT, ppqnIndexOf(source))).toBe(source);
+      } else {
+        expect(ppqnIndexOf(source)).toBe(0);
+      }
+    }
+    expect(clockSourceOf(ClockMode.INT, 3)).toBe(0);
+    expect(clockSourceOf(ClockMode.MIDI, 3)).toBe(5);
+    expect(clockSourceOf(ClockMode.EXT, 4)).toBe(1);
+    expect(CLOCK_SOURCE_COUNT).toBe(6);
+  });
+
+  it("the mode field walks int, ext, midi and stops at both ends", () => {
+    const { ui, gotoTab, enterTab, gotoField } = rig();
+    gotoTab(TAB_CLOCK);
+    enterTab();
+    gotoField(UiField.ClockMode);
+    ui.handle(UiEvent.Press);
+    ui.handle(UiEvent.Rotate, -1);
+    expect(ui.clockSource).toBe(0);
+    ui.handle(UiEvent.Rotate, 1);
+    expect(ui.clockSource).toBe(1);
+    ui.handle(UiEvent.Rotate, 1);
+    expect(ui.clockSource).toBe(5);
+    ui.handle(UiEvent.Rotate, 1);
+    expect(ui.clockSource).toBe(5);
+    ui.handle(UiEvent.Rotate, -1);
+    expect(ui.clockSource).toBe(1);
+    ui.handle(UiEvent.Rotate, -1);
+    expect(ui.clockSource).toBe(0);
+  });
+
+  it("the cursor follows the mode field when the mode moves it", () => {
+    const { ui, gotoTab, enterTab, gotoField } = rig();
+    gotoTab(TAB_CLOCK);
+    enterTab();
+    gotoField(UiField.ClockMode);
+    expect(ui.cursor).toBe(1);
+    ui.handle(UiEvent.Press);
+    ui.handle(UiEvent.Rotate, 1);
+    expect(ui.cursor).toBe(0);
+    expect(ui.field).toBe(UiField.ClockMode);
+    expect(ui.fieldOpen).toBe(true);
+    ui.handle(UiEvent.Rotate, 1);
+    expect(ui.cursor).toBe(0);
+    expect(ui.field).toBe(UiField.ClockMode);
+    ui.handle(UiEvent.Rotate, -1);
+    ui.handle(UiEvent.Rotate, -1);
+    expect(ui.clockSource).toBe(0);
+    expect(ui.cursor).toBe(1);
+    expect(ui.field).toBe(UiField.ClockMode);
+  });
+
+  it("the ppqn field walks 24, 4, 2, 1 and never leaves the external mode", () => {
+    const { ui, gotoTab, enterTab, gotoField } = rig();
+    gotoTab(TAB_CLOCK);
+    expect(ui.setClockSource(1)).toBe(true);
+    enterTab();
+    gotoField(UiField.Ppqn);
+    ui.handle(UiEvent.Press);
+    ui.handle(UiEvent.Rotate, -1);
+    expect(ui.clockSource).toBe(1);
+    for (const expected of [2, 3, 4]) {
+      ui.handle(UiEvent.Rotate, 1);
+      expect(ui.clockSource).toBe(expected);
+    }
+    ui.handle(UiEvent.Rotate, 1);
+    expect(ui.clockSource).toBe(4);
+    expect(ui.field).toBe(UiField.Ppqn);
+  });
+
+  it("a mode that does not change keeps the ppqn", () => {
+    const { ui, gotoTab, enterTab, gotoField } = rig();
+    gotoTab(TAB_CLOCK);
+    expect(ui.setClockSource(3)).toBe(true);
+    enterTab();
+    gotoField(UiField.ClockMode);
+    ui.handle(UiEvent.Press);
+    ui.handle(UiEvent.Rotate, 0);
+    expect(ui.clockSource).toBe(3);
+  });
+
+  it("entering the external mode starts at 24 ppqn", () => {
+    const { ui, gotoTab, enterTab } = rig();
+    gotoTab(TAB_CLOCK);
+    expect(ui.setClockSource(5)).toBe(true);
+    enterTab();
+    ui.handle(UiEvent.Press);
+    ui.handle(UiEvent.Rotate, -1);
+    expect(ui.clockSource).toBe(1);
+  });
+
+  it("shift rotation on the bar leaves the tempo alone off the internal clock", () => {
+    for (const source of [1, 5]) {
+      const { ui, gotoTab } = rig();
+      gotoTab(TAB_CLOCK);
+      expect(ui.setClockSource(source)).toBe(true);
+      ui.handle(UiEvent.ShiftRotate, 1);
+      expect(ui.tempo).toBe(120);
+      expect(ui.clockSource).toBe(source);
+    }
   });
 
   it("the other gestures do nothing on the tab bar", () => {
@@ -247,17 +387,17 @@ describe("UiController — inside a tab", () => {
     expect(ui.tempo).toBe(MIN_TEMPO);
   });
 
-  it("the clock source field never reaches the sentinel", () => {
+  it("the clock fields never reach the sentinel", () => {
     const { ui, gotoTab, enterTab, gotoField } = rig();
     gotoTab(TAB_CLOCK);
     enterTab();
-    gotoField(UiField.ClockSource);
-    for (let i = 0; i < CLOCK_SOURCE_COUNT + 5; i += 1) {
+    gotoField(UiField.ClockMode);
+    for (let i = 0; i < 11; i += 1) {
       ui.handle(UiEvent.ShiftRotate, 1);
-      expect(ui.clockSource).toBeLessThan(CLOCK_SOURCE_COUNT);
+      expect(ui.clockSource).toBeLessThan(6);
     }
-    expect(ui.clockSource).toBe(CLOCK_SOURCE_COUNT - 1);
-    for (let i = 0; i < CLOCK_SOURCE_COUNT + 5; i += 1) ui.handle(UiEvent.ShiftRotate, -1);
+    expect(ui.clockSource).toBe(5);
+    for (let i = 0; i < 11; i += 1) ui.handle(UiEvent.ShiftRotate, -1);
     expect(ui.clockSource).toBe(0);
   });
 
@@ -321,10 +461,9 @@ describe("UiController — inside a tab", () => {
     enterTab();
     ui.handle(UiEvent.ShiftRotate, 3);
     expect(ui.tempo).toBe(DEFAULT_TEMPO + 1);
-    gotoField(UiField.ClockSource);
-    const before = ui.clockSource;
+    gotoField(UiField.ClockMode);
     ui.handle(UiEvent.ShiftRotate, 3);
-    expect(ui.clockSource).toBe(before + 1);
+    expect(ui.clockSource).toBe(1);
   });
 
   it("never accelerates a short list", () => {
