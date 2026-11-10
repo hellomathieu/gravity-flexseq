@@ -39,6 +39,8 @@ static const int DETENTS_BEFORE_RATCHET_2 =
 static const int DETENTS_TO_RATCHET_4 = (int)flexseq::ratchetChoiceIndexOf(flexseq::RATCHET_4);
 static const int DETENTS_TO_RATCHET_6 = (int)flexseq::ratchetChoiceIndexOf(flexseq::RATCHET_6);
 static const int DETENTS_TO_TRIPLET = (int)flexseq::ratchetChoiceIndexOf(flexseq::RATCHET_TRIPLET);
+static const int DETENTS_TO_LAST_CHOICE = (int)flexseq::RATCHET_CHOICE_COUNT - 1;
+static const int DETENTS_FROM_TRIPLET_PAST_THE_END = DETENTS_TO_LAST_CHOICE - DETENTS_TO_TRIPLET + 1;
 #include <flexseq/Transport.h>
 #include <flexseq/UiController.h>
 
@@ -1868,7 +1870,8 @@ int main(int argc, char **argv)
 
         for (int cran = 1; cran <= 3; ++cran) {
             marque = g_twi_bytes;
-            const int crans = cran == 1 ? 1 + DETENTS_BEFORE_RATCHET_2 : 1;
+            const int crans = cran == 1 ? 1 + DETENTS_BEFORE_RATCHET_2
+                            : cran == 3 ? DETENTS_FROM_TRIPLET_PAST_THE_END : 1;
             if (!skipBGeste) shiftRotate(avr, crans, 1, harness::RATCHET_BURST_LIMIT, false);
             readInstances(avr, vu);
             ecarts = instancesDiffCount(vu, expectedBytes, &premier);
@@ -1880,8 +1883,12 @@ int main(int argc, char **argv)
                    (int)patternOfOffset(premier), (unsigned)byteOfOffset(premier));
         }
 
+        printf("rD_plafond         nibble %02x crans %d\n",
+               (unsigned)flexseq::ratchetChoiceAt((uint8_t)DETENTS_TO_LAST_CHOICE),
+               DETENTS_FROM_TRIPLET_PAST_THE_END);
+
         marque = g_twi_bytes;
-        if (!skipBGeste) shiftRotate(avr, DETENTS_TO_TRIPLET, 0, harness::RATCHET_BURST_LIMIT, false);
+        if (!skipBGeste) shiftRotate(avr, DETENTS_TO_LAST_CHOICE, 0, harness::RATCHET_BURST_LIMIT, false);
         readInstances(avr, vu);
         ecarts = instancesDiffCount(vu, expectedBytes, &premier);
         printf("rD_retour          nibble %02x octet %02x ecarts %u twi %u\n",

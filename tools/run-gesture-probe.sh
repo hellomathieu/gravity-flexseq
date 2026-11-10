@@ -2146,10 +2146,13 @@ else
   fi
 
   N3="$(d2 cran3 3)"; E3="$(d2 cran3 7)"; T3="$(d2 cran3 11)"
-  if [ "$N3" = "$N2" ] && [ "$E3" = "$E2" ] && [ "${T3:-0}" -gt 0 ] 2>/dev/null; then
-    ok "R11 : plafond du choix" "3e cran : nibble inchange a $N3, $T3 octets de trafic — le geste a bien atteint le controleur"
+  NP="$(d2 plafond 3)"; CP="$(d2 plafond 5)"
+  if [ -z "$NP" ]; then
+    inval "R11 : plafond du choix" "la sonde n a pas publie le dernier code de la liste"
+  elif [ "$N3" = "$NP" ] && [ "$E3" = "$E2" ] && [ "${T3:-0}" -gt 0 ] 2>/dev/null; then
+    ok "R11 : plafond du choix" "$CP crans apres le triolet : nibble arrete a $N3, le dernier code de la liste LU dans le domaine, $T3 octets de trafic"
   else
-    bad "R11 : plafond du choix" "nibble $N3 (attendu $N2), $E3 ecart(s), trafic $T3"
+    bad "R11 : plafond du choix" "nibble $N3 (attendu $NP, le dernier code de la liste), $E3 ecart(s), trafic $T3"
   fi
 
   D_REF_OK=1; D_REF_D=""
