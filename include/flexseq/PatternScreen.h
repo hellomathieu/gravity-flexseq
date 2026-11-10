@@ -66,15 +66,21 @@ constexpr uint8_t HEADER_LINE_Y = 10;
 constexpr uint8_t HEADER_LINE_W = 120;
 
 constexpr uint8_t HEADER_TITLE_X = HEADER_LINE_X;
-constexpr uint8_t TITLE_W = 65;
+constexpr uint8_t TITLE_W = 48;
+
+constexpr uint8_t COUNTER_X = 60;
+constexpr uint8_t COUNTER_MAX_W = 5 * FONT_VELVETSCREEN_MAX_WIDTH;
+constexpr uint8_t COUNTER_PAD = 1;
 
 constexpr uint8_t SEP_LABEL_X = 102;
 constexpr uint8_t SEP_VALUE_X = 120;
 constexpr uint8_t SEP_LABEL_W = 16;
 constexpr uint8_t SEP_FRAME_PAD = 2;
 
-static_assert(HEADER_TITLE_X + TITLE_W < SEP_LABEL_X,
-              "le titre ferre a gauche doit degager l etiquette SEP");
+static_assert(HEADER_TITLE_X + TITLE_W < COUNTER_X - COUNTER_PAD,
+              "the title must clear the box of the counter");
+static_assert(COUNTER_X + COUNTER_MAX_W + COUNTER_PAD < SEP_LABEL_X - 1,
+              "the box of the counter must clear the box of the SEP label");
 static_assert(SEP_LABEL_X + SEP_LABEL_W < SEP_VALUE_X,
               "l etiquette vient avant la valeur, sans la toucher");
 static_assert(SEP_VALUE_X + FONT_VELVETSCREEN_MAX_WIDTH + SEP_FRAME_PAD <= WIDTH,
@@ -160,6 +166,10 @@ struct PatternScreenModel {
     uint8_t barLength; // separation de mesure (0 = aucune) : GRAPHIQUE seule
     bool sepSelected;  // le curseur est monte dans l'en-tete, sur le champ
     bool sepOpen;      // et la rotation fait defiler sa valeur
+    uint8_t counterStep;
+    uint8_t baseLength;
+    bool lenSelected;
+    bool lenOpen;
     uint16_t ticksPerStep;
 };
 
@@ -276,16 +286,31 @@ void drawHollowTriangle(Canvas& c, uint8_t cx, uint8_t cy) {
 
 }  // namespace detail
 
+namespace detail {
+
+inline uint8_t writeTwoDigits(char* out, uint8_t value) {
+    uint8_t n = 0;
+    if (value == 0) {
+        out[0] = '-';
+        out[1] = '\0';
+        return 1;
+    }
+    if (value >= 10) {
+        out[n++] = static_cast<char>('0' + value / 10);
+    }
+    out[n++] = static_cast<char>('0' + value % 10);
+    out[n] = '\0';
+    return n;
+}
+
+}  // namespace detail
+
 template <typename Canvas>
 void drawPatternScreen(Canvas& canvas, const PatternScreenModel& model,
                        Band band = Band{0, screen::HEIGHT - 1}) {
     // En-tete : titre centre + filet. getStrWidth() parcourt la chaine, donc on
     // l'evite aussi quand la bande ne porte pas le titre.
     if (model.title != nullptr && touches(band, 0, screen::TITLE_BASELINE_Y)) {
-        const uint8_t w = model.titleWidth != 0
-                              ? model.titleWidth
-                              : static_cast<uint8_t>(canvas.getStrWidth(model.title));
-        (void)w;
         canvas.drawStr(screen::HEADER_TITLE_X, screen::TITLE_BASELINE_Y, model.title);
     }
     if (touches(band, screen::HEADER_LINE_Y, screen::HEADER_LINE_Y)) {
@@ -327,6 +352,33 @@ void drawPatternScreen(Canvas& canvas, const PatternScreenModel& model,
         } else {
             canvas.drawStr(valueX, base, value);
         }
+    }
+
+    if (model.baseLength != 0 && touches(band, 0, screen::TITLE_BASELINE_Y)) {
+        char step[4];
+        char length[3];
+        const uint8_t stepEnd = detail::writeTwoDigits(step, model.counterStep);
+        step[stepEnd] = '/';
+        step[stepEnd + 1] = '\0';
+        detail::writeTwoDigits(length, model.baseLength);
+        const uint8_t base = screen::TITLE_BASELINE_Y;
+        const uint8_t h = FONT_VELVETSCREEN_HEIGHT;
+        const uint8_t stepW = static_cast<uint8_t>(canvas.getStrWidth(step));
+        const uint8_t lengthX = static_cast<uint8_t>(screen::COUNTER_X + stepW);
+        if (model.lenSelected) {
+            const uint8_t boxX = model.lenOpen ? lengthX : screen::COUNTER_X;
+            const uint8_t textW = static_cast<uint8_t>(
+                canvas.getStrWidth(length) + (model.lenOpen ? 0 : stepW));
+            canvas.drawBox(static_cast<uint8_t>(boxX - screen::COUNTER_PAD),
+                           static_cast<uint8_t>(base - h - 1),
+                           static_cast<uint8_t>(textW + 2 * screen::COUNTER_PAD),
+                           static_cast<uint8_t>(h + 2));
+        }
+        canvas.setDrawColor(model.lenSelected && !model.lenOpen ? 0 : 1);
+        canvas.drawStr(screen::COUNTER_X, base, step);
+        canvas.setDrawColor(model.lenSelected ? 0 : 1);
+        canvas.drawStr(lengthX, base, length);
+        canvas.setDrawColor(1);
     }
 
     // Separations de mesure : verticale dans la gouttiere, jamais en bord de ligne.

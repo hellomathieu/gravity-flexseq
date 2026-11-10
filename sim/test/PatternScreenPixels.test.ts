@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { textWidth } from "../src/sim/oledFont.js";
 import {
   GRID_STEPS,
   HEADER_LINE_W,
@@ -7,6 +8,9 @@ import {
   colX,
   rowCY,
   renderPatternScreen,
+  COUNTER_MAX_W,
+  COUNTER_PAD,
+  COUNTER_X,
   SEP_FRAME_PAD,
   SEP_LABEL_X,
   TITLE_BASELINE_Y,
@@ -44,7 +48,7 @@ function panelModel(playhead = 0): PatternScreenPixelModel {
   ratchets[3] = RATCHET_4;
   ratchets[13] = 8;
   return {
-    title: "EDIT PATTERN A1",
+    title: "EDIT PAT. A1",
     steps,
     ratchets,
     length: 20,
@@ -53,6 +57,10 @@ function panelModel(playhead = 0): PatternScreenPixelModel {
     barLength: 3,
     sepSelected: false,
     sepOpen: false,
+    counterStep: 6,
+    baseLength: 20,
+    lenSelected: false,
+    lenOpen: false,
     ticksPerStep: 96,
   };
 }
@@ -62,7 +70,7 @@ function panelModel(playhead = 0): PatternScreenPixelModel {
  * `env:wokwi`, remise en coordonnees logiques : `y logique = 63 - y panneau`.
  */
 const PANEL_ROWS: ReadonlyArray<readonly [number, number]> = [
-  [2, 47], [3, 27], [4, 43], [5, 24], [6, 38], [10, 120], [14, 3], [15, 3],
+  [2, 42], [3, 25], [4, 40], [5, 23], [6, 39], [10, 120], [14, 3], [15, 3],
   [16, 12], [17, 5], [18, 39], [19, 47], [20, 46], [21, 47], [22, 43],
   [23, 5], [24, 12], [25, 12], [26, 6], [27, 9], [28, 4], [29, 9], [31, 3],
   [32, 3], [33, 3], [34, 3], [35, 23], [36, 26], [37, 30], [38, 28],
@@ -71,7 +79,7 @@ const PANEL_ROWS: ReadonlyArray<readonly [number, number]> = [
   [56, 3], [57, 3], [58, 3], [59, 3], [60, 3],
 ];
 
-const PANEL_INK = 819;
+const PANEL_INK = 809;
 
 describe("l ecran EDIT, confronte au PANNEAU (risque 89)", () => {
   it("rend exactement l encre que le panneau recoit", () => {
@@ -157,6 +165,10 @@ describe("le rendu d un step, PRD 12.1", () => {
       barLength: 0,
       sepSelected: false,
       sepOpen: false,
+      counterStep: 0,
+      baseLength: 0,
+      lenSelected: false,
+      lenOpen: false,
       ticksPerStep,
     }).pixels;
   }
@@ -236,6 +248,71 @@ describe("le rendu d un step, PRD 12.1", () => {
 
   it("un ratchet 2 garde son chiffre a la cadence la plus rapide", () => {
     expect(digitInk(one(true, RATCHET_2, 4))).toBe(11);
+  });
+});
+
+describe("le compteur de l en-tete, avec la vraie police", () => {
+  const on = (px: Set<string>, x: number, y: number) => px.has(`${x},${y}`);
+  const stepW = textWidth("6/");
+  const lengthW = textWidth("20");
+
+  it("ne dessine aucun pave sans selection", () => {
+    const { pixels } = renderPatternScreen(panelModel());
+    expect(on(pixels, COUNTER_X - COUNTER_PAD, 1)).toBe(false);
+    expect(on(pixels, COUNTER_X - COUNTER_PAD, 7)).toBe(false);
+  });
+
+  it("une longueur selectionnee inverse le compteur entier", () => {
+    const { pixels } = renderPatternScreen({ ...panelModel(), lenSelected: true });
+    const right = COUNTER_X + stepW + lengthW + COUNTER_PAD - 1;
+    expect(on(pixels, COUNTER_X - COUNTER_PAD, 1), "coin haut gauche").toBe(true);
+    expect(on(pixels, COUNTER_X - COUNTER_PAD, 7), "coin bas gauche").toBe(true);
+    expect(on(pixels, right, 1), "coin haut droit").toBe(true);
+    expect(on(pixels, COUNTER_X - COUNTER_PAD - 1, 4), "rien a gauche").toBe(false);
+    expect(on(pixels, right + 1, 4), "rien a droite").toBe(false);
+  });
+
+  it("une longueur ouverte inverse le denominateur seul", () => {
+    const { pixels } = renderPatternScreen({ ...panelModel(), lenSelected: true, lenOpen: true });
+    const left = COUNTER_X + stepW - COUNTER_PAD;
+    expect(on(pixels, left, 1), "le pave commence a la longueur").toBe(true);
+    expect(on(pixels, left + lengthW + 2 * COUNTER_PAD - 1, 7), "et la couvre").toBe(true);
+    expect(on(pixels, COUNTER_X - COUNTER_PAD, 1), "le numero de pas reste en clair").toBe(false);
+  });
+
+  it("un compteur sans pas dessine un tiret a la place du numero", () => {
+    const dash = renderPatternScreen({ ...panelModel(), counterStep: 0 });
+    const six = renderPatternScreen({ ...panelModel(), counterStep: 6 });
+    let dashInk = 0;
+    let sixInk = 0;
+    for (let x = COUNTER_X; x < COUNTER_X + 4; ++x) {
+      for (let y = 2; y <= 6; ++y) {
+        if (dash.pixels.has(`${x},${y}`)) dashInk += 1;
+        if (six.pixels.has(`${x},${y}`)) sixInk += 1;
+      }
+    }
+    expect(dashInk, "un tiret est une seule rangee de pixels").toBeLessThanOrEqual(4);
+    expect(dashInk).toBeGreaterThan(0);
+    expect(sixInk).toBeGreaterThan(dashInk);
+  });
+
+  it("un modele sans longueur ne dessine aucun compteur", () => {
+    const withCounter = renderPatternScreen(panelModel()).count;
+    const without = renderPatternScreen({ ...panelModel(), baseLength: 0 }).count;
+    expect(without).toBeLessThan(withCounter);
+  });
+
+  it("le pave du compteur le plus large degage le titre et SEP", () => {
+    const { pixels } = renderPatternScreen({
+      ...panelModel(), counterStep: 36, baseLength: 36, lenSelected: true,
+    });
+    for (let x = COUNTER_X + COUNTER_MAX_W + COUNTER_PAD; x < SEP_LABEL_X - 1; ++x) {
+      expect(on(pixels, x, 1), `colonne ${x}`).toBe(false);
+    }
+    for (let x = 0; x < 128; ++x) {
+      expect(on(pixels, x, 0), "le pave deborde vers le haut").toBe(false);
+      expect(on(pixels, x, 8), "le pave deborde dans la bande 1").toBe(false);
+    }
   });
 });
 

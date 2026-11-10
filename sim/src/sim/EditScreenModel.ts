@@ -19,7 +19,8 @@ export function editScreenModelOf(
       ratchets[i] = pattern.getRatchet(i);
     }
   }
-  const sepSelected = ui.isOnHeader;
+  const lenSelected = ui.isOnHeaderLength;
+  const sepSelected = ui.isOnHeader && !lenSelected;
   return {
     title,
     steps,
@@ -30,6 +31,10 @@ export function editScreenModelOf(
     barLength: engine.getBarLength(channel),
     sepSelected,
     sepOpen: sepSelected && ui.fieldOpen,
+    counterStep: ui.editIsReadOnly ? 0 : ui.stepCursor + 1,
+    baseLength: engine.getBaseLength(channel),
+    lenSelected,
+    lenOpen: lenSelected && ui.fieldOpen,
     ticksPerStep: engine.getTicksPerStep(channel),
   };
 }

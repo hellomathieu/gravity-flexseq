@@ -1,8 +1,8 @@
 import type { SequencerEngine } from "./SequencerEngine.js";
 import type { UiController } from "./UiController.js";
 
-export const LBL_EDIT_TITLE = "EDIT PATTERN A1";
-export const LBL_CV_TITLE = "CV PATTERN A1";
+export const LBL_EDIT_TITLE = "EDIT PAT. A1";
+export const LBL_CV_TITLE = "CV PAT. A1";
 export const EDIT_TITLE_CAPACITY = 16;
 
 export function editTitleFor(

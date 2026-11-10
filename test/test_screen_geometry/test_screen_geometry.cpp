@@ -236,6 +236,9 @@ bool production(char family, int index, int& out) {
             case 24: out = screen::SEP_LABEL_W; return true;
             case 25: out = screen::HEADER_TITLE_X; return true;
             case 26: out = screen::TITLE_W; return true;
+            case 28: out = screen::COUNTER_X; return true;
+            case 29: out = screen::COUNTER_MAX_W; return true;
+            case 30: out = screen::COUNTER_PAD; return true;
             default: return false;
         }
     }

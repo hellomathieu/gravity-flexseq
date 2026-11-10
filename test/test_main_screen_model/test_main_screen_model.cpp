@@ -213,10 +213,10 @@ void test_the_edit_title_names_the_selected_pattern_without_a_routing() {
     r.engine.setSelectedPattern(0, 4);
     r.enterEditOf(0);
     TEST_ASSERT_TRUE(flexseq::editTitleFor(r.ui, r.engine, 0, r.title));
-    TEST_ASSERT_EQUAL_STRING("EDIT PATTERN A5", r.title);
+    TEST_ASSERT_EQUAL_STRING("EDIT PAT. A5", r.title);
     r.engine.setSelectedPattern(0, 13);
     TEST_ASSERT_TRUE(flexseq::editTitleFor(r.ui, r.engine, 0, r.title));
-    TEST_ASSERT_EQUAL_STRING("EDIT PATTERN B6", r.title);
+    TEST_ASSERT_EQUAL_STRING("EDIT PAT. B6", r.title);
 }
 
 void test_the_cv_title_names_the_played_pattern_and_not_the_selected_one() {
@@ -229,7 +229,7 @@ void test_the_cv_title_names_the_played_pattern_and_not_the_selected_one() {
     TEST_ASSERT_EQUAL_INT8(14, r.engine.patternCvIndex(0));
     r.enterEditOf(0);
     TEST_ASSERT_TRUE(flexseq::editTitleFor(r.ui, r.engine, 0, r.title));
-    TEST_ASSERT_EQUAL_STRING_MESSAGE("CV PATTERN B7", r.title,
+    TEST_ASSERT_EQUAL_STRING_MESSAGE("CV PAT. B7", r.title,
         "the title names the pattern the channel plays, B7, not the selected A5");
 }
 
@@ -239,7 +239,7 @@ void test_the_cv_title_appears_as_soon_as_a_source_is_routed_to_pattern() {
     r.engine.setCvDestination(0, flexseq::CV_SOURCE_2, flexseq::CV_DEST_PATTERN);
     r.enterEditOf(0);
     TEST_ASSERT_TRUE(flexseq::editTitleFor(r.ui, r.engine, 0, r.title));
-    TEST_ASSERT_EQUAL_STRING_MESSAGE("CV PATTERN A1", r.title,
+    TEST_ASSERT_EQUAL_STRING_MESSAGE("CV PAT. A1", r.title,
         "the routing decides, not the zone: at zone zero the word already changes");
 }
 
@@ -248,7 +248,7 @@ void test_another_routing_keeps_the_edit_title() {
     r.engine.setCvDestination(0, flexseq::CV_SOURCE_1, flexseq::CV_DEST_LENGTH);
     r.enterEditOf(0);
     TEST_ASSERT_TRUE(flexseq::editTitleFor(r.ui, r.engine, 0, r.title));
-    TEST_ASSERT_EQUAL_STRING("EDIT PATTERN A1", r.title);
+    TEST_ASSERT_EQUAL_STRING("EDIT PAT. A1", r.title);
 }
 
 void test_the_title_refuses_an_invalid_channel_and_leaves_the_buffer_alone() {
@@ -345,6 +345,91 @@ void test_the_edit_model_marks_the_header_field_and_its_open_state() {
     TEST_ASSERT_TRUE(m.sepOpen);
 }
 
+void test_the_counter_shows_the_step_under_the_cursor_while_stopped() {
+    EditRig r;
+    r.engine.setBaseLength(0, 12);
+    r.enterEditOf(0);
+    flexseq::PatternScreenModel m = flexseq::editScreenModelOf(r.ui, r.engine, 0, r.title);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, m.counterStep, "le compteur compte a partir de 1");
+    TEST_ASSERT_EQUAL_UINT8(12, m.baseLength);
+    for (uint8_t i = 0; i < 19; ++i) {
+        r.ui.handle(UiController::EVENT_ROTATE, 1);
+    }
+    m = flexseq::editScreenModelOf(r.ui, r.engine, 0, r.title);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(20, m.counterStep,
+        "le curseur peut depasser la longueur : 20/12");
+    TEST_ASSERT_EQUAL_UINT8(12, m.baseLength);
+}
+
+void test_the_counter_keeps_the_step_under_the_cursor_while_the_transport_runs() {
+    EditRig r;
+    r.enterEditOf(0);
+    for (uint8_t i = 0; i < 5; ++i) {
+        r.ui.handle(UiController::EVENT_ROTATE, 1);
+    }
+    r.engine.start();
+    r.engine.advance(96);
+    r.engine.advance(96);
+    const flexseq::PatternScreenModel m = flexseq::editScreenModelOf(r.ui, r.engine, 0, r.title);
+    TEST_ASSERT_EQUAL_INT8_MESSAGE(2, m.playhead, "temoin : le pattern joue le pas 3");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(6, m.counterStep,
+        "le compteur garde le pas 6 du curseur : la lecture ne redessine pas l en-tete");
+}
+
+void test_the_counter_carries_no_step_on_the_read_only_screen() {
+    EditRig r;
+    r.engine.setCvDestination(0, flexseq::CV_SOURCE_1, flexseq::CV_DEST_PATTERN);
+    r.engine.setBaseLength(0, 12);
+    r.enterEditOf(0);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    const flexseq::PatternScreenModel m = flexseq::editScreenModelOf(r.ui, r.engine, 0, r.title);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, m.counterStep,
+        "sans curseur, le compteur ne nomme aucun pas");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(12, m.baseLength, "et il garde la longueur");
+}
+
+void test_the_counter_shows_the_base_length_and_not_the_derived_one() {
+    EditRig r;
+    r.engine.setBaseLength(0, 12);
+    r.engine.setCvDestination(0, flexseq::CV_SOURCE_1, flexseq::CV_DEST_LENGTH);
+    r.engine.setCvInput(flexseq::CV_SOURCE_1, 330);
+    r.enterEditOf(0);
+    r.engine.start();
+    r.engine.advance(96);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(22, r.engine.getEffectiveLength(0),
+        "temoin : la longueur jouee est bien modulee");
+    const flexseq::PatternScreenModel m = flexseq::editScreenModelOf(r.ui, r.engine, 0, r.title);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(12, m.baseLength, "le denominateur montre la base");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(22, m.length, "la grille garde la longueur jouee");
+}
+
+void test_the_edit_model_marks_the_length_field_and_its_open_state() {
+    EditRig r;
+    r.enterEditOf(0);
+    flexseq::PatternScreenModel m = flexseq::editScreenModelOf(r.ui, r.engine, 0, r.title);
+    TEST_ASSERT_FALSE(m.lenSelected);
+    TEST_ASSERT_FALSE(m.lenOpen);
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    r.ui.handle(UiController::EVENT_PRESS);
+    m = flexseq::editScreenModelOf(r.ui, r.engine, 0, r.title);
+    TEST_ASSERT_TRUE(m.sepOpen);
+    TEST_ASSERT_FALSE_MESSAGE(m.lenSelected, "SEP ouvert ne selectionne pas la longueur");
+    TEST_ASSERT_FALSE_MESSAGE(m.lenOpen, "et ne l ouvre pas");
+    r.ui.handle(UiController::EVENT_PRESS);
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    m = flexseq::editScreenModelOf(r.ui, r.engine, 0, r.title);
+    TEST_ASSERT_TRUE(m.lenSelected);
+    TEST_ASSERT_FALSE(m.lenOpen);
+    TEST_ASSERT_FALSE_MESSAGE(m.sepSelected, "une seule selection a la fois");
+    TEST_ASSERT_EQUAL_INT8(-1, m.cursor);
+    r.ui.handle(UiController::EVENT_PRESS);
+    m = flexseq::editScreenModelOf(r.ui, r.engine, 0, r.title);
+    TEST_ASSERT_TRUE(m.lenSelected);
+    TEST_ASSERT_TRUE(m.lenOpen);
+    TEST_ASSERT_FALSE(m.sepOpen);
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_the_model_shows_the_editable_length_and_not_the_derived_one);
@@ -368,5 +453,10 @@ int main() {
     RUN_TEST(test_the_edit_model_shows_the_played_pattern_and_the_state_of_the_channel);
     RUN_TEST(test_the_edit_model_follows_the_playhead);
     RUN_TEST(test_the_edit_model_marks_the_header_field_and_its_open_state);
+    RUN_TEST(test_the_counter_shows_the_step_under_the_cursor_while_stopped);
+    RUN_TEST(test_the_counter_keeps_the_step_under_the_cursor_while_the_transport_runs);
+    RUN_TEST(test_the_counter_carries_no_step_on_the_read_only_screen);
+    RUN_TEST(test_the_counter_shows_the_base_length_and_not_the_derived_one);
+    RUN_TEST(test_the_edit_model_marks_the_length_field_and_its_open_state);
     return UNITY_END();
 }

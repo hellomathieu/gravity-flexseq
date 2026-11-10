@@ -1040,8 +1040,6 @@ describe("UiController — les trois modes et leurs champs", () => {
     expect(ui.level).toBe(UiLevel.Edit);
     ui.handle(UiEvent.Rotate, -1);
     expect(ui.isOnHeader).toBe(true);
-    ui.handle(UiEvent.Rotate, -1);
-    expect(ui.isOnHeader, "l en-tete est un butoir").toBe(true);
     ui.handle(UiEvent.Press);
     const before = engine.getBarLength(0);
     ui.handle(UiEvent.Rotate, 1);
@@ -1359,6 +1357,83 @@ describe("UiController — EDIT en lecture seule sous un routage PATTERN", () =>
     enterEditOf(r);
     r.ui.handle(UiEvent.Press);
     expect(r.engine.patternForChannel(0)!.readStep(0)).toBe(true);
+  });
+
+  it("un second cran a gauche selectionne la longueur, et c est la butee", () => {
+    const r = rig();
+    enterEditOf(r);
+    r.ui.handle(UiEvent.Rotate, -1);
+    expect(r.ui.isOnHeader, "le premier cran selectionne SEP").toBe(true);
+    expect(r.ui.isOnHeaderLength, "et pas encore la longueur").toBe(false);
+    r.ui.handle(UiEvent.Rotate, -1);
+    expect(r.ui.isOnHeaderLength, "le second cran selectionne la longueur").toBe(true);
+    r.ui.handle(UiEvent.Rotate, -1);
+    expect(r.ui.isOnHeaderLength, "la longueur est la butee de gauche").toBe(true);
+    r.ui.handle(UiEvent.Rotate, 1);
+    expect(r.ui.isOnHeaderLength, "un cran a droite revient sur SEP").toBe(false);
+    expect(r.ui.isOnHeader, "et reste dans l en-tete").toBe(true);
+    r.ui.handle(UiEvent.Rotate, 1);
+    expect(r.ui.isOnHeader, "un cran de plus rend le premier pas").toBe(false);
+    expect(r.ui.stepCursor).toBe(0);
+  });
+
+  it("la longueur ouverte de l en-tete edite la base et laisse SEP", () => {
+    const r = rig();
+    enterEditOf(r);
+    r.engine.setBaseLength(0, 12);
+    const sep = r.engine.getBarLength(0);
+    r.ui.handle(UiEvent.Rotate, -1);
+    r.ui.handle(UiEvent.Rotate, -1);
+    r.ui.handle(UiEvent.Rotate, 1);
+    r.ui.handle(UiEvent.Rotate, -1);
+    expect(r.engine.getBaseLength(0), "un champ ferme ne change pas sa valeur").toBe(12);
+    r.ui.handle(UiEvent.Press);
+    expect(r.ui.fieldOpen).toBe(true);
+    r.ui.handle(UiEvent.Rotate, 1);
+    expect(r.engine.getBaseLength(0), "un cran a droite : 13").toBe(13);
+    r.ui.handle(UiEvent.Rotate, -1);
+    r.ui.handle(UiEvent.Rotate, -1);
+    expect(r.engine.getBaseLength(0), "deux crans a gauche : 11").toBe(11);
+    expect(r.engine.getBarLength(0), "SEP ne bouge pas").toBe(sep);
+    expect(r.ui.isOnHeaderLength).toBe(true);
+    r.ui.handle(UiEvent.Press);
+    expect(r.ui.fieldOpen).toBe(false);
+  });
+
+  it("SEP ouvert n edite pas la longueur", () => {
+    const r = rig();
+    enterEditOf(r);
+    r.engine.setBaseLength(0, 12);
+    r.ui.handle(UiEvent.Rotate, -1);
+    r.ui.handle(UiEvent.Press);
+    r.ui.handle(UiEvent.Rotate, 1);
+    expect(r.engine.getBaseLength(0)).toBe(12);
+  });
+
+  it("un appui long sur la longueur de l en-tete rend le premier pas", () => {
+    const r = rig();
+    enterEditOf(r);
+    r.ui.handle(UiEvent.Rotate, -1);
+    r.ui.handle(UiEvent.Rotate, -1);
+    r.ui.handle(UiEvent.Press);
+    r.ui.handle(UiEvent.LongPress);
+    expect(r.ui.isOnHeader).toBe(false);
+    expect(r.ui.isOnHeaderLength).toBe(false);
+    expect(r.ui.fieldOpen).toBe(false);
+    r.ui.handle(UiEvent.Rotate, -1);
+    expect(r.ui.isOnHeaderLength, "le retour dans l en-tete repart de SEP").toBe(false);
+  });
+
+  it("la longueur de l en-tete reste reglable sous un routage PATTERN", () => {
+    const r = rig();
+    r.engine.setCvDestination(0, CV_SOURCE_1, CvDestination.PATTERN);
+    enterEditOf(r);
+    r.engine.setBaseLength(0, 12);
+    r.ui.handle(UiEvent.Rotate, -1);
+    r.ui.handle(UiEvent.Rotate, -1);
+    r.ui.handle(UiEvent.Press);
+    r.ui.handle(UiEvent.Rotate, 1);
+    expect(r.engine.getBaseLength(0)).toBe(13);
   });
 
   it("SEP reste reglable sous un routage PATTERN", () => {

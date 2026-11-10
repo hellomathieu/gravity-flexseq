@@ -150,6 +150,7 @@ export class UiController {
   private fieldCursor = 0;
   private step = 0;
   private header = false;
+  private headerLength = false;
   private configPage = false;
   private open = false;
   private currentTempo = DEFAULT_TEMPO;
@@ -187,6 +188,10 @@ export class UiController {
 
   get isOnHeader(): boolean {
     return this.header;
+  }
+
+  get isOnHeaderLength(): boolean {
+    return this.headerLength;
   }
 
   get doneShown(): boolean {
@@ -470,7 +475,11 @@ export class UiController {
         const s = oneStep(delta);
         if (this.header) {
           if (this.open) {
-            this.adjustFieldValue(UiField.BarLength, delta);
+            this.adjustFieldValue(this.headerLength ? UiField.Length : UiField.BarLength, delta);
+          } else if (s < 0) {
+            this.headerLength = true;
+          } else if (this.headerLength) {
+            this.headerLength = false;
           } else if (s > 0) {
             this.header = false;
             this.step = 0;
@@ -489,6 +498,7 @@ export class UiController {
       case UiEvent.LongPress:
         if (this.header) {
           this.header = false;
+          this.headerLength = false;
           this.open = false;
           this.step = 0;
         } else {

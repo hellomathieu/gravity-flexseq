@@ -11,14 +11,14 @@
 
 namespace flexseq {
 
-FLEXSEQ_LABEL(LBL_EDIT_TITLE, "EDIT PATTERN A1");
-FLEXSEQ_LABEL(LBL_CV_TITLE, "CV PATTERN A1");
+FLEXSEQ_LABEL(LBL_EDIT_TITLE, "EDIT PAT. A1");
+FLEXSEQ_LABEL(LBL_CV_TITLE, "CV PAT. A1");
 
 constexpr uint8_t EDIT_TITLE_CAPACITY = 16;
 
-static_assert(sizeof("EDIT PATTERN A1") <= EDIT_TITLE_CAPACITY,
+static_assert(sizeof("EDIT PAT. A1") <= EDIT_TITLE_CAPACITY,
               "the EDIT title must fit its buffer, terminator included");
-static_assert(sizeof("CV PATTERN A1") <= EDIT_TITLE_CAPACITY,
+static_assert(sizeof("CV PAT. A1") <= EDIT_TITLE_CAPACITY,
               "the CV title must fit its buffer, terminator included");
 
 inline bool editTitleFor(const UiController& ui, const SequencerEngine& engine,
@@ -48,10 +48,14 @@ inline PatternScreenModel editScreenModelOf(const UiController& ui, const Sequen
     model.titleWidth = 0;
     model.pattern = engine.patternForChannel(channel);
     model.length = engine.getEffectiveLength(channel);
-    model.sepSelected = ui.isOnHeader();
+    model.lenSelected = ui.isOnHeaderLength();
+    model.lenOpen = model.lenSelected && ui.fieldOpen();
+    model.sepSelected = ui.isOnHeader() && !model.lenSelected;
     model.sepOpen = model.sepSelected && ui.fieldOpen();
     model.cursor = editCursorFor(ui);
     model.playhead = engine.effectiveStep(channel);
+    model.counterStep = ui.editIsReadOnly() ? 0 : static_cast<uint8_t>(ui.stepCursor() + 1);
+    model.baseLength = engine.getBaseLength(channel);
     model.barLength = static_cast<uint8_t>(engine.getBarLength(channel));
     model.ticksPerStep = engine.getTicksPerStep(channel);
     return model;

@@ -90,4 +90,7 @@ F	main_font_max_width	5	both	FONT_STK_L_MAX_WIDTH	15
 F	label_font_bytes	6	cpp	FONT_VELVETSCREEN_BYTES	437
 F	main_font_bytes	7	cpp	FONT_STK_L_BYTES	569
 E	header_title_x	25	both	HEADER_TITLE_X	4
-E	title_width	26	both	TITLE_W	65
+E	title_width	26	both	TITLE_W	48
+E	counter_x	28	both	COUNTER_X	60
+E	counter_max_width	29	both	COUNTER_MAX_W	25
+E	counter_pad	30	both	COUNTER_PAD	1

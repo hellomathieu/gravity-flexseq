@@ -706,6 +706,102 @@ void test_the_open_value_stays_inside_band_zero() {
     }
 }
 
+void test_the_counter_is_drawn_between_the_title_and_sep() {
+    TEST_ASSERT_EQUAL_UINT8(60, screen::COUNTER_X);
+    canvas.reset();
+    PatternScreenModel m = model(12, -1, -1, 3);
+    m.counterStep = 2;
+    m.baseLength = 12;
+    drawPatternScreen(canvas, m);
+    const Str* step = canvas.findStr("2/");
+    TEST_ASSERT_NOT_NULL_MESSAGE(step, "le numero de pas et la barre oblique");
+    TEST_ASSERT_EQUAL_UINT8(60, step->x);
+    TEST_ASSERT_EQUAL_UINT8(screen::TITLE_BASELINE_Y, step->y);
+    const Str* length = canvas.findStr("12");
+    TEST_ASSERT_NOT_NULL_MESSAGE(length, "la longueur du canal");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(70, length->x, "juste apres le numero de pas");
+    TEST_ASSERT_EQUAL_UINT8(screen::TITLE_BASELINE_Y, length->y);
+    TEST_ASSERT_FALSE_MESSAGE(canvas.at(59, 4), "aucun pave sans selection");
+}
+
+void test_a_counter_without_a_step_draws_a_dash() {
+    canvas.reset();
+    PatternScreenModel m = model(12, -1, -1, 3);
+    m.counterStep = 0;
+    m.baseLength = 12;
+    drawPatternScreen(canvas, m);
+    const Str* step = canvas.findStr("-/");
+    TEST_ASSERT_NOT_NULL_MESSAGE(step, "l ecran en lecture seule montre -/12");
+    TEST_ASSERT_EQUAL_UINT8(60, step->x);
+    const Str* length = canvas.findStr("12");
+    TEST_ASSERT_NOT_NULL(length);
+    TEST_ASSERT_EQUAL_UINT8(70, length->x);
+}
+
+void test_a_model_without_a_length_draws_no_counter() {
+    canvas.reset();
+    PatternScreenModel m = model(12, -1, -1, 3);
+    drawPatternScreen(canvas, m);
+    TEST_ASSERT_NULL(canvas.findStr("-/"));
+    TEST_ASSERT_NULL(canvas.findStr("0"));
+}
+
+void test_the_counter_is_drawn_in_the_header_band_only() {
+    canvas.reset();
+    PatternScreenModel m = model(12, -1, -1, 3);
+    m.counterStep = 2;
+    m.baseLength = 12;
+    drawPatternScreen(canvas, m, flexseq::Band{8, 15});
+    TEST_ASSERT_NULL_MESSAGE(canvas.findStr("2/"), "la bande 1 ne redessine pas le compteur");
+}
+
+void test_a_selected_length_inverts_the_whole_counter() {
+    canvas.reset();
+    PatternScreenModel m = model(12, -1, -1, 3);
+    m.counterStep = 2;
+    m.baseLength = 12;
+    m.lenSelected = true;
+    drawPatternScreen(canvas, m);
+    TEST_ASSERT_TRUE_MESSAGE(canvas.at(59, 1), "coin haut gauche du pave");
+    TEST_ASSERT_TRUE_MESSAGE(canvas.at(59, 7), "le pave descend jusqu en bas");
+    TEST_ASSERT_TRUE_MESSAGE(canvas.at(80, 4), "le pave couvre aussi la longueur");
+    TEST_ASSERT_FALSE_MESSAGE(canvas.at(58, 4), "le pave ne deborde pas a gauche");
+    TEST_ASSERT_FALSE_MESSAGE(canvas.at(81, 4), "le pave ne deborde pas a droite");
+}
+
+void test_an_open_length_inverts_the_denominator_alone() {
+    canvas.reset();
+    PatternScreenModel m = model(12, -1, -1, 3);
+    m.counterStep = 2;
+    m.baseLength = 12;
+    m.lenSelected = true;
+    m.lenOpen = true;
+    drawPatternScreen(canvas, m);
+    TEST_ASSERT_TRUE_MESSAGE(canvas.at(69, 1), "le pave commence a la longueur");
+    TEST_ASSERT_TRUE_MESSAGE(canvas.at(80, 7), "et la couvre en entier");
+    TEST_ASSERT_FALSE_MESSAGE(canvas.at(68, 4), "le numero de pas reste en clair");
+    TEST_ASSERT_FALSE_MESSAGE(canvas.at(81, 4), "le pave ne deborde pas a droite");
+}
+
+void test_the_counter_box_stays_inside_band_zero_and_clear_of_its_neighbours() {
+    canvas.reset();
+    PatternScreenModel m = model(36, -1, -1, 3);
+    m.counterStep = 36;
+    m.baseLength = 36;
+    m.lenSelected = true;
+    drawPatternScreen(canvas, m);
+    for (uint8_t x = 0; x < screen::WIDTH; ++x) {
+        TEST_ASSERT_FALSE_MESSAGE(canvas.at(x, 0), "le pave deborde vers le haut");
+        TEST_ASSERT_FALSE_MESSAGE(canvas.at(x, 8), "le pave deborde dans la bande 1");
+    }
+    for (uint8_t x = 86; x < screen::SEP_LABEL_X - 1; ++x) {
+        TEST_ASSERT_FALSE_MESSAGE(canvas.at(x, 4), "le pave touche SEP");
+    }
+    for (uint8_t x = screen::HEADER_TITLE_X; x < 59; ++x) {
+        TEST_ASSERT_FALSE_MESSAGE(canvas.at(x, 4), "le pave touche le titre");
+    }
+}
+
 /*
  * L en-tete de l editeur de templates — lot 16E etape 4d
  */
@@ -722,6 +818,13 @@ int main() {
     UNITY_BEGIN();
     RUN_TEST(test_the_open_value_is_inverted_and_not_framed);
     RUN_TEST(test_the_open_value_stays_inside_band_zero);
+    RUN_TEST(test_the_counter_is_drawn_between_the_title_and_sep);
+    RUN_TEST(test_a_model_without_a_length_draws_no_counter);
+    RUN_TEST(test_a_counter_without_a_step_draws_a_dash);
+    RUN_TEST(test_the_counter_is_drawn_in_the_header_band_only);
+    RUN_TEST(test_a_selected_length_inverts_the_whole_counter);
+    RUN_TEST(test_an_open_length_inverts_the_denominator_alone);
+    RUN_TEST(test_the_counter_box_stays_inside_band_zero_and_clear_of_its_neighbours);
     RUN_TEST(test_the_column_grid_is_centred_and_regular);
     RUN_TEST(test_the_grid_holds_three_rows_of_twelve);
     RUN_TEST(test_the_three_row_centres_are_20_37_and_54);

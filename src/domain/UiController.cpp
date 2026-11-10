@@ -81,6 +81,7 @@ UiController::UiController(SequencerEngine& engine, Transport& transport)
       cursor_(0),
       stepCursor_(0),
       onHeader_(false),
+      onHeaderLength_(false),
       onConfigPage_(false),
       fieldOpen_(false),
       patternBrowse_(NO_BROWSE),
@@ -305,6 +306,7 @@ void UiController::handleTab(Event event, int8_t delta) {
                 level_ = LEVEL_EDIT;
                 stepCursor_ = 0;
                 onHeader_ = false;
+                onHeaderLength_ = false;
             } else if (field() == FIELD_CONFIG) {
                 onConfigPage_ = true;
                 cursor_ = CONFIG_FIELD_INDEX_LENGTH;
@@ -334,7 +336,11 @@ void UiController::handleEdit(Event event, int8_t delta) {
         case EVENT_ROTATE:
             if (onHeader_) {
                 if (fieldOpen_) {
-                    adjustFieldValue(FIELD_BAR_LENGTH, delta);
+                    adjustFieldValue(onHeaderLength_ ? FIELD_LENGTH : FIELD_BAR_LENGTH, delta);
+                } else if (step < 0) {
+                    onHeaderLength_ = true;
+                } else if (onHeaderLength_) {
+                    onHeaderLength_ = false;
                 } else if (step > 0) {
                     onHeader_ = false;
                     stepCursor_ = 0;
@@ -355,6 +361,7 @@ void UiController::handleEdit(Event event, int8_t delta) {
         case EVENT_LONG_PRESS:
             if (onHeader_) {
                 onHeader_ = false;
+                onHeaderLength_ = false;
                 fieldOpen_ = false;
                 stepCursor_ = 0;
             } else {

@@ -161,7 +161,7 @@ function drawOledScreen(): void {
   const label = patternLabel(curPat());
 
   drawOled(ctx as unknown as OledCtx, {
-    title: `EDIT PATTERN ${label}`,
+    title: `EDIT PAT. ${label}`,
     cells: backend.view(state.channel),
     cursor: state.cursor,
     playhead: backend.effectiveStep(state.channel),

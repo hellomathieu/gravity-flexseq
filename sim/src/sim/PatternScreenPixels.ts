@@ -31,9 +31,13 @@ export const HEADER_LINE_X = 4;
 export const HEADER_LINE_Y = 10;
 export const HEADER_LINE_W = 120;
 export const HEADER_TITLE_X = HEADER_LINE_X;
-export const TITLE_W = 65;
+export const TITLE_W = 48;
 // L en-tete de l editeur de TEMPLATES porte la longueur et non la separation de
 // mesure. Elle a SA position : deux chiffres ne tiennent pas la ou un seul tient.
+
+export const COUNTER_X = 60;
+export const COUNTER_MAX_W = 25;
+export const COUNTER_PAD = 1;
 
 export const SEP_LABEL_X = 102;
 export const SEP_VALUE_X = 120;
@@ -78,6 +82,10 @@ export interface PatternScreenPixelModel {
   barLength: number;
   sepSelected: boolean;
   sepOpen: boolean;
+  counterStep: number;
+  baseLength: number;
+  lenSelected: boolean;
+  lenOpen: boolean;
   ticksPerStep: number;
 }
 
@@ -253,6 +261,25 @@ export function renderPatternScreen(model: PatternScreenPixelModel): Render {
     } else {
       ink.drawStr(valueX, base, value);
     }
+  }
+
+  if (model.baseLength !== 0) {
+    const step = model.counterStep === 0 ? "-/" : `${model.counterStep}/`;
+    const length = String(model.baseLength);
+    const base = TITLE_BASELINE_Y;
+    const h = 5;
+    const stepW = textWidth(step, VELVETSCREEN);
+    const lengthX = COUNTER_X + stepW;
+    if (model.lenSelected) {
+      const boxX = model.lenOpen ? lengthX : COUNTER_X;
+      const textW = textWidth(length, VELVETSCREEN) + (model.lenOpen ? 0 : stepW);
+      ink.drawBox(boxX - COUNTER_PAD, base - h - 1, textW + 2 * COUNTER_PAD, h + 2);
+    }
+    ink.setDrawColor(model.lenSelected && !model.lenOpen ? 0 : 1);
+    ink.drawStr(COUNTER_X, base, step);
+    ink.setDrawColor(model.lenSelected ? 0 : 1);
+    ink.drawStr(lengthX, base, length);
+    ink.setDrawColor(1);
   }
 
   if (model.barLength > 0) {

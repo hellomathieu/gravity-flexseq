@@ -136,6 +136,7 @@ public:
 
     uint8_t stepCursor() const { return stepCursor_; }
     bool isOnHeader() const { return onHeader_; }
+    bool isOnHeaderLength() const { return onHeaderLength_; }
     bool isOnConfigPage() const { return onConfigPage_; }
 
     bool doneShown() const { return doneShown_; }
@@ -178,6 +179,7 @@ private:
     uint8_t cursor_;
     uint8_t stepCursor_;
     bool onHeader_;
+    bool onHeaderLength_;
     bool onConfigPage_;
     bool fieldOpen_;
     int8_t patternBrowse_;

@@ -151,6 +151,7 @@ function production(family: Family, index: number): number | undefined {
     22: ps.SEP_LABEL_X, 23: ps.SEP_VALUE_X, 24: ps.SEP_LABEL_W,
     27: ps.SEP_FRAME_PAD,
     25: ps.HEADER_TITLE_X, 26: ps.TITLE_W,
+    28: ps.COUNTER_X, 29: ps.COUNTER_MAX_W, 30: ps.COUNTER_PAD,
   };
   return table[index];
 }

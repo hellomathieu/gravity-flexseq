@@ -377,6 +377,54 @@ void test_the_cursor_arriving_on_sep_redraws_the_header_band(void) {
         "le curseur est monte sur SEP et son surlignage n a pas ete dessine");
 }
 
+static void expectHeaderRedraw(PatternScreenModel before, PatternScreenModel after,
+                               const char* message) {
+    reset();
+    paged.begin(display, before);
+    finishFrame();
+    memset(display.sent, 0, sizeof(display.sent));
+    paged.begin(display, after);
+    finishFrame();
+    TEST_ASSERT_TRUE_MESSAGE(display.sent[FakeDisplay::PAGES - 1], message);
+}
+
+void test_every_part_of_the_counter_redraws_the_header_band(void) {
+    PatternScreenModel base = modelOf(source);
+    base.counterStep = 2;
+    base.baseLength = 12;
+
+    PatternScreenModel m = base;
+    m.counterStep = 3;
+    expectHeaderRedraw(base, m, "le numero de pas a change et sa bande n a pas ete refaite");
+
+    m = base;
+    m.baseLength = 13;
+    expectHeaderRedraw(base, m, "la longueur a change et sa bande n a pas ete refaite");
+
+    m = base;
+    m.lenSelected = true;
+    expectHeaderRedraw(base, m, "la longueur est selectionnee et son pave n a pas ete dessine");
+
+    PatternScreenModel selected = m;
+    m.lenOpen = true;
+    expectHeaderRedraw(selected, m, "la longueur est ouverte et son pave n a pas change");
+}
+
+void test_an_unchanged_counter_leaves_the_header_band_alone(void) {
+    reset();
+    PatternScreenModel m = modelOf(source);
+    m.counterStep = 2;
+    m.baseLength = 12;
+    paged.begin(display, m);
+    finishFrame();
+    memset(display.sent, 0, sizeof(display.sent));
+    m.playhead = 5;
+    paged.begin(display, m);
+    finishFrame();
+    TEST_ASSERT_FALSE_MESSAGE(display.sent[FakeDisplay::PAGES - 1],
+        "le compteur n a pas change : sa bande ne doit pas etre renvoyee");
+}
+
 void test_opening_and_closing_sep_redraws_the_header_band(void) {
     reset();
     PatternScreenModel m = modelOf(source);
@@ -675,6 +723,8 @@ int main(int, char**) {
     RUN_TEST(test_a_changed_bar_length_redraws_the_header_band);
     RUN_TEST(test_the_cursor_arriving_on_sep_redraws_the_header_band);
     RUN_TEST(test_opening_and_closing_sep_redraws_the_header_band);
+    RUN_TEST(test_every_part_of_the_counter_redraws_the_header_band);
+    RUN_TEST(test_an_unchanged_counter_leaves_the_header_band_alone);
     RUN_TEST(test_only_the_title_band_is_ever_skipped);
     RUN_TEST(test_two_titles_with_the_same_character_sum_are_distinguished);
     RUN_TEST(test_the_safety_net_forces_a_full_frame_periodically);

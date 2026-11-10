@@ -51,7 +51,7 @@ void onOutputTick(uint32_t) {
 // a advance() ; drawPatternScreen() doit rester pure.
 void beginFrame() {
     flexseq::PatternScreenModel model{};
-    model.title = "EDIT PATTERN A1";
+    model.title = "EDIT PAT. A1";
     model.titleWidth = 0;  // PagedScreen la mesure une fois par image
     model.pattern = engine.patternForChannel(CH);
     model.length = engine.getEffectiveLength(CH);
@@ -59,6 +59,8 @@ void beginFrame() {
     model.playhead = engine.effectiveStep(CH);
     model.barLength = static_cast<uint8_t>(engine.getBarLength(CH));
     model.ticksPerStep = engine.getTicksPerStep(CH);
+    model.counterStep = static_cast<uint8_t>(CURSOR + 1);
+    model.baseLength = engine.getBaseLength(CH);
 
     screen.begin(gravity.display, model);
 }

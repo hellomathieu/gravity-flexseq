@@ -706,9 +706,6 @@ void test_rotate_moves_the_step_cursor_and_wraps_at_thirty_six() {
     r.ui.handle(UiController::EVENT_ROTATE, -1);
     TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, r.ui.isOnHeader() ? 1 : 0,
         "un cran a gauche depuis le step 0 monte dans l en-tete");
-    r.ui.handle(UiController::EVENT_ROTATE, -1);
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, r.ui.isOnHeader() ? 1 : 0,
-        "l en-tete est un BUTOIR : un cran de plus a gauche n y change rien");
     r.ui.handle(UiController::EVENT_ROTATE, 1);
     TEST_ASSERT_EQUAL_UINT8(0, r.ui.stepCursor());
     for (uint8_t i = 0; i < 5; ++i) {
@@ -901,6 +898,86 @@ void test_the_header_field_cycles_the_measure_separation() {
     TEST_ASSERT_TRUE_MESSAGE(r.ui.isOnHeader(), "on reste sur l en-tete");
     r.ui.handle(UiController::EVENT_PRESS);
     TEST_ASSERT_FALSE_MESSAGE(r.ui.fieldOpen(), "un second appui court valide");
+}
+
+void test_a_second_detent_to_the_left_selects_the_length_and_it_is_the_stop() {
+    Rig r;
+    r.enterEdit();
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    TEST_ASSERT_TRUE_MESSAGE(r.ui.isOnHeader(), "le premier cran selectionne SEP");
+    TEST_ASSERT_FALSE_MESSAGE(r.ui.isOnHeaderLength(), "et pas encore la longueur");
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    TEST_ASSERT_TRUE_MESSAGE(r.ui.isOnHeaderLength(), "le second cran selectionne la longueur");
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    TEST_ASSERT_TRUE_MESSAGE(r.ui.isOnHeaderLength(), "la longueur est la butee de gauche");
+    TEST_ASSERT_TRUE(r.ui.isOnHeader());
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_FALSE_MESSAGE(r.ui.isOnHeaderLength(), "un cran a droite revient sur SEP");
+    TEST_ASSERT_TRUE_MESSAGE(r.ui.isOnHeader(), "et reste dans l en-tete");
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_FALSE_MESSAGE(r.ui.isOnHeader(), "un cran de plus rend le premier pas");
+    TEST_ASSERT_EQUAL_UINT8(0, r.ui.stepCursor());
+}
+
+void test_the_open_length_of_the_header_edits_the_base_length_and_leaves_sep_alone() {
+    Rig r;
+    r.enterEdit();
+    r.engine.setBaseLength(0, 12);
+    const int8_t sep = r.engine.getBarLength(0);
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(12, r.engine.getBaseLength(0),
+        "un champ ferme ne change pas sa valeur");
+    r.ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_TRUE(r.ui.fieldOpen());
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(13, r.engine.getBaseLength(0), "un cran a droite : 13");
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(11, r.engine.getBaseLength(0), "deux crans a gauche : 11");
+    TEST_ASSERT_EQUAL_INT8_MESSAGE(sep, r.engine.getBarLength(0), "SEP ne bouge pas");
+    TEST_ASSERT_TRUE_MESSAGE(r.ui.isOnHeaderLength(), "la rotation ne deplace pas la selection");
+    r.ui.handle(UiController::EVENT_PRESS);
+    TEST_ASSERT_FALSE(r.ui.fieldOpen());
+}
+
+void test_the_open_sep_does_not_edit_the_length() {
+    Rig r;
+    r.enterEdit();
+    r.engine.setBaseLength(0, 12);
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    r.ui.handle(UiController::EVENT_PRESS);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_UINT8(12, r.engine.getBaseLength(0));
+}
+
+void test_a_long_press_on_the_header_length_returns_to_the_first_step() {
+    Rig r;
+    r.enterEdit();
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    r.ui.handle(UiController::EVENT_PRESS);
+    r.ui.handle(UiController::EVENT_LONG_PRESS);
+    TEST_ASSERT_FALSE(r.ui.isOnHeader());
+    TEST_ASSERT_FALSE(r.ui.isOnHeaderLength());
+    TEST_ASSERT_FALSE(r.ui.fieldOpen());
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    TEST_ASSERT_FALSE_MESSAGE(r.ui.isOnHeaderLength(), "le retour dans l en-tete repart de SEP");
+}
+
+void test_the_header_length_stays_adjustable_under_a_pattern_routing() {
+    Rig r;
+    r.engine.setCvDestination(0, flexseq::CV_SOURCE_1, flexseq::CV_DEST_PATTERN);
+    r.enterEdit();
+    r.engine.setBaseLength(0, 12);
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    r.ui.handle(UiController::EVENT_ROTATE, -1);
+    r.ui.handle(UiController::EVENT_PRESS);
+    r.ui.handle(UiController::EVENT_ROTATE, 1);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(13, r.engine.getBaseLength(0),
+        "la longueur appartient au canal, pas au pattern");
 }
 
 void test_a_long_press_on_the_header_returns_to_the_first_step() {
@@ -1866,6 +1943,11 @@ int main(int, char**) {
     RUN_TEST(test_no_backward_wrap_the_header_takes_that_detent);
     RUN_TEST(test_the_header_field_cycles_the_measure_separation);
     RUN_TEST(test_a_long_press_on_the_header_returns_to_the_first_step);
+    RUN_TEST(test_a_second_detent_to_the_left_selects_the_length_and_it_is_the_stop);
+    RUN_TEST(test_the_open_length_of_the_header_edits_the_base_length_and_leaves_sep_alone);
+    RUN_TEST(test_the_open_sep_does_not_edit_the_length);
+    RUN_TEST(test_a_long_press_on_the_header_length_returns_to_the_first_step);
+    RUN_TEST(test_the_header_length_stays_adjustable_under_a_pattern_routing);
     RUN_TEST(test_a_press_on_the_header_does_not_toggle_a_step);
     RUN_TEST(test_shift_rotate_on_the_header_changes_no_ratchet);
     RUN_TEST(test_long_press_returns_from_the_grid_to_the_tab);

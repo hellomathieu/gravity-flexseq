@@ -94,11 +94,6 @@ public:
             pattern_ = *model.pattern;
             model_.pattern = &pattern_;
         }
-        // La largeur du titre une seule fois pour toute l'image : getStrWidth()
-        // decode la police et coute ~1 ms par appel.
-        if (model_.title != nullptr && model_.titleWidth == 0) {
-            model_.titleWidth = static_cast<uint8_t>(display.getStrWidth(model_.title));
-        }
         headerHash_ = headerHashOf(model_);
         startFrame(display, switched);
     }
@@ -206,14 +201,15 @@ private:
     // enfreinte deux fois, et les deux fois le defaut a atteint le module : la
     // valeur de SEP en 2026-09-04, la longueur de l editeur de templates en
     // 2026-09-13. Un champ ajoute a cette bande s ajoute ICI le meme jour.
-    //
-    // La longueur N Y EST PLUS : la bande porte le titre et SEP, et l en-tete
-    // LEN est parti avec l editeur de templates.
     static uint16_t headerHashOf(const PatternScreenModel& model) {
         uint16_t h = hashOf(model.title);
         h = static_cast<uint16_t>(h * 31u + model.barLength);
         h = static_cast<uint16_t>(h * 31u + (model.sepSelected ? 1u : 0u));
         h = static_cast<uint16_t>(h * 31u + (model.sepOpen ? 1u : 0u));
+        h = static_cast<uint16_t>(h * 31u + model.counterStep);
+        h = static_cast<uint16_t>(h * 31u + model.baseLength);
+        h = static_cast<uint16_t>(h * 31u + (model.lenSelected ? 1u : 0u));
+        h = static_cast<uint16_t>(h * 31u + (model.lenOpen ? 1u : 0u));
         return h;
     }
 
