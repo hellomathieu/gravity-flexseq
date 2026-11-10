@@ -505,6 +505,20 @@ The code is `8` in the ratchet nibble. The nibble holds sixteen values, so the E
 **The choice list becomes: none, `OFF-BEAT`, 2, 3, 4, 6, `TRIPLET`.** The owner placed `OFF-BEAT` first, because it is one hit moved and not a roll. The ratchet 2 therefore moves from one detent to two.
 Measured cost: Flash **+286 B**, RAM **+1 B**, stack peak 205 to **213 B**.
 ✅ **The owner read the code on the module on 2026-11-10**, rack powered: the choice list, the half disc, the hit at half the step, the unchanged length of the pattern, and the phrase of claps on 12 steps.
+✅ **THREE MORE CODES, `PAUSE 2`, `PAUSE 3` AND `PAUSE 4`, ARE ADDED — decided by the owner on 2026-11-10.** A phrase sometimes needs a silence longer than one step. Without these codes, the user spends one inactive step for each unit of silence.
+- `PAUSE N` — **the step lasts N units and emits nothing.** N is 2, 3 or 4, and one unit is the duration of a step of the channel. The step is a silence.
+
+The codes are `9`, `10` and `11` in the ratchet nibble, so the EEPROM format does not move and no version changes. They fit **every** rate, because they emit nothing. `CLOCK` and `RANDOM` ignore them, as they ignore every ratchet.
+
+**Only the channel waits, and the pattern grows longer**, as with the triplet. A pattern of 12 steps that holds one `PAUSE 4` lasts 15 units. The channel falls behind the others at every turn, and only a global reset realigns the channels. This is the wanted behaviour.
+
+**The duration belongs to the code, as for the triplet.** A `PAUSE N` on an inactive step keeps its N units and emits nothing, so the active state of the step changes nothing that the user hears. The gesture stays the gesture of a ratchet: `SHIFT` plus a turn on a step that is selected and active.
+
+**The screen draws an empty ring with the digit N under it**, on an active and on an inactive step. No other step draws that pair: a ratchet draws a filled disc with a digit, and an inactive step draws a ring with no digit.
+
+**The choice list becomes: none, `OFF-BEAT`, 2, 3, 4, 6, `TRIPLET`, `PAUSE 2`, `PAUSE 3`, `PAUSE 4`.** The three codes sit at the end, so no existing detent count moves.
+
+Measured cost: Flash **+126 B**, RAM **+0 B**, stack peak **214 B**.
 **A triplet on an INACTIVE step keeps its two units and emits nothing**: it is a **triplet rest**. A ratchet `2/3/4/6` on an inactive step has no effect at all, because its duration is one unit. In both cases the pattern **keeps** the code, and it becomes active again with the step.
 ### 6.3.1 Placement of the sub-onsets — DECIDED on 2026-08-23
 A ratchet N cuts **one** step into N slots, and the triplet cuts **two** steps into 3. At 96 PPQN a step is worth `ticksPerStep` (§6.1): **4 ticks at `x24`**, 96 at `/1`, and 12288 at `/128`. The slots therefore do not always fall on a whole tick.
