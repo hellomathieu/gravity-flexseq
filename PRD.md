@@ -538,6 +538,33 @@ Measured cost: Flash **+126 B**, RAM **+0 B**, stack peak **214 B**.
 **`PAUSE 1` — SET ASIDE by the owner on 2026-11-10.** A silence of one unit already exists: it is an inactive step. A code `PAUSE 1` would do what a short press on an active step does. It would cost one of the four free codes and one more digit to draw.
 
 ✅ **The owner read the pauses on the module on 2026-11-10**, rack powered: the three choices after the triplet, the stop of the list, the ring with its digit, the silent step, the next step that waits, the channel that falls behind another channel, and the removal of the pause.
+
+✅ **FIVE MORE CODES ARE ADDED: `PAUSE 5`, `PAUSE 6`, `PAUSE 7`, `PAUSE 8` AND `PAUSE 1/2` — decided by the owner on 2026-11-11.** The owner asked for longer silences, and for a silence shorter than one step.
+
+- `PAUSE N`, with N from 5 to 8 — the step lasts N units and emits nothing. The rules of `PAUSE 2` to `PAUSE 4` apply unchanged.
+- `PAUSE 1/2` — **the step lasts half a unit and emits nothing.** The channel gets ahead of the other channels by half a unit at each turn. A long pause does the opposite.
+
+**A pause step never emits a trigger**, active or inactive, at every rate. The owner restated this rule on 2026-11-11.
+
+The codes `12` to `15` hold `PAUSE 5` to `PAUSE 8`, and the code `1` holds `PAUSE 1/2`. The EEPROM format does not move and no version changes. An image written before these codes never holds them, so it reads back unchanged. **One code stays free: `5`.**
+
+**`PAUSE 1/2` is exact at every rate.** Every step duration is an even number of ticks, and the shortest is 4 ticks at `x24`.
+
+⚠️ **AT `/128`, A PAUSE LASTS FIVE UNITS AT MOST.** The engine counts the duration of a step in a 16-bit number, so 65535 ticks is the limit. A step of `/128` lasts 12288 ticks, and six units need 73728. At `/128` only, `PAUSE 6`, `PAUSE 7` and `PAUSE 8` therefore last five units, which is 61440 ticks. Every other rate holds the eight units. The owner accepted this limit on 2026-11-11. A larger counter costs about 24 bytes of RAM, and it was set aside.
+
+**The screen:**
+
+- `PAUSE 5` to `PAUSE 8` draw the empty ring with their digit, as the shorter pauses do. The digits 5, 7 and 8 are new in the 3 x 5 digit set.
+- `PAUSE 1/2` draws **the top half of the ring**: the top row and two rows of the sides, with no digit. The owner drew this glyph on 2026-11-11. The drawing is the same on an active and on an inactive step.
+- An active `OFF-BEAT` step still shows no digit, although its code is `8`.
+
+**The choice list becomes: none, `OFF-BEAT`, 2, 3, 4, 6, `TRIPLET`, `PAUSE 1/2`, `PAUSE 2`, `PAUSE 3`, `PAUSE 4`, `PAUSE 5`, `PAUSE 6`, `PAUSE 7`, `PAUSE 8`.** The pauses stay together, from the shortest to the longest. `PAUSE 2` to `PAUSE 4` therefore move by one detent. The EEPROM stores the code and not the position, so a stored pattern does not change.
+
+Measured cost of the five codes together: Flash **+184 B** (29800 to 29984), RAM **+0 B**, stack peak **214 B** unchanged, loop pass p90 **6.50 ms** against 12.
+
+Proofs: the panel of `env:wokwi`, whose demo holds a `PAUSE 1/2`, a `PAUSE 5`, a `PAUSE 7` and a `PAUSE 8`, reads **848** pixels, equal to the mirror row by row. On the pins, with the pause on the first step at 120 BPM and `/1`: the first edge comes 1250 ms after the start for `PAUSE 1/2`, and 5000 ms after the start for `PAUSE 8`. Both figures equal the expected values.
+
+⚠️ **The owner did not read these five codes on the module yet.**
 **A triplet on an INACTIVE step keeps its two units and emits nothing**: it is a **triplet rest**. A ratchet `2/3/4/6` on an inactive step has no effect at all, because its duration is one unit. In both cases the pattern **keeps** the code, and it becomes active again with the step.
 ### 6.3.1 Placement of the sub-onsets — DECIDED on 2026-08-23
 A ratchet N cuts **one** step into N slots, and the triplet cuts **two** steps into 3. At 96 PPQN a step is worth `ticksPerStep` (§6.1): **4 ticks at `x24`**, 96 at `/1`, and 12288 at `/128`. The slots therefore do not always fall on a whole tick.
