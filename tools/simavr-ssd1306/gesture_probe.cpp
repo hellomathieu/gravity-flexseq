@@ -1888,7 +1888,9 @@ int main(int argc, char **argv)
                DETENTS_FROM_TRIPLET_PAST_THE_END);
 
         marque = g_twi_bytes;
-        if (!skipBGeste) shiftRotate(avr, DETENTS_TO_LAST_CHOICE, 0, harness::RATCHET_BURST_LIMIT, false);
+        if (!skipBGeste)
+            for (int i = 0; i < DETENTS_TO_LAST_CHOICE; ++i)
+                shiftRotate(avr, 1, 0, harness::RATCHET_BURST_LIMIT, false);
         readInstances(avr, vu);
         ecarts = instancesDiffCount(vu, expectedBytes, &premier);
         printf("rD_retour          nibble %02x octet %02x ecarts %u twi %u\n",
