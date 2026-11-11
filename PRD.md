@@ -564,7 +564,7 @@ Measured cost of the five codes together: Flash **+184 B** (29800 to 29984), RAM
 
 Proofs: the panel of `env:wokwi`, whose demo holds a `PAUSE 1/2`, a `PAUSE 5`, a `PAUSE 7` and a `PAUSE 8`, reads **848** pixels, equal to the mirror row by row. On the pins, with the pause on the first step at 120 BPM and `/1`: the first edge comes 1250 ms after the start for `PAUSE 1/2`, and 5000 ms after the start for `PAUSE 8`. Both figures equal the expected values.
 
-⚠️ **The owner did not read these five codes on the module yet.**
+✅ **The owner read the five codes on the module on 2026-11-11**, rack powered: the choice list in its order with its stop, the top half of the ring for `PAUSE 1/2`, the ring with its digit for `PAUSE 5` to `PAUSE 8`, no trigger on a pause step, and the next step that comes half a unit early after a `PAUSE 1/2`. The owner also read that a long press on the encoder leaves the `EDIT` screen after twelve or more detents under `SHIFT`, and that the pattern stays intact.
 **A triplet on an INACTIVE step keeps its two units and emits nothing**: it is a **triplet rest**. A ratchet `2/3/4/6` on an inactive step has no effect at all, because its duration is one unit. In both cases the pattern **keeps** the code, and it becomes active again with the step.
 ### 6.3.1 Placement of the sub-onsets — DECIDED on 2026-08-23
 A ratchet N cuts **one** step into N slots, and the triplet cuts **two** steps into 3. At 96 PPQN a step is worth `ticksPerStep` (§6.1): **4 ticks at `x24`**, 96 at `/1`, and 12288 at `/128`. The slots therefore do not always fall on a whole tick.
