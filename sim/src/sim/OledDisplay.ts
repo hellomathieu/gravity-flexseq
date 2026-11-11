@@ -16,7 +16,7 @@
  */
 import type { CellView } from "./PatternView.js";
 import { textPixels, textWidth } from "./oledFont.js";
-import { RATCHET_NONE, RATCHET_OFFBEAT, RATCHET_TRIPLET, ratchetFitsStep, ratchetPauseUnits } from "../domain/Pattern.js";
+import { RATCHET_6, RATCHET_NONE, RATCHET_OFFBEAT, RATCHET_PAUSE_HALF, RATCHET_TRIPLET, ratchetFitsStep, ratchetPauseUnits } from "../domain/Pattern.js";
 
 export const OLED_W = 128;
 export const OLED_H = 64;
@@ -48,6 +48,9 @@ const DIGITS: Record<number, readonly number[]> = {
   3: [0b111, 0b001, 0b111, 0b001, 0b111],
   4: [0b101, 0b101, 0b111, 0b001, 0b001],
   6: [0b111, 0b100, 0b111, 0b101, 0b111],
+  5: [0b111, 0b100, 0b111, 0b001, 0b111],
+  7: [0b111, 0b001, 0b001, 0b001, 0b001],
+  8: [0b111, 0b101, 0b111, 0b101, 0b111],
 };
 // La barre de mesure DEPASSE le cadre 9x9 du curseur : sinon un curseur voisin
 // l'absorbe visuellement.
@@ -114,6 +117,16 @@ function blitText(ctx: OledCtx, text: string, x: number, y: number): void {
 }
 
 // --- Glyphes 5x5 ------------------------------------------------------------
+
+function drawTopHalfRing(ctx: OledCtx, cx: number, cy: number): void {
+  const x = cx - GLYPH_HALF;
+  const y = cy - GLYPH_HALF;
+  hline(ctx, x + 1, y, 3);
+  px(ctx, x, y + 1);
+  px(ctx, x + 4, y + 1);
+  px(ctx, x, y + 2);
+  px(ctx, x + 4, y + 2);
+}
 
 /** Anneau : step inactif. */
 function drawRing(ctx: OledCtx, cx: number, cy: number): void {
@@ -208,7 +221,9 @@ export function drawOled(ctx: OledCtx, model: OledModel): void {
     }
 
     const pause = ratchetPauseUnits(cell.ratchet);
-    if (cell.kind === "active" && pause === 0) {
+    if (cell.ratchet === RATCHET_PAUSE_HALF) {
+      drawTopHalfRing(ctx, cx, cy);
+    } else if (cell.kind === "active" && pause === 0) {
       if (cell.ratchet === RATCHET_TRIPLET) drawTriangle(ctx, cx, cy);
       else if (cell.ratchet === RATCHET_OFFBEAT && ratchetFitsStep(cell.ratchet, model.ticksPerStep)) {
         drawRightHalfDisc(ctx, cx, cy);
@@ -219,8 +234,7 @@ export function drawOled(ctx: OledCtx, model: OledModel): void {
       drawRing(ctx, cx, cy);
     }
 
-    if (pause !== 0 || (cell.kind === "active" && cell.ratchet !== RATCHET_NONE
-        && cell.ratchet !== RATCHET_TRIPLET && ratchetFitsStep(cell.ratchet, model.ticksPerStep))) {
+    if (pause !== 0 || (cell.kind === "active" && cell.ratchet <= RATCHET_6 && ratchetFitsStep(cell.ratchet, model.ticksPerStep))) {
       const rows = DIGITS[pause !== 0 ? pause : cell.ratchet];
       if (rows) {
         for (let r = 0; r < DIGIT_H; ++r) {

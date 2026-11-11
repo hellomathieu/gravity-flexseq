@@ -60,10 +60,9 @@ void SequencerEngine::refreshStepTiming(uint8_t channel, bool resetSubOnset) {
         }
     }
 
-    const uint8_t span = ratchetSpan(code);
     uint8_t triggers = ratchetTriggers(code);
 
-    c.stepTicks = static_cast<uint16_t>(c.ticksPerStep * span);
+    c.stepTicks = ratchetStepTicks(code, c.ticksPerStep);
 
     if (!ratchetFitsStep(code, c.ticksPerStep)) {
         triggers = 1;
@@ -71,7 +70,7 @@ void SequencerEngine::refreshStepTiming(uint8_t channel, bool resetSubOnset) {
 
     c.triggers = triggers;
     const uint8_t channelBit = static_cast<uint8_t>(1u << channel);
-    if (ratchetSkipsStepOnset(code) && (triggers > 1 || ratchetPauseUnits(code) != 0)) {
+    if (ratchetSkipsStepOnset(code) && (triggers > 1 || ratchetIsPause(code))) {
         offbeat_ = static_cast<uint8_t>(offbeat_ | channelBit);
     } else {
         offbeat_ = static_cast<uint8_t>(offbeat_ & ~channelBit);

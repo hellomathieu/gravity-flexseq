@@ -23,6 +23,12 @@ import {
   RATCHET_PAUSE_2,
   RATCHET_PAUSE_3,
   RATCHET_PAUSE_4,
+  RATCHET_PAUSE_5,
+  RATCHET_PAUSE_6,
+  RATCHET_PAUSE_7,
+  RATCHET_PAUSE_8,
+  RATCHET_PAUSE_HALF,
+  ratchetIsPause,
   isValidRatchet,
   RATCHET_OFFBEAT,
   RATCHET_2,
@@ -327,18 +333,22 @@ describe("Les pas pause", () => {
     return out;
   }
 
-  it("portent les codes 9, 10 et 11", () => {
+  it("portent les codes 9 a 15", () => {
     expect(RATCHET_PAUSE_2).toBe(9);
     expect(RATCHET_PAUSE_3).toBe(10);
     expect(RATCHET_PAUSE_4).toBe(11);
-    for (const code of [9, 10, 11]) {
+    expect(RATCHET_PAUSE_5).toBe(12);
+    expect(RATCHET_PAUSE_6).toBe(13);
+    expect(RATCHET_PAUSE_7).toBe(14);
+    expect(RATCHET_PAUSE_8).toBe(15);
+    for (const code of [9, 10, 11, 12, 13, 14, 15]) {
       expect(isValidRatchet(code)).toBe(true);
-      expect(ratchetSpan(code), "une pause dure 2, 3 ou 4 unites").toBe(code - 7);
+      expect(ratchetSpan(code), "une pause dure de 2 a 8 unites").toBe(code - 7);
       expect(ratchetPauseUnits(code)).toBe(code - 7);
       expect(ratchetTriggers(code)).toBe(1);
       expect(ratchetSkipsStepOnset(code), "une pause n emet rien").toBe(true);
     }
-    for (const code of [0, 7, 8, 12]) expect(ratchetPauseUnits(code)).toBe(0);
+    for (const code of [0, 7, 8, 16]) expect(ratchetPauseUnits(code)).toBe(0);
     expect(ratchetSpan(7)).toBe(2);
     expect(ratchetSpan(8)).toBe(1);
   });
@@ -348,15 +358,58 @@ describe("Les pas pause", () => {
     expect(onsetTicks(r, 96 + 3 * 96 + 95)).toEqual([1, 96 + 3 * 96]);
   });
 
+  it("un pas en pause de 8 est muet et retarde le pas suivant", () => {
+    const r = pauseRig(1, [0, 1, 2], 1, RATCHET_PAUSE_8, 4);
+    expect(onsetTicks(r, 96 + 768 + 95)).toEqual([1, 864]);
+  });
+
+  it("le demi-silence porte le code 1 et c est un silence", () => {
+    expect(RATCHET_PAUSE_HALF).toBe(1);
+    expect(isValidRatchet(1)).toBe(true);
+    expect(ratchetIsPause(1)).toBe(true);
+    expect(ratchetPauseUnits(1), "aucun chiffre a dessiner").toBe(0);
+    expect(ratchetTriggers(1)).toBe(1);
+    expect(ratchetSkipsStepOnset(1)).toBe(true);
+    expect(ratchetIsPause(9)).toBe(true);
+    expect(ratchetIsPause(15)).toBe(true);
+    for (const code of [0, 8, 5]) expect(ratchetIsPause(code)).toBe(false);
+  });
+
+  it("un demi-silence est muet et le pas suivant arrive une demi-unite plus tot", () => {
+    const r = pauseRig(1, [0, 1, 2], 1, RATCHET_PAUSE_HALF, 4);
+    expect(onsetTicks(r, 96 + 48 + 95)).toEqual([1, 144]);
+  });
+
+  it("un demi-silence dure un demi-pas a toutes les cadences", () => {
+    const half = [2, 3, 4, 6, 8, 12, 16, 24, 48, 96, 144, 192, 240, 288, 336, 384, 432, 480, 528, 576,
+      768, 1152, 1536, 3072, 6144];
+    for (let i = 0; i < SUBDIVS.length; ++i) {
+      const r = pauseRig(SUBDIVS[i]!, [0], 0, RATCHET_PAUSE_HALF, 4);
+      expect(r.engine.currentStepTicks(0)).toBe(half[i]);
+      expect(r.engine.currentStepTriggers(0)).toBe(0);
+    }
+  });
+
+  it("a /128 une pause dure au plus cinq unites", () => {
+    const expected = [24576, 36864, 49152, 61440, 61440, 61440, 61440];
+    for (let k = 0; k < 7; ++k) {
+      const r = pauseRig(128, [0], 0, 9 + k, 4);
+      expect(r.engine.currentStepTicks(0)).toBe(expected[k]);
+      expect(r.engine.currentStepTriggers(0)).toBe(0);
+    }
+    const r = pauseRig(64, [0], 0, RATCHET_PAUSE_8, 4);
+    expect(r.engine.currentStepTicks(0)).toBe(49152);
+  });
+
   it("sur le premier pas, garde le depart muet et allonge le pattern", () => {
     const r = pauseRig(1, [0, 1], 0, RATCHET_PAUSE_2, 2);
     expect(onsetTicks(r, 2 * 288 + 95)).toEqual([192, 288 + 192]);
   });
 
   it("dure ses unites et n emet rien a toutes les cadences", () => {
-    const codes = [RATCHET_PAUSE_2, RATCHET_PAUSE_3, RATCHET_PAUSE_4];
-    for (let i = 0; i < SUBDIVS.length; ++i) {
-      for (let k = 0; k < 3; ++k) {
+    const codes = [9, 10, 11, 12, 13, 14, 15];
+    for (let i = 0; i + 1 < SUBDIVS.length; ++i) {
+      for (let k = 0; k < 7; ++k) {
         const r = pauseRig(SUBDIVS[i]!, [0], 0, codes[k]!, 4);
         expect(r.engine.currentStepTicks(0)).toBe(STEP_TICKS[i]! * (k + 2));
         expect(ratchetFitsStep(codes[k]!, STEP_TICKS[i]!)).toBe(true);
@@ -376,9 +429,9 @@ describe("Les pas pause", () => {
     expect(onsetTicks(r, 2 * 96)).toEqual([1, 96, 192]);
   });
 
-  it("la liste de choix finit par les trois pauses", () => {
-    expect(RATCHET_CODES.length).toBe(10);
-    expect(RATCHET_CODES.slice(6)).toEqual([7, 9, 10, 11]);
+  it("la liste de choix finit par les sept pauses", () => {
+    expect(RATCHET_CODES.length).toBe(15);
+    expect(RATCHET_CODES.slice(6)).toEqual([7, 1, 9, 10, 11, 12, 13, 14, 15]);
   });
 });
 
@@ -455,10 +508,8 @@ describe("Le ratchet contretemps seul", () => {
   it("porte le code 8, et c est un ratchet valide", () => {
     expect(RATCHET_OFFBEAT).toBe(8);
     expect(isValidRatchet(8)).toBe(true);
-    expect(isValidRatchet(1)).toBe(false);
     expect(isValidRatchet(5)).toBe(false);
-    expect(isValidRatchet(12)).toBe(false);
-    expect(isValidRatchet(15)).toBe(false);
+    expect(isValidRatchet(16)).toBe(false);
     expect(ratchetSkipsStepOnset(8)).toBe(true);
     expect(ratchetSkipsStepOnset(2)).toBe(false);
     expect(ratchetSkipsStepOnset(0)).toBe(false);

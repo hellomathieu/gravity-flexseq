@@ -343,6 +343,20 @@ static bool glyphIs(uint8_t step, const char* const rows[5]) {
     return true;
 }
 
+static bool digitIs(uint8_t step, const char* const rows[5]) {
+    const uint8_t cx = screen::colX(step);
+    const uint8_t y0 = static_cast<uint8_t>(screen::rowCY(step) + screen::DIGIT_DY);
+    for (uint8_t r = 0; r < 5; ++r) {
+        for (uint8_t c = 0; c < 3; ++c) {
+            const bool want = rows[r][c] == '#';
+            if (canvas.at(static_cast<uint8_t>(cx - 1 + c), static_cast<uint8_t>(y0 + r)) != want) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 static uint8_t digitInk(uint8_t step) {
     const uint8_t cx = screen::colX(step);
     const uint8_t y0 = static_cast<uint8_t>(screen::rowCY(step) + screen::DIGIT_DY);
@@ -409,6 +423,48 @@ void test_a_pause_step_is_a_ring_with_its_digit_active_or_not() {
     TEST_ASSERT_EQUAL_UINT8_MESSAGE(11, digitInk(4), "avec le chiffre 2 dessous");
     TEST_ASSERT_TRUE_MESSAGE(glyphIs(6, RING), "une pause inactive aussi");
     TEST_ASSERT_EQUAL_UINT8_MESSAGE(9, digitInk(6), "avec le chiffre 4 dessous");
+}
+
+static const char* const DIGIT_5[5] = {"###", "#..", "###", "..#", "###"};
+static const char* const DIGIT_6[5] = {"###", "#..", "###", "#.#", "###"};
+static const char* const DIGIT_7[5] = {"###", "..#", "..#", "..#", "..#"};
+static const char* const DIGIT_8[5] = {"###", "#.#", "###", "#.#", "###"};
+static const char* const TOP_HALF_RING[5] = {".###.", "#...#", "#...#", ".....", "....."};
+
+void test_the_long_pauses_show_their_own_digit() {
+    pattern.writeStep(5, true);
+    pattern.setRatchet(4, flexseq::RATCHET_PAUSE_5);
+    pattern.setRatchet(5, flexseq::RATCHET_PAUSE_6);
+    pattern.setRatchet(6, flexseq::RATCHET_PAUSE_7);
+    pattern.setRatchet(7, flexseq::RATCHET_PAUSE_8);
+    drawPatternScreen(canvas, model());
+    for (uint8_t step = 4; step <= 7; ++step) {
+        TEST_ASSERT_TRUE_MESSAGE(glyphIs(step, RING), "une pause longue est un anneau");
+    }
+    TEST_ASSERT_TRUE_MESSAGE(digitIs(4, DIGIT_5), "le chiffre 5");
+    TEST_ASSERT_TRUE_MESSAGE(digitIs(5, DIGIT_6), "le chiffre 6");
+    TEST_ASSERT_TRUE_MESSAGE(digitIs(6, DIGIT_7), "le chiffre 7");
+    TEST_ASSERT_TRUE_MESSAGE(digitIs(7, DIGIT_8), "le chiffre 8");
+}
+
+void test_an_active_offbeat_step_never_shows_the_digit_eight() {
+    pattern.writeStep(4, true);
+    pattern.setRatchet(4, flexseq::RATCHET_OFFBEAT);
+    drawPatternScreen(canvas, model());
+    TEST_ASSERT_EQUAL_UINT8(0, digitInk(4));
+}
+
+void test_a_half_pause_is_the_top_half_of_a_ring_active_or_not() {
+    pattern.writeStep(4, true);
+    pattern.setRatchet(4, flexseq::RATCHET_PAUSE_HALF);
+    pattern.setRatchet(6, flexseq::RATCHET_PAUSE_HALF);
+    PatternScreenModel m = model();
+    m.ticksPerStep = 4;
+    drawPatternScreen(canvas, m);
+    TEST_ASSERT_TRUE_MESSAGE(glyphIs(4, TOP_HALF_RING), "actif : le demi-anneau haut");
+    TEST_ASSERT_TRUE_MESSAGE(glyphIs(6, TOP_HALF_RING), "inactif : le meme dessin");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0, digitInk(4), "aucun chiffre");
+    TEST_ASSERT_EQUAL_UINT8(0, digitInk(6));
 }
 
 void test_the_digit_of_a_pause_is_drawn_at_the_fastest_rate() {
@@ -892,6 +948,9 @@ int main() {
     RUN_TEST(test_an_active_offbeat_step_is_the_right_half_of_a_disc);
     RUN_TEST(test_an_inactive_offbeat_step_is_a_plain_ring);
     RUN_TEST(test_a_pause_step_is_a_ring_with_its_digit_active_or_not);
+    RUN_TEST(test_the_long_pauses_show_their_own_digit);
+    RUN_TEST(test_an_active_offbeat_step_never_shows_the_digit_eight);
+    RUN_TEST(test_a_half_pause_is_the_top_half_of_a_ring_active_or_not);
     RUN_TEST(test_the_digit_of_a_pause_is_drawn_at_the_fastest_rate);
     RUN_TEST(test_the_half_disc_is_drawn_at_the_fastest_rate);
     return UNITY_END();

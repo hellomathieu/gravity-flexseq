@@ -294,7 +294,7 @@ describe("Persistence — the version 4 content codec", () => {
     expect(pattern.getRatchet(0)).toBe(RATCHET_6);
     expect(pattern.getRatchet(1)).toBe(RATCHET_3);
 
-    v4.applyContentByte(pattern, 5, 0x51);
+    v4.applyContentByte(pattern, 5, 0x55);
     expect(pattern.getRatchet(0)).toBe(RATCHET_NONE);
     expect(pattern.getRatchet(1)).toBe(RATCHET_NONE);
     expect(v4.contentByte(pattern, 5)).toBe(0);
@@ -530,7 +530,7 @@ describe("Persistence — what a corrupted image may not do", () => {
     const r = rig();
     r.scheduler.markDirty(0);
     finishWrite(r, eeprom, QUIET_MS);
-    eeprom.cell[BASE_ADDRESS + PATTERNS_OFFSET + PATTERN_STEP_BYTES] = 0x51;
+    eeprom.cell[BASE_ADDRESS + PATTERNS_OFFSET + PATTERN_STEP_BYTES] = 0x55;
 
     const loaded = rig();
     loaded.bank.getPattern(0)!.setRatchet(0, RATCHET_3);

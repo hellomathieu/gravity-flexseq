@@ -192,6 +192,9 @@ inline uint16_t digitBits(uint8_t code) {
     if (code == RATCHET_3) return 0b111001111001111;
     if (code == RATCHET_4) return 0b101101111001001;
     if (code == RATCHET_6) return 0b111100111101111;
+    if (code == 5) return 0b111100111001111;
+    if (code == 7) return 0b111001001001001;
+    if (code == 8) return 0b111101111101111;
     return 0;
 }
 
@@ -238,6 +241,17 @@ void drawRing(Canvas& c, uint8_t cx, uint8_t cy) {
     c.drawPixel(x, y + 3);
     c.drawPixel(x + 4, y + 3);
     c.drawHLine(x + 1, y + 4, 3);
+}
+
+template <typename Canvas>
+void drawTopHalfRing(Canvas& c, uint8_t cx, uint8_t cy) {
+    const uint8_t x = static_cast<uint8_t>(cx - screen::GLYPH_HALF);
+    const uint8_t y = static_cast<uint8_t>(cy - screen::GLYPH_HALF);
+    c.drawHLine(x + 1, y, 3);
+    c.drawPixel(x, y + 1);
+    c.drawPixel(x + 4, y + 1);
+    c.drawPixel(x, y + 2);
+    c.drawPixel(x + 4, y + 2);
 }
 
 template <typename Canvas>
@@ -434,7 +448,9 @@ void drawPatternScreen(Canvas& canvas, const PatternScreenModel& model,
             const uint8_t pause = ratchetPauseUnits(ratchet);
 
             if (glyphs) {
-                if (active && pause == 0) {
+                if (ratchet == RATCHET_PAUSE_HALF) {
+                    detail::drawTopHalfRing(canvas, cx, static_cast<uint8_t>(cy));
+                } else if (active && pause == 0) {
                     if (ratchet == RATCHET_TRIPLET) {
                         detail::drawTriangle(canvas, cx, static_cast<uint8_t>(cy));
                     } else if (ratchet == RATCHET_OFFBEAT
@@ -452,7 +468,7 @@ void drawPatternScreen(Canvas& canvas, const PatternScreenModel& model,
 
             if (digits && pause != 0) {
                 detail::drawRatchetDigit(canvas, cx, static_cast<uint8_t>(cy), pause);
-            } else if (digits && active && ratchet != RATCHET_NONE && ratchet != RATCHET_TRIPLET
+            } else if (digits && active && ratchet <= RATCHET_6
                        && ratchetFitsStep(ratchet, model.ticksPerStep)) {
                 detail::drawRatchetDigit(canvas, cx, static_cast<uint8_t>(cy), ratchet);
             }

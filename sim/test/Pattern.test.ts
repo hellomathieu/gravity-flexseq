@@ -145,7 +145,6 @@ describe("Pattern — ratchets (un code par step)", () => {
 
   it("rejette un code ou un index invalide", () => {
     const p = new Pattern();
-    expect(p.setRatchet(0, 1)).toBe(false);
     expect(p.setRatchet(0, 5)).toBe(false); // non representable a 96 PPQN
     expect(p.setRatchet(36, RATCHET_2)).toBe(false);
     expect(p.getRatchet(0)).toBe(RATCHET_NONE);

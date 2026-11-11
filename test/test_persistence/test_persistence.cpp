@@ -258,7 +258,7 @@ void test_an_invalid_v4_nibble_replaces_a_previous_ratchet_instead_of_keeping_it
     TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_6, pattern.getRatchet(0));
     TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_3, pattern.getRatchet(1));
 
-    persist::v4::applyContentByte(pattern, 5, 0x51);
+    persist::v4::applyContentByte(pattern, 5, 0x55);
     TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, pattern.getRatchet(0));
     TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, pattern.getRatchet(1));
     TEST_ASSERT_EQUAL_UINT8(0, persist::v4::contentByte(pattern, 5));
@@ -603,9 +603,9 @@ void test_an_invalid_ratchet_nibble_is_read_back_as_none() {
     Rig r;
     r.scheduler.markDirty(0);
     finishWrite(r, eeprom, persist::QUIET_MS);
-    // Quartets 1 et 5, absents de la table des ratchets (PRD 6.3).
+    // Quartet 5, absent de la table des ratchets (PRD 6.3).
     eeprom.cell[persist::BASE_ADDRESS + persist::PATTERNS_OFFSET
-                + persist::PATTERN_STEP_BYTES] = 0x51;
+                + persist::PATTERN_STEP_BYTES] = 0x55;
 
     Rig loaded;
     TEST_ASSERT_TRUE(loaded.scheduler.load(eeprom, loaded.image));
@@ -622,7 +622,7 @@ void test_an_invalid_nibble_replaces_a_previous_ratchet_instead_of_keeping_it() 
     r.scheduler.markDirty(0);
     finishWrite(r, eeprom, persist::QUIET_MS);
     eeprom.cell[persist::BASE_ADDRESS + persist::PATTERNS_OFFSET
-                + persist::PATTERN_STEP_BYTES] = 0x51;
+                + persist::PATTERN_STEP_BYTES] = 0x55;
 
     Rig loaded;
     loaded.bank.getPattern(0)->setRatchet(0, flexseq::RATCHET_3);

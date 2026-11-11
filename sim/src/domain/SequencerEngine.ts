@@ -40,10 +40,10 @@ import type { PatternBank } from "./PatternBank.js";
 import {
   Pattern,
   ratchetFitsStep,
-  ratchetSpan,
   ratchetTriggers,
   ratchetSkipsStepOnset,
-  ratchetPauseUnits,
+  ratchetIsPause,
+  ratchetStepTicks,
   RATCHET_NONE,
 } from "./Pattern.js";
 
@@ -185,14 +185,13 @@ export class SequencerEngine {
       if (pattern) code = pattern.getRatchet(this.currentReadStep(ch));
     }
 
-    const span = ratchetSpan(code);
     let triggers = ratchetTriggers(code);
-    c.stepTicks = c.ticksPerStep * span;
+    c.stepTicks = ratchetStepTicks(code, c.ticksPerStep);
 
     if (!ratchetFitsStep(code, c.ticksPerStep)) triggers = 1;
 
     c.triggers = triggers;
-    c.offbeat = ratchetSkipsStepOnset(code) && (triggers > 1 || ratchetPauseUnits(code) !== 0);
+    c.offbeat = ratchetSkipsStepOnset(code) && (triggers > 1 || ratchetIsPause(code));
     if (resetSubOnset) {
       c.subOnset = 0;
     } else if (c.subOnset >= c.triggers) {

@@ -785,8 +785,8 @@ void test_shift_rotate_sets_the_ratchet_of_an_active_step_and_clamps() {
     for (uint8_t i = 0; i < UiController::RATCHET_CHOICE_COUNT + 3; ++i) {
         r.ui.handle(UiController::EVENT_SHIFT_ROTATE, 1);
     }
-    TEST_ASSERT_EQUAL_UINT8_MESSAGE(11, r.engine.patternForChannel(0)->getRatchet(0),
-        "la liste s arrete sur la pause de quatre unites");
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(15, r.engine.patternForChannel(0)->getRatchet(0),
+        "la liste s arrete sur la pause de huit unites");
     for (uint8_t i = 0; i < UiController::RATCHET_CHOICE_COUNT + 3; ++i) {
         r.ui.handle(UiController::EVENT_SHIFT_ROTATE, -1);
     }

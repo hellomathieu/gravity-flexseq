@@ -170,9 +170,8 @@ void test_pattern_any_step_can_carry_a_ratchet() {
 
 void test_pattern_rejects_invalid_ratchet_code_and_index() {
     Pattern pattern;
-    TEST_ASSERT_FALSE(pattern.setRatchet(0, 1));  // 1 is meaningless
     TEST_ASSERT_FALSE(pattern.setRatchet(0, 5));  // 5 is not representable
-    TEST_ASSERT_FALSE(pattern.setRatchet(0, 15));
+    TEST_ASSERT_FALSE(pattern.setRatchet(0, 16));
     TEST_ASSERT_FALSE(pattern.setRatchet(36, flexseq::RATCHET_2));
     TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, pattern.getRatchet(0));
     TEST_ASSERT_EQUAL_UINT8(flexseq::RATCHET_NONE, pattern.getRatchet(36));

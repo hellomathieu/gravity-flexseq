@@ -8,7 +8,7 @@
  */
 import { OLED_H, OLED_W } from "./OledDisplay.js";
 import { VELVETSCREEN, glyphFor, textWidth } from "./oledFont.js";
-import { RATCHET_NONE, RATCHET_2, RATCHET_3, RATCHET_4, RATCHET_6, RATCHET_TRIPLET, RATCHET_OFFBEAT, ratchetFitsStep, ratchetPauseUnits } from "../domain/Pattern.js";
+import { RATCHET_NONE, RATCHET_2, RATCHET_3, RATCHET_4, RATCHET_6, RATCHET_TRIPLET, RATCHET_OFFBEAT, RATCHET_PAUSE_HALF, ratchetFitsStep, ratchetPauseUnits } from "../domain/Pattern.js";
 
 export const PER_ROW = 12;
 export const GRID_ROWS = 3;
@@ -69,6 +69,9 @@ export function digitBits(code: number): number {
   if (code === RATCHET_3) return 0b111001111001111;
   if (code === RATCHET_4) return 0b101101111001001;
   if (code === RATCHET_6) return 0b111100111101111;
+  if (code === 5) return 0b111100111001111;
+  if (code === 7) return 0b111001001001001;
+  if (code === 8) return 0b111101111101111;
   return 0;
 }
 
@@ -165,6 +168,16 @@ function drawRing(ink: Ink, cx: number, cy: number): void {
     ink.plot(x + 4, y + r);
   }
   ink.drawHLine(x + 1, y + 4, 3);
+}
+
+function drawTopHalfRing(ink: Ink, cx: number, cy: number): void {
+  const x = cx - GLYPH_HALF;
+  const y = cy - GLYPH_HALF;
+  ink.drawHLine(x + 1, y, 3);
+  for (let r = 1; r <= 2; ++r) {
+    ink.plot(x, y + r);
+    ink.plot(x + 4, y + r);
+  }
 }
 
 function drawRightHalfDisc(ink: Ink, cx: number, cy: number): void {
@@ -300,7 +313,9 @@ export function renderPatternScreen(model: PatternScreenPixelModel): Render {
     const active = model.steps[i] ?? false;
     const ratchet = model.ratchets[i] ?? RATCHET_NONE;
     const pause = ratchetPauseUnits(ratchet);
-    if (active && pause === 0) {
+    if (ratchet === RATCHET_PAUSE_HALF) {
+      drawTopHalfRing(ink, cx, cy);
+    } else if (active && pause === 0) {
       if (ratchet === RATCHET_TRIPLET) drawTriangle(ink, cx, cy);
       else if (ratchet === RATCHET_OFFBEAT && ratchetFitsStep(ratchet, model.ticksPerStep)) {
         drawRightHalfDisc(ink, cx, cy);
@@ -312,7 +327,7 @@ export function renderPatternScreen(model: PatternScreenPixelModel): Render {
     }
     if (pause !== 0) {
       drawRatchetDigit(ink, cx, cy, pause);
-    } else if (active && ratchet !== RATCHET_NONE && ratchet !== RATCHET_TRIPLET
+    } else if (active && ratchet <= RATCHET_6
         && ratchetFitsStep(ratchet, model.ticksPerStep)) {
       drawRatchetDigit(ink, cx, cy, ratchet);
     }

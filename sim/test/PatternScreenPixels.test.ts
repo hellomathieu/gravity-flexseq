@@ -49,6 +49,10 @@ function panelModel(playhead = 0): PatternScreenPixelModel {
   ratchets[13] = 8;
   ratchets[17] = 10;
   ratchets[19] = 9;
+  ratchets[1] = 1;
+  ratchets[4] = 12;
+  ratchets[9] = 14;
+  ratchets[11] = 15;
   return {
     title: "EDIT PAT. A1",
     steps,
@@ -73,15 +77,15 @@ function panelModel(playhead = 0): PatternScreenPixelModel {
  */
 const PANEL_ROWS: ReadonlyArray<readonly [number, number]> = [
   [2, 42], [3, 25], [4, 40], [5, 23], [6, 39], [10, 120], [14, 3], [15, 3],
-  [16, 12], [17, 5], [18, 39], [19, 47], [20, 46], [21, 47], [22, 43],
-  [23, 5], [24, 12], [25, 12], [26, 6], [27, 9], [28, 4], [29, 9], [31, 3],
+  [16, 12], [17, 5], [18, 39], [19, 47], [20, 46], [21, 45], [22, 40],
+  [23, 5], [24, 12], [25, 21], [26, 10], [27, 16], [28, 8], [29, 16], [31, 3],
   [32, 3], [33, 3], [34, 3], [35, 23], [36, 23], [37, 27], [38, 25],
   [39, 27], [40, 3], [41, 3], [42, 11], [43, 7], [44, 9], [45, 3], [46, 7],
   [48, 3], [49, 3], [50, 3], [51, 3], [52, 3], [53, 3], [54, 15], [55, 3],
   [56, 3], [57, 3], [58, 3], [59, 3], [60, 3],
 ];
 
-const PANEL_INK = 822;
+const PANEL_INK = 848;
 
 describe("l ecran EDIT, confronte au PANNEAU (risque 89)", () => {
   it("rend exactement l encre que le panneau recoit", () => {
@@ -229,6 +233,40 @@ describe("le rendu d un step, PRD 12.1", () => {
     const inactive = one(false, 11);
     expect(glyphIs(inactive, RING)).toBe(true);
     expect(digitInk(inactive), "avec le chiffre 4 dessous").toBe(9);
+  });
+
+  function digitIs(px: Set<string>, rows: string[]): boolean {
+    const cx = colX(4);
+    const y0 = rowCY(4) + 5;
+    for (let r = 0; r < 5; ++r) {
+      for (let c = 0; c < 3; ++c) {
+        if (px.has(`${cx - 1 + c},${y0 + r}`) !== (rows[r]![c] === "#")) return false;
+      }
+    }
+    return true;
+  }
+
+  it("les pauses longues montrent leur propre chiffre", () => {
+    const digits: Record<number, string[]> = {
+      12: ["###", "#..", "###", "..#", "###"],
+      13: ["###", "#..", "###", "#.#", "###"],
+      14: ["###", "..#", "..#", "..#", "..#"],
+      15: ["###", "#.#", "###", "#.#", "###"],
+    };
+    for (const code of [12, 13, 14, 15]) {
+      const px = one(code === 13, code);
+      expect(glyphIs(px, RING), `anneau pour le code ${code}`).toBe(true);
+      expect(digitIs(px, digits[code]!), `chiffre du code ${code}`).toBe(true);
+    }
+  });
+
+  it("un demi-silence est le demi-anneau haut, actif ou non, sans chiffre", () => {
+    const TOP_HALF_RING = [".###.", "#...#", "#...#", ".....", "....."];
+    for (const active of [true, false]) {
+      const px = one(active, 1, 4);
+      expect(glyphIs(px, TOP_HALF_RING)).toBe(true);
+      expect(digitInk(px)).toBe(0);
+    }
   });
 
   it("le chiffre d une pause se dessine a la cadence la plus rapide", () => {
