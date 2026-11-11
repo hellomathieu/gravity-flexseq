@@ -434,6 +434,21 @@ image     588 ->   434 bytes, and the WHOLE image is scanned
 - To change the length **does not reset** `masterPhase`, and it **does not make** the playhead jump. See §7.
 ### 5.3 Pattern selection
 Each channel selects one of the 16 patterns. The CV can target the pattern selection, through the chosen mapping.
+
+**A PLAYLIST — SET ASIDE by the owner on 2026-11-11, on a measurement.** The owner asked for a list of patterns that play one after the other, each with a repeat count, for example `A1`, `A2`, `A1 x2`. The design was a fourth channel mode that one channel alone can take. The channel plays an entry until it returns to its first step the wanted number of times, and then it plays the next entry. The list was stored after the EEPROM image, so the format version did not move.
+
+A prototype measured the cost on the firmware of that day, 29800 bytes of Flash:
+
+| Variant | Flash | RAM | Firmware | Against the guard of 30412 |
+| --- | --- | --- | --- | --- |
+| A page of four lines that scrolls | +1314 B | +35 B | 31114 B | 702 B too many |
+| One entry at a time on the tab of the channel | +918 B | +30 B | 30718 B | 306 B too many |
+
+The engine costs 284 B and the storage 144 B in both variants. The rest is the screen and its gestures. ⚠️ **Both figures are lower bounds**: the prototype has no gesture that shortens the list, no explicit block of the CV inputs, and no mark of the entry that plays.
+
+**The removal of the `RANDOM` mode was measured too, and it returns 256 B of Flash and 8 B of RAM.** With it, the smaller variant still passes the guard by 50 B. The owner kept `RANDOM`, which is a mode of the original firmware.
+
+**The playlist becomes possible again on one condition**: the 1536 bytes of Flash that may exist beyond the assumed 30720 bytes. Only a hardware programmer can confirm them. `docs/open-risks.md` carries that subject.
 ### 5.4 Reset
 The **global Reset** belongs to the external clock input, see Transport §8, and **not** to a CV destination. The CV can however target a **Reset per channel** (**decided 2026-08-20**): see §10.
 ### 5.5 RECORDING — to design
